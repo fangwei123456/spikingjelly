@@ -11,6 +11,45 @@ from spikingjelly.logger import logger
 from .native_loader import _check_native_device
 
 
+# Offline complete-call rankings; see benchmark/benchmark_neuron_implementations.py.
+_CUDA_PRIORITIES = {
+    (8, 0): {
+        "sj_activation_aware_if": ("cuda", "triton", "cupy", "torch"),
+        "sj_eif": ("cuda", "triton", "cupy", "torch"),
+        "sj_if": ("cuda", "triton", "cupy", "torch"),
+        "sj_ilif": ("cuda", "triton", "cupy", "torch"),
+        "sj_izhikevich": ("cuda", "triton", "cupy", "torch"),
+        "sj_lif": ("cuda", "triton", "cupy", "torch"),
+        "sj_plif": ("cuda", "triton", "cupy", "torch"),
+        "sj_qif": ("cuda", "triton", "cupy", "torch"),
+        "sj_stbif": ("cuda", "triton", "cupy", "torch"),
+    },
+    (8, 6): {
+        "sj_activation_aware_if": ("cuda", "triton", "cupy", "torch"),
+        "sj_eif": ("cuda", "triton", "cupy", "torch"),
+        "sj_if": ("cuda", "triton", "cupy", "torch"),
+        "sj_ilif": ("cuda", "triton", "cupy", "torch"),
+        "sj_izhikevich": ("cuda", "triton", "cupy", "torch"),
+        "sj_lif": ("cuda", "triton", "cupy", "torch"),
+        "sj_plif": ("cuda", "triton", "cupy", "torch"),
+        "sj_qif": ("cuda", "triton", "cupy", "torch"),
+        "sj_stbif": ("cuda", "triton", "cupy", "torch"),
+    },
+    (12, 0): {
+        "sj_activation_aware_if": ("cuda", "triton", "cupy", "torch"),
+        "sj_eif": ("cuda", "triton", "cupy", "torch"),
+        "sj_if": ("cuda", "triton", "cupy", "torch"),
+        "sj_ilif": ("cuda", "triton", "cupy", "torch"),
+        "sj_izhikevich": ("cuda", "triton", "cupy", "torch"),
+        "sj_lif": ("cuda", "triton", "cupy", "torch"),
+        "sj_plif": ("cuda", "triton", "cupy", "torch"),
+        "sj_qif": ("cuda", "triton", "cupy", "torch"),
+        "sj_stbif": ("cuda", "triton", "cupy", "torch"),
+    },
+}
+_DEFAULT_CUDA_PRIORITY = ("cuda", "triton", "cupy", "torch")
+
+
 def _require_automatic_torch(
     selection: "_CudaSelection", device: torch.device, reason: str
 ) -> None:
@@ -89,16 +128,19 @@ class _CudaSelection:
         self._lock = threading.Lock()
 
     def _select(self, index: int):
-        priority = ("cuda", "triton", "cupy", "torch")
-        if self._requested not in ("auto", *priority):
+        if self._requested not in ("auto", *_DEFAULT_CUDA_PRIORITY):
             raise ValueError(
-                f"{self._environment_variable} must be auto, cuda, triton, or cupy; "
+                f"{self._environment_variable} must be auto, cuda, triton, cupy, or torch; "
                 f"got {self._requested!r}"
             )
         if torch.version.hip:
             raise RuntimeError(
                 "SpikingJelly neuron CUDA implementations require NVIDIA CUDA"
             )
+        capability = torch.cuda.get_device_capability(index)
+        priority = _CUDA_PRIORITIES.get(capability, {}).get(
+            self._namespace, _DEFAULT_CUDA_PRIORITY
+        )
         unavailable = {}
         candidates = priority if self._requested == "auto" else (self._requested,)
         with torch.cuda.device(index):
@@ -156,7 +198,14 @@ class _CudaSelection:
                     unpack=getattr(module, "_unpack", None),
                 )
                 if self._on_select is not None:
-                    selected = self._on_select(self._namespace, index, module, selected)
+                    selected = self._on_select(
+                        self._namespace,
+                        index,
+                        module,
+                        selected,
+                        capability=capability,
+                        priority=candidates,
+                    )
                 return selected
         reasons = "; ".join(f"{name}: {reason}" for name, reason in unavailable.items())
         raise RuntimeError(

@@ -360,3 +360,38 @@ def test_explicit_precision_node_fullgraph(family):
         torch.autograd.grad(expected.sum(), inputs),
     )
     assert model.v.dtype == torch.float32
+
+
+def test_offline_priorities_bind_per_device_and_strict_override(monkeypatch):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from spikingjelly._ops import selection
+
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda index: (8, index))
+    monkeypatch.setattr(torch.cuda, "device", lambda index: nullcontext())
+    monkeypatch.setattr(
+        selection,
+        "_CUDA_PRIORITIES",
+        {
+            (8, 0): {"sj_lif": ("triton", "torch")},
+            (8, 1): {"sj_lif": ("torch", "triton")},
+        },
+    )
+    module = SimpleNamespace(
+        _forward_impl=lambda *args: None, _backward_impl=lambda *args: None
+    )
+    monkeypatch.setattr(selection.importlib, "import_module", lambda *args: module)
+    monkeypatch.delenv("SJ_LIF_CUDA_IMPLEMENTATION", raising=False)
+    selector = selection._CudaSelection(
+        "test", "sj_lif", "SJ_LIF_CUDA_IMPLEMENTATION", module._forward_impl
+    )
+    assert selector.diagnostics(torch.device("cuda", 0))["implementation"] == "triton"
+    assert selector.diagnostics(torch.device("cuda", 1))["implementation"] == "torch"
+    # Changing the table cannot silently rebind a device after first use.
+    selection._CUDA_PRIORITIES[(8, 0)]["sj_lif"] = ("torch", "triton")
+    assert selector.diagnostics(torch.device("cuda", 0))["implementation"] == "triton"
+    monkeypatch.setenv("SJ_LIF_CUDA_IMPLEMENTATION", "torch")
+    forced = selection._CudaSelection(
+        "test", "sj_lif", "SJ_LIF_CUDA_IMPLEMENTATION", module._forward_impl
+    )
+    assert forced.diagnostics(torch.device("cuda", 0))["implementation"] == "torch"

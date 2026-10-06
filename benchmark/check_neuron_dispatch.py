@@ -90,13 +90,29 @@ def _measure(
     return {"summary": _summary(rows), "samples_us": rows}
 
 
-def _arguments(kind, T, N, device):
-    x = torch.randn(T, N, device=device, requires_grad=True)
-    v = torch.zeros(N, device=device, requires_grad=True)
+def _arguments(kind, T, N, device, dtype=torch.float32):
+    trainable = kind not in ("activation_aware_if", "stbif")
+    x = torch.randn(T, N, device=device, dtype=dtype, requires_grad=trainable)
+    v = torch.zeros(N, device=device, requires_grad=trainable)
     if kind == "lif":
         return (x, v, 2.0, True, 1.0, 0.0, True, 2.0, False, 1), (x, v)
     if kind == "if":
         return (x, v, 1.0, 0.0, True, 2.0, False, 1), (x, v)
+    if kind == "qif":
+        return (x, v, 2.3, -0.2, 0.8, 0.4, 1.0, 0.0, True, 2.0, False, 1), (x, v)
+    if kind == "eif":
+        return (x, v, 2.3, -0.2, 0.9, 0.7, 1.0, 0.0, True, 2.0, False, 1), (x, v)
+    if kind == "ilif":
+        return (x, v, 2.3, 4.0, 0.0, 4.0, 1.0, True, False), (x, v)
+    if kind == "activation_aware_if":
+        threshold, offset = [torch.tensor(t, device=device) for t in (1.0, 0.0)]
+        return (x, v, threshold, offset, 1, 1, None, False), ()
+    if kind == "stbif":
+        acc = torch.zeros_like(v)
+        threshold, positive, negative = [
+            torch.tensor(t, device=device) for t in (1.0, 3.0, -3.0)
+        ]
+        return (x, v, acc, threshold, positive, negative), ()
     if kind == "izhikevich":
         w = torch.zeros_like(v, requires_grad=True)
         return (

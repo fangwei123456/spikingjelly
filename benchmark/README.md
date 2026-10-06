@@ -7,6 +7,7 @@ Use an otherwise idle GPU and warm up before measuring.
 | --- | --- |
 | Full-model SNN training and inference | `benchmark_snn_single_gpu.py` |
 | Neuron dispatch and provider overhead | `check_neuron_dispatch.py` |
+| Offline neuron implementation priorities | `benchmark_neuron_implementations.py` |
 | Triton LIF regression check | `check_triton_lif_performance.py` |
 | Nsight Systems capture | `nsys_snn.sh`, `nsys_lif_example.py`, `nsys_multigpu_example.py` |
 | Neuron layouts and final-state execution | `benchmark_neuron_layout.py`, `benchmark_neuron_last_state.py`, `benchmark_ilif.py` |
@@ -16,7 +17,10 @@ Use an otherwise idle GPU and warm up before measuring.
 
 Neuron modules select execution from the tensor device. CPU uses the Torch
 reference; CUDA uses the registered operator and caches a compatible
-implementation per device. Normal model construction has no backend argument.
+implementation per device. Known GPU architectures use checked-in offline
+priorities per neuron family; unknown architectures retain native CUDA → Triton →
+CuPy → Torch. Runtime selection never profiles candidates. Normal model construction
+has no backend argument.
 To inspect the selected implementation, call
 `functional.neuron_implementation(neuron_type, device)`.
 
@@ -52,3 +56,27 @@ Use unprofiled runs for latency; use Nsight Systems for attribution. The full
 model runner and the kernel check test different workloads and should not be
 treated as interchangeable evidence. Benchmark JSON records the actual selected
 implementation where applicable.
+
+To recalibrate priorities, run each of the nine families with each of `cuda`,
+`triton`, `cupy`, and `torch` in three separate process rounds. Alternate candidate
+order between rounds, pin the same idle CPU core with `taskset`, and use an idle
+GPU. Each invocation validates outputs and first gradients against Torch before
+measuring warmed, synchronized complete eager calls:
+
+```bash
+taskset -c 2 uv run --no-sync python -m benchmark.benchmark_neuron_implementations \
+  --neuron lif --implementation triton --round 0 --device cuda:0 \
+  --output /tmp/sj-calibration/lif-triton-r0.json
+uv run --no-sync python -m benchmark.benchmark_neuron_implementations \
+  --summarize /tmp/sj-calibration --output /tmp/sj-priorities.json
+```
+
+The default matrix uses FP32 state, FP32/FP16/BF16 inputs, ATan where applicable,
+and four T/N sizes: 1/512, 4/32768, 16/32768, and 4/2097152. Training receives
+two-thirds of the score, inference one-third; inference-only families use forward
+only. Scores are weighted geometric means with equal dtype/size weights. Within
+5%, prefer Triton, then native CUDA, CuPy, and Torch. Publish a priority only when
+all three rounds give the same order. An inconclusive result leaves the previous
+order in place. Preserve raw samples, environment and source hashes with the
+summary. This measures steady-state eager execution; first-load/JIT costs are
+recorded separately, and compile workloads require separate validation.

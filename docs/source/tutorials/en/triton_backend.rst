@@ -3,8 +3,10 @@ Automatic Neuron Execution
 
 Neuron modules select execution from the input tensor's device. CPU uses the
 Torch reference implementation. CUDA calls a registered PyTorch operator, which
-selects and caches a compatible implementation for each CUDA device. The default
-provider order is native CUDA, Triton, CuPy, then Torch.
+selects and caches a compatible implementation for each CUDA device. Known GPU
+compute capabilities use priorities measured offline per neuron family. Unknown
+devices retain native CUDA, Triton, CuPy, then Torch. Selection never runs online
+profiling; the checked-in priorities are read only on first binding.
 
 The neuron API has no backend constructor argument or mutable backend property.
 This applies to IF, LIF, PLIF, QIF, EIF, Izhikevich, I-LIF, ActivationAwareIF,

@@ -42,6 +42,12 @@ Modules: ``spikingjelly.activation_based.functional.neuron``,
   records each bound implementation once; steady-state calls do not log.
   ``SJ_<NEURON>_CUDA_IMPLEMENTATION`` remains an advanced strict diagnostic
   control and defaults to ``auto``.
+- Ordinary neuron CUDA selection uses offline measured priorities per neuron
+  family and GPU compute capability, without runtime profiling. Unknown devices
+  retain the existing availability order. The calibration benchmark compares
+  complete eager inference/training calls and rejects inconsistent rankings.
+- QIF native CUDA and CuPy recurrences now match Torch's FP32 reciprocal rounding
+  for scalar time constants, preserving spikes at a low-precision threshold edge.
 - Ordinary CUDA backward uses the selected fused implementation. When a
   higher-order gradient graph is requested, the Torch reference equations are
   recomputed on CPU or CUDA so double backward remains available.

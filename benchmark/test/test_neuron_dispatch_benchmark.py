@@ -47,3 +47,59 @@ def test_gpu_process_check_rejects_only_other_processes_on_target(monkeypatch):
     snapshot += "GPU-test, 999999\n"
     with pytest.raises(RuntimeError, match="discard this round"):
         _check_gpu_processes()
+
+
+def test_offline_ranking_weights_training_and_keeps_near_ties_stable():
+    from benchmark.benchmark_neuron_implementations import _rank
+
+    records = []
+    times = {"cuda": (1, 8), "triton": (10, 2), "cupy": (10, 2.01), "torch": (100, 100)}
+    for implementation, (forward, training) in times.items():
+        for index in range(3):
+            records.append(
+                {
+                    "capability": [8, 0],
+                    "neuron": "lif",
+                    "implementation": implementation,
+                    "round": index,
+                    "gpu": "test",
+                    "torch": "test",
+                    "cuda": "test",
+                    "warmup": 50,
+                    "samples": 7,
+                    "iterations": 50,
+                    "source_sha256": {"ops/lif/kernels.cuh": "same"},
+                    "measurements": [
+                        {
+                            "dtype": "float32",
+                            "T": 4,
+                            "N": 32,
+                            "mode": "inference",
+                            "median_us": forward,
+                        },
+                        {
+                            "dtype": "float32",
+                            "T": 4,
+                            "N": 32,
+                            "mode": "training",
+                            "median_us": training,
+                        },
+                    ],
+                }
+            )
+    ranked = _rank(records)[0]
+    assert ranked["priority"] == ["triton", "cupy", "cuda", "torch"]
+    assert ranked["score_us"]["cuda"] == pytest.approx(4)
+    with pytest.raises(ValueError, match="Incomplete calibration"):
+        _rank(records[:-3])
+    records[1]["source_sha256"]["ops/lif/kernels.cuh"] = "changed"
+    with pytest.raises(ValueError, match="operator source changed"):
+        _rank(records)
+    records[1]["source_sha256"]["ops/lif/kernels.cuh"] = "same"
+    # A strong opposite result in one process must not be published as a ranking.
+    records[1]["measurements"][0]["median_us"] = 0.1
+    records[1]["measurements"][1]["median_us"] = 0.1
+    assert _rank(records)[0]["status"] == "inconclusive"
+    records[1]["torch"] = "different"
+    with pytest.raises(ValueError, match="software versions must match"):
+        _rank(records)

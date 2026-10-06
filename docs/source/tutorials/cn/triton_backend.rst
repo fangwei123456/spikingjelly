@@ -2,8 +2,9 @@
 ==========================
 
 神经元模块根据输入张量的设备选择执行路径。CPU 使用 Torch 参考实现。CUDA 调用
-注册的 PyTorch 算子，并为每个 CUDA 设备选择和缓存兼容实现。默认候选顺序为原生
-CUDA、Triton、CuPy，最后为 Torch。
+注册的 PyTorch 算子，并为每个 CUDA 设备选择和缓存兼容实现。已校准的 GPU 计算能力
+使用按神经元类别离线测得的优先级；未知设备仍按原生 CUDA、Triton、CuPy、Torch
+顺序检查。选择过程不进行在线测速，只在首次绑定时读取仓库内的优先级。
 
 神经元 API 不再提供 backend 构造参数或可修改的 backend 属性。此规则适用于 IF、
 LIF、PLIF、QIF、EIF、Izhikevich、I-LIF、ActivationAwareIF 和 STBIF。状态、重置、

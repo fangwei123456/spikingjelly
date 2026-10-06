@@ -313,3 +313,124 @@ logs are saved on g1 in `/tmp/sj-opt-results` and the task source directories
 `/home/allenyolk/CodeRepo/sj-opt-{baseline,candidate,final}-20261006`. A local copy
 of the summary, source manifest and evidence archive is at
 `/tmp/sj-opt-evidence-20261006/`.
+
+
+## Offline implementation ranking (2026-10-06)
+
+The existing selector now reads checked-in priorities per neuron family and exact
+CUDA compute capability on first per-device binding. Production performs no
+profiling, shape-dependent search, persistent user caching, or additional
+steady-state logging. Unknown architectures/families retain the previous
+availability order; explicit diagnostic overrides remain strict. Unsupported
+profiles, explicit precision, FlexSN and CuPy fused Linear retain their own rules.
+The priority table in `ops/selection.py` is the only runtime policy source.
+
+`benchmark/benchmark_neuron_implementations.py` calibrates all nine ordinary
+registered families through the real shared operator, including Torch as a
+candidate. It validates all outputs and first gradients against Torch before
+measuring synchronized wall time of warmed complete eager calls. The matrix uses
+FP32 state, FP32/FP16/BF16 inputs, ATan where applicable (I-LIF retains its own STE),
+and four T/N sizes: 1/512, 4/32768, 16/32768, and 4/2097152. Reset/trajectory
+parameters come from the existing dispatch benchmark's `_arguments` helper.
+These representative profiles do not establish an optimum for every surrogate,
+reset setting, trajectory policy, shape, or compiled model.
+
+Trainable families receive 2/3 forward+first-backward and 1/3 inference weight;
+inference-only families use forward only. Dtypes and sizes have equal weights.
+Scores are weighted geometric means of per-profile medians, not the latency of
+one workload. A 5% tie band prefers Triton, native CUDA, CuPy, then Torch. The
+summary requires all four candidates, matching sampling/profiles/GPU/software, consistent
+operator source hashes, and at least three alternating process rounds. Only an
+order reproduced in every round is published; inconclusive families retain the
+previous policy. Benchmark instrumentation hashes are retained but do not block
+aggregation when measurement defaults or summary code change.
+
+A100 (g2, sm80) and RTX 3090 (g1, sm86), using Torch 2.7.1+cu118 and CUDA 11.8,
+produced stable native CUDA → Triton → CuPy → Torch orders for all nine families.
+This confirms the previous default on those devices; no selection-driven speedup
+is claimed. Initial runs used 10 warmups and five batches of 20 calls; families
+with inconsistent orders were rerun pinned to one CPU core with 50 warmups and
+seven batches of 50 calls. Every candidate/round within a published family used
+the same sampling configuration. The benchmark now defaults to the latter.
+
+| GPU | Family | Native CUDA score (us) | Triton score (us) | CuPy score (us) | Torch score (us) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| A100 | IF | 147.33 | 307.67 | 313.35 | 1055.39 |
+| A100 | LIF | 158.31 | 326.41 | 328.98 | 1265.74 |
+| A100 | PLIF | 206.35 | 408.66 | 423.07 | 1501.29 |
+| A100 | Izhikevich | 160.15 | 293.53 | 307.22 | 1565.01 |
+| RTX 3090 | IF | 140.74 | 285.28 | 288.28 | 1051.23 |
+| RTX 3090 | LIF | 384.55 | 606.31 | 611.50 | 2001.76 |
+| RTX 3090 | PLIF | 194.63 | 383.24 | 387.64 | 1489.68 |
+| RTX 3090 | Izhikevich | 481.56 | 717.41 | 747.13 | 3150.00 |
+
+The cached selection getter, including `tensor.device`, measured 0.394 us median
+on RTX 3090 over 15 batches of 100,000 calls. Its steady-state implementation is
+unchanged. This is not a before/after speedup measurement. Rankings optimize
+warmed eager execution; extension loading and first forward/JIT costs are recorded
+separately. Compile performance remains a separate measurement question.
+
+Calibration found a QIF BF16 threshold case where native CUDA used float division
+while Torch scalar division multiplied by an FP32 reciprocal. A voltage rounded
+below 1 instead of to 1, changing a spike. Native/CuPy forward and backward now use
+the same reciprocal multiplication. The four-value regression and large-input
+FP32/FP16/BF16 comparisons pass. Triton equations were unchanged.
+
+The g1/g2 task directories were made distinct after discovering their source
+parent is shared NFS. The initial mixed-build g2 data was rejected. Native
+extensions were rebuilt separately on each host; g2 binaries require a newer
+glibc than g1. Triton caches are also host-local. Final QIF measurements use the
+corrected source consistently.
+
+Validation: local relevant suites passed 1,504 tests (510 skipped), and the
+final policy/benchmark suite passed 16 tests (20 skipped on macOS). On each g-series host,
+dispatch tests passed 23 tests (nine skipped); forced native CUDA/Triton/CuPy QIF
+suites each passed 67 tests, and the auto-only fallback check passed separately.
+The standard A100 Spikformer-Ti FP32 LIF training runner completed eager and
+compile execution (T=4, B=8, 64px, 10 warmups, 20 steps); compile recorded one
+graph and zero graph breaks. These are integration checks, not comparative
+performance evidence. Scoped Ruff, formatting, logging, Changelog generation and
+Sphinx checks pass.
+
+RTX 5090 (sm120), using Torch 2.7.1+cu128, CUDA 12.8, Triton 3.3.1 and CuPy
+14.2, completed all 108 candidate processes (nine families × four providers ×
+three rounds). Every output and first-gradient comparison passed. All nine
+rankings reproduced native CUDA → Triton → CuPy → Torch in all rounds; sm120
+priorities are included in the runtime table. All 5090 cases used 50 warmups,
+seven batches of 50 calls and one pinned CPU core.
+
+| GPU | Family | Native CUDA score (us) | Triton score (us) | CuPy score (us) | Torch score (us) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| RTX 5090 | IF | 195.47 | 376.42 | 383.62 | 1544.54 |
+| RTX 5090 | LIF | 205.39 | 394.16 | 394.67 | 1834.50 |
+| RTX 5090 | PLIF | 269.21 | 510.59 | 500.76 | 2100.22 |
+| RTX 5090 | Izhikevich | 281.40 | 502.69 | 493.93 | 3107.62 |
+
+CuPy's slightly lower aggregate PLIF/Izhikevich score is within the 5% tie band,
+so the recorded order still prefers Triton. Cross-GPU absolute scores also
+include each host's Python/submission cost; they are not GPU throughput rankings.
+
+The existing devel template was kept unchanged. The original 2.11 image failed
+to pull on two offers; the working instance used the 2.7.1 CUDA 12.8 devel image
+with matching instance-only readiness checks, retaining image Torch/Triton/CUDA.
+Native extensions were built locally for sm120. No 2.11-on-5090 claim is made.
+The first 5090 attempt's summary lacked a complete local raw archive after its
+watchdog teardown, so it was excluded. The final run's complete raw archive was
+backed up before validation and teardown. Final sm120 dispatch checks passed 23 tests (nine skipped because the ordinary
+selection was native CUDA, while those cases require forced Triton). Each forced
+native CUDA/Triton/CuPy QIF suite passed 67 tests. CuPy emitted upstream
+`ExternalStream` deprecation warnings. A fresh process confirmed all nine families
+bind native CUDA using the final sm120 table. A separate final-policy fullgraph
+forward/backward comparison passed for IF, LIF, PLIF and Izhikevich against Torch.
+All 324 final per-candidate/per-round records across the three architectures are
+saved locally. All four task instances (including the failed image pulls and excluded first
+5090 attempt) were destroyed and verified absent from the account's instance
+list. Charges listed after teardown total **$1.254**, below the $2.5 cap; no task
+storage instance remains. The existing template was preserved. The ledger and
+cleanup verification are saved with the evidence.
+
+
+Raw samples, summaries, source hashes, commands and test logs are retained at
+`.agents/artifacts/neuron-priorities-20261006` in the primary checkout, with
+host-side records in `/tmp/sj-ranking-results`. Runtime priorities are reviewed
+and updated with this evidence; no developer calibration runs on user startup.

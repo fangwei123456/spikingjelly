@@ -44,7 +44,7 @@ def _source_cache_tag(namespace, scope, module, trainable):
     return f"|sj-ops:{namespace}:{scope}:{digest.hexdigest()}"
 
 
-def _update_cache_tag(namespace, index, module, selected):
+def _update_cache_tag(namespace, index, module, selected, *, capability, priority):
     tag = _source_cache_tag(
         namespace,
         f"{index}:{selected.name}",
@@ -53,10 +53,12 @@ def _update_cache_tag(namespace, index, module, selected):
     )
     _include_cache_tag(tag)
     logger.info(
-        "ops selection operator={} device=cuda:{} ({}) implementation={} forward={} backward={} unavailable={}",
+        "ops selection operator={} device=cuda:{} ({}) capability={} priority={} implementation={} forward={} backward={} unavailable={}",
         namespace,
         index,
         torch.cuda.get_device_name(index),
+        capability,
+        priority,
         selected.name,
         getattr(
             selected.eager_forward,

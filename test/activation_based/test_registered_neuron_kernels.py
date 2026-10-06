@@ -655,3 +655,30 @@ def test_compiled_cupy_plif_keeps_initial_state_and_parameter_gradient(layout):
     )
     torch.testing.assert_close(grads, reference_grads, rtol=1e-4, atol=1e-5)
     assert reference_grads[-1].abs() > 0
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_qif_scalar_division_threshold_boundary():
+    from spikingjelly._ops import qif
+    from spikingjelly._ops.qif.reference import _forward_impl
+
+    x = (
+        torch.tensor(
+            [-0.37109375, 0.1240234375, 1.9140625, 0.765625],
+            device="cuda",
+            dtype=torch.bfloat16,
+        )
+        .reshape(4, 1)
+        .requires_grad_()
+    )
+    v = torch.zeros(1, device="cuda", requires_grad=True)
+    args = (x, v, 2.3, -0.2, 0.8, 0.4, 1.0, 0.0, True, 2.0, False, 1)
+    actual = qif._forward(*args)
+    expected = _forward_impl(*args)
+    torch.testing.assert_close(actual[0], expected[0], rtol=0, atol=0)
+    assert expected[0][-1].item() == 1
+    torch.testing.assert_close(actual[1], expected[1])
+    torch.testing.assert_close(
+        torch.autograd.grad(actual[0].sum() + actual[1].sum(), (x, v)),
+        torch.autograd.grad(expected[0].sum() + expected[1].sum(), (x, v)),
+    )
