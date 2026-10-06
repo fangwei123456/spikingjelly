@@ -15,7 +15,6 @@ import torch.distributed.device_mesh as device_mesh
 import torch.nn as nn
 from torch.utils.data import TensorDataset
 
-from spikingjelly.activation_based import base as activation_base
 from spikingjelly.activation_based import functional, layer, neuron, surrogate
 from spikingjelly.activation_based._cuda_graph import validate_cuda_graph_model
 from spikingjelly.activation_based.distributed import vision
@@ -651,18 +650,15 @@ def test_vision_prediction_merge_cleans_failed_temporary_file(tmp_path):
 @pytest.mark.parametrize(
     "model_config",
     [
-        SEWResNet34Config(image_size=32, num_classes=3, neuron_backend="triton"),
+        SEWResNet34Config(image_size=32, num_classes=3),
         SpikformerConfig(
             image_height=32,
             image_width=32,
             num_classes=3,
-            neuron_backend="triton",
         ),
     ],
 )
-def test_vision_builder_sets_step_mode_before_triton_backend(monkeypatch, model_config):
-    monkeypatch.setattr(activation_base, "check_backend_library", lambda _backend: None)
-
+def test_vision_builder_uses_automatic_neuron_dispatch(model_config):
     model = model_config.get_builder_cls()(model_config)._build_canonical_model()
     nodes = [
         module for module in model.modules() if isinstance(module, neuron.BaseNode)
@@ -670,12 +666,12 @@ def test_vision_builder_sets_step_mode_before_triton_backend(monkeypatch, model_
 
     assert nodes
     assert all(module.step_mode == "m" for module in nodes)
-    assert all(module.backend == "triton" for module in nodes)
+    assert all(not hasattr(module, "backend") for module in nodes)
 
 
 @pytest.mark.parametrize(
     ("attribute", "value", "message"),
-    [("backend", "cupy", "CuPy"), ("store_v_seq", True, "store_v_seq")],
+    [("store_v_seq", True, "store_v_seq")],
 )
 def test_vision_cuda_graph_rejects_unsafe_model_state(attribute, value, message):
     model = nn.Sequential(nn.Linear(2, 2), nn.Linear(2, 2))
@@ -1309,8 +1305,8 @@ def test_legacy_checkpoint_precision_does_not_inherit_new_triton_fields(tmp_path
         dataset_builder="package.datasets.build",
         precision=PrecisionConfig(
             mode="bf16",
-            triton_storage="bf16",
-            triton_fwd="bf16",
+            neuron_storage="bf16",
+            neuron_fwd="bf16",
         ),
     )
     checkpoint = tmp_path / "checkpoint"
@@ -1535,9 +1531,9 @@ def test_training_config_round_trips_precision_config():
         precision=PrecisionConfig(
             mode="fp8",
             fp8_recipe="delayed",
-            triton_storage="float8_e4m3fn",
-            triton_fwd="bf16",
-            triton_bwd="fp16",
+            neuron_storage="float8_e4m3fn",
+            neuron_fwd="bf16",
+            neuron_bwd="fp16",
         ),
     )
     assert vision.TrainingConfig.from_dict(config.as_dict()) == config

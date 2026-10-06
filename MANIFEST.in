@@ -1,2 +1,2 @@
-recursive-include ops *.py *.cu *.h *.cuh
+recursive-include ops *.py *.cu *.cuh
 global-exclude *.so *.pyd _native_build.json

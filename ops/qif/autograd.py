@@ -2,8 +2,8 @@ import math
 from typing import Optional
 
 import torch
-from torch.autograd.function import once_differentiable
 
+from ..autograd import _higher_order_grad, _save_for_higher_order
 from ..validation import _check_gradients, _check_inputs
 
 
@@ -164,13 +164,16 @@ def _register_ops(forward_name: str, backward_name: str, *, register_fake=True):
     def setup_context(ctx, inputs, output):
         ctx.dtype = inputs[0].dtype
         ctx.parameters = inputs[2:]
-        ctx.save_for_backward(*output[2:])
+        _save_for_higher_order(ctx, inputs, output[2:])
         ctx.mark_non_differentiable(*output[2:])
         ctx.set_materialize_grads(False)
 
-    @once_differentiable
     def backward(ctx, gs, gv, gh, gp):
-        h, previous = ctx.saved_tensors
+        if torch.is_grad_enabled():
+            from .reference import _forward_impl
+
+            return _higher_order_grad(ctx, _forward_impl, (gs, gv, gh, gp))
+        h, previous = ctx.saved_tensors[:2]
         state_output = h if ctx.parameters[-2] else h[0]
         if gs is None:
             gs = torch.zeros_like(h, dtype=ctx.dtype)

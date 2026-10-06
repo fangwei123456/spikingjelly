@@ -114,8 +114,6 @@ def _backward_impl(
             dr = 1 - (h[t] >= threshold).float()
             if not detach_reset:
                 dr = dr + (reset - h[t]) * sg
-            else:
-                dr = dr + reset * sg
         incoming_v = cv + (gv[t] if store_v_seq else gv if t == h.shape[0] - 1 else 0)
         incoming_w = cw + (gw[t] if store_v_seq else gw if t == h.shape[0] - 1 else 0)
         gh = gs[t].float() * sg + incoming_v * dr

@@ -10,6 +10,7 @@
 
    ann2snn_converter_legacy
    5_ann2snn
+   11_cext_neuron_with_lbl
 
 `Activation-based` 的设计来源
 --------------------------------------------

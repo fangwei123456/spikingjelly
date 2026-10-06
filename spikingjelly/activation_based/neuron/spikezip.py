@@ -20,7 +20,6 @@ class STBIFNode(base.MemoryModule):
         pos_max=None,
         neg_min=None,
         step_mode: str = "s",
-        backend: str = "torch",
     ) -> None:
         r"""
         **API Language** - :ref:`中文 <STBIFNode.__init__-cn>` | :ref:`English <STBIFNode.__init__-en>`
@@ -57,9 +56,6 @@ class STBIFNode(base.MemoryModule):
         :type neg_min: float or torch.Tensor or None
         :param step_mode: 步进模式，``"s"`` 或 ``"m"``。
         :type step_mode: str
-        :param backend: 计算后端，``"torch"``（默认）或 ``"triton"``。
-        :type backend: str
-        :raises ImportError: 选择 ``"triton"`` 但未安装 Triton 时抛出。
 
         ----
 
@@ -96,9 +92,6 @@ class STBIFNode(base.MemoryModule):
         :type neg_min: float or torch.Tensor or None
         :param step_mode: Step mode, ``"s"`` or ``"m"``.
         :type step_mode: str
-        :param backend: Compute backend, ``"torch"`` (default) or ``"triton"``.
-        :type backend: str
-        :raises ImportError: If ``"triton"`` is selected but Triton is not installed.
         """
         super().__init__()
         self.level = int(level)
@@ -121,7 +114,6 @@ class STBIFNode(base.MemoryModule):
             ).float(),
         )
         self.step_mode = step_mode
-        self.backend = backend
         self.register_memory("q", None)
         self.register_memory("acc_q", None)
         self.register_memory("cur_output", None)
@@ -139,10 +131,6 @@ class STBIFNode(base.MemoryModule):
         )
         level = int(getattr(quantizer, "level", default_level))
         return cls(scale, level=level, sym=sym, pos_max=pos_max, neg_min=neg_min)
-
-    @property
-    def supported_backends(self) -> tuple[str, ...]:
-        return ("torch", "triton")
 
     def materialize_states(
         self,
@@ -170,16 +158,6 @@ class STBIFNode(base.MemoryModule):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x = inputs[0]
         q, acc_q, cur_output = states
-        if self.backend == "triton":
-            out, q, acc_q, cur_output = functional.stbif_single_step_triton(
-                x,
-                q,
-                acc_q,
-                self.q_threshold,
-                self.pos_max,
-                self.neg_min,
-            )
-            return (out,), (q, acc_q, cur_output)
         out, q, acc_q, cur_output = functional.stbif_step(
             x,
             q,
@@ -198,31 +176,32 @@ class STBIFNode(base.MemoryModule):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x_seq = inputs[0]
         q, acc_q, cur_output = states
-        if self.backend == "triton" and x_seq.device.type != "cuda":
-            raise RuntimeError("STBIFNode backend='triton' requires a CUDA tensor.")
-        if self.backend == "triton":
-            from ..._ops.stbif import triton_precision as stbif
-
-            out_seq, q, acc_q, cur_output = stbif.multi_step_stbif(
-                x_seq,
-                q,
-                acc_q,
-                self.q_threshold.to(dtype=x_seq.dtype),
-                self.pos_max.to(dtype=x_seq.dtype),
-                self.neg_min.to(dtype=x_seq.dtype),
-            )
-        else:
-            out_seq = torch.empty_like(x_seq)
-            for t in range(x_seq.shape[0]):
-                out_seq[t], q, acc_q, cur_output = functional.stbif_step(
-                    x_seq[t],
-                    q,
-                    acc_q,
-                    self.q_threshold,
-                    self.pos_max,
-                    self.neg_min,
-                )
+        out_seq, q, acc_q, cur_output = functional.stbif_multi_step(
+            x_seq,
+            q,
+            acc_q,
+            self.q_threshold,
+            self.pos_max,
+            self.neg_min,
+        )
         return (out_seq,), (q, acc_q, cur_output)
+
+    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
+        states = self.materialize_states(
+            (x_seq, *args), tuple(self._memories.values()), "m"
+        )
+        out_seq, q, acc_q, cur_output = functional.stbif_multi_step(
+            x_seq,
+            states[0],
+            states[1],
+            self.q_threshold,
+            self.pos_max,
+            self.neg_min,
+        )
+        self.q = q
+        self.acc_q = acc_q
+        self.cur_output = cur_output
+        return out_seq
 
     @property
     def accumulated(self) -> torch.Tensor:

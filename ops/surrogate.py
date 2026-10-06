@@ -14,6 +14,22 @@ _SURROGATE_IDS = {
 _DTYPES = (torch.float32, torch.float16, torch.bfloat16)
 
 
+def _surrogate_spec(function):
+    if function is None:
+        return 0, 4.0
+    from spikingjelly.activation_based import surrogate as surrogate_module
+
+    if type(function).__module__ != surrogate_module.__name__:
+        return None
+    surrogate_id = _SURROGATE_IDS.get(type(function).__name__)
+    if surrogate_id is None or not getattr(function, "spiking", True):
+        return None
+    alpha = function.alpha
+    if isinstance(alpha, torch.Tensor) or not isinstance(alpha, (int, float)):
+        return None
+    return surrogate_id, float(alpha)
+
+
 def _surrogate_gradient(x, alpha, surrogate_id):
     if surrogate_id == 0:
         s = torch.sigmoid(alpha * x)
@@ -35,3 +51,25 @@ def _surrogate_gradient(x, alpha, surrogate_id):
         z = alpha * x
         return (alpha / math.sqrt(math.pi)) * torch.exp(-z * z)
     raise ValueError("surrogate_id must be in [0, 6]")
+
+
+class _SurrogateSpike(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, alpha, surrogate_id):
+        ctx.save_for_backward(x)
+        ctx.alpha = alpha
+        ctx.surrogate_id = surrogate_id
+        return (x >= 0).to(x.dtype)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        (x,) = ctx.saved_tensors
+        return (
+            grad_output * _surrogate_gradient(x, ctx.alpha, ctx.surrogate_id),
+            None,
+            None,
+        )
+
+
+def _surrogate_spike(x, alpha, surrogate_id):
+    return _SurrogateSpike.apply(x, alpha, surrogate_id)

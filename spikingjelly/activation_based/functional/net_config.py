@@ -1,7 +1,7 @@
 from __future__ import annotations
 from spikingjelly.logger import logger
 
-from typing import Optional, Union
+from typing import Optional
 from weakref import ReferenceType, WeakKeyDictionary, ref
 
 import torch.nn as nn
@@ -15,7 +15,6 @@ __all__ = [
     "invalidate_reset_cache",
     "reset_collected_modules",
     "reset_net",
-    "set_backend",
     "set_step_mode",
 ]
 
@@ -276,118 +275,6 @@ def set_step_mode(net: nn.Module, step_mode: str):
             m.step_mode = step_mode
         if not isinstance(m, keep_step_mode_instance):
             modules.extend(reversed(tuple(m.children())))
-
-
-def set_backend(
-    net: nn.Module,
-    backend: str,
-    instance: Optional[Union[nn.Module, tuple[nn.Module]]] = None,
-):
-    r"""
-    **API Language** - :ref:`中文 <set_backend-cn>` | :ref:`English <set_backend-en>`
-
-    ----
-
-    .. _set_backend-cn:
-
-    * **中文**
-
-    将 ``net`` 中所有满足 ``isinstance(m, instance)`` 且具有 ``backend``
-    属性的模块后端设置为 ``backend``。
-
-    仅当目标模块的 ``supported_backends`` 包含给定 ``backend`` 时才会实际更新；
-    否则会记录告警并保留原有后端。若 ``instance`` 为 ``None``，则会检查所有具有
-    ``backend`` 属性的模块。
-
-    .. note::
-
-        许多神经元的 ``supported_backends`` 取决于当前的 ``step_mode``。例如
-        :class:`~spikingjelly.activation_based.neuron.LIFNode` 与
-        :class:`~spikingjelly.activation_based.neuron.IFNode` 仅在多步模式 ``'m'``
-        下支持 ``'triton'``；而
-        :class:`~spikingjelly.activation_based.neuron.ParametricLIFNode` 等神经元
-        的 ``'cupy'`` 也仅在 ``'m'`` 下可用。请先调用 :func:`set_step_mode`
-        再调用本函数；否则该后端会被拒绝并保留原有后端。
-
-    :param net: 一个神经网络
-    :type net: torch.nn.Module
-
-    :param backend: 使用哪个后端
-    :type backend: str
-
-    :param instance: 传给 ``isinstance`` 的筛选类型。满足该筛选且具有 ``backend`` 属性的模块后端会被检查。
-        若为 ``None`` ，则所有具有 ``backend`` 属性的模块都会被检查
-    :type instance: Optional[Union[nn.Module, tuple[nn.Module]]]
-
-
-    :raises Exception: 若目标模块在访问 ``supported_backends`` 或设置 ``backend`` 时抛出异常，则该异常会原样向上传播
-
-    ----
-
-    .. _set_backend-en:
-
-    * **English**
-
-    Set ``backend`` for all modules in ``net`` whose type matches ``instance``
-    and that expose a ``backend`` attribute.
-
-    The backend is updated only when ``backend`` is listed in the module's
-    ``supported_backends``. Otherwise, a warning is logged and the existing
-    backend is kept unchanged. If ``instance`` is ``None``, all modules with a
-    ``backend`` attribute are checked.
-
-    .. admonition:: Note
-        :class: note
-
-        ``supported_backends`` of many neurons depends on the current
-        ``step_mode``. For example,
-        :class:`~spikingjelly.activation_based.neuron.LIFNode` and
-        :class:`~spikingjelly.activation_based.neuron.IFNode` only offer
-        ``'triton'`` in multi-step mode ``'m'``, and some neurons such as
-        :class:`~spikingjelly.activation_based.neuron.ParametricLIFNode` also
-        restrict ``'cupy'`` to ``'m'``. Call :func:`set_step_mode` before this
-        function; otherwise the backend is rejected and the existing backend is
-        kept.
-
-    :param net: a network
-    :type net: torch.nn.Module
-
-    :param backend: the backend to be set
-    :type backend: str
-
-    :param instance: the type filter passed to ``isinstance``. Modules that
-        match this filter and have a ``backend`` attribute will be checked. If
-        ``None``, all modules with a ``backend`` attribute will be checked
-    :type instance: Optional[Union[nn.Module, tuple[nn.Module]]]
-
-
-    :raises Exception: Propagated if a target module raises while exposing ``supported_backends`` or assigning ``backend``
-    """
-    instance = (nn.Module,) if instance is None else instance
-    for m in net.modules():
-        if not isinstance(m, instance) or not hasattr(m, "backend"):
-            continue
-        if not isinstance(m, base.MemoryModule):
-            logger.warning(
-                "Trying to set the backend for {}, which is not a MemoryModule",
-                m,
-            )
-        supported_backends = m.supported_backends
-        if backend in supported_backends:
-            m.backend = backend
-        else:
-            logger.warning(
-                "{} does not support backend={} while step_mode={} "
-                "(supported_backends={}); it will continue using backend={}. "
-                "supported_backends can depend on step_mode, so call "
-                "set_step_mode() before set_backend() if the backend is only "
-                "available in another step mode",
-                m,
-                backend,
-                getattr(m, "step_mode", None),
-                supported_backends,
-                m.backend,
-            )
 
 
 def detach_net(net: nn.Module):

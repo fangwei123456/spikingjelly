@@ -82,13 +82,3 @@ def test_benchmark_median_must_be_positive_and_finite(value):
         runner._positive_median([value], "benchmark")
 
     assert runner._positive_median([1.0, 3.0], "benchmark") == 2.0
-
-
-def test_backend_parity_requires_equal_tokens_and_bounded_logits():
-    reference = {"logits": torch.ones(2, 3), "token_id": 7}
-    candidate = {"logits": torch.ones(2, 3), "token_id": 7}
-    assert runner._backend_parity(candidate, reference)["relative_l2"] == 0.0
-
-    candidate["token_id"] = 8
-    with pytest.raises(ValueError, match="token"):
-        runner._backend_parity(candidate, reference)

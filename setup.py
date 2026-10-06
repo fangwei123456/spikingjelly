@@ -24,7 +24,7 @@ def _native_extensions():
         )
     except ImportError as error:
         warnings.warn(
-            f"Skipping experimental neuron CUDA extensions: {error}", stacklevel=2
+            f"Skipping SpikingJelly native CUDA extensions: {error}", stacklevel=2
         )
         return [], {}
 
@@ -32,20 +32,20 @@ def _native_extensions():
     compiler = os.environ.get("CXX", "cl" if os.name == "nt" else "c++")
     if torch.version.cuda is None or not CUDA_HOME or not nvcc.is_file():
         warnings.warn(
-            "Skipping experimental neuron CUDA extensions: CUDA-enabled PyTorch and a CUDA "
+            "Skipping SpikingJelly native CUDA extensions: CUDA-enabled PyTorch and a CUDA "
             "toolkit with nvcc are required; set CUDA_HOME to the toolkit.",
             stacklevel=2,
         )
         return [], {}
     if shutil.which(compiler) is None:
         warnings.warn(
-            f"Skipping experimental neuron CUDA extensions: C++ compiler {compiler!r} not found.",
+            f"Skipping SpikingJelly native CUDA extensions: C++ compiler {compiler!r} not found.",
             stacklevel=2,
         )
         return [], {}
     if not os.environ.get("TORCH_CUDA_ARCH_LIST") and not torch.cuda.is_available():
         warnings.warn(
-            "Skipping experimental neuron CUDA extensions: set TORCH_CUDA_ARCH_LIST when "
+            "Skipping SpikingJelly native CUDA extensions: set TORCH_CUDA_ARCH_LIST when "
             "building without a visible CUDA device.",
             stacklevel=2,
         )
@@ -75,7 +75,11 @@ def _native_extensions():
         CUDAExtension(
             f"spikingjelly._ops.{source.parent.name}._C",
             sources=[str(source)],
-            depends=[str(source.with_name("kernels.cuh")), "ops/_cuda.cuh"],
+            depends=[
+                str(source.with_name("kernels.cuh")),
+                "ops/_cuda.cuh",
+                "ops/cuda_surrogate.cuh",
+            ],
             extra_compile_args={"nvcc": ["-O3", "--fmad=false", *arch_flags]},
         )
         for source in sorted(Path("ops").glob("*/native.cu"))

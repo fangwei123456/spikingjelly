@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 
 import pytest
 import torch
@@ -41,25 +42,23 @@ def _call(kind, x, v, w, sg, trace, reset, detach):
         v_threshold=0.7, surrogate_function=sg, detach_reset=detach, store_v_seq=trace
     )
     if kind == "ilif":
-        return functional.ilif_multi_step_registered(x, v, tau=2.3, **common)
+        return functional.ilif_multi_step(x, v, tau=2.3, **common)
     common["v_reset"] = reset
     if kind == "if":
-        return functional.if_multi_step_registered(x, v, **common)
+        return functional.if_multi_step(x, v, **common)
     if kind == "lif":
-        return functional.lif_multi_step_registered(x, v, tau=2.3, **common)
+        return functional.lif_multi_step(x, v, tau=2.3, **common)
     if kind == "plif":
-        return functional.plif_multi_step_registered(x, v, w, **common)
+        return functional.plif_multi_step(x, v, w, **common)
     common["v_rest"] = -0.2
     if kind == "qif":
-        return functional.qif_multi_step_registered(
-            x, v, tau=2.3, v_c=0.8, a0=0.4, **common
-        )
+        return functional.qif_multi_step(x, v, tau=2.3, v_c=0.8, a0=0.4, **common)
     if kind == "eif":
-        return functional.eif_multi_step_registered(
+        return functional.eif_multi_step(
             x, v, tau=2.3, theta_rh=0.9, delta_t=0.7, **common
         )
     common.pop("store_v_seq")
-    return functional.izhikevich_multi_step_registered(
+    return functional.izhikevich_multi_step(
         x,
         v,
         w,
@@ -74,26 +73,32 @@ def _call(kind, x, v, w, sg, trace, reset, detach):
     )
 
 
+def _selected_implementation(kind, device):
+    return functional.neuron_implementation(kind, device)
+
+
 def _reference(kind, x, v, w, sg, trace, reset, detach):
+    from spikingjelly._ops import eif, if_, izhikevich, lif, plif, qif
+
     spikes, voltages, recoveries = [], [], []
     for current in x.float():
         if kind == "if":
-            spike, v = functional.if_step(current, v, 0.7, reset, sg, detach)
+            spike, v, _ = if_.reference.step(current, v, 0.7, reset, sg, detach)
         elif kind == "lif":
-            spike, v = functional.lif_step(
+            spike, v, _ = lif.reference.step(
                 current, v, 2.3, True, 0.7, reset, sg, detach
             )
         elif kind == "plif":
-            spike, v = functional.plif_step(
+            spike, v, _ = plif.reference.step(
                 current, v, w.float(), True, 0.7, reset, sg, detach
             )
         elif kind == "qif":
-            spike, v = functional.qif_step(
+            spike, v, _ = qif.reference.step(
                 current, v, 2.3, 0.4, -0.2, 0.8, 0.7, reset, sg, detach
             )
         elif kind == "eif":
-            spike, v = functional.eif_step(
-                current, v, 2.3, 0.7, 0.9, -0.2, 0.7, reset, sg, detach
+            spike, v, _ = eif.reference.step(
+                current, v, 2.3, -0.2, 0.9, 0.7, 0.7, reset, sg, detach
             )
         elif kind == "ilif":
             # Charge is algebraically decay*v+x; preserve its specified FP32 form.
@@ -101,17 +106,17 @@ def _reference(kind, x, v, w, sg, trace, reset, detach):
             spike = sg(h / 0.7)
             v = h - (spike.detach() if detach else spike) * 0.7
         else:
-            spike, v, w = functional.izhikevich_step(
+            spike, v, w, _ = izhikevich.reference.step(
                 current,
                 v,
                 w,
                 2.3,
-                0.4,
                 -0.2,
                 0.8,
-                3.1,
+                0.4,
                 0.2,
                 0.3,
+                3.1,
                 0.7,
                 reset,
                 sg,
@@ -277,7 +282,7 @@ def test_activation_aware_inference(device, dtype, trace, reset, scalar):
         if not scalar
         else torch.tensor(0.1, device=device)
     )
-    actual = functional.activation_aware_if_multi_step_registered(
+    actual = functional.activation_aware_if_multi_step(
         x, v, threshold, offset, 3, 5, reset, trace
     )
     th = threshold.reshape(1, -1, 1) if not scalar else threshold
@@ -304,7 +309,7 @@ def test_stbif_sequence_single_step_and_bounds(device, dtype):
     q = torch.tensor([0.5, 0.0, -0.5, 0.0], device=device)
     acc = torch.tensor([0.5, 1.5, -0.5, -1.5], device=device)
     scale, pos, neg = [torch.tensor(value, device=device) for value in (1.0, 2.0, -2.0)]
-    actual = functional.stbif_multi_step_registered(x, q, acc, scale, pos, neg)
+    actual = functional.stbif_multi_step(x, q, acc, scale, pos, neg)
     outputs = []
     for current in x.float():
         out, q, acc, cur = functional.stbif_step(current, q, acc, scale, pos, neg)
@@ -314,9 +319,7 @@ def test_stbif_sequence_single_step_and_bounds(device, dtype):
     a0 = torch.tensor([0.5, 1.5, -0.5, -1.5], device=device)
     singles = []
     for current in x:
-        out, q0, a0, cur0 = functional.stbif_single_step_registered(
-            current, q0, a0, scale, pos, neg
-        )
+        out, q0, a0, cur0 = functional.stbif_step(current, q0, a0, scale, pos, neg)
         singles.append(out)
     _assert_outputs((torch.stack(singles), q0, a0, cur0), actual)
 
@@ -388,41 +391,26 @@ def test_inference_opcheck_compile_and_grad_rejection(device, kind):
 def test_invalid_dynamics_inputs(device, kind):
     sg = surrogate.MultiLevelSpikeCount(4) if kind == "ilif" else surrogate.ATan()
     v = torch.zeros(7, device=device)
-    for x in (
-        torch.ones(0, 7, device=device),
-        torch.ones(3, 7, device=device, dtype=torch.float64),
-    ):
+    for x in (torch.ones(0, 7, device=device),):
         with pytest.raises(RuntimeError):
             _call(kind, x, v, v, sg, False, None, False)
-    with pytest.raises(RuntimeError):
-        _call(
-            kind, torch.ones(3, 7, device=device), v.half(), v, sg, False, None, False
+    x64 = torch.ones(3, 7, device=device, dtype=torch.float64)
+    assert (
+        _call(kind, x64, v.double(), v.double(), sg, False, None, False)[0].dtype
+        == torch.float64
+    )
+    custom = surrogate.Rect()
+    if kind == "ilif":
+        with pytest.raises(TypeError, match="MultiLevelSpikeCount"):
+            _call(
+                kind, torch.ones(3, 7, device=device), v, v, custom, False, None, False
+            )
+    else:
+        output = _call(
+            kind, torch.ones(3, 7, device=device), v, v, custom, False, None, False
         )
-    with pytest.raises(TypeError):
-        _call(
-            kind,
-            torch.ones(3, 7, device=device),
-            v,
-            v,
-            surrogate.Rect(),
-            False,
-            None,
-            False,
-        )
-
-
-def test_single_step_existing_families(device):
-    x = torch.tensor([0.2, 1.2], device=device, requires_grad=True)
-    v = torch.tensor([0.1, 0.3], device=device, requires_grad=True)
-    for kind in ("if", "lif"):
-        actual = getattr(functional, f"{kind}_step_registered")(x, v)
-        expected = (
-            functional.if_step(x, v, 1.0, 0.0, surrogate.Sigmoid())
-            if kind == "if"
-            else functional.lif_step(x, v, 2.0, True, 1.0, 0.0, surrogate.Sigmoid())
-        )
-        _assert_outputs(actual, expected)
-        _assert_gradients(actual, expected, (x, v))
+        assert output[0].shape == (3, 7)
+        assert torch.isfinite(output[0]).all()
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="NVIDIA CUDA unavailable")
@@ -438,6 +426,12 @@ def test_separate_cuda_selections_in_fresh_process():
         "activation_aware_if": "triton",
         "stbif": "cupy",
     }
+    from torch.utils.cpp_extension import CUDA_HOME
+
+    if not (Path(CUDA_HOME or "") / "include/cuda_bf16.h").is_file():
+        choices = {
+            kind: provider for kind, provider in choices.items() if provider != "cupy"
+        }
     code = """
         import torch
         from spikingjelly.activation_based import functional, surrogate
@@ -445,9 +439,19 @@ def test_separate_cuda_selections_in_fresh_process():
 
         choices = CHOICES
         device = torch.device("cuda", 0)
+        selected_choices = {}
         for kind, provider in choices.items():
-            info = functional.registered_neuron_implementation(kind, device)
+            try:
+                info = functional.neuron_implementation(kind, device)
+            except RuntimeError as error:
+                if str(error).startswith("No available sj_"):
+                    continue
+                raise
             assert info["implementation"] == provider, (kind, info)
+            selected_choices[kind] = provider
+
+        assert selected_choices
+        for kind, provider in selected_choices.items():
             x = torch.full((3, 7), 0.4, device=device, requires_grad=True)
             v = torch.zeros(7, device=device, requires_grad=True)
             w = torch.zeros(() if kind == "plif" else (7,), device=device, requires_grad=True)
@@ -463,8 +467,8 @@ def test_separate_cuda_selections_in_fresh_process():
             gradients = [torch.autograd.grad(sum(out.sum() for out in result if out is not None), inputs)
                          for result in (actual, expected)]
             torch.testing.assert_close(*gradients, rtol=2e-4, atol=2e-5)
-        for kind, provider in choices.items():
-            assert functional.registered_neuron_implementation(kind, device)["implementation"] == provider
+        for kind, provider in selected_choices.items():
+            assert functional.neuron_implementation(kind, device)["implementation"] == provider
     """.replace("CHOICES", repr(choices))
     env = dict(os.environ)
     env.update(
@@ -478,20 +482,65 @@ def test_separate_cuda_selections_in_fresh_process():
     )
 
 
-@pytest.mark.parametrize("kind", ["qif", "eif", "izhikevich", "ilif"])
-def test_odd_size_long_sequence_and_second_order_rejection(device, kind):
+@pytest.mark.parametrize(
+    "kind", ["if", "lif", "plif", "qif", "eif", "izhikevich", "ilif"]
+)
+def test_odd_size_long_sequence_and_second_order_gradients(device, kind):
     torch.manual_seed(982)
     x = (torch.rand(33, 513, device=device) * 0.1).requires_grad_()
     v = torch.zeros(513, device=device, requires_grad=True)
-    w = torch.zeros_like(v).requires_grad_()
+    w = torch.zeros(() if kind == "plif" else v.shape, device=device).requires_grad_()
     sg = surrogate.MultiLevelSpikeCount(4) if kind == "ilif" else surrogate.Sigmoid()
     actual = _call(kind, x, v, w, sg, True, 0.2, True)
     reference = _reference(kind, x, v, w, sg, True, 0.2, True)
     _assert_outputs(actual, reference)
-    _assert_gradients(actual, reference, (x, v, w) if kind == "izhikevich" else (x, v))
-    gradient = torch.autograd.grad(actual[0].sum(), x, create_graph=True)[0]
-    with pytest.raises(RuntimeError):
-        torch.autograd.grad(gradient.sum(), x)
+    _assert_gradients(
+        actual, reference, (x, v, w) if kind in ("plif", "izhikevich") else (x, v)
+    )
+    from spikingjelly._ops import eif, if_, ilif, izhikevich, lif, plif, qif
+
+    if kind == "if":
+        high_order_reference = if_.reference._forward_impl(
+            x, v, 0.7, 0.2, True, 4.0, True, 0
+        )
+    elif kind == "lif":
+        high_order_reference = lif.reference._forward_impl(
+            x, v, 2.3, True, 0.7, 0.2, True, 4.0, True, 0
+        )
+    elif kind == "plif":
+        high_order_reference = plif.reference._forward_impl(
+            x, v, w, True, 0.7, 0.2, True, 4.0, True, 0
+        )
+    elif kind == "qif":
+        high_order_reference = qif.reference._forward_impl(
+            x, v, 2.3, -0.2, 0.8, 0.4, 0.7, 0.2, True, 4.0, True, 0
+        )
+    elif kind == "eif":
+        high_order_reference = eif.reference._forward_impl(
+            x, v, 2.3, -0.2, 0.9, 0.7, 0.7, 0.2, True, 4.0, True, 0
+        )
+    elif kind == "izhikevich":
+        high_order_reference = izhikevich.reference._forward_impl(
+            x, v, w, 2.3, -0.2, 0.8, 0.4, 0.2, 0.3, 3.1, 0.7, 0.2, True, 4.0, True, 0
+        )
+    else:
+        high_order_reference = ilif.reference._forward_impl(
+            x, v, 2.3, 4.0, 0.0, 4.0, 0.7, True, True
+        )
+    gradient = torch.autograd.grad(
+        actual[0].sum() + actual[1].sum(), x, create_graph=True
+    )[0]
+    reference_gradient = torch.autograd.grad(
+        high_order_reference[0].sum() + high_order_reference[1][-1].sum(),
+        x,
+        create_graph=True,
+        retain_graph=True,
+    )[0]
+    torch.testing.assert_close(gradient, reference_gradient, rtol=2e-5, atol=4e-6)
+    grad2 = torch.autograd.grad(gradient.sum(), x)[0]
+    reference_grad2 = torch.autograd.grad(reference_gradient.sum(), x)[0]
+    torch.testing.assert_close(grad2, reference_grad2, rtol=2e-5, atol=4e-6)
+    assert torch.isfinite(grad2).all()
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="NVIDIA CUDA unavailable")
@@ -509,7 +558,7 @@ def test_non_default_stream_and_second_device():
             )
             _assert_outputs(actual, expected)
             _assert_gradients(actual, expected, (x, v, w))
-            output = functional.stbif_multi_step_registered(
+            output = functional.stbif_multi_step(
                 x.detach(),
                 v.detach(),
                 w.detach(),
@@ -519,3 +568,90 @@ def test_non_default_stream_and_second_device():
             )
             assert all(t.device == device for t in output)
         stream.synchronize()
+
+
+@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+@pytest.mark.parametrize("dtype", DTYPES)
+@pytest.mark.parametrize("mode", ["s", "m"])
+def test_common_neuron_modes_use_registered_entry(
+    device, kind, dtype, mode, monkeypatch
+):
+    import importlib
+
+    package = importlib.import_module(
+        "spikingjelly._ops." + ("if_" if kind == "if" else kind)
+    )
+    entry = package._forward
+    calls = []
+
+    def observe(*args, **kwargs):
+        calls.append(args[0].dtype)
+        return entry(*args, **kwargs)
+
+    monkeypatch.setattr(package, "_forward", observe)
+    torch.manual_seed(619)
+    x = (torch.rand(4, 9, device=device, dtype=dtype) * 0.8).requires_grad_()
+    v = torch.zeros(9, device=device, requires_grad=True)
+    w = torch.tensor(-0.5, device=device, requires_grad=True)
+    sg = surrogate.ATan(alpha=2.0)
+    if mode == "m":
+        actual = _call(kind, x, v, w, sg, False, 0.2, False)
+        inputs = x
+    else:
+        inputs = x[0]
+        if kind == "if":
+            actual = functional.if_step(inputs, v, 0.7, 0.2, sg)
+        elif kind == "lif":
+            actual = functional.lif_step(inputs, v, 2.3, True, 0.7, 0.2, sg)
+        else:
+            actual = functional.plif_step(inputs, v, w, True, 0.7, 0.2, sg)
+    expected = _reference(
+        kind,
+        inputs.unsqueeze(0) if mode == "s" else inputs,
+        v,
+        w,
+        sg,
+        False,
+        0.2,
+        False,
+    )
+    expected = (expected[0].to(dtype), *expected[1:])
+    if mode == "s":
+        expected = (expected[0][0], expected[1])
+    _assert_outputs(actual, expected)
+    _assert_gradients(actual, expected, (x, v, w) if kind == "plif" else (x, v))
+    assert calls == [dtype]
+    assert actual[0].dtype == dtype
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="NVIDIA CUDA unavailable")
+@pytest.mark.parametrize("layout", ["contiguous", "channels_last", "broadcast"])
+def test_compiled_cupy_plif_keeps_initial_state_and_parameter_gradient(layout):
+    from torch.utils.cpp_extension import CUDA_HOME
+    from pathlib import Path
+
+    if CUDA_HOME is None or not (Path(CUDA_HOME) / "include/cuda_bf16.h").is_file():
+        pytest.skip("CuPy neuron compilation needs CUDA toolkit headers")
+    pytest.importorskip("cupy")
+    from spikingjelly._ops.plif.cupy import _forward
+    from spikingjelly._ops.plif.reference import _forward_impl
+
+    torch.manual_seed(753)
+    source = torch.rand(4, 2, 3, 2, 8, device="cuda")
+    if layout == "channels_last":
+        source = source.transpose(2, 4)
+    elif layout == "broadcast":
+        source = source[:1].expand_as(source)
+    source.requires_grad_()
+    v = torch.full(source.shape[1:], 0.17, device="cuda", requires_grad=True)
+    w = torch.tensor(-0.3, device="cuda", requires_grad=True)
+    parameters = (source, v, w, True, 0.7, 0.2, False, 2.0, True, 1)
+    expected = _forward_impl(*parameters)
+    actual = torch.compile(_forward, fullgraph=True)(*parameters)
+    torch.testing.assert_close(actual[:2], expected[:2])
+    grads = torch.autograd.grad(actual[0].sum() + actual[1].sum(), (source, v, w))
+    reference_grads = torch.autograd.grad(
+        expected[0].sum() + expected[1].sum(), (source, v, w)
+    )
+    torch.testing.assert_close(grads, reference_grads, rtol=1e-4, atol=1e-5)
+    assert reference_grads[-1].abs() > 0

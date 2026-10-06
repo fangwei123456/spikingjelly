@@ -3,6 +3,8 @@ from functools import lru_cache
 
 import torch
 
+from spikingjelly.logger import logger
+
 from .layout import _layout_args
 from .triton_runtime import (
     is_fp8_dtype,
@@ -45,20 +47,22 @@ def _neuron_indices(
         indices = (pid * BLOCK + tl.arange(0, BLOCK))[None, :]
         mask = indices < NCL
     else:
-        minor_size: tl.constexpr = SIZES.value[0]
-        minor_blocks: tl.constexpr = tl.cdiv(minor_size, MINOR)
+        inner_size: tl.constexpr = tl.constexpr(SIZES).value[0]
+        minor_blocks: tl.constexpr = tl.cdiv(inner_size, MINOR)
         inner = (pid % minor_blocks) * MINOR + tl.arange(0, MINOR)[None, :]
         outer = (pid // minor_blocks) * (BLOCK // MINOR) + tl.arange(0, BLOCK // MINOR)[
             :, None
         ]
-        indices = outer * minor_size + inner
-        mask = (inner < minor_size) & (indices < NCL)
+        indices = outer * inner_size + inner
+        mask = (inner < inner_size) & (indices < NCL)
     return indices, mask
 
 
 @triton.jit
 def _time_offset(t, n: tl.constexpr, layouts: tl.constexpr, slot: tl.constexpr):
-    stride: tl.constexpr = n if len(layouts) == 0 else layouts.value[slot][0]
+    stride: tl.constexpr = (
+        n if len(layouts) == 0 else tl.constexpr(layouts).value[slot][0]
+    )
     # Widen the stride before multiplying: the time offset can exceed int32.
     return t * tl.full((), stride, tl.int64)
 
@@ -70,13 +74,25 @@ def _spatial_offsets(
     if len(layouts) == 0:
         return index.to(tl.int64)
     else:
-        strides: tl.constexpr = layouts.value[slot]
-        # Access constexpr tuples explicitly on Triton 3.3. Contiguous launches
-        # use the empty-layout fast path above; other layouts use integer strides.
-        offset = tl.full(index.shape, 0, tl.int64)
+        # Unwrap constexpr tuples for Triton 3.3. The metadata-only predicate
+        # uses scalar IR constants, which fold away before GPU code generation.
+        strides: tl.constexpr = tl.constexpr(layouts).value[slot]
+        dense = tl.full((), True, tl.int1)
+        span = tl.full((), 1, tl.int64)
         for d in tl.static_range(len(sizes)):
-            offset += (index % sizes.value[d]).to(tl.int64) * strides.value[d + 1]
-            index = index // sizes.value[d]
+            size = tl.full((), tl.constexpr(sizes).value[d], tl.int64)
+            stride = tl.full((), tl.constexpr(strides).value[d + 1], tl.int64)
+            dense = dense & ((size == 1) | (stride == span))
+            span = span * size
+        if dense:
+            offset = index.to(tl.int64)
+        else:
+            offset = tl.full(index.shape, 0, tl.int64)
+            for d in tl.static_range(len(sizes)):
+                offset += (index % tl.constexpr(sizes).value[d]).to(
+                    tl.int64
+                ) * tl.constexpr(strides).value[d + 1]
+                index = index // tl.constexpr(sizes).value[d]
         return offset
 
 
@@ -242,7 +258,7 @@ def _prepare_triton_neuron_execution_plan_cached(
         neuron_type.upper(),
         "backward",
     )
-    return _TritonNeuronExecutionPlan(
+    plan = _TritonNeuronExecutionPlan(
         neuron_type=neuron_type,
         device=device,
         storage_dtype=storage_dtype,
@@ -261,6 +277,18 @@ def _prepare_triton_neuron_execution_plan_cached(
         spike_dtype_id=torch_dtype_to_triton_neuron_dtype_id(spike_dtype),
         save_intermediates=save_intermediates,
     )
+    logger.info(
+        "ops selection operator=sj_{} device=cuda:{} ({}) implementation=triton "
+        "profile=storage:{} forward:{} backward:{} spikes:{}",
+        neuron_type,
+        device.index,
+        torch.cuda.get_device_name(device),
+        storage_dtype,
+        forward_compute_dtype_name,
+        backward_compute_dtype_name,
+        spike_dtype,
+    )
+    return plan
 
 
 def _check_mp_cuda_inputs(

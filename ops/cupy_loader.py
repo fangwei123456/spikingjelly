@@ -15,6 +15,10 @@ _TYPES = {
 def _kernel(path, name, dtype, *template_parameters):
     source = Path(path)
     code = (source.parent.parent / "_cuda.cuh").read_text(encoding="utf-8")
+    code = code.replace(
+        '#include "cuda_surrogate.cuh"',
+        (source.parent.parent / "cuda_surrogate.cuh").read_text(encoding="utf-8"),
+    )
     code += "\n" + source.read_text(encoding="utf-8").replace(
         '#include "../_cuda.cuh"', ""
     )

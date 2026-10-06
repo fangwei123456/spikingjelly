@@ -104,9 +104,9 @@ def test_qwen2_config_rejects_non_integer_discrete_values(name, value):
         Qwen2SNNConfig(**{name: value})
 
 
-def test_qwen2_config_rejects_unknown_neuron_backend():
-    with pytest.raises(ValueError, match="neuron_backend"):
-        Qwen2SNNConfig(neuron_backend="unknown")
+def test_qwen2_config_rejects_removed_neuron_backend():
+    with pytest.raises(TypeError, match="neuron_backend"):
+        Qwen2SNNConfig(neuron_backend="triton")
 
 
 def test_qwen2_exact_td_matches_hugging_face_with_left_padding():

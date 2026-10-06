@@ -124,8 +124,6 @@ def _backward_kernel(
                 dr = dr - threshold * sg
             else:
                 dr = dr + (reset - h) * sg
-        elif not SOFT:
-            dr = dr + reset * sg
         if TRACE:
             iv = cv + tl.load(GV + i, mask, 0)
             iw = cw + tl.load(GW + i, mask, 0)

@@ -91,11 +91,11 @@ def test_profile_options_parse_and_validate(monkeypatch, tmp_path) -> None:
             "delayed",
             "--fp8-fallback-dtype",
             "fp16",
-            "--triton-storage",
+            "--neuron-storage",
             "float8_e4m3fn",
-            "--triton-fwd",
+            "--neuron-fwd",
             "fp16",
-            "--triton-bwd",
+            "--neuron-bwd",
             "bf16",
             "--output",
             str(tmp_path / "profile.json"),
@@ -111,9 +111,9 @@ def test_profile_options_parse_and_validate(monkeypatch, tmp_path) -> None:
     assert args.precisions == ["fp8"]
     assert args.fp8_recipe == "delayed"
     assert args.fp8_fallback_dtype == "fp16"
-    assert args.triton_storage == "float8_e4m3fn"
-    assert args.triton_fwd == "fp16"
-    assert args.triton_bwd == "bf16"
+    assert args.neuron_storage == "float8_e4m3fn"
+    assert args.neuron_fwd == "fp16"
+    assert args.neuron_bwd == "bf16"
 
 
 def test_profile_validation_rejects_multiple_precisions(tmp_path) -> None:
@@ -185,7 +185,6 @@ def test_profile_hooks_write_first_tensor_metadata_and_balance_nvtx(
         hidden_dim=4,
         num_classes=2,
         tau=2.0,
-        backend="torch",
         depth=2,
         attention_every=0,
         num_heads=1,
@@ -228,7 +227,6 @@ def test_benchmark_releases_training_state_before_inference(monkeypatch) -> None
         hidden_dim=4,
         num_classes=2,
         tau=2.0,
-        backend="torch",
         depth=2,
         attention_every=0,
         num_heads=1,
@@ -244,9 +242,9 @@ def test_benchmark_releases_training_state_before_inference(monkeypatch) -> None
         tensor_metadata_output=None,
         fp8_recipe="delayed",
         fp8_fallback_dtype="bf16",
-        triton_storage=None,
-        triton_fwd="fp32",
-        triton_bwd="fp32",
+        neuron_storage=None,
+        neuron_fwd="fp32",
+        neuron_bwd="fp32",
     )
     base_model = benchmark.build_model(args)
     x_seq = torch.randn(2, args.batch_size, args.input_dim)

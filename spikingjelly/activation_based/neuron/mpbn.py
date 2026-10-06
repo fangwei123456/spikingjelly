@@ -18,7 +18,6 @@ class MPBNBaseNode(BaseNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
-        backend="torch",
         store_v_seq: bool = False,
         mpbn: bool = True,
         out_features=None,
@@ -119,9 +118,8 @@ class MPBNBaseNode(BaseNode):
             v_reset,
             surrogate_function,
             detach_reset,
-            step_mode,
-            backend,
-            store_v_seq,
+            step_mode=step_mode,
+            store_v_seq=store_v_seq,
         )
         if (out_features is None) == (out_channels is None):
             raise ValueError("Specify exactly one of out_features or out_channels.")
@@ -184,7 +182,6 @@ class MPBNLIFNode(MPBNBaseNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
-        backend="torch",
         store_v_seq: bool = False,
         mpbn: bool = True,
         out_features=None,
@@ -256,24 +253,19 @@ class MPBNLIFNode(MPBNBaseNode):
             v_reset,
             surrogate_function,
             detach_reset,
-            step_mode,
-            backend,
-            store_v_seq,
-            mpbn,
-            out_features,
-            out_channels,
-            learnable_vth,
-            bn_momentum,
-            bn_decay_momentum,
-            bn_min_momentum,
+            step_mode=step_mode,
+            store_v_seq=store_v_seq,
+            mpbn=mpbn,
+            out_features=out_features,
+            out_channels=out_channels,
+            learnable_vth=learnable_vth,
+            bn_momentum=bn_momentum,
+            bn_decay_momentum=bn_decay_momentum,
+            bn_min_momentum=bn_min_momentum,
         )
 
         self.tau = tau
         self.decay_input = decay_input
-
-    @property
-    def supported_backends(self):
-        return "torch"
 
     def _normalization_state(self):
         return {

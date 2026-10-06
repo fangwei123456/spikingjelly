@@ -3,7 +3,7 @@
 import torch
 
 from ..selection import _CudaSelection
-from . import cpu as _cpu  # noqa: F401
+from . import cpu as _cpu
 
 _selection = _CudaSelection(
     __name__,
@@ -18,8 +18,9 @@ def _pack(x):
 
 
 def _unpack(packed, shape, dtype=torch.uint8):
-    selected = _selection.get_trace_forward(packed.device)
-    name = selected._schema.name.split("::")[1].replace("_forward", "_unpack")
-    return getattr(torch.ops.sj_spike_compress, name).default(
-        packed, list(shape), dtype
+    implementation = (
+        _cpu._unpack
+        if packed.device.type == "cpu"
+        else _selection._get_cuda_selection(packed.device).unpack
     )
+    return implementation(packed, list(shape), dtype)

@@ -9,10 +9,6 @@ __all__ = ["OTTTLIFNode", "SLTTLIFNode"]
 
 
 class _OnlineLIFNode(LIFNode):
-    @property
-    def supported_backends(self):
-        return "torch"
-
     def single_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
@@ -44,7 +40,6 @@ class OTTTLIFNode(_OnlineLIFNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = True,
         step_mode="s",
-        backend="torch",
         store_v_seq: bool = False,
     ):
         r"""
@@ -56,8 +51,8 @@ class OTTTLIFNode(_OnlineLIFNode):
 
         * **中文**
 
-        用于 OTTT 训练的单步 LIF 神经元。该类继承 :class:`LIFNode` 的放电行为，但仅支持
-        ``step_mode='s'`` 和 ``backend='torch'``，并在训练时额外维护迹以供后续模块使用。
+        用于 OTTT 训练的单步 LIF 神经元。该类继承 :class:`LIFNode` 的放电行为，
+        仅支持 ``step_mode='s'``，并在训练时额外维护迹以供后续模块使用。
 
         OTTT LIF 神经元模型，来源于
         `Online Training Through Time for Spiking Neural Networks
@@ -88,9 +83,6 @@ class OTTTLIFNode(_OnlineLIFNode):
         :param step_mode: 步进模式。为了保证神经元的显存占用较小，仅支持 ``'s'`` （单步）
         :type step_mode: str
 
-        :param backend: 使用的后端。当前实现仅支持 ``'torch'``，其他取值会触发
-            ``ValueError``
-        :type backend: str
 
         :param store_v_seq: 传递给 :class:`LIFNode` 的参数。本类仅支持单步模式，设置为
             ``True`` 时每个时间步结束后的电压会被追加到 ``self.v_seq`` ，直到调用
@@ -104,9 +96,8 @@ class OTTTLIFNode(_OnlineLIFNode):
         * **English**
 
         Single-step LIF neuron for OTTT training. This class inherits the firing
-        behavior of :class:`LIFNode`, but only supports ``step_mode='s'`` and
-        ``backend='torch'``. During training it also maintains a trace for
-        downstream modules.
+        behavior of :class:`LIFNode` but only supports ``step_mode='s'``. During
+        training it also maintains a trace for downstream modules.
 
         OTTT LIF neuron, proposed in
         `Online Training Through Time for Spiking Neural Networks
@@ -143,10 +134,6 @@ class OTTTLIFNode(_OnlineLIFNode):
             only ``'s'`` (single-step) mode is supported
         :type step_mode: str
 
-        :param backend: backend for this neuron layer. The current
-            implementation only supports ``'torch'``; other values raise
-            ``ValueError``
-        :type backend: str
 
         :param store_v_seq: forwarded to :class:`LIFNode`. This class only supports
             single-step mode, so when ``True`` the voltage after each time-step is
@@ -163,7 +150,6 @@ class OTTTLIFNode(_OnlineLIFNode):
             surrogate_function,
             detach_reset,
             step_mode,
-            backend,
             store_v_seq,
         )
         assert step_mode == "s", (
@@ -218,7 +204,6 @@ class SLTTLIFNode(_OnlineLIFNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = True,
         step_mode="s",
-        backend="torch",
         store_v_seq: bool = False,
     ):
         r"""
@@ -230,8 +215,8 @@ class SLTTLIFNode(_OnlineLIFNode):
 
         * **中文**
 
-        用于 SLTT 训练的单步 LIF 神经元。该类继承 :class:`LIFNode` 的放电行为，但仅支持
-        ``step_mode='s'`` 和 ``backend='torch'``，并通过截断时间梯度来降低训练的时间与显存开销。
+        用于 SLTT 训练的单步 LIF 神经元。该类继承 :class:`LIFNode` 的放电行为，
+        仅支持 ``step_mode='s'``，并通过截断时间梯度来降低训练的时间与显存开销。
 
         SLTT LIF 神经元模型，来源于
         `Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks
@@ -263,9 +248,6 @@ class SLTTLIFNode(_OnlineLIFNode):
         :param step_mode: 步进模式。为了保证神经元的显存占用较小，仅支持 ``'s'`` （单步）
         :type step_mode: str
 
-        :param backend: 使用的后端。当前实现仅支持 ``'torch'``，其他取值会触发
-            ``ValueError``
-        :type backend: str
 
         :param store_v_seq: 传递给 :class:`LIFNode` 的参数。本类仅支持单步模式，设置为
             ``True`` 时每个时间步结束后的电压会被追加到 ``self.v_seq`` ，直到调用
@@ -279,8 +261,8 @@ class SLTTLIFNode(_OnlineLIFNode):
         * **English**
 
         Single-step LIF neuron for SLTT training. This class inherits the firing
-        behavior of :class:`LIFNode`, but only supports ``step_mode='s'`` and
-        ``backend='torch'``. It reduces training time and memory cost by truncating
+        behavior of :class:`LIFNode` but only supports ``step_mode='s'``. It
+        reduces training time and memory cost by truncating
         temporal gradients.
 
         SLTT LIF neuron, proposed in
@@ -318,10 +300,6 @@ class SLTTLIFNode(_OnlineLIFNode):
             only ``'s'`` (single-step) mode is supported
         :type step_mode: str
 
-        :param backend: backend for this neuron layer. The current
-            implementation only supports ``'torch'``; other values raise
-            ``ValueError``
-        :type backend: str
 
         :param store_v_seq: forwarded to :class:`LIFNode`. This class only supports
             single-step mode, so when ``True`` the voltage after each time-step is
@@ -337,7 +315,6 @@ class SLTTLIFNode(_OnlineLIFNode):
             surrogate_function,
             detach_reset,
             step_mode,
-            backend,
             store_v_seq,
         )
         assert step_mode == "s", (

@@ -11,6 +11,47 @@ from spikingjelly.logger import logger
 from .native_loader import _check_native_device
 
 
+def _require_automatic_torch(
+    selection: "_CudaSelection", device: torch.device, reason: str
+) -> None:
+    if device.type != "cuda":
+        return
+    if selection._requested != "auto":
+        raise RuntimeError(
+            f"{selection._environment_variable}={selection._requested!r} cannot "
+            f"run this execution profile: {reason}."
+        )
+    index = device.index
+    if index is None:
+        index = torch.cuda.current_device()
+    key = (index, reason)
+    with selection._lock:
+        if key not in selection._selections:
+            selection._selections[key] = None
+            logger.info(
+                "ops selection operator={} device=cuda:{} ({}) implementation=torch-reference profile=fallback reason={}",
+                selection._namespace,
+                index,
+                torch.cuda.get_device_name(index),
+                reason,
+            )
+
+
+def _require_provider(
+    selection: "_CudaSelection",
+    device: torch.device,
+    implementation: str,
+    reason: str,
+) -> None:
+    if device.type != "cuda":
+        raise RuntimeError(f"{reason} requires CUDA.")
+    if selection._requested not in ("auto", implementation):
+        raise RuntimeError(
+            f"{selection._environment_variable}={selection._requested!r} cannot "
+            f"run this execution profile: {reason} requires {implementation}."
+        )
+
+
 class _CudaImplementation(NamedTuple):
     name: str
     trace_forward: Callable
@@ -19,6 +60,7 @@ class _CudaImplementation(NamedTuple):
     eager_forward: Callable
     eager_backward: Optional[Callable]
     cache_tag: str = ""
+    unpack: Optional[Callable] = None
 
 
 class _CudaSelection:
@@ -42,7 +84,7 @@ class _CudaSelection:
         self._lock = threading.Lock()
 
     def _select(self, index: int):
-        priority = ("cuda", "triton", "cupy")
+        priority = ("cuda", "triton", "cupy", "torch")
         if self._requested not in ("auto", *priority):
             raise ValueError(
                 f"{self._environment_variable} must be auto, cuda, triton, or cupy; "
@@ -50,13 +92,15 @@ class _CudaSelection:
             )
         if torch.version.hip:
             raise RuntimeError(
-                "Experimental neuron CUDA implementations require NVIDIA CUDA"
+                "SpikingJelly neuron CUDA implementations require NVIDIA CUDA"
             )
         unavailable = {}
         candidates = priority if self._requested == "auto" else (self._requested,)
         with torch.cuda.device(index):
             for name in candidates:
                 module_name = "native" if name == "cuda" else name
+                if name == "torch":
+                    module_name = "cpu"
                 try:
                     module = importlib.import_module(f".{module_name}", self._package)
                     if name == "cuda":
@@ -77,6 +121,11 @@ class _CudaSelection:
                         )
                         if backward_impl is not None
                         else None
+                    )
+                elif name == "torch":
+                    trace_forward = forward_impl = module._forward_impl
+                    trace_backward = backward_impl = getattr(
+                        module, "_backward_impl", None
                     )
                 else:
                     trace_forward = getattr(
@@ -99,6 +148,7 @@ class _CudaSelection:
                     trace_backward,
                     forward_impl,
                     backward_impl,
+                    unpack=getattr(module, "_unpack", None),
                 )
                 if self._on_select is not None:
                     selected = self._on_select(self._namespace, index, module, selected)
@@ -113,7 +163,7 @@ class _CudaSelection:
             return self._cpu_forward
         if device.type != "cuda":
             raise RuntimeError(
-                f"Experimental neurons support CPU and NVIDIA CUDA, not {device}"
+                f"SpikingJelly neurons support CPU and NVIDIA CUDA, not {device}"
             )
         return self._get_cuda_selection(device).trace_forward
 
@@ -132,15 +182,16 @@ class _CudaSelection:
         index = device.index
         if index is None:
             index = torch.cuda.current_device()
-        if index not in self._selections:
+        key = index
+        if key not in self._selections:
             with self._lock:
-                if index not in self._selections:
-                    self._selections[index] = self._select(index)
-        return self._selections[index]
+                if key not in self._selections:
+                    self._selections[key] = self._select(index)
+        return self._selections[key]
 
     def diagnostics(self, device: torch.device) -> dict[str, object]:
         if device.type != "cuda":
-            raise ValueError("get_cuda_implementation expects a CUDA device")
+            raise ValueError("neuron_implementation expects a CUDA device")
         self.get_trace_forward(device)
         index = (
             device.index if device.index is not None else torch.cuda.current_device()

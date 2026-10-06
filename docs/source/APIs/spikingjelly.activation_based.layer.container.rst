@@ -13,4 +13,4 @@ For more information, refer to :doc:`../tutorials/en/container` .
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr

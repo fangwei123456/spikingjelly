@@ -1,99 +1,8 @@
-from spikingjelly.logger import logger
 import copy
 from typing import Tuple, Generator, Optional, Callable
 
 import torch
 import torch.nn as nn
-
-try:
-    import cupy
-except (ImportError, OSError) as e:
-    logger.info("Optional CuPy backend unavailable: {}", e)
-    _CUPY_IMPORT_ERROR = e
-    cupy = None
-else:
-    _CUPY_IMPORT_ERROR = None
-
-try:
-    import triton
-except (ImportError, OSError) as e:
-    logger.info("Optional Triton backend unavailable: {}", e)
-    _TRITON_IMPORT_ERROR = e
-    triton = None
-else:
-    _TRITON_IMPORT_ERROR = None
-
-try:
-    import lava.lib.dl.slayer as slayer
-except (ImportError, OSError) as e:
-    _LAVA_IMPORT_ERROR = e
-    slayer = None
-else:
-    _LAVA_IMPORT_ERROR = None
-
-
-def check_backend_library(backend: str):
-    r"""
-    **API Language** - :ref:`中文 <check_backend_library-cn>` | :ref:`English <check_backend_library-en>`
-
-    ----
-
-    .. _check_backend_library-cn:
-
-    * **中文**
-
-    检查某个后端的python库是否已经安装。若未安装则此函数会报 ``ImportError`` 。
-
-    :param backend: ``'torch'``, ``'cupy'``, ``'triton'`` 或 ``'lava'``
-    :type backend: str
-
-    :raises ImportError: 若所请求后端依赖的 Python 库未安装，则抛出 ``ImportError``
-
-    ----
-
-    .. _check_backend_library-en:
-
-    * **English**
-
-    Check whether the python lib for backend is installed.
-    If not, this function will raise an ``ImportError`` .
-
-    :param backend: ``'torch'``, ``'cupy'``, ``'triton'`` or ``'lava'``
-    :type backend: str
-
-    :raises ImportError: Raised when the Python package required by ``backend`` is not installed
-    """
-    if backend == "torch":
-        return
-    elif backend == "cupy":
-        if cupy is None:
-            error = ImportError(
-                "CuPy is not installed! "
-                'You can install it from "https://github.com/cupy/cupy".'
-            )
-            if _CUPY_IMPORT_ERROR is not None:
-                raise error from _CUPY_IMPORT_ERROR
-            raise error
-    elif backend == "triton":
-        if triton is None:
-            error = ImportError(
-                "Triton is not installed! "
-                'You can install it from "https://github.com/openai/triton".'
-            )
-            if _TRITON_IMPORT_ERROR is not None:
-                raise error from _TRITON_IMPORT_ERROR
-            raise error
-    elif backend == "lava":
-        if slayer is None:
-            error = ImportError(
-                "Lava-DL is not installed! You can install it from "
-                '"https://github.com/lava-nc/lava-dl". '
-            )
-            if _LAVA_IMPORT_ERROR is not None:
-                raise error from _LAVA_IMPORT_ERROR
-            raise error
-    else:
-        pass
 
 
 class StepModule:
@@ -341,103 +250,7 @@ class MemoryModule(nn.Module, StepModule):
         super().__init__()
         self._memories = {}
         self._memories_rv = {}
-        self._backend = "torch"
         self._step_mode = "s"
-
-    @property
-    def supported_backends(self) -> Tuple[str]:
-        r"""
-        **API Language** - :ref:`中文 <MemoryModule.supported_backends-cn>` | :ref:`English <MemoryModule.supported_backends-en>`
-
-        ----
-
-        .. _MemoryModule.supported_backends-cn:
-
-        * **中文**
-
-        :return: 支持的后端
-        :rtype: Tuple[str]
-
-        ----
-
-        .. _MemoryModule.supported_backends-en:
-
-        * **English**
-
-        :return: supported backends
-        :rtype: Tuple[str]
-        """
-        return ("torch",)
-
-    @property
-    def backend(self):
-        r"""
-        **API Language** - :ref:`中文 <MemoryModule.backend-cn>` | :ref:`English <MemoryModule.backend-en>`
-
-        ----
-
-        .. _MemoryModule.backend-cn:
-
-        * **中文**
-
-        :return: 当前后端名称
-        :rtype: str
-
-        ----
-
-        .. _MemoryModule.backend-en:
-
-        * **English**
-
-        :return: the name of the current backend
-        :rtype: str
-        """
-        return self._backend
-
-    @backend.setter
-    def backend(self, value: str):
-        r"""
-        **API Language** - :ref:`中文 <MemoryModule.backend-setter-cn>` | :ref:`English <MemoryModule.backend-setter-en>`
-
-        ----
-
-        .. _MemoryModule.backend-setter-cn:
-
-        * **中文**
-
-        设置当前模块的后端。
-
-        只有当 ``value`` 属于 :meth:`supported_backends` 且对应依赖库已安装时，
-        赋值才会成功。
-
-        :param value: 目标后端名称
-        :type value: str
-        :raises NotImplementedError: 当 ``value`` 不在 ``supported_backends`` 中时抛出
-        :raises ImportError: 当 ``value`` 对应的后端库未安装时抛出
-
-        ----
-
-        .. _MemoryModule.backend-setter-en:
-
-        * **English**
-
-        Set the backend of the current module.
-
-        The assignment succeeds only when ``value`` is listed in
-        :meth:`supported_backends` and the corresponding backend library is
-        installed.
-
-        :param value: Target backend name
-        :type value: str
-        :raises NotImplementedError: Raised when ``value`` is not listed in ``supported_backends``
-        :raises ImportError: Raised when the backend library required by ``value`` is not installed
-        """
-        if value not in self.supported_backends:
-            raise NotImplementedError(
-                f"{value} is not a supported backend of {self._get_name()}!"
-            )
-        check_backend_library(value)
-        self._backend = value
 
     def materialize_states(
         self,
@@ -802,7 +615,7 @@ class MemoryModule(nn.Module, StepModule):
 
         返回附加到 ``nn.Module.__repr__`` 输出中的摘要字符串。
 
-        :return: 附加到模块字符串表示中的摘要，包含 ``step_mode`` 与 ``backend``
+        :return: 附加到模块字符串表示中的步进模式摘要。
         :rtype: str
 
         ----
@@ -813,10 +626,10 @@ class MemoryModule(nn.Module, StepModule):
 
         Return the summary string appended to ``nn.Module.__repr__``.
 
-        :return: Summary appended to the module string representation, including ``step_mode`` and ``backend``
+        :return: Step-mode summary appended to the module string representation.
         :rtype: str
         """
-        return f"step_mode={self.step_mode}, backend={self.backend}"
+        return f"step_mode={self.step_mode}"
 
     def register_memory(self, name: str, value):
         r"""

@@ -387,11 +387,9 @@ def _environment_metadata(
 
 def _build_model(
     name: str,
-    backend: str,
     T: int,
     num_classes: int,
     neuron_family: str = "lif",
-    experimental_neurons: bool = False,
     surrogate_name: str | None = None,
 ):
     from spikingjelly.activation_based import functional, neuron, surrogate
@@ -402,7 +400,6 @@ def _build_model(
         "tau": 2.0,
         "detach_reset": True,
         "step_mode": "m",
-        "backend": backend,
     }
     if name == "spiking_vgg16_bn":
         model = spiking_vgg.spiking_vgg16_bn(num_classes=num_classes, **node_kwargs)
@@ -411,9 +408,9 @@ def _build_model(
             cnf="ADD", num_classes=num_classes, **node_kwargs
         )
     elif name == "spikformer_ti":
-        model = spikformer.spikformer_ti(T=T, num_classes=num_classes, backend=backend)
+        model = spikformer.spikformer_ti(T=T, num_classes=num_classes)
     elif name == "spikformer_s":
-        model = spikformer.spikformer_s(T=T, num_classes=num_classes, backend=backend)
+        model = spikformer.spikformer_s(T=T, num_classes=num_classes)
     else:
         raise ValueError(name)
     if surrogate_name is not None:
@@ -421,23 +418,12 @@ def _build_model(
             if isinstance(module, neuron.BaseNode):
                 module.surrogate_function = getattr(surrogate, surrogate_name)()
     functional.set_step_mode(model, "m")
-    if neuron_family != "lif" or experimental_neurons:
-        if experimental_neurons:
-            from spikingjelly.activation_based.neuron.experimental import (
-                ExperimentalIFNode,
-                ExperimentalLIFNode,
-                ExperimentalParametricLIFNode,
-            )
-
-            node_class = {
-                "if": ExperimentalIFNode,
-                "lif": ExperimentalLIFNode,
-                "plif": ExperimentalParametricLIFNode,
-            }[neuron_family]
-        else:
-            node_class = {"if": neuron.IFNode, "plif": neuron.ParametricLIFNode}[
-                neuron_family
-            ]
+    if neuron_family != "lif":
+        node_class = {
+            "if": neuron.IFNode,
+            "plif": neuron.ParametricLIFNode,
+            "izhikevich": neuron.IzhikevichNode,
+        }[neuron_family]
         for parent in list(model.modules()):
             for attribute, child in list(parent.named_children()):
                 if type(child) is not neuron.LIFNode:
@@ -447,20 +433,14 @@ def _build_model(
                     v_reset=child.v_reset,
                     detach_reset=child.detach_reset,
                     store_v_seq=child.store_v_seq,
+                    surrogate_function=child.surrogate_function,
+                    step_mode="m",
                 )
-                if experimental_neurons:
-                    parameters["surrogate_function"] = child.surrogate_function
-                else:
-                    parameters.update(
-                        surrogate_function=child.surrogate_function,
-                        backend=backend,
-                        step_mode="m",
-                    )
-                if neuron_family != "if":
-                    parameters["tau" if neuron_family == "lif" else "init_tau"] = (
-                        child.tau
-                    )
+                if neuron_family == "plif":
+                    parameters["init_tau"] = child.tau
                     parameters["decay_input"] = child.decay_input
+                elif neuron_family == "izhikevich":
+                    parameters["tau"] = child.tau
                 setattr(parent, attribute, node_class(**parameters))
     return model
 
@@ -503,12 +483,6 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("module metadata requires an eager diagnostic run")
     if args.tensor_metadata and not args.profile:
         raise ValueError("module metadata requires --profile")
-    if args.experimental_neurons and (
-        args.precision == "fp8" or args.execution != "eager"
-    ):
-        raise ValueError(
-            "experimental neuron benchmarks require eager FP32, FP16 or BF16"
-        )
     source_root = Path(
         os.environ.get("SJ_BENCH_SOURCE_ROOT", Path(__file__).parents[1])
     ).resolve()
@@ -541,11 +515,9 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
     metadata = _environment_metadata(source_root, device, package_file, gpu_selector)
     model = _build_model(
         args.model,
-        args.neuron_backend,
         args.T,
         args.num_classes,
         args.neuron_family,
-        args.experimental_neurons,
         args.surrogate,
     ).to(device)
     precision = prepare_model_for_precision(
@@ -555,9 +527,9 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
             mode=args.precision,
             fp8_recipe=args.fp8_recipe,
             fp8_fallback_dtype=args.fp8_fallback_dtype,
-            triton_storage=args.triton_storage,
-            triton_fwd=args.triton_fwd,
-            triton_bwd=args.triton_bwd,
+            neuron_storage=args.neuron_storage,
+            neuron_fwd=args.neuron_fwd,
+            neuron_bwd=args.neuron_bwd,
         ),
     )
     model = precision.model
@@ -726,17 +698,8 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         _stop_monitor(monitor)
 
     dynamo_metrics = _dynamo_metrics()
-    selected_backend = args.neuron_backend
-    if args.experimental_neurons:
-        import importlib
-
-        operation_module = importlib.import_module(
-            "spikingjelly._ops."
-            + ("if_" if args.neuron_family == "if" else args.neuron_family)
-        )
-        selection = operation_module.get_cuda_implementation(device)
-        metadata["experimental_neuron_implementation"] = selection
-        selected_backend = f"experimental_{selection['implementation']}"
+    selection = functional.neuron_implementation(args.neuron_family, device)
+    metadata["neuron_implementation"] = selection["implementation"]
     result = {
         "schema_version": 1,
         "source_label": args.source_label,
@@ -748,16 +711,13 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
             "world_size": 1,
             "parallelism": "single",
             "microbatches": 1,
-            "backend": selected_backend,
             "dtype": "float32",
             "T": args.T,
             "batch_size": args.batch_size,
             "image_size": args.image_size,
             "num_classes": args.num_classes,
             "channels_last": args.channels_last,
-            "neuron_backend": selected_backend,
             "neuron_family": args.neuron_family,
-            "experimental_neurons": args.experimental_neurons,
             "surrogate": args.surrogate or "model-default",
             "precision": args.precision,
             "warmup": args.warmup,
@@ -875,8 +835,6 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
                             str(args.seed),
                             "--device",
                             str(args.device),
-                            "--neuron-backend",
-                            args.neuron_backend,
                             "--neuron-family",
                             args.neuron_family,
                             "--precision",
@@ -898,18 +856,16 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
                             command.extend(["--surrogate", args.surrogate])
                         if args.profile:
                             command.append("--profile")
-                        if args.experimental_neurons:
-                            command.append("--experimental-neurons")
                         if args.channels_last:
                             command.append("--channels-last")
                         if args.require_gpu_name:
                             command.extend(
                                 ["--require-gpu-name", args.require_gpu_name]
                             )
-                        if args.triton_storage is not None:
-                            command.extend(["--triton-storage", args.triton_storage])
-                        command.extend(["--triton-fwd", args.triton_fwd])
-                        command.extend(["--triton-bwd", args.triton_bwd])
+                        if args.neuron_storage is not None:
+                            command.extend(["--neuron-storage", args.neuron_storage])
+                        command.extend(["--neuron-fwd", args.neuron_fwd])
+                        command.extend(["--neuron-bwd", args.neuron_bwd])
                         command.extend(
                             [
                                 "--compile-layout-optimization",
@@ -978,8 +934,11 @@ def _add_case_parser(subparsers) -> None:
     parser.add_argument("--phase", choices=PHASES, required=True)
     parser.add_argument("--execution", choices=EXECUTIONS, required=True)
     parser.add_argument("--batch-size", type=int, required=True)
-    parser.add_argument("--neuron-family", choices=("if", "lif", "plif"), default="lif")
-    parser.add_argument("--experimental-neurons", action="store_true")
+    parser.add_argument(
+        "--neuron-family",
+        choices=("if", "lif", "plif", "izhikevich"),
+        default="lif",
+    )
     parser.add_argument(
         "--surrogate",
         choices=(
@@ -1001,9 +960,6 @@ def _add_case_parser(subparsers) -> None:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument(
-        "--neuron-backend", choices=("torch", "cupy", "triton"), default="triton"
-    )
-    parser.add_argument(
         "--precision", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
     )
     parser.add_argument(
@@ -1017,14 +973,14 @@ def _add_case_parser(subparsers) -> None:
         default="bf16",
     )
     parser.add_argument(
-        "--triton-storage",
+        "--neuron-storage",
         choices=("fp32", "fp16", "bf16", "float8_e4m3fn", "float8_e5m2"),
     )
     parser.add_argument(
-        "--triton-fwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+        "--neuron-fwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
     )
     parser.add_argument(
-        "--triton-bwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+        "--neuron-bwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
     )
     parser.add_argument(
         "--compile-layout-optimization", choices=("default", "off"), default="default"
@@ -1047,8 +1003,11 @@ def _add_matrix_parser(subparsers) -> None:
     parser = subparsers.add_parser(
         "matrix", help="run source trees in alternating isolated processes"
     )
-    parser.add_argument("--neuron-family", choices=("if", "lif", "plif"), default="lif")
-    parser.add_argument("--experimental-neurons", action="store_true")
+    parser.add_argument(
+        "--neuron-family",
+        choices=("if", "lif", "plif", "izhikevich"),
+        default="lif",
+    )
     parser.add_argument(
         "--surrogate",
         choices=(
@@ -1086,9 +1045,6 @@ def _add_matrix_parser(subparsers) -> None:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument(
-        "--neuron-backend", choices=("torch", "cupy", "triton"), default="triton"
-    )
-    parser.add_argument(
         "--precision", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
     )
     parser.add_argument(
@@ -1102,14 +1058,14 @@ def _add_matrix_parser(subparsers) -> None:
         default="bf16",
     )
     parser.add_argument(
-        "--triton-storage",
+        "--neuron-storage",
         choices=("fp32", "fp16", "bf16", "float8_e4m3fn", "float8_e5m2"),
     )
     parser.add_argument(
-        "--triton-fwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+        "--neuron-fwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
     )
     parser.add_argument(
-        "--triton-bwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+        "--neuron-bwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
     )
     parser.add_argument(
         "--compile-layout-optimization", choices=("default", "off"), default="default"

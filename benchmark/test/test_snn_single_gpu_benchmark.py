@@ -6,7 +6,6 @@ import pytest
 import torch
 
 import benchmark.benchmark_snn_single_gpu as benchmark
-import benchmark.probe_snn_compile_boundary as probe
 
 
 def _record(label: str, round_index: int, latency_ms: float, peak_bytes: int):
@@ -56,69 +55,37 @@ def test_case_parser_keeps_required_reproduction_fields(tmp_path: Path):
         "inference",
         "compile",
     )
-    assert (args.neuron_backend, args.precision, args.fp8_recipe) == (
-        "triton",
+    assert (args.neuron_family, args.precision, args.fp8_recipe) == (
+        "lif",
         "fp32",
         "auto",
     )
     assert args.fp8_fallback_dtype == "bf16"
 
 
-def test_case_parser_accepts_cupy_backend(tmp_path: Path):
-    args = benchmark.build_parser().parse_args(
-        [
-            "case",
-            "--model",
-            "spikformer_ti",
-            "--phase",
-            "training",
-            "--execution",
-            "eager",
-            "--batch-size",
-            "16",
-            "--warmup",
-            "30",
-            "--steps",
-            "25",
-            "--neuron-backend",
-            "cupy",
-            "--output",
-            str(tmp_path / "cupy.json"),
-        ]
-    )
-    assert args.neuron_backend == "cupy"
-
-
-@pytest.mark.parametrize("family", ["if", "lif", "plif"])
-def test_experimental_spikformer_preserves_neuron_parameters(family):
-    from spikingjelly.activation_based import functional, neuron
-    from spikingjelly.activation_based.neuron import experimental
-
-    expected = benchmark._build_model("spikformer_ti", "torch", 4, 10)
-    actual = benchmark._build_model("spikformer_ti", "torch", 4, 10, family, True)
-    reference_nodes = [m for m in expected.modules() if type(m) is neuron.LIFNode]
-    node_class = {
-        "if": experimental.ExperimentalIFNode,
-        "lif": experimental.ExperimentalLIFNode,
-        "plif": experimental.ExperimentalParametricLIFNode,
-    }[family]
-    actual_nodes = [m for m in actual.modules() if type(m) is node_class]
-    assert len(actual_nodes) == len(reference_nodes) > 0
-    assert not any(isinstance(m, neuron.BaseNode) for m in actual.modules())
-    for old, new in zip(reference_nodes, actual_nodes, strict=True):
-        assert (new.v_threshold, new.v_reset, new.detach_reset) == (
-            old.v_threshold,
-            old.v_reset,
-            old.detach_reset,
+def test_case_parser_rejects_removed_backend_option(tmp_path: Path):
+    with pytest.raises(SystemExit):
+        benchmark.build_parser().parse_args(
+            [
+                "case",
+                "--model",
+                "spikformer_ti",
+                "--phase",
+                "training",
+                "--execution",
+                "eager",
+                "--batch-size",
+                "16",
+                "--warmup",
+                "30",
+                "--steps",
+                "25",
+                "--neuron-backend",
+                "cupy",
+                "--output",
+                str(tmp_path / "removed.json"),
+            ]
         )
-        assert new.alpha == old.surrogate_function.alpha
-        if family == "lif":
-            assert (new.tau, new.decay_input) == (old.tau, old.decay_input)
-        elif family == "plif":
-            torch.testing.assert_close(new.w.sigmoid(), torch.tensor(1 / old.tau))
-        new(torch.ones(2, 3))
-    functional.reset_net(actual)
-    assert all(m.v is None and m.v_seq is None for m in actual_nodes)
 
 
 def test_spikformer_s_uses_image_batch():
@@ -133,6 +100,20 @@ def test_spikformer_s_uses_image_batch():
     x, target = benchmark._make_batch(args, torch.device("cpu"))
     assert x.shape == (2, 3, 32, 32)
     assert target.shape == (2,)
+
+
+def test_full_model_runner_supports_izhikevich_neurons():
+    from spikingjelly.activation_based import neuron
+
+    model = benchmark._build_model(
+        "sew_resnet18", T=2, num_classes=3, neuron_family="izhikevich"
+    )
+    neurons = [
+        module for module in model.modules() if isinstance(module, neuron.BaseNode)
+    ]
+    assert neurons
+    assert all(isinstance(module, neuron.IzhikevichNode) for module in neurons)
+    assert all(not hasattr(module, "backend") for module in neurons)
 
 
 def test_case_parser_builds_triton_throughput_compile_options(tmp_path: Path):
@@ -439,153 +420,16 @@ def test_aggregate_records_rejects_invalid_compile_metrics(metric):
     assert comparison["performance_gates"]["met"] is False
 
 
-@pytest.mark.parametrize(
-    ("case", "missing_api", "reason_code"),
-    [
-        ("triton_flexsn", "triton_op", "triton_op_unavailable"),
-        ("custom_lif", "wrap_triton", "wrap_triton_unavailable"),
-    ],
-)
-def test_probe_checks_registration_prerequisites(
-    monkeypatch, case, missing_api, reason_code
-):
-    monkeypatch.setattr(probe.torch.cuda, "is_available", lambda: True)
-    find_spec = probe.importlib.util.find_spec
-    monkeypatch.setattr(
-        probe.importlib.util,
-        "find_spec",
-        lambda name: object() if name == "triton" else find_spec(name),
-    )
-    monkeypatch.delattr(probe.torch.library, missing_api, raising=False)
-
-    result = probe._prerequisite_failure(case, "inference")
-
-    assert result["reason_code"] == reason_code
-
-
-def test_generated_code_counts_only_kernel_call_sites(tmp_path: Path):
-    generated = tmp_path / "output_code.py"
-    generated.write_text(
-        """
-triton_poi_fused_0.run(arg0, arg1)
-flexsn_forward_kernel_0.run(arg0, arg1)
-buf0 = extern_kernels.mm(arg0, arg1)
-wrapper.run(arg0)
-benchmark.run(arg0)
-""",
-        encoding="utf-8",
-    )
-
-    paths, _allocations, launches = probe._generated_code(tmp_path)
-
-    assert paths == [str(generated)]
-    assert launches == 3
-
-
-def test_probe_records_child_timeouts(monkeypatch, tmp_path: Path):
-    args = probe.build_parser().parse_args(
-        [
-            "--cases",
-            "torch_lif",
-            "--phases",
-            "inference",
-            "--timeout",
-            "1",
-            "--output",
-            str(tmp_path / "probe.json"),
-        ]
-    )
-
-    def timeout(command, **kwargs):
-        raise probe.subprocess.TimeoutExpired(command, kwargs["timeout"])
-
-    monkeypatch.setattr(probe.subprocess, "run", timeout)
-    result = probe.run_parent(args)["results"][0]
-
-    assert result["status"] == "error"
-    assert result["reason_code"] == "child_process_timeout"
-    assert result["kernel_launch_count"] is None
-    assert result["allocation_count"] is None
-    assert result["graph_break_count"] is None
-    assert result["registration_environment"] == {
-        "SJ_USE_TRITON_OP": "0",
-        "SJ_USE_WRAP_TRITON": "0",
-    }
-
-
-def test_probe_preserves_failed_child_stderr(monkeypatch, tmp_path: Path):
-    args = probe.build_parser().parse_args(
-        [
-            "--cases",
-            "torch_lif",
-            "--phases",
-            "inference",
-            "--output",
-            str(tmp_path / "probe.json"),
-        ]
-    )
-    stderr = "root cause\n" + "x" * 5000
-    completed = SimpleNamespace(stderr=stderr, returncode=1)
-    monkeypatch.setattr(probe.subprocess, "run", lambda *_args, **_kwargs: completed)
-
-    result = probe.run_parent(args)["results"][0]
-
-    assert Path(result["stderr_path"]).read_text(encoding="utf-8") == stderr
-    assert result["stderr_path"] in result["reason"]
-
-
-def test_flexsn_probe_core_is_differentiable():
-    x = probe.torch.randn(2, 3, requires_grad=True)
-    state = probe.torch.zeros_like(x)
-
-    output, next_state = probe._lif_core(x, state)
-    (output + next_state).sum().backward()
-
-    assert x.grad is not None
-
-
-def test_probe_clears_dynamo_counters():
-    counters = probe.torch._dynamo.utils.counters
-    counters["stats"]["unique_graphs"] = 7
-
-    probe._clear_dynamo_state()
-
-    assert not counters
-
-
 @pytest.mark.parametrize("family", ["if", "lif", "plif"])
-@pytest.mark.parametrize("experimental", [False, True])
-def test_atan_override_reaches_every_neuron(family, experimental):
+def test_atan_override_reaches_every_neuron(family):
     from spikingjelly.activation_based import neuron, surrogate
-    from spikingjelly.activation_based.neuron.experimental import (
-        ExperimentalIFNode,
-        ExperimentalLIFNode,
-        ExperimentalParametricLIFNode,
-    )
 
-    model = benchmark._build_model(
-        "spikformer_ti", "torch", 4, 10, family, experimental, "ATan"
-    )
-    nodes = [
-        m
-        for m in model.modules()
-        if isinstance(
-            m,
-            (
-                neuron.BaseNode,
-                ExperimentalIFNode,
-                ExperimentalLIFNode,
-                ExperimentalParametricLIFNode,
-            ),
-        )
-    ]
+    model = benchmark._build_model("spikformer_ti", 4, 10, family, "ATan")
+    nodes = [m for m in model.modules() if isinstance(m, neuron.BaseNode)]
     assert len(nodes) > 0
     for node in nodes:
-        if experimental:
-            assert node._surrogate_id == 1 and node.alpha == 2.0
-        else:
-            assert type(node.surrogate_function) is surrogate.ATan
-            assert node.surrogate_function.alpha == 2.0
+        assert type(node.surrogate_function) is surrogate.ATan
+        assert node.surrogate_function.alpha == 2.0
 
 
 def test_aggregate_records_separates_surrogates():

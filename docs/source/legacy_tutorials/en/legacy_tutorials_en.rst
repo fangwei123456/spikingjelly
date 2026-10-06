@@ -11,6 +11,7 @@ helpful.
 
    ann2snn_converter_legacy
    5_ann2snn
+   11_cext_neuron_with_lbl
 
 The predecessor of `Activation-based`
 --------------------------------------------

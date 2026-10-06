@@ -2,7 +2,7 @@ import argparse
 
 import torch
 
-from spikingjelly.activation_based import neuron
+from spikingjelly.activation_based import functional, neuron
 
 
 def _run_once(
@@ -68,35 +68,27 @@ def main() -> None:
         dtype=dtype,
         requires_grad=backward,
     )
-    results = {}
-    for backend in ("torch", "triton"):
-        node = neuron.ILIFNode(
-            step_mode="m",
-            backend=backend,
-            store_v_seq=False,
-        ).to(device="cuda", dtype=dtype)
-        node.train(backward)
-        if backward:
-            context = torch.enable_grad()
-        else:
-            context = torch.inference_mode()
-        with context:
-            results[backend] = _measure(
-                node,
-                x,
-                backward,
-                args.warmup,
-                args.repeat,
-            )
-
-    torch_ms, torch_memory = results["torch"]
-    triton_ms, triton_memory = results["triton"]
+    node = neuron.ILIFNode(step_mode="m", store_v_seq=False).to(
+        device="cuda", dtype=dtype
+    )
+    node.train(backward)
+    context = torch.enable_grad() if backward else torch.inference_mode()
+    with context:
+        auto_ms, auto_memory = _measure(
+            node,
+            x,
+            backward,
+            args.warmup,
+            args.repeat,
+        )
+    implementation = functional.neuron_implementation(
+        "ilif", torch.device("cuda")
+    )["implementation"]
     print(
         f"mode={args.mode} step_mode=m dtype={args.dtype} "
         f"T={args.T} numel={args.numel} "
-        f"torch={torch_ms:.3f}ms/{torch_memory:.1f}MiB "
-        f"triton={triton_ms:.3f}ms/{triton_memory:.1f}MiB "
-        f"speedup={torch_ms / triton_ms:.2f}x"
+        f"implementation={implementation} "
+        f"automatic={auto_ms:.3f}ms/{auto_memory:.1f}MiB"
     )
 
 

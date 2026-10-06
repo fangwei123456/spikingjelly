@@ -4,7 +4,6 @@ https://github.com/fla-org/flash-linear-attention/blob/main/fla/utils.py
 """
 
 import functools
-import os
 
 import torch
 
@@ -13,12 +12,14 @@ from spikingjelly.logger import logger
 
 from . import triton_missing as dummy
 
-triton_op = getattr(torch.library, "triton_op", None)
+triton_op = torch.library.triton_op
 
 _TRITON_IMPORT_ERROR = None
+do_bench_cudagraph = None
 try:
     import triton
     import triton.language as tl
+    from triton.testing import do_bench_cudagraph as do_bench_cudagraph
 
     type_dict = {
         torch.bool: tl.int1,
@@ -363,12 +364,7 @@ def normalize_cuda_device(device: torch.device | str) -> torch.device:
     return device
 
 
-_USE_TRITON_OP = (
-    _TRITON_IMPORT_ERROR is None
-    and triton_op is not None
-    and os.getenv("SJ_USE_TRITON_OP", "1").strip().lower()
-    not in ("0", "false", "off", "no")
-)
+_USE_TRITON_OP = _TRITON_IMPORT_ERROR is None
 
 
 def register_op(opname: str, mutates_args=()):

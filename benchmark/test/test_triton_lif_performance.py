@@ -198,18 +198,24 @@ def test_captured_graphs_write_same_buffers_and_read_live_inputs():
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_round_captures_the_active_production_backend(tmp_path, monkeypatch):
+def test_round_captures_the_automatically_dispatched_triton_path(
+    tmp_path, monkeypatch
+):
     pytest.importorskip("triton")
     if torch.cuda.get_allocator_backend() != "native":
         pytest.skip("shared graph buffers require the native CUDA allocator")
     from spikingjelly.activation_based import neuron, surrogate
+    from spikingjelly._ops.lif import _selection
+
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    monkeypatch.setattr(_selection, "_selections", {})
 
     class Network(torch.nn.Module):
         def __init__(self):
             super().__init__()
             self.linear = torch.nn.Linear(3, 1000)
             self.lif = neuron.LIFNode(
-                step_mode="m", backend="triton", surrogate_function=surrogate.ATan()
+                step_mode="m", surrogate_function=surrogate.ATan()
             )
 
         def forward(self, x):

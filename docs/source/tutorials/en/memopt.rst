@@ -253,14 +253,12 @@ Evaluation, prediction, generation, and model export omit training-time
 checkpoint wrappers. Because ``checkpoint_module`` preserves ``state_dict``
 keys, inference does not need a weight conversion step.
 
-Neuron Backends and ``torch.compile``
+Neuron Execution and ``torch.compile``
 -------------------------------------
 
-Memopt does not replace the neuron backend. Torch, CuPy, and Triton neurons can
-run inside a checkpoint when their functional forward path supports the selected
-backend. A custom backend that does not support this path will not become
-compatible just by adding memopt. Before a full training run, test forward and
-backward with the actual model, dtype, backend, and distributed topology.
+Memopt does not change neuron execution. It works with device-based neuron
+selection; validate training and backward with the actual model, dtype, and
+distributed topology.
 
 ``memopt.checkpoint`` uses PyTorch's non-reentrant checkpoint.
 The uncompressed, Boolean-compressed, and bit-compressed paths support

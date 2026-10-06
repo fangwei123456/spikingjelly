@@ -65,10 +65,25 @@ def _reference(
         ((4, 3, 130), False, 0.25, True),
     ],
 )
-def test_lif_linear_forward_backward(shape, decay_input, v_reset, detach_reset):
+@pytest.mark.parametrize(
+    "surrogate_name",
+    [
+        "Sigmoid",
+        "ATan",
+        "PiecewiseQuadratic",
+        "PiecewiseExp",
+        "SoftSign",
+        "SuperSpike",
+        "Erf",
+        "LogTailedReLU",
+    ],
+)
+def test_lif_linear_forward_backward(
+    shape, decay_input, v_reset, detach_reset, surrogate_name
+):
     torch.manual_seed(0)
     K, N = shape[-1], 70
-    sg = surrogate.ATan()
+    sg = getattr(surrogate, surrogate_name)()
     x = torch.randn(*shape, device="cuda", requires_grad=True)
     v = torch.randn(shape[-2], K, device="cuda", requires_grad=True)
     weight = torch.randn(N, K, device="cuda", requires_grad=True)
@@ -103,11 +118,24 @@ def test_lif_linear_forward_backward(shape, decay_input, v_reset, detach_reset):
         torch.testing.assert_close(actual.grad, expected.grad, rtol=2e-4, atol=2e-5)
 
 
-def test_if_linear_forward_backward():
+@pytest.mark.parametrize(
+    "surrogate_name",
+    [
+        "Sigmoid",
+        "ATan",
+        "PiecewiseQuadratic",
+        "PiecewiseExp",
+        "SoftSign",
+        "SuperSpike",
+        "Erf",
+        "LogTailedReLU",
+    ],
+)
+def test_if_linear_forward_backward(surrogate_name):
     torch.manual_seed(2)
     shape, v_reset = (4, 3, 130), None
     K, N = shape[-1], 70
-    sg = surrogate.ATan()
+    sg = getattr(surrogate, surrogate_name)()
     x = torch.randn(*shape, device="cuda", requires_grad=True)
     v = torch.randn(shape[-2], K, device="cuda", requires_grad=True)
     weight = torch.randn(N, K, device="cuda", requires_grad=True)
@@ -218,3 +246,39 @@ def test_neuron_linear_fake_and_compile(fused_op):
     actual = torch.compile(f, fullgraph=True)(x, v, weight_t)
     torch.testing.assert_close(actual[0], expected[0])
     torch.testing.assert_close(actual[1], expected[1])
+
+
+@pytest.mark.parametrize("fused_op", [if_linear, lif_linear], ids=["if", "lif"])
+def test_registered_neuron_linear_compiled_backward(fused_op):
+    torch.manual_seed(5)
+    inputs = tuple(
+        torch.randn(*shape, device="cuda", requires_grad=True)
+        for shape in ((4, 3, 16), (3, 16), (16, 8))
+    )
+
+    from spikingjelly._ops.cuda_runtime import register_python_object
+
+    sg = surrogate.Sigmoid()
+    handle = register_python_object(sg)
+    # Bind the Python surrogate before tracing the registered tensor operation.
+    if fused_op is if_linear:
+
+        def run(x, v, weight):
+            return torch.ops.sj_if_linear.cupy_if_linear_forward(
+                x, v, weight, None, 1.0, 0.0, False, False, handle, 128
+            )
+    else:
+
+        def run(x, v, weight):
+            return torch.ops.sj_lif_linear.cupy_lif_linear_forward(
+                x, v, weight, None, 2.0, True, 1.0, 0.0, False, False, handle, 128
+            )
+
+    reference = run(*inputs)
+    actual = torch.compile(run, fullgraph=True)(*inputs)
+    grads = (torch.randn_like(actual[0]), torch.randn_like(actual[1]))
+    torch.testing.assert_close(actual, reference)
+    torch.testing.assert_close(
+        torch.autograd.grad(actual, inputs, grads),
+        torch.autograd.grad(reference, inputs, grads),
+    )

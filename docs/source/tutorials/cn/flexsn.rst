@@ -7,7 +7,10 @@ English version: :doc:`../en/flexsn`
 
 ``FlexSN`` 可以把用户用纯 PyTorch 编写的单步神经元动力学转换成有状态的
 SpikingJelly 神经元，并为多步 CUDA 计算生成 Triton 内核。预定义 IF、LIF、PLIF
-神经元的 Triton 用法见 :doc:`./triton_backend`。
+神经元的设备分发用法见 :doc:`./triton_backend`。
+
+自定义多步神经元统一使用 FlexSN。旧 Auto CUDA 转译器及神经元代码生成模板已删除；
+固定神经元使用 ``ops/`` 中的显式内核。
 
 用函数描述神经元动力学
 ----------------------
@@ -89,7 +92,6 @@ Tensor 调用推导，不需要示例输入：
         core=complicated_lif_core_generator(beta=0.5, gamma=0.9),
         num_states=2,
         step_mode="m",
-        backend="triton",
         store_state_seqs=True,
     ).cuda()
 
@@ -118,7 +120,6 @@ Tensor 调用推导，不需要示例输入：
     f_torch = neuron.FlexSN(
         core=complicated_lif_core_generator(beta=0.5, gamma=0.9),
         num_states=2,
-        backend="torch",
     )
     initial_states = (
         torch.zeros_like(x[0]),
@@ -160,7 +161,6 @@ PLIF 动力学使用可训练参数控制膜电位衰减：
         plif_core,
         num_states=1,
         static_inputs=(w,),
-        backend="torch",
     )
 
 函数式调用必须显式传入静态值，因此可以在不修改模块参数的情况下使用另一组参数：
@@ -175,97 +175,31 @@ PLIF 动力学使用可训练参数控制膜电位衰减：
 
 静态 Tensor 必须是标量，或与单步输入具有相同元素数；不支持任意广播。
 
-验证前向与反向传播
-------------------
+自动执行与 ``torch.compile``
+----------------------------------------
 
-``backend="torch"`` 是参考实现。开发新动力学时，应先比较 Torch 和 Triton 的输出、
-最终状态、状态轨迹和输入梯度：
-
-.. code-block:: python
-
-    core = complicated_lif_core_generator(beta=0.5, gamma=0.9)
-    n_torch = neuron.FlexSN(
-        core, 2, backend="torch", store_state_seqs=True
-    ).cuda()
-    n_triton = neuron.FlexSN(
-        core, 2, backend="triton", store_state_seqs=True
-    ).cuda()
-
-    x = torch.randn([16, 3, 32, 32], device="cuda")
-    y = torch.randn([16, 3, 32, 32], device="cuda")
-    x_torch = x.clone().requires_grad_(True)
-    y_torch = y.clone().requires_grad_(True)
-    x_triton = x.clone().requires_grad_(True)
-    y_triton = y.clone().requires_grad_(True)
-
-    s1_torch, s2_torch = n_torch(x_torch, y_torch)
-    s1_triton, s2_triton = n_triton(x_triton, y_triton)
-    grad = torch.randn_like(s1_torch)
-    s1_torch.backward(grad)
-    s1_triton.backward(grad)
-
-    torch.testing.assert_close(s1_triton, s1_torch)
-    torch.testing.assert_close(s2_triton, s2_torch)
-    torch.testing.assert_close(n_triton.states, n_torch.states)
-    torch.testing.assert_close(n_triton.state_seqs, n_torch.state_seqs)
-    torch.testing.assert_close(x_triton.grad, x_torch.grad)
-    torch.testing.assert_close(y_triton.grad, y_torch.grad)
-
-后端与 ``torch.compile``
-------------------------
-
-``FlexSN`` 提供三个后端：
-
-.. list-table::
-   :header-rows: 1
-   :widths: 18 18 64
-
-   * - 后端
-     - 设备
-     - 用途
-   * - ``"torch"``
-     - CPU / CUDA
-     - 参考实现；支持单步和多步模式
-   * - ``"hop"``
-     - CPU / CUDA
-     - compiler-visible scan；只支持多步模式，适合与外层网络联合编译
-   * - ``"triton"``
-     - CUDA
-     - 根据 ``core`` 生成专用前向与反向内核；只支持多步模式
-
-HOP 路径可以直接交给 ``torch.compile``：
-
-.. code-block:: python
-
-    model = neuron.FlexSN(lif_core, 1, backend="hop")
-    compiled_model = torch.compile(model, fullgraph=True)
-    output = compiled_model(torch.randn(8, 64, 512))
-
-Triton 路径在第一次收到真实 CUDA 输入时，按输入的 dtype 和 device 构建运行时，
-构造模块时不需要示例 Tensor。外层网络仍可使用 ``torch.compile``：
+FlexSN 会自动选择执行路径。CPU 使用 Torch 实现；CUDA 上支持的 core 使用生成的
+Triton 内核，已知不支持融合的组合使用 Torch/HOP 路径。构造函数不接收 backend 参数。
 
 .. code-block:: python
 
     import torch.nn as nn
+    from spikingjelly.activation_based import neuron
 
-    flex = neuron.FlexSN(lif_core, 1, backend="triton").cuda()
-    model = nn.Sequential(
-        nn.Linear(512, 512),
-        flex,
-        nn.Linear(512, 512),
-    ).cuda()
-    model = torch.compile(model, fullgraph=True)
-    output = model(torch.randn(8, 64, 512, device="cuda"))
+    flex = neuron.FlexSN(lif_core, 1).cuda()
+    model = nn.Sequential(nn.Linear(512, 512), flex, nn.Linear(512, 512)).cuda()
+    compiled = torch.compile(model, fullgraph=True)
+    output = compiled(torch.randn(8, 64, 512, device="cuda"))
 
-Triton 不支持的 ``core`` 算子或内核构建失败会直接抛出异常，不会切换到 HOP 或
-Torch。选择 Triton 后端后，执行路径不会在用户不知情时改变。
+支持的 CUDA core 会在首次接收真实 CUDA 输入时编译。选择实现后遇到不支持的算子或
+kernel 错误时会直接报告。
 
 使用限制与迁移
 --------------
 
 * 多步输入的首维是时间维 ``T``；``T == 0`` 会被拒绝。
 * ``hop`` 和 ``triton`` 只支持 ``step_mode="m"``。
-* 修改 backend 或 step mode 会保留最终状态，但清除派生的 ``state_seqs``。
+* 修改 step mode 会保留最终状态，但清除派生的 ``state_seqs``。
 * 旧构造参数 ``num_inputs``、``num_outputs``、``example_inputs``、
   ``example_outputs`` 和 ``requires_grad`` 已删除。
 * 旧 ``FlexSNKernel`` 和 ``FlexSN.kernel`` 已删除；显式状态调用统一使用

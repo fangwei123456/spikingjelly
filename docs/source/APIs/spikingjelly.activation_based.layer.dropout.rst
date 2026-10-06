@@ -11,4 +11,4 @@ SpikingJelly provides **dropout implementations** suitable for SNNs with step mo
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr

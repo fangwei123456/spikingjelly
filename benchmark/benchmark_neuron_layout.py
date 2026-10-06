@@ -36,7 +36,6 @@ class _StaticPrefixChain(torch.nn.Module):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--backend", choices=("triton", "cupy"), required=True)
     parser.add_argument(
         "--workload", choices=("neuron", "chain", "static-prefix"), default="neuron"
     )
@@ -68,7 +67,7 @@ def main():
             "--tensor-metadata requires --profile and cannot be used with --compile"
         )
     torch.manual_seed(20261001)
-    model = neuron.LIFNode(step_mode="m", backend=args.backend)
+    model = neuron.LIFNode(step_mode="m")
     if args.workload == "chain":
         model = torch.nn.Sequential(
             layer.Conv2d(64, 64, 3, padding=1, step_mode="m"),
@@ -139,6 +138,9 @@ def main():
         "torch": torch.__version__,
         "cuda": torch.version.cuda,
         "gpu": torch.cuda.get_device_name(),
+        "neuron_implementation": functional.neuron_implementation(
+            "lif", torch.device("cuda")
+        ),
         "input_shape": list(x.shape),
         "input_stride": list(x.stride()),
         "source_shape": list(source.shape),

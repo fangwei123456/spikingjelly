@@ -27,7 +27,6 @@ __global__ void izhikevich_backward(scalar_t const *gs, float const *gv, float c
             const float sg = sj_surrogate_gradient<Surrogate>(charged - threshold, alpha);
             float dr = soft ? 1.f : 1.f - float(charged >= threshold);
             if (!detach) dr += (soft ? -threshold : reset - charged) * sg;
-            else if (!soft) dr += reset * sg;
             const float iv = cv + (trace ? gv[i] : (t == T - 1 ? gv[n] : 0.f));
             const float iw = cw + (trace ? gw[i] : (t == T - 1 ? gw[n] : 0.f));
             float gh = float(gs[i]) * sg + iv * dr;

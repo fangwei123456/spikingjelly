@@ -237,10 +237,8 @@ MCore 训练提供 level 和 budget 配置，但只在预先确定的 Transforme
 神经元后端与 ``torch.compile``
 --------------------------------
 
-memopt 不会替换神经元后端。只要神经元的函数式 forward 路径支持对应实现，Torch、
-CuPy 和 Triton 都可以放在检查点内。自定义后端如果不支持这条路径，也不会因为包装
-了 memopt 而自动兼容。正式训练前，应使用实际模型、dtype、后端和分布式拓扑完成
-一次前向与反向测试。
+memopt 不改变神经元执行路径。神经元实现会根据设备自动选择；正式训练前，应使用
+实际模型、dtype 和分布式拓扑完成一次前向与反向测试。
 
 ``memopt.checkpoint`` 使用 PyTorch non-reentrant checkpoint。无压缩、
 Boolean 压缩和 bit 压缩路径支持 ``torch.compile(..., fullgraph=True)``。Sparse

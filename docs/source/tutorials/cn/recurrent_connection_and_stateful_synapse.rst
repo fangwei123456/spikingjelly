@@ -58,7 +58,7 @@ English version: :doc:`../en/recurrent_connection_and_stateful_synapse`
     ElementWiseRecurrentContainer(
     element-wise function=<function element_wise_add at 0x00000158FC15ACA0>, step_mode=s
     (sub_module): IFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=s, backend=torch
+        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=s
         (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
     )
     )
@@ -187,7 +187,7 @@ Sequential FashionMNIST上的对比实验
 
 .. code:: shell
 
-    usage: rsnn_sequential_fmnist.py [-h] [-model MODEL] [-device DEVICE] [-b B] [-epochs N] [-j N] [-data-dir DATA_DIR] [-out-dir OUT_DIR] [-resume RESUME] [-amp] [-cupy] [-opt OPT] [-momentum MOMENTUM] [-lr LR]
+    usage: rsnn_sequential_fmnist.py [-h] [-model MODEL] [-device DEVICE] [-b B] [-epochs N] [-j N] [-data-dir DATA_DIR] [-out-dir OUT_DIR] [-resume RESUME] [-amp] [-opt OPT] [-momentum MOMENTUM] [-lr LR]
 
     Classify Sequential Fashion-MNIST
 
@@ -202,7 +202,6 @@ Sequential FashionMNIST上的对比实验
     -out-dir OUT_DIR    root dir for saving logs and checkpoint
     -resume RESUME      resume from the checkpoint path
     -amp                automatic mixed precision training
-    -cupy               use cupy backend
     -opt OPT            use which optimizer. SDG or Adam
     -momentum MOMENTUM  momentum for SGD
     -lr LR              learning rate
@@ -212,11 +211,11 @@ Sequential FashionMNIST上的对比实验
 
 .. code:: shell
 
-    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -model plain
+    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt sgd -lr 0.1 -j 8 -model plain
 
-    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -model fb
+    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt sgd -lr 0.1 -j 8 -model fb
 
-    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -model ss
+    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt sgd -lr 0.1 -j 8 -model ss
 
 下图展示了3种网络的训练曲线：
 

@@ -367,9 +367,7 @@ def test_masnn_models_accept_a_custom_spiking_neuron():
     _train_step(resnet)
 
 
-def test_masnn_custom_spiking_neuron_receives_the_model_backend(monkeypatch):
-    monkeypatch.setattr(base, "check_backend_library", lambda _backend: None)
-
+def test_masnn_custom_spiking_neuron_uses_automatic_dispatch():
     net = MASNN(
         T=4,
         in_channels=2,
@@ -380,7 +378,6 @@ def test_masnn_custom_spiking_neuron_receives_the_model_backend(monkeypatch):
         fc_hidden=12,
         reduction_t=2,
         reduction_c=4,
-        backend="cupy",
         spiking_neuron=neuron.IFNode,
     )
     resnet = AttMSResNet(
@@ -391,7 +388,6 @@ def test_masnn_custom_spiking_neuron_receives_the_model_backend(monkeypatch):
         stem_kernel_size=3,
         stem_stride=1,
         reduction_c=4,
-        backend="cupy",
         spiking_neuron=neuron.IFNode,
     )
 
@@ -399,7 +395,7 @@ def test_masnn_custom_spiking_neuron_receives_the_model_backend(monkeypatch):
         cells = [m for m in built.modules() if isinstance(m, neuron.BaseNode)]
         assert cells
         assert all(isinstance(cell, neuron.IFNode) for cell in cells)
-        assert {cell.backend for cell in cells} == {"cupy"}
+        assert all(not hasattr(cell, "backend") for cell in cells)
 
 
 def test_masnn_keyword_arguments_override_the_paper_neuron():

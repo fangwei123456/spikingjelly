@@ -20,6 +20,7 @@ from ..triton_layout import (
     _TritonNeuronExecutionPlan,
 )
 from ..triton_runtime import (
+    do_bench_cudagraph,
     register_op,
     torch_dtype_to_triton_neuron_dtype_id,
     triton_neuron_compute_dtype_id_to_tl_dtype,
@@ -44,7 +45,7 @@ __all__ = ["multistep_lif"]
 
 
 @triton.autotune(
-    do_bench=triton.testing.do_bench,
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
@@ -52,6 +53,8 @@ __all__ = ["multistep_lif"]
     ],
     key=[
         "BLOCK_MINOR",
+        "SIZES",
+        "STRIDES",
         "T",
         "NCL",
         "compute_dtype",
@@ -125,7 +128,7 @@ def _multistep_lif_forward_kernel_static(
 
 
 @triton.autotune(
-    do_bench=triton.testing.do_bench,
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2]
@@ -133,6 +136,8 @@ def _multistep_lif_forward_kernel_static(
     ],
     key=[
         "BLOCK_MINOR",
+        "SIZES",
+        "STRIDES",
         "NCL",
         "compute_dtype",
         "soft_reset",
@@ -205,7 +210,7 @@ def _multistep_lif_forward_kernel_dynamic(
 
 
 @triton.autotune(
-    do_bench=triton.testing.do_bench,
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2, 4, 8]
@@ -213,6 +218,8 @@ def _multistep_lif_forward_kernel_dynamic(
     ],
     key=[
         "BLOCK_MINOR",
+        "SIZES",
+        "STRIDES",
         "T",
         "NCL",
         "compute_dtype",
@@ -312,7 +319,7 @@ def _multistep_lif_backward_kernel_static(
 
 
 @triton.autotune(
-    do_bench=triton.testing.do_bench,
+    do_bench=do_bench_cudagraph,
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)
         for f in [1, 2, 4, 8]
@@ -320,6 +327,8 @@ def _multistep_lif_backward_kernel_static(
     ],
     key=[
         "BLOCK_MINOR",
+        "SIZES",
+        "STRIDES",
         "NCL",
         "compute_dtype",
         "soft_reset",
@@ -911,7 +920,7 @@ def _multistep_lif_mp(
     surrogate_function=None,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     r"""
-    Experimental mixed-precision multi-step LIF forward path using the same
+    Mixed-precision multi-step LIF forward path using the same
     Triton forward kernel source as :func:`multistep_lif`.
 
     This path is intended for FP8 storage experiments where storage dtype,

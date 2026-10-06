@@ -32,7 +32,7 @@ Adaptive Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Nonlinear Integrate-and-fire Neurons
 --------------------------------------------------
@@ -41,7 +41,7 @@ Nonlinear Integrate-and-fire Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Resonate-and-Fire Neurons
 --------------------------------------------------
@@ -50,7 +50,7 @@ Resonate-and-Fire Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 LIF Variants
 --------------------------------------------------
@@ -59,7 +59,7 @@ LIF Variants
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Neurons with Membrane Potential Batch Normalization
 ----------------------------------------------------------
@@ -68,7 +68,6 @@ Neurons with Membrane Potential Batch Normalization
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends
 
 Differentiation on Spike Representation (DSR)
 --------------------------------------------------
@@ -77,7 +76,7 @@ Differentiation on Spike Representation (DSR)
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Neurons for Online Learning
 -----------------------------------------------------------------
@@ -86,7 +85,6 @@ Neurons for Online Learning
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends
 
 Few-Spike / LAS Neuron Primitives
 --------------------------------------------------
@@ -95,7 +93,7 @@ Few-Spike / LAS Neuron Primitives
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 SpikeZIP Neuron Primitives
 --------------------------------------------------
@@ -104,7 +102,7 @@ SpikeZIP Neuron Primitives
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Integer-Valued Training Neurons
 --------------------------------------------------
@@ -113,7 +111,7 @@ Integer-Valued Training Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Neurons with Inter-layer Connection
 --------------------------------------------------
@@ -131,4 +129,4 @@ Neurons with Input or Output Noise
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr

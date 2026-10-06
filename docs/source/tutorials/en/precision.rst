@@ -135,7 +135,7 @@ Some Transformer Engine recipes serialize FP8 metadata as a pickle. Set
 ``NVTE_ALLOW_UNSAFE_PICKLE_EXTRA_STATE=1`` only when restoring a trusted
 checkpoint; do not enable it for unknown checkpoints.
 
-Configuring Triton neurons
+Configuring neuron precision
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Triton precision is set by ``prepare_model_for_precision`` rather than on every
@@ -146,16 +146,16 @@ and forward arithmetic, and FP32 neuron backward arithmetic:
 
     config = PrecisionConfig(
         mode="bf16",
-        triton_storage="bf16",
-        triton_fwd="bf16",
-        triton_bwd="fp32",
+        neuron_storage="bf16",
+        neuron_fwd="bf16",
+        neuron_bwd="fp32",
     )
     precision = prepare_model_for_precision(model, device, config)
 
-Only IFNode, LIFNode, and ParametricLIFNode instances with ``backend="triton"``
-and ``step_mode="m"`` use these options. The function does not switch backends.
-``triton_fwd`` and ``triton_bwd`` independently accept ``fp8``, ``fp16``,
-``bf16``, or ``fp32``. FP8 arithmetic requires ``triton_storage`` to be
+Multi-step IFNode, LIFNode, and ParametricLIFNode use Triton when explicit neuron
+precision fields are set. The neuron module API has no backend argument.
+``neuron_fwd`` and ``neuron_bwd`` independently accept ``fp8``, ``fp16``,
+``bf16``, or ``fp32``. FP8 arithmetic requires ``neuron_storage`` to be
 ``float8_e4m3fn`` or ``float8_e5m2``. Exponentials and sensitive surrogate
 operations remain FP32 inside the kernels and are not user options.
 
@@ -176,16 +176,16 @@ optimizer construction. ``TrainingConfig``, ``EvaluationConfig``, and
         dataset_builder=dataset_builder,
         precision=PrecisionConfig(
             mode="bf16",
-            triton_storage="bf16",
-            triton_fwd="bf16",
-            triton_bwd="fp32",
+            neuron_storage="bf16",
+            neuron_fwd="bf16",
+            neuron_bwd="fp32",
         ),
     )
     result = distributed.vision.train_classification(config)
 
 In the repository CLI, ``--precision`` maps to ``mode``. The remaining fields
-come from ``--fp8-recipe``, ``--triton-storage``, ``--triton-fwd``, and
-``--triton-bwd``:
+come from ``--fp8-recipe``, ``--neuron-storage``, ``--neuron-fwd``, and
+``--neuron-bwd``:
 
 .. code-block:: bash
 
@@ -250,7 +250,7 @@ When FP8 is faster
 ------------------
 
 FP8 benefits large matrices, not every low-precision workload. FC-SNN depends on
-the neuron backend and the Linear-to-neuron boundary; Spikformer has a larger
+neuron execution and the Linear-to-neuron boundary; Spikformer has a larger
 convolution, BatchNorm, and neuron share and does not cross the FP16/BF16
 baseline on one GPU yet.
 
@@ -314,19 +314,19 @@ End-to-end SNN and DDP
     * - workload
       - training FP8 / FP16, BF16
       - inference FP8 / FP16, BF16
-    * - FC-SNN: T16, batch 256, width 4096, depth 20 (Triton LIF, FP16 fallback)
+    * - FC-SNN: T16, batch 256, width 4096, depth 20 (automatically dispatched LIF, FP16 fallback)
       - 1.533x / 1.677x
       - 1.578x / 1.786x
-    * - FC-SNN: T16, batch 256, width 8192, depth 10 (Triton LIF, FP32 fallback)
+    * - FC-SNN: T16, batch 256, width 8192, depth 10 (automatically dispatched LIF, FP32 fallback)
       - 1.544x / 1.468x
       - 1.648x / 1.471x
 
 The ratios are end-to-end throughput ratios in the order ``FP8 / FP16`` and
-``FP8 / BF16``. Both FC-SNN cases use the existing Triton LIF; Triton neuron
+``FP8 / BF16``. Both FC-SNN cases use the existing automatically dispatched LIF; Triton neuron
 storage is not enabled and neuron computation remains high precision. W4096
 uses ``fp8_fallback_dtype="fp16"`` and its training/inference peak allocated
 memory is 4279.1/1460.3 MiB; W8192 is the earlier result without an outer
-autocast. Thus “FP8 Linear + Triton LIF” wins at these sizes, but this does not
+autocast. Thus “FP8 Linear + automatically dispatched LIF” wins at these sizes, but this does not
 mean that all neuron state is FP8 or that FP8 always saves memory.
 
 The slower FC-SNN numbers previously shown in this tutorial used Torch LIF and
@@ -339,18 +339,18 @@ Reproduce the FC-SNN profile with:
 
 .. code-block:: bash
 
-    nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
+    SJ_LIF_CUDA_IMPLEMENTATION=triton nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
       --trace=cuda,nvtx,cublas,osrt --sample=none --cpuctxsw=none \
       -o fcsnn-fp8 \
       uv run python benchmark/benchmark_train_precision_snn_fc.py \
-        --backend triton --precisions fp8 --fp8-fallback-dtype fp16 \
+        --precisions fp8 --fp8-fallback-dtype fp16 \
         --profile --profile-steps 10 --output fcsnn-fp8.json
 
 Single-GPU Spikformer
 ~~~~~~~~~~~~~~~~~~~~~
 
 For ``spikformer_ti`` with ``T=4``, input size ``224``, eager execution, and
-Triton LIF, the RTX 5090 end-to-end results are:
+automatically dispatched LIF, the RTX 5090 end-to-end results are:
 
 .. list-table::
     :header-rows: 1
@@ -432,13 +432,13 @@ FC-SNN Triton result. Reproduce a single-GPU profile with:
 
 .. code-block:: bash
 
-    nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
+    SJ_LIF_CUDA_IMPLEMENTATION=triton nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
       --trace=cuda,nvtx,cublas,osrt --sample=none --cpuctxsw=none \
       -o spikformer-fp8 \
       uv run python benchmark/benchmark_snn_single_gpu.py case \
         --model spikformer_ti --phase inference --execution eager \
         --batch-size 64 --warmup 50 --steps 10 --profile --precision fp8 \
-        --neuron-backend triton --fp8-fallback-dtype bf16 \
+        --fp8-fallback-dtype bf16 \
         --tensor-metadata spikformer-fp8.tensors.jsonl \
         --output spikformer-fp8.json
 
@@ -475,7 +475,7 @@ this workload.
 Choosing a mode
 ---------------
 
-Start with BF16. Try FP8 for FC-SNN only with Triton LIF and matrix sizes near
+Start with BF16. Try FP8 for FC-SNN only with automatically dispatched LIF and matrix sizes near
 the table's crossover. For CNN/neuron-heavy models such as Spikformer, continue
 with FP16/BF16 until the FP32 boundary is optimized. Profile against the
 end-to-end step; FP8 memory may exceed BF16 and is not a memory-optimization

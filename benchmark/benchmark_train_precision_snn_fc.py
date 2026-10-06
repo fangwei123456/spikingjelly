@@ -206,7 +206,6 @@ class DeepFCSNN(torch_nn.Module):
         hidden_dim: int,
         num_classes: int,
         tau: float,
-        backend: str,
         depth: int,
         attention_every: int,
         num_heads: int,
@@ -226,7 +225,6 @@ class DeepFCSNN(torch_nn.Module):
                     surrogate_function=sg,
                     detach_reset=False,
                     step_mode="m",
-                    backend=backend,
                 )
             )
             if attention_every > 0 and (block_idx + 1) % attention_every == 0:
@@ -270,12 +268,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--inference-steps", type=int, default=100)
     parser.add_argument("--seed", type=int, default=20260531)
     parser.add_argument(
-        "--backend",
-        choices=("torch", "triton"),
-        default="torch",
-        help="Neuron backend used by LIF nodes.",
-    )
-    parser.add_argument(
         "--precisions",
         nargs="+",
         default=["fp32", "fp16", "bf16", "fp8"],
@@ -295,19 +287,19 @@ def parse_args() -> argparse.Namespace:
         help="Autocast dtype for non-TE CUDA operations in FP8 runs.",
     )
     parser.add_argument(
-        "--triton-storage",
+        "--neuron-storage",
         choices=("none", "fp32", "fp16", "bf16", "float8_e4m3fn", "float8_e5m2"),
         default="none",
         help="Optional Triton neuron state storage dtype.",
     )
     parser.add_argument(
-        "--triton-fwd",
+        "--neuron-fwd",
         choices=("fp8", "fp16", "bf16", "fp32"),
         default="fp32",
         help="Triton neuron forward compute dtype.",
     )
     parser.add_argument(
-        "--triton-bwd",
+        "--neuron-bwd",
         choices=("fp8", "fp16", "bf16", "fp32"),
         default="fp32",
         help="Triton neuron backward compute dtype.",
@@ -381,7 +373,6 @@ def build_model(args: argparse.Namespace) -> DeepFCSNN:
         hidden_dim=args.hidden_dim,
         num_classes=args.num_classes,
         tau=args.tau,
-        backend=args.backend,
         depth=args.depth,
         attention_every=args.attention_every,
         num_heads=args.num_heads,
@@ -566,9 +557,9 @@ def benchmark_one_precision(
     model.load_state_dict(model_state, strict=True)
     model.train()
 
-    triton_storage = args.triton_storage
-    if triton_storage == "none":
-        triton_storage = None
+    neuron_storage = args.neuron_storage
+    if neuron_storage == "none":
+        neuron_storage = None
     artifacts = prepare_model_for_precision(
         model,
         device,
@@ -578,9 +569,9 @@ def benchmark_one_precision(
             fp8_fallback_dtype=args.fp8_fallback_dtype
             if precision == "fp8"
             else "bf16",
-            triton_storage=triton_storage,
-            triton_fwd=args.triton_fwd,
-            triton_bwd=args.triton_bwd,
+            neuron_storage=neuron_storage,
+            neuron_fwd=args.neuron_fwd,
+            neuron_bwd=args.neuron_bwd,
         ),
     )
     model = artifacts.model
@@ -801,12 +792,11 @@ def main() -> None:
         "warmup": args.warmup,
         "steps": args.steps,
         "inference_steps": args.inference_steps,
-        "backend": args.backend,
         "fp8_recipe": args.fp8_recipe,
         "fp8_fallback_dtype": args.fp8_fallback_dtype,
-        "triton_storage": args.triton_storage,
-        "triton_fwd": args.triton_fwd,
-        "triton_bwd": args.triton_bwd,
+        "neuron_storage": args.neuron_storage,
+        "neuron_fwd": args.neuron_fwd,
+        "neuron_bwd": args.neuron_bwd,
         "profile": args.profile,
         "profile_steps": args.profile_steps,
         "profile_module_hooks": args.profile_module_hooks,

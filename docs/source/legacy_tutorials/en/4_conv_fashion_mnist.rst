@@ -184,7 +184,7 @@ The complete codes are available at :class:`spikingjelly.activation_based.exampl
       -out_dir OUT_DIR      root dir for saving logs and checkpoint
       -resume RESUME        resume from the checkpoint path
       -amp                  automatic mixed precision training
-      -cupy                 use cupy neuron and multi-step forward mode
+                      use cupy neuron and multi-step forward mode
       -opt OPT              use which optimizer. SDG or Adam
       -lr LR                learning rate
       -momentum MOMENTUM    momentum for SGD

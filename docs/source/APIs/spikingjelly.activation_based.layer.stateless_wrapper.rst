@@ -13,4 +13,4 @@ See :doc:`../tutorials/en/basic_concept` for more details.
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr

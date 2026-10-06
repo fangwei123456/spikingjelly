@@ -256,9 +256,6 @@ def test_complementary_lif_state_storage_reset_and_backend_contract():
     assert module.m.shape == x_seq.shape[1:]
     assert module.v.dtype == x_seq.dtype
     assert module.m.dtype == x_seq.dtype
-    assert module.supported_backends == ("torch",)
-    with pytest.raises(NotImplementedError, match="not a supported backend"):
-        neuron.ComplementaryLIFNode(backend="triton")
 
 
 def test_complementary_lif_single_step_ignores_store_v_seq():
@@ -885,7 +882,6 @@ def test_flexsn_sequence_cache_is_not_a_functional_state():
         core,
         num_states=1,
         step_mode="m",
-        backend="torch",
         store_state_seqs=True,
     )
     x_seq = torch.randn(3, 2, 4)
@@ -950,6 +946,30 @@ def test_sliding_psn_step_matches_module():
     assert len(module.queue) == len(queue)
     for actual_state, expected_state in zip(module.queue, queue):
         _assert_close(actual_state, expected_state)
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16, torch.float16])
+def test_sliding_psn_multi_step_gemm_follows_parameter_dtype(dtype):
+    # Regression: gen_gemm_weight() built the T x T weight matrix with the
+    # parameter's device but a hardcoded float32 dtype, so a bf16/fp16
+    # SlidingPSN crashed in the gemm multi-step path with
+    # "mat1 and mat2 must have the same dtype".
+    x_seq = torch.randn(5, 2, 3, dtype=dtype)
+    module = neuron.SlidingPSN(k=3, surrogate_function=_surrogate()).to(dtype)
+    assert module.gen_gemm_weight(x_seq.shape[0]).dtype == dtype
+
+    module.step_mode = "m"
+    multi_step = module(x_seq)
+    assert multi_step.dtype == dtype
+
+    if dtype == torch.float32:
+        # The gemm and single-step paths accumulate in different orders, so the
+        # emitted spikes only agree in float32; in half precision a membrane
+        # potential near the threshold can flip one spike between the paths.
+        module.step_mode = "s"
+        module.reset()
+        single_step = torch.stack([module(x) for x in x_seq])
+        torch.testing.assert_close(single_step, multi_step)
 
 
 def test_masked_psn_step_matches_module_sequence():

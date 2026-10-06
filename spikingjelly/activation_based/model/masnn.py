@@ -14,7 +14,7 @@ __all__ = [
 ]
 
 
-def _ma_lif(backend: str, **overrides) -> neuron.LIFNode:
+def _ma_lif(**overrides) -> neuron.LIFNode:
     """Default neuron of the MA-SNN DVS line.
 
     The author cell accumulates without input leak, fires at ``v_threshold``,
@@ -29,13 +29,12 @@ def _ma_lif(backend: str, **overrides) -> neuron.LIFNode:
         "decay_input": False,
         "step_mode": "m",
         "surrogate_function": surrogate.Rect(alpha=2.0),
-        "backend": backend,
     }
     parameters.update(overrides)
     return neuron.LIFNode(**parameters)
 
 
-def _att_ms_lif(backend: str, **overrides) -> neuron.LIFNode:
+def _att_ms_lif(**overrides) -> neuron.LIFNode:
     """Default neuron of the Att-MS-ResNet line.
 
     Author surrogate: ``|v - thresh| < lens`` with ``lens = 0.5``, i.e.
@@ -48,24 +47,20 @@ def _att_ms_lif(backend: str, **overrides) -> neuron.LIFNode:
         "decay_input": False,
         "step_mode": "m",
         "surrogate_function": surrogate.Rect(alpha=1.0),
-        "backend": backend,
     }
     parameters.update(overrides)
     return neuron.LIFNode(**parameters)
 
 
-def _neuron_factory(spiking_neuron, default_factory, backend: str, kwargs: dict):
+def _neuron_factory(spiking_neuron, default_factory, kwargs: dict):
     """Build the per-neuron factory used by every block of a model.
 
     ``spiking_neuron=None`` keeps the paper neuron and lets ``kwargs`` override
-    single fields. A user-supplied class is constructed from ``kwargs`` plus
-    ``backend``, so the model-level backend applies to both paths; the class
-    must therefore accept a ``backend`` argument, as every
-    :class:`BaseNode <spikingjelly.activation_based.neuron.BaseNode>` does.
+    single fields. A user-supplied class is constructed from ``kwargs``.
     """
     if spiking_neuron is None:
-        return lambda: default_factory(backend, **deepcopy(kwargs))
-    return lambda: spiking_neuron(backend=backend, **deepcopy(kwargs))
+        return lambda: default_factory(**deepcopy(kwargs))
+    return lambda: spiking_neuron(**deepcopy(kwargs))
 
 
 class _MaConvBlock(nn.Module):
@@ -133,7 +128,6 @@ class MASNN(nn.Module):
         fc_hidden: int = 256,
         reduction_t: int = 5,
         reduction_c: int = 8,
-        backend: str = "torch",
         spiking_neuron: callable = None,
         **kwargs,
     ) -> None:
@@ -183,11 +177,6 @@ class MASNN(nn.Module):
         :type reduction_t: int
         :param reduction_c: 通道注意力压缩比，必须 ``<=`` 各卷积块通道数
         :type reduction_c: int
-        :param backend: 脉冲神经元使用的后端，对默认神经元和 ``spiking_neuron``
-            同时生效。默认的 :class:`Rect <spikingjelly.activation_based.surrogate.Rect>`
-            替代梯度只有 ``torch`` 后端支持；使用 ``cupy`` 或 ``triton`` 时需通过
-            ``kwargs`` 传入受支持的替代梯度（如 ``ATan``）
-        :type backend: str
         :param spiking_neuron: 脉冲神经元类；为 ``None`` 时使用论文默认的
             :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>`
         :type spiking_neuron: callable
@@ -249,13 +238,6 @@ class MASNN(nn.Module):
         :param reduction_c: channel attention reduction ratio; must be ``<=`` the
             channel count of every convolution block
         :type reduction_c: int
-        :param backend: backend of the spiking neurons, applied both to the
-            default neuron and to ``spiking_neuron``. The default
-            :class:`Rect <spikingjelly.activation_based.surrogate.Rect>`
-            surrogate is only supported by the ``torch`` backend; pass a
-            supported surrogate such as ``ATan`` through ``kwargs`` to use
-            ``cupy`` or ``triton``
-        :type backend: str
         :param spiking_neuron: spiking neuron class; ``None`` uses the paper
             default :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>`
         :type spiking_neuron: callable
@@ -280,7 +262,7 @@ class MASNN(nn.Module):
             height, width = height // pool, width // pool
 
         self.T = T
-        cell_factory = _neuron_factory(spiking_neuron, _ma_lif, backend, kwargs)
+        cell_factory = _neuron_factory(spiking_neuron, _ma_lif, kwargs)
 
         def attn_factory(channel_count: int):
             return layer.MultiDimensionalAttention(
@@ -364,7 +346,6 @@ def masnn_dvs128_gesture(
     in_channels: int = 2,
     num_classes: int = 11,
     input_size: tuple[int, int] = (32, 32),
-    backend: str = "torch",
     spiking_neuron: callable = None,
     **kwargs,
 ) -> MASNN:
@@ -389,9 +370,6 @@ def masnn_dvs128_gesture(
     :type num_classes: int
     :param input_size: 输入空间尺寸 ``(H, W)``
     :type input_size: tuple[int, int]
-    :param backend: 脉冲神经元使用的后端；默认 ``Rect`` 替代梯度只有 ``torch``
-        后端支持
-    :type backend: str
     :param spiking_neuron: 脉冲神经元类；为 ``None`` 时使用论文默认神经元
     :type spiking_neuron: callable
     :param kwargs: 传给脉冲神经元的额外参数
@@ -417,9 +395,6 @@ def masnn_dvs128_gesture(
     :type num_classes: int
     :param input_size: input spatial size ``(H, W)``
     :type input_size: tuple[int, int]
-    :param backend: backend of the spiking neurons; the default ``Rect``
-        surrogate is only supported by the ``torch`` backend
-    :type backend: str
     :param spiking_neuron: spiking neuron class; ``None`` uses the paper default
     :type spiking_neuron: callable
     :param kwargs: extra arguments for the spiking neuron
@@ -437,7 +412,6 @@ def masnn_dvs128_gesture(
         fc_hidden=256,
         reduction_t=5,
         reduction_c=8,
-        backend=backend,
         spiking_neuron=spiking_neuron,
         **kwargs,
     )
@@ -449,12 +423,11 @@ class _AttMSBlock(_MSBlock):
         in_channels: int,
         out_channels: int,
         stride: int,
-        backend: str,
         downsample: nn.Module | None,
         attention: nn.Module,
         cell_factory,
     ):
-        super().__init__(in_channels, out_channels, stride, backend, downsample)
+        super().__init__(in_channels, out_channels, stride, downsample)
         # The parent builds its own default nodes; replace them so both the
         # author neuron and a user-supplied spiking_neuron reach every block.
         self.spike1 = cell_factory()
@@ -487,7 +460,6 @@ class AttMSResNet(MSResNet):
         stage_channels: tuple[int, ...] | None = None,
         reduction_c: int = 8,
         dropout: float = 0.2,
-        backend: str = "torch",
         spiking_neuron: callable = None,
         **kwargs,
     ) -> None:
@@ -540,16 +512,11 @@ class AttMSResNet(MSResNet):
         :type reduction_c: int
         :param dropout: 分类头 Dropout 概率
         :type dropout: float
-        :param backend: 脉冲神经元使用的后端，对默认神经元和 ``spiking_neuron``
-            同时生效。默认的 :class:`Rect <spikingjelly.activation_based.surrogate.Rect>`
-            替代梯度只有 ``torch`` 后端支持；使用 ``cupy`` 或 ``triton`` 时需通过
-            ``kwargs`` 传入受支持的替代梯度（如 ``ATan``）
-        :type backend: str
         :param spiking_neuron: 脉冲神经元类；为 ``None`` 时使用论文默认的
             :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>`
         :type spiking_neuron: callable
         :param kwargs: 传给脉冲神经元的额外参数；``spiking_neuron`` 为 ``None``
-            时逐项覆盖论文默认值，否则完全决定神经元构造（``backend`` 除外）
+            时逐项覆盖论文默认值，否则完全决定神经元构造
         :type kwargs: dict
         :raises ValueError: ``layers`` 不含三个或四个值，或 ``stage_channels``
             与 ``layers`` 长度不同
@@ -607,19 +574,12 @@ class AttMSResNet(MSResNet):
         :type reduction_c: int
         :param dropout: dropout probability of the classification head
         :type dropout: float
-        :param backend: backend of the spiking neurons, applied both to the
-            default neuron and to ``spiking_neuron``. The default
-            :class:`Rect <spikingjelly.activation_based.surrogate.Rect>`
-            surrogate is only supported by the ``torch`` backend; pass a
-            supported surrogate such as ``ATan`` through ``kwargs`` to use
-            ``cupy`` or ``triton``
-        :type backend: str
         :param spiking_neuron: spiking neuron class; ``None`` uses the paper
             default :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>`
         :type spiking_neuron: callable
         :param kwargs: extra arguments for the spiking neuron; they override the
             paper defaults field by field when ``spiking_neuron`` is ``None``,
-            and otherwise fully define its construction apart from ``backend``
+            and otherwise fully define its construction
         :type kwargs: dict
         :raises ValueError: if ``layers`` does not contain three or four values,
             or ``stage_channels`` and ``layers`` have different lengths
@@ -629,9 +589,7 @@ class AttMSResNet(MSResNet):
         `Attention Spiking Neural Networks
         <https://ieeexplore.ieee.org/document/10032591>`_
         """
-        self._cell_factory = _neuron_factory(
-            spiking_neuron, _att_ms_lif, backend, kwargs
-        )
+        self._cell_factory = _neuron_factory(spiking_neuron, _att_ms_lif, kwargs)
         self._attention_factory = lambda channels: layer.MultiDimensionalAttention(
             T=T, C=channels, reduction_c=reduction_c, use_temporal=False
         )
@@ -645,7 +603,6 @@ class AttMSResNet(MSResNet):
             stem_stride=stem_stride,
             stem_pool=stem_pool,
             stage_channels=stage_channels,
-            backend=backend,
         )
         self.head_lif = self._cell_factory()
         self.dropout = nn.Dropout(dropout)
@@ -673,7 +630,6 @@ class AttMSResNet(MSResNet):
                 self.inplanes,
                 out_channels,
                 stride,
-                self.backend,
                 downsample,
                 self._attention_factory(out_channels),
                 self._cell_factory,
@@ -685,7 +641,6 @@ class AttMSResNet(MSResNet):
                 out_channels,
                 out_channels,
                 1,
-                self.backend,
                 None,
                 self._attention_factory(out_channels),
                 self._cell_factory,
@@ -736,7 +691,6 @@ def att_ms_resnet18(
     T: int = 1,
     in_channels: int = 3,
     num_classes: int = 1000,
-    backend: str = "torch",
     spiking_neuron: callable = None,
     **kwargs,
 ) -> AttMSResNet:
@@ -759,9 +713,6 @@ def att_ms_resnet18(
     :type in_channels: int
     :param num_classes: 分类类别数
     :type num_classes: int
-    :param backend: 脉冲神经元使用的后端；默认 ``Rect`` 替代梯度只有 ``torch``
-        后端支持
-    :type backend: str
     :param spiking_neuron: 脉冲神经元类；为 ``None`` 时使用论文默认神经元
     :type spiking_neuron: callable
     :param kwargs: 传给脉冲神经元的额外参数
@@ -785,9 +736,6 @@ def att_ms_resnet18(
     :type in_channels: int
     :param num_classes: number of classes
     :type num_classes: int
-    :param backend: backend of the spiking neurons; the default ``Rect``
-        surrogate is only supported by the ``torch`` backend
-    :type backend: str
     :param spiking_neuron: spiking neuron class; ``None`` uses the paper default
     :type spiking_neuron: callable
     :param kwargs: extra arguments for the spiking neuron
@@ -800,7 +748,6 @@ def att_ms_resnet18(
         in_channels=in_channels,
         num_classes=num_classes,
         layers=(2, 2, 2, 2),
-        backend=backend,
         spiking_neuron=spiking_neuron,
         **kwargs,
     )

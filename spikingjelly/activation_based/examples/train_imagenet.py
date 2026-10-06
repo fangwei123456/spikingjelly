@@ -41,10 +41,8 @@ class SResNetTrainer(train_classify.Trainer):
       is the total number of time-steps.
     - Model output processing: averages outputs over ``T`` time-steps along the time dimension as
       the final prediction (firing rate).
-    - Model loading: supports loading various spiking ResNet models from :mod:`spiking_resnet` with
-      an optional CuPy backend for acceleration.
-    - Extra CLI arguments: adds ``--T`` (number of time-steps) and ``--cupy`` (enable CuPy backend)
-      arguments.
+    - Model loading: supports loading various spiking ResNet models from :mod:`spiking_resnet`.
+    - Extra CLI arguments: adds ``--T`` (number of time-steps).
     """
 
     def preprocess_train_sample(self, args, x: torch.Tensor):
@@ -65,9 +63,6 @@ class SResNetTrainer(train_classify.Trainer):
     def get_args_parser(self, add_help=True):
         parser = super().get_args_parser(add_help=add_help)
         parser.add_argument("--T", type=int, help="total time-steps")
-        parser.add_argument(
-            "--cupy", action="store_true", help="set the neurons to use cupy backend"
-        )
         return parser
 
     def get_tb_logdir_name(self, args):
@@ -82,9 +77,6 @@ class SResNetTrainer(train_classify.Trainer):
                 detach_reset=True,
             )
             functional.set_step_mode(model, step_mode="m")
-            if args.cupy:
-                functional.set_backend(model, "cupy", neuron.IFNode)
-
             return model
         else:
             raise ValueError(f"args.model should be one of {spiking_resnet.__all__}")

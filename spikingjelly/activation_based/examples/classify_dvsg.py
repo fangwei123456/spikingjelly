@@ -13,7 +13,7 @@ import datetime
 
 
 def main():
-    # python -m spikingjelly.activation_based.examples.classify_dvsg -T 16 -device cuda:0 -b 16 -epochs 64 -data-dir /datasets/DVSGesture/ -amp -cupy -opt adam -lr 0.001 -j 8
+    # python -m spikingjelly.activation_based.examples.classify_dvsg -T 16 -device cuda:0 -b 16 -epochs 64 -data-dir /datasets/DVSGesture/ -amp -opt adam -lr 0.001 -j 8
 
     parser = argparse.ArgumentParser(description="Classify DVS Gesture")
     parser.add_argument("-T", default=16, type=int, help="simulating time-steps")
@@ -44,7 +44,6 @@ def main():
     parser.add_argument(
         "-amp", action="store_true", help="automatic mixed precision training"
     )
-    parser.add_argument("-cupy", action="store_true", help="use cupy backend")
     parser.add_argument("-opt", type=str, help="use which optimizer. SDG or Adam")
     parser.add_argument("-momentum", default=0.9, type=float, help="momentum for SGD")
     parser.add_argument("-lr", default=0.1, type=float, help="learning rate")
@@ -61,9 +60,6 @@ def main():
     )
 
     functional.set_step_mode(net, "m")
-    if args.cupy:
-        functional.set_backend(net, "cupy", instance=neuron.LIFNode)
-
     print(net)
 
     net.to(args.device)
@@ -134,9 +130,6 @@ def main():
 
     if args.amp:
         out_dir += "_amp"
-
-    if args.cupy:
-        out_dir += "_cupy"
 
     os.makedirs(out_dir, exist_ok=True)
 

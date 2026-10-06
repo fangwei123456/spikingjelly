@@ -34,7 +34,7 @@ We build the network like the following codes:
     from spikingjelly import visualizing
 
     class CSNN(nn.Module):
-        def __init__(self, T: int, channels: int, use_cupy=False):
+        def __init__(self, T: int, channels: int):
             super().__init__()
             self.T = T
 
@@ -57,20 +57,16 @@ We build the network like the following codes:
             neuron.IFNode(surrogate_function=surrogate.ATan()),
             )
 
-For faster training speed, we use the multi-step mode and use the ``cupy`` backend if specified by ``use_cupy`` in ``__init__``:
+For faster training speed, we use the multi-step mode and rely on automatic device-based neuron execution:
 
 .. code-block:: python
 
     # spikingjelly.activation_based.examples.conv_fashion_mnist
 
     class CSNN(nn.Module):
-        def __init__(self, T: int, channels: int, use_cupy=False):
+        def __init__(self, T: int, channels: int):
             # ...
             functional.set_step_mode(self, step_mode='m')
-
-            if use_cupy:
-                functional.set_backend(self, backend='cupy')
-
 Recently, sending the image to SNN directly is a popular method in deep SNNs, which we will also use in this tutorial. In this case, the ``image-spike`` encoding is implemented by the first three layers of the network, \
 which are ``{Conv2d-BatchNorm2d-IFNode}``.
 
@@ -116,7 +112,7 @@ We can use the following commands to print the training args:
 
     (sj-dev) wfang@Precision-5820-Tower-X-Series:~/spikingjelly_dev$ python -m spikingjelly.activation_based.examples.conv_fashion_mnist -h
     usage: conv_fashion_mnist.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-data-dir DATA_DIR] [-out-dir OUT_DIR]
-                                [-resume RESUME] [-amp] [-cupy] [-opt OPT] [-momentum MOMENTUM] [-lr LR] [-channels CHANNELS]
+                                [-resume RESUME] [-amp] [-opt OPT] [-momentum MOMENTUM] [-lr LR] [-channels CHANNELS]
 
     Classify Fashion-MNIST
 
@@ -131,7 +127,6 @@ We can use the following commands to print the training args:
     -out-dir OUT_DIR    root dir for saving logs and checkpoint
     -resume RESUME      resume from the checkpoint path
     -amp                automatic mixed precision training
-    -cupy               use cupy backend
     -opt OPT            use which optimizer. SDG or Adam
     -momentum MOMENTUM  momentum for SGD
     -lr LR              learning rate
@@ -139,63 +134,63 @@ We can use the following commands to print the training args:
     -save-es SAVE_ES    dir for saving a batch spikes encoded by the first {Conv2d-BatchNorm2d-IFNode}
 
 
-We can use the following commands to train. For faster training speed, we enable the AMP (automatic mixed precision) and the ``cupy`` backend:
+We can use the following commands to train. For faster training speed, we enable automatic mixed precision:
 
 .. code-block:: shell
 
-    python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8
+    python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt sgd -lr 0.1 -j 8
 
 The outputs are:
 
 .. code-block:: shell
 
-    Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+    Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
     CSNN(
     (conv_fc): Sequential(
         (0): Conv2d(1, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
         (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
         (2): IFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m, backend=cupy
+        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m
         (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
         (4): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
         (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
         (6): IFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m, backend=cupy
+        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m
         (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
         (8): Flatten(start_dim=1, end_dim=-1, step_mode=m)
         (9): Linear(in_features=6272, out_features=2048, bias=False)
         (10): IFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m, backend=cupy
+        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m
         (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (11): Linear(in_features=2048, out_features=10, bias=False)
         (12): IFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m, backend=cupy
+        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m
         (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
     )
     )
-    Mkdir ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy.
-    Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
-    ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+    Mkdir ./logs/T4_b256_sgd_lr0.1_c128_amp.
+    Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+    ./logs/T4_b256_sgd_lr0.1_c128_amp
     epoch =0, train_loss = 0.0325, train_acc = 0.7875, test_loss = 0.0248, test_acc = 0.8543, max_test_acc = 0.8543
     train speed = 7109.7899 images/s, test speed = 7936.2602 images/s
     escape time = 2022-05-24 21:42:15
 
-    Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
-    ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+    Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+    ./logs/T4_b256_sgd_lr0.1_c128_amp
     epoch =1, train_loss = 0.0217, train_acc = 0.8734, test_loss = 0.0201, test_acc = 0.8758, max_test_acc = 0.8758
     train speed = 7712.5343 images/s, test speed = 7902.5029 images/s
     escape time = 2022-05-24 21:43:13
 
     ...
 
-    Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
-    ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+    Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+    ./logs/T4_b256_sgd_lr0.1_c128_amp
     epoch =63, train_loss = 0.0024, train_acc = 0.9941, test_loss = 0.0113, test_acc = 0.9283, max_test_acc = 0.9308
     train speed = 7627.8147 images/s, test speed = 7868.9090 images/s
     escape time = 2022-05-24 21:42:16
@@ -270,7 +265,7 @@ Let us load the trained model, set ``batch_size=4``, which means we only save 4 
 
 .. code-block:: shell
 
-    python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 4 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -resume ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy/checkpoint_latest.pth -save-es ./logs
+    python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 4 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt sgd -lr 0.1 -j 8 -resume ./logs/T4_b256_sgd_lr0.1_c128_amp/checkpoint_latest.pth -save-es ./logs
 
 .. note::
 

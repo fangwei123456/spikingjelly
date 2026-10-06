@@ -13,4 +13,4 @@ For more information about Spiking Transformers, see :doc:`../tutorials/en/spikf
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr

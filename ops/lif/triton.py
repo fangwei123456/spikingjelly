@@ -5,6 +5,7 @@ import triton
 import triton.language as tl
 
 from ..triton_surrogate import _surrogate_gradient
+from ..triton_runtime import use_static_range_for_triton_neuron_kernel
 from .autograd import _check_backward, _check_forward
 
 
@@ -15,7 +16,7 @@ def _forward_kernel(
     spikes_ptr,
     voltages_ptr,
     charged_ptr,
-    T,
+    T: tl.constexpr,
     N,
     tau,
     threshold,
@@ -60,7 +61,7 @@ def _backward_kernel(
     h_ptr,
     gx_ptr,
     gv_init_ptr,
-    T,
+    T: tl.constexpr,
     N,
     tau,
     threshold,
@@ -72,45 +73,52 @@ def _backward_kernel(
     SURROGATE: tl.constexpr,
     STORE_V_SEQ: tl.constexpr,
     PRELOAD_LAST_GRAD: tl.constexpr,
+    UNROLL: tl.constexpr,
     BLOCK: tl.constexpr,
 ):
     tau = tl.cast(tau, tl.float32)
     threshold = tl.cast(threshold, tl.float32)
     reset = tl.cast(reset, tl.float32)
     alpha = tl.cast(alpha, tl.float32)
+    r_tau = 1.0 / tau
     n = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
     mask = n < N
     if PRELOAD_LAST_GRAD:
         carry = tl.load(gv_ptr + n, mask=mask, other=0.0)
     else:
         carry = tl.full((BLOCK,), 0.0, tl.float32)
-    for step in range(T):
+    for step in tl.range(T, loop_unroll_factor=UNROLL):
         offset = (T - 1 - step).to(tl.int64) * N + n
         h = tl.load(h_ptr + offset, mask=mask, other=0.0)
         sg = _surrogate_gradient(h - threshold, alpha, SURROGATE)
-        if SOFT_RESET:
-            reset_grad = tl.full((BLOCK,), 1.0, tl.float32)
-        else:
-            reset_grad = 1.0 - (h >= threshold).to(tl.float32)
-        if not DETACH_RESET:
-            if SOFT_RESET:
-                reset_grad = reset_grad - threshold * sg
-            else:
-                reset_grad = reset_grad + (reset - h) * sg
         gs = tl.load(gs_ptr + offset, mask=mask, other=0.0).to(tl.float32)
-        if PRELOAD_LAST_GRAD:
-            gh = gs * sg + carry * reset_grad
+        if STORE_V_SEQ:
+            gv = tl.load(gv_ptr + offset, mask=mask, other=0.0)
+            grad_v = gv + carry
+        elif PRELOAD_LAST_GRAD:
+            grad_v = carry
+        elif step == 0:
+            grad_v = tl.load(gv_ptr + n, mask=mask, other=0.0)
         else:
-            if STORE_V_SEQ:
-                gv = tl.load(gv_ptr + offset, mask=mask, other=0.0)
-            elif step == 0:
-                gv = tl.load(gv_ptr + n, mask=mask, other=0.0)
+            grad_v = carry
+        if SOFT_RESET:
+            if DETACH_RESET:
+                gh = tl.fma(gs, sg, grad_v)
             else:
-                gv = tl.full((BLOCK,), 0.0, tl.float32)
-            gh = gs * sg + (gv + carry) * reset_grad
-        gx = tl.div_rn(gh, tau) if DECAY_INPUT else gh
+                gh = tl.fma(gs - threshold * grad_v, sg, grad_v)
+        else:
+            spike = (h >= threshold).to(tl.float32)
+            if DETACH_RESET:
+                gh = tl.fma(gs, sg, grad_v * (1.0 - spike))
+            else:
+                gh = tl.fma(
+                    tl.fma(grad_v, reset - h, gs),
+                    sg,
+                    grad_v * (1.0 - spike),
+                )
+        gx = gh * r_tau if DECAY_INPUT else gh
         tl.store(gx_ptr + offset, gx, mask=mask)
-        carry = gh - tl.div_rn(gh, tau)
+        carry = gh * (1.0 - r_tau)
     tl.store(gv_init_ptr + n, carry, mask=mask)
 
 
@@ -186,6 +194,11 @@ def _backward_impl(
         and not store_v_seq
     )
     block = 512 if preload_last_grad else 256
+    unroll = (
+        h.shape[0]
+        if use_static_range_for_triton_neuron_kernel(h.shape[0])
+        else 1
+    )
     with torch.cuda.device(h.device):
         (
             _backward_kernel
@@ -209,6 +222,7 @@ def _backward_impl(
             surrogate_id,
             store_v_seq,
             preload_last_grad,
+            unroll,
             block,
             enable_fp_fusion=False,
         )

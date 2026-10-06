@@ -3,6 +3,8 @@ import torch
 from spikingjelly.activation_based import surrogate
 from spikingjelly.logger import logger
 
+from .surrogate import _SURROGATE_IDS
+
 try:
     import triton
     import triton.language as tl
@@ -20,17 +22,8 @@ __all__ = [
     "resolve_sg_triton_id_and_alpha",
 ]
 
-# Maps surrogate class → integer id used as tl.constexpr in sg_triton.
-# Adding a new surrogate: (1) assign the next id here, (2) add an elif branch
-# in sg_triton below, (3) update resolve_sg_triton_id_and_alpha if needed.
 SG_TRITON_IDS: dict[type[surrogate.SurrogateFunctionBase], int] = {
-    surrogate.Sigmoid: 0,
-    surrogate.ATan: 1,
-    surrogate.PiecewiseQuadratic: 2,
-    surrogate.PiecewiseExp: 3,
-    surrogate.SoftSign: 4,
-    surrogate.SuperSpike: 5,
-    surrogate.Erf: 6,
+    getattr(surrogate, name): index for name, index in _SURROGATE_IDS.items()
 }
 
 
@@ -129,14 +122,14 @@ def resolve_sg_triton_id_and_alpha(surrogate_function) -> tuple[int, float]:
     if sg_triton_id is None:
         supported_names = tuple(t.__name__ for t in SG_TRITON_IDS)
         raise NotImplementedError(
-            f"Triton backend only supports surrogate functions "
+            f"Triton precision kernels only support surrogate functions "
             f"{supported_names}, but got {sg_type.__name__}. "
-            f"Use backend='torch' for other surrogate functions."
+            "Use the automatic neuron path for other surrogate functions."
         )
 
     if not hasattr(surrogate_function, "alpha"):
         raise TypeError(
-            "Triton backend requires surrogate_function.alpha, but got "
+            "Triton precision kernels require surrogate_function.alpha, but got "
             f"{sg_type.__name__} without 'alpha'."
         )
 

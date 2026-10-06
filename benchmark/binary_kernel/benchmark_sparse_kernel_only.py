@@ -10,7 +10,7 @@ from pathlib import Path
 import cupy
 import torch
 
-from spikingjelly.activation_based.cuda_kernel import sparse_linear
+from spikingjelly._ops.spike_linear.sparse import sparse_linear
 
 
 def _sync():

@@ -2,7 +2,6 @@ import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .. import base, functional, surrogate
 
@@ -356,7 +355,6 @@ class SlidingPSN(base.MemoryModule):
         exp_init: bool = True,
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.ATan(),
         step_mode: str = "s",
-        backend: str = "gemm",
     ):
         r"""
         **API Language** - :ref:`中文 <SlidingPSN.__init__-cn>` | :ref:`English <SlidingPSN.__init__-en>`
@@ -396,8 +394,6 @@ class SlidingPSN(base.MemoryModule):
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
-        :param backend: 神经元层使用的后端，可以为 "gemm" 或 "conv"。此选项仅在多步模式下生效
-        :type backend: str
 
         ----
 
@@ -434,8 +430,6 @@ class SlidingPSN(base.MemoryModule):
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        :param backend: backend for this neuron layer, which can be "gemm" or "conv". This option only works for multi-step mode
-        :type backend: str
 """
 
         super().__init__()
@@ -443,7 +437,6 @@ class SlidingPSN(base.MemoryModule):
         self.step_mode = step_mode
         self.k = k
         self.surrogate_function = surrogate_function
-        self.backend = backend
 
         if exp_init:
             weight = torch.ones([k])
@@ -457,12 +450,8 @@ class SlidingPSN(base.MemoryModule):
         self.weight = nn.Parameter(weight)
         self.bias = nn.Parameter(torch.as_tensor(-1.0))
 
-    @property
-    def supported_backends(self):
-        return "gemm", "conv"
-
     def gen_gemm_weight(self, T: int):
-        weight = torch.zeros([T, T], device=self.weight.device)
+        weight = torch.zeros([T, T], device=self.weight.device, dtype=self.weight.dtype)
         for i in range(T):
             end = i + 1
             start = max(0, i + 1 - self.k)
@@ -493,24 +482,9 @@ class SlidingPSN(base.MemoryModule):
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x_seq = inputs[0]
-        if self.backend == "gemm":
-            weight = self.gen_gemm_weight(x_seq.shape[0])
-            h_seq = torch.addmm(self.bias, weight, x_seq.flatten(1)).view(x_seq.shape)
-            output = self.surrogate_function(h_seq)
-        elif self.backend == "conv":
-            # x_seq.shape = [T, N, *]
-            x_seq_shape = x_seq.shape
-            # [T, N, *] -> [T, N] -> [N, T] -> [N, 1, T]
-            x_seq = x_seq.flatten(1).t().unsqueeze(1)
-
-            x_seq = F.pad(x_seq, pad=(self.k - 1, 0))
-            x_seq = F.conv1d(x_seq, self.weight.view(1, 1, -1), stride=1)
-
-            x_seq = x_seq.squeeze(1).t().view(x_seq_shape)
-            output = self.surrogate_function(x_seq + self.bias)
-
-        else:
-            raise NotImplementedError(self.backend)
+        weight = self.gen_gemm_weight(x_seq.shape[0])
+        h_seq = torch.addmm(self.bias, weight, x_seq.flatten(1)).view(x_seq.shape)
+        output = self.surrogate_function(h_seq)
         return (output,), states
 
     def extra_repr(self):

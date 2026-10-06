@@ -1,6 +1,6 @@
 import torch
-from torch.autograd.function import once_differentiable
 
+from ..autograd import _higher_order_grad, _save_for_higher_order
 from ..surrogate import _DTYPES
 from ..validation import _check_gradients, _check_inputs
 
@@ -86,7 +86,7 @@ def _backward_fake(
 def _setup_context(ctx, inputs, output):
     ctx.input_dtype = inputs[0].dtype
     ctx.parameters = inputs[3:]
-    ctx.save_for_backward(*inputs[:3], output[2])
+    _save_for_higher_order(ctx, inputs, (output[2],))
     ctx.mark_non_differentiable(output[2])
     ctx.set_materialize_grads(False)
 
@@ -98,9 +98,12 @@ def _register_ops(forward_name: str, backward_name: str, *, register_fake: bool 
     namespace, name = backward_name.split("::")
     backward_op = getattr(getattr(torch.ops, namespace), name).default
 
-    @once_differentiable
     def backward(ctx, gs, gv, gh):
-        x, v, w, h = ctx.saved_tensors
+        if torch.is_grad_enabled():
+            from .reference import _forward_impl
+
+            return _higher_order_grad(ctx, _forward_impl, (gs, gv, gh))
+        h, x, v, w = ctx.saved_tensors
         if gs is None:
             gs = torch.zeros_like(h, dtype=ctx.input_dtype)
         if gv is None:

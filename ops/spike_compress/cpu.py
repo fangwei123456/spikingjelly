@@ -5,10 +5,7 @@ import torch
 from .validation import _check_pack, _check_unpack, _pack_fake, _unpack_fake
 
 
-@torch.library.custom_op(
-    "sj_spike_compress::cpu_forward", mutates_args=(), device_types="cpu"
-)
-def _pack(x: torch.Tensor) -> torch.Tensor:
+def _forward_impl(x: torch.Tensor) -> torch.Tensor:
     _check_pack(x)
     x = x.bool().reshape(-1)
     packed = torch.zeros(((x.numel() + 7) // 8,), device=x.device, dtype=torch.uint8)
@@ -18,8 +15,13 @@ def _pack(x: torch.Tensor) -> torch.Tensor:
     return packed
 
 
+_pack = torch.library.custom_op(
+    "sj_spike_compress::cpu_forward", mutates_args=(), device_types=("cpu", "cuda")
+)(_forward_impl)
+
+
 @torch.library.custom_op(
-    "sj_spike_compress::cpu_unpack", mutates_args=(), device_types="cpu"
+    "sj_spike_compress::cpu_unpack", mutates_args=(), device_types=("cpu", "cuda")
 )
 def _unpack(packed: torch.Tensor, shape: list[int], dtype: torch.dtype) -> torch.Tensor:
     _check_unpack(packed, shape)

@@ -27,9 +27,9 @@ def _base_report():
             "config": {
                 "mode": "bf16",
                 "fp8_recipe": "auto",
-                "triton_storage": None,
-                "triton_fwd": "fp32",
-                "triton_bwd": "fp32",
+                "neuron_storage": None,
+                "neuron_fwd": "fp32",
+                "neuron_bwd": "fp32",
             },
             "policy": {"dtype": "torch.bfloat16"},
         },

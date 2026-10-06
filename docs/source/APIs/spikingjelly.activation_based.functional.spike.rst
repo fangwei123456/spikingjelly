@@ -1,12 +1,9 @@
 Binary spike operators / 二值脉冲算子
 ======================================
 
-以下接口使用根目录 ``ops`` 中的注册实现。旧 ``cuda_kernel`` 与
-``triton_kernel`` 路径保留用于对照，不被这些新入口调用。
+以下接口使用根目录 ``ops`` 中的注册实现。
 
 The following interfaces use registered implementations in root ``ops``.
-Old ``cuda_kernel`` and ``triton_kernel`` paths remain as references and are not
-called by these new entry points.
 
 ``spike_linear`` 和 ``spike_conv1d/2d/3d`` 的数值计算继续由 PyTorch 分发至
 CPU、cuBLAS 或 cuDNN；新反向通过 ``save_for_backward`` 保存 bool/位压缩输入，

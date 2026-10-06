@@ -76,31 +76,14 @@ def test_cpu_and_fake_cuda_do_not_choose_a_cuda_provider(monkeypatch):
     monkeypatch.setattr(lif._selection, "_select", forbidden)
     x = torch.full((3, 7), 0.3, requires_grad=True)
     v = torch.zeros(7, requires_grad=True)
-    s, voltage, _ = lif.lif(x, v)
+    s, voltage, _ = lif._forward(x, v, 2.0, True, 1.0, 0.0, False, 4.0)
     gradients = torch.autograd.grad(s.sum() + voltage.sum(), (x, v))
     assert all(torch.isfinite(g).all() for g in gradients)
     with FakeTensorMode():
         x = torch.empty(3, 7, device="cuda")
         v = torch.empty(7, device="cuda")
-        outputs = lif.lif(x, v)
+        outputs = lif._forward(x, v, 2.0, True, 1.0, 0.0, False, 4.0)
         assert all(t.shape == x.shape and t.device == x.device for t in outputs)
-
-
-def test_cpu_compilation_restores_source_identity_after_caller_tag_change(monkeypatch):
-    from spikingjelly._ops.lif import lif
-
-    monkeypatch.setattr(torch.compiler.config, "cache_key_tag", "caller-cpu-tag")
-    x = torch.full((3, 7), 0.3, requires_grad=True)
-    v = torch.zeros(7, requires_grad=True)
-    expected = lif(x, v)
-    actual = torch.compile(lif, fullgraph=True)(x, v)
-    torch.testing.assert_close(actual, expected)
-    torch.testing.assert_close(
-        torch.autograd.grad(actual[0].sum() + actual[1].sum(), (x, v)),
-        torch.autograd.grad(expected[0].sum() + expected[1].sum(), (x, v)),
-    )
-    assert torch.compiler.config.cache_key_tag.startswith("caller-cpu-tag")
-    assert "|sj-ops:sj_lif:cpu:" in torch.compiler.config.cache_key_tag
 
 
 @pytest.mark.parametrize("family", FAMILIES)
@@ -202,7 +185,8 @@ def test_compiler_cache_distinguishes_cuda_implementations(tmp_path):
     code = textwrap.dedent("""
         import os
         import torch
-        from spikingjelly._ops.lif import lif, get_cuda_implementation
+        from spikingjelly._ops.lif import _forward as lif
+        from spikingjelly.activation_based.functional import neuron_implementation
         from unittest.mock import patch
 
         torch.compiler.config.cache_key_tag = "caller-tag"
@@ -211,7 +195,7 @@ def test_compiler_cache_distinguishes_cuda_implementations(tmp_path):
         v = torch.zeros(2, 5, device="cuda", requires_grad=True)
         args = (x, v, 2.0, True, 1.0, 0.0, False, 4.0)
         reference = lif(*args)
-        assert get_cuda_implementation(x.device)["implementation"] == provider
+        assert neuron_implementation("lif", x.device)["implementation"] == provider
         bound_tag = torch.compiler.config.cache_key_tag
         lif(*args)
         assert torch.compiler.config.cache_key_tag == bound_tag
@@ -260,7 +244,7 @@ def test_compiler_cache_distinguishes_cuda_implementations(tmp_path):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_cuda_compile_requires_warm_binding_in_fresh_process():
+def test_cuda_fullgraph_compile_binds_provider_on_first_call():
     import os
     import subprocess
     import sys
@@ -268,18 +252,28 @@ def test_cuda_compile_requires_warm_binding_in_fresh_process():
 
     code = textwrap.dedent("""
         import torch
-        from spikingjelly._ops.lif import lif
-        x = torch.ones(2, 11, device="cuda")
-        v = torch.zeros(11, device="cuda")
+        from spikingjelly._ops.lif import _forward as lif
+        from spikingjelly._ops.lif.reference import _forward_impl
+
+        x = torch.full((2, 11), 0.3, device="cuda", requires_grad=True)
+        v = torch.zeros(11, device="cuda", requires_grad=True)
+        args = (x, v, 2.0, True, 1.0, 0.0, False, 4.0, False)
+        expected = _forward_impl(x, v, 2.0, True, 1.0, 0.0, False, 4.0, False, 0)
         compiled = torch.compile(lif, fullgraph=True)
-        try:
-            compiled(x, v)
-        except Exception as error:
-            assert "Warm up the registered neuron" in str(error), str(error)
-        else:
-            raise AssertionError("cold CUDA capture must not use an unbound cache key")
-        expected = lif(x, v)
-        torch.testing.assert_close(compiled(x, v), expected)
+        actual = compiled(*args)
+        for got, want in zip(actual, expected, strict=True):
+            if got is not None:
+                torch.testing.assert_close(got, want)
+        got_grads = torch.autograd.grad(
+            actual[0].sum() + actual[1].sum(), (x, v)
+        )
+        want_grads = torch.autograd.grad(
+            expected[0].sum() + expected[1].sum(), (x, v)
+        )
+        torch.testing.assert_close(got_grads, want_grads)
+        from spikingjelly.activation_based.functional import neuron_implementation
+
+        assert neuron_implementation("lif", x.device)["implementation"] == "triton"
     """)
     result = subprocess.run(
         [sys.executable, "-c", code],

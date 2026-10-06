@@ -125,7 +125,7 @@ def _check_gradient(actual, expected):
     }
 
 
-def _capture_workload(args, production):
+def _capture_workload(args, kernel_module):
     from spikingjelly.activation_based import functional, surrogate
     from spikingjelly._ops.surrogate_dispatch import (
         resolve_sg_triton_id_and_alpha,
@@ -133,7 +133,7 @@ def _capture_workload(args, production):
 
     model = (
         _build_model(
-            "spikformer_s", "triton", args.T, 1000, "lif", False, args.surrogate
+            "spikformer_s", args.T, 1000, "lif", args.surrogate
         )
         .to(device=args.device, dtype=torch.float32)
         .train()
@@ -158,31 +158,74 @@ def _capture_workload(args, production):
         optimizer.step()
         functional.reset_net(model)
 
-    for _ in range(args.warmup_steps):
-        step()
-    torch.cuda.synchronize()
     records = []
-    original = production._launch_lif_backward_kernel
+    original = kernel_module._backward_impl
+    capture_enabled = False
 
-    def capture(gs, gv, h, gx, gv0, **parameters):
-        records.append(
-            {
-                "inputs": tuple(
-                    t.detach().clone(memory_format=torch.contiguous_format)
-                    for t in (gs, gv, h)
-                ),
-                "source_shapes": [list(t.shape) for t in (gs, gv, h)],
-                "source_strides": [list(t.stride()) for t in (gs, gv, h)],
-                "parameters": parameters,
-            }
+    def capture(
+        gs,
+        gv,
+        h,
+        tau,
+        decay_input,
+        threshold,
+        reset,
+        detach_reset,
+        alpha,
+        store_v_seq,
+        surrogate_id,
+        *,
+        _kernel_wrapper=None,
+    ):
+        if capture_enabled:
+            records.append(
+                {
+                    "inputs": tuple(
+                        t.detach().clone(memory_format=torch.contiguous_format)
+                        for t in (gs, gv, h)
+                    ),
+                    "source_shapes": [list(t.shape) for t in (gs, gv, h)],
+                    "source_strides": [list(t.stride()) for t in (gs, gv, h)],
+                    "parameters": {
+                        "tau": tau,
+                        "decay_input": decay_input,
+                        "v_threshold": threshold,
+                        "v_reset": 0.0 if reset is None else reset,
+                        "soft_reset": reset is None,
+                        "detach_reset": detach_reset,
+                        "sg_alpha": alpha,
+                        "compute_dtype_id": 0,
+                        "storage_dtype_id": 0,
+                        "store_v_seq": store_v_seq,
+                        "sg_triton_id": surrogate_id,
+                    },
+                }
+            )
+        return original(
+            gs,
+            gv,
+            h,
+            tau,
+            decay_input,
+            threshold,
+            reset,
+            detach_reset,
+            alpha,
+            store_v_seq,
+            surrogate_id,
+            _kernel_wrapper=_kernel_wrapper,
         )
-        return original(gs, gv, h, gx, gv0, **parameters)
 
-    production._launch_lif_backward_kernel = capture
+    kernel_module._backward_impl = capture
     try:
+        for _ in range(args.warmup_steps):
+            step()
+        torch.cuda.synchronize()
+        capture_enabled = True
         step()
     finally:
-        production._launch_lif_backward_kernel = original
+        capture_enabled = False
+        kernel_module._backward_impl = original
     torch.cuda.synchronize()
     if not records:
         raise RuntimeError("no production LIF backward calls were captured")
@@ -335,7 +378,15 @@ def _run_round(args):
     torch.cuda.manual_seed_all(DEFAULT_SEED)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
-    records = _capture_workload(args, production)
+    records = _capture_workload(args, candidate_module)
+    from spikingjelly.activation_based import functional
+
+    selected = functional.neuron_implementation("lif", device)["implementation"]
+    if selected != "triton":
+        raise RuntimeError(
+            "This check measures the production Triton path. Set "
+            "SJ_LIF_CUDA_IMPLEMENTATION=triton before starting Python."
+        )
     with torch.no_grad():
         graphs, outputs, checks = _make_graphs(
             records,

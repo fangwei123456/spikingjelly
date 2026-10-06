@@ -300,8 +300,8 @@ def _read_training_text(path: Path) -> tuple[str, tuple[str, ...]]:
 def _make_model(author_model, vocabulary_size: int, device: torch.device):
     model = author_model.GPT(_make_config(author_model, vocabulary_size))
     for block in model.blocks:
-        block.lif1 = make_current_lif("cupy")
-        block.lif2 = make_current_lif("cupy")
+        block.lif1 = make_current_lif()
+        block.lif2 = make_current_lif()
     model = model.to(device)
     parameter_count = sum(parameter.numel() for parameter in model.parameters())
     if parameter_count != EXPECTED_PARAMETER_COUNT:
@@ -621,7 +621,7 @@ def run(
     )
     print(
         f"model=SpikeGPT parameter_count={EXPECTED_PARAMETER_COUNT} layers={N_LAYER} "
-        f"hidden={N_EMBD} context={CONTEXT_LENGTH} backend=current-cupy"
+        f"hidden={N_EMBD} context={CONTEXT_LENGTH} neuron_implementation=automatic"
     )
     print(
         f"overfit loss_before={overfit_loss_before:.8f} "

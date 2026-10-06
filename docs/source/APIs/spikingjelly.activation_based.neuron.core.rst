@@ -40,7 +40,6 @@ Integrate-and-fire (IF) Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends
 
 Leaky Integrate-and-fire (LIF) Neurons
 ------------------------------------------------
@@ -49,7 +48,6 @@ Leaky Integrate-and-fire (LIF) Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends
 
 Parametric Leaky Integrate-and-fire (PLIF) Neurons
 ----------------------------------------------------------
@@ -58,7 +56,7 @@ Parametric Leaky Integrate-and-fire (PLIF) Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Parallel Spiking Neuron Family
 --------------------------------------------
@@ -67,32 +65,19 @@ Parallel Spiking Neuron Family
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 FlexSN
 -------------
 
-**中文：实现组织**
-
-``FlexSN`` 负责用户 ``core``、状态、静态输入和 ``reset()``。
-``neuron.flexsn_trace`` 捕获推理/训练 FX 图，``neuron.flexsn_hop`` 负责 Dynamo
-捕获。后端 ``spikingjelly._ops.flexsn`` 接收图，完成 Triton 代码生成、算子注册、
-启动与反向；HOP 的执行也位于该包。后端不依赖神经元实例。
-现有 ``backend="torch" / "hop" / "triton"`` 选择保持不变，不引入自动后端选择。
-
-**English: implementation layout**
-
-``FlexSN`` owns the user ``core``, state, static inputs and ``reset()``.
-``neuron.flexsn_trace`` captures inference/training FX graphs, while
-``neuron.flexsn_hop`` handles Dynamo capture. The backend in
-``spikingjelly._ops.flexsn`` consumes graphs and owns Triton code generation,
-operator registration, launches and backward execution, as well as HOP execution.
-It does not depend on neuron instances. The existing
-``backend="torch" / "hop" / "triton"`` selection remains explicit.
+FlexSN automatically uses its Torch implementation on CPU. On CUDA it selects
+the fused Triton implementation for supported cores and uses the Torch/HOP path
+for supported compositions that cannot be fused. Its constructor has no backend
+parameter.
 
 
 .. automodule:: spikingjelly.activation_based.neuron.flexsn
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr, store_state_seqs
+   :exclude-members: extra_repr, store_state_seqs

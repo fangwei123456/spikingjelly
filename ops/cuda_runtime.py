@@ -2,10 +2,8 @@ import threading
 import weakref
 from typing import Any
 
-import numpy as np
 import torch
 
-from spikingjelly import configure
 from spikingjelly.logger import logger
 
 try:
@@ -13,35 +11,6 @@ try:
 except (ImportError, OSError) as e:
     logger.info("Optional CuPy dependency unavailable: {}", e)
     cupy = None
-
-
-_INT32_MAX = np.iinfo(np.int32).max
-
-
-def _as_cupy_int32(value: int, name: str):
-    if not (-_INT32_MAX - 1 <= value <= _INT32_MAX):
-        raise OverflowError(
-            f"{name}={value} exceeds int32 range required by CUDA kernel launch metadata."
-        )
-    return cupy.asarray(value, dtype=np.int32)
-
-
-def _scalar_to_cupy(py_dict: dict, ref: str):
-    device = py_dict[ref].get_device()
-    dtype = py_dict[ref].dtype
-
-    with DeviceEnvironment(device):
-        for key, value in py_dict.items():
-            if isinstance(value, float):
-                if dtype == torch.float32:
-                    value = cupy.asarray(value, dtype=np.float32)
-                elif dtype == torch.float16:
-                    value = cupy.asarray([value, value], dtype=np.float16)
-                else:
-                    raise NotImplementedError(dtype)
-                py_dict[key] = value
-            elif isinstance(value, int):
-                py_dict[key] = _as_cupy_int32(value, key)
 
 
 _PYOBJ_LOCK = threading.Lock()
@@ -92,143 +61,6 @@ def resolve_python_object(obj_id: int) -> Any:
         return obj
 
 
-def cal_blocks(numel: int, threads: int = -1):
-    r"""
-    **API Language** - :ref:`中文 <cal_blocks-cn>` | :ref:`English <cal_blocks-en>`
-
-    ----
-
-    .. _cal_blocks-cn:
-
-    * **中文**
-
-    :param numel: 并行执行的CUDA内核的数量
-    :type numel: int
-    :param threads: 每个cuda block中threads的数量，默认为-1，表示使用 ``configure.cuda_threads``
-    :type threads: int
-    :return: blocks的数量
-    :rtype: int
-
-    此函数返回 blocks的数量，用来按照 ``kernel((blocks,), (configure.cuda_threads,), ...)`` 调用 :class:`cupy.RawKernel`
-
-    ----
-
-    .. _cal_blocks-en:
-
-    * **English**
-
-    :param numel: the number of parallel CUDA kernels
-    :type numel: int
-    :param threads: the number of threads in each cuda block.
-        The defaule value is -1, indicating to use ``configure.cuda_threads``
-    :type threads: int
-    :return: the number of blocks
-    :rtype: int
-
-    Returns the number of blocks to call :class:`cupy.RawKernel` by ``kernel((blocks,), (threads,), ...)``
-    """
-    if threads == -1:
-        threads = configure.cuda_threads
-    return (numel + threads - 1) // threads
-
-
-def get_contiguous(*args):
-    r"""
-    **API Language** - :ref:`中文 <get_contiguous-cn>` | :ref:`English <get_contiguous-en>`
-
-    ----
-
-    .. _get_contiguous-cn:
-
-    * **中文**
-
-    将 ``*args`` 中所有的 ``torch.Tensor`` 或 ``cupy.ndarray`` 进行连续化。
-
-    .. note::
-
-        连续化的操作无法in-place，因此本函数返回一个新的list。
-
-    :return: 一个元素全部为连续的 ``torch.Tensor`` 或 ``cupy.ndarray`` 的 ``list``
-    :rtype: list
-
-    ----
-
-    .. _get_contiguous-en:
-
-    * **English**
-
-    :return: a list that contains the contiguous ``torch.Tensor`` or ``cupy.ndarray``
-    :rtype: list
-
-    Makes ``torch.Tensor`` or ``cupy.ndarray`` in ``*args`` to be contiguous
-
-    .. admonition:: Note
-        :class: note
-
-        The making contiguous operation can not be done in-place. Hence, this function will return a new list.
-    """
-    ret_list = []
-
-    for item in args:
-        if isinstance(item, torch.Tensor):
-            ret_list.append(item.contiguous())
-
-        elif isinstance(item, cupy.ndarray):
-            ret_list.append(cupy.ascontiguousarray(item))
-        else:
-            raise TypeError(type(item))
-    return ret_list
-
-
-def wrap_args_to_raw_kernel(device: int, *args):
-    r"""
-    **API Language** - :ref:`中文 <wrap_args_to_raw_kernel-cn>` | :ref:`English <wrap_args_to_raw_kernel-en>`
-
-    ----
-
-    .. _wrap_args_to_raw_kernel-cn:
-
-    * **中文**
-
-    :param device: raw kernel运行的CUDA设备
-    :type device: int
-    :return: 一个包含用来调用 :class:`cupy.RawKernel` 的 ``tuple``
-    :rtype: tuple
-
-    此函数可以包装 ``torch.Tensor`` 和 ``cupy.ndarray`` 并将其作为 :class:`cupy.RawKernel.__call__` 的 ``args``
-
-    ----
-
-    .. _wrap_args_to_raw_kernel-en:
-
-    * **English**
-
-    :param device: on which CUDA device the raw kernel will run
-    :type device: int
-    :return: a ``tuple`` that contains args to call :class:`cupy.RawKernel`
-    :rtype: tuple
-
-    This function can wrap ``torch.Tensor`` or ``cupy.ndarray`` to ``args`` in :class:`cupy.RawKernel.__call__`
-    """
-    # note that the input must be contiguous
-    # check device and get data_ptr from tensor
-    ret_list = []
-    for item in args:
-        if isinstance(item, torch.Tensor):
-            assert item.get_device() == device
-            assert item.is_contiguous()
-            ret_list.append(item.data_ptr())
-
-        elif isinstance(item, cupy.ndarray):
-            assert item.device.id == device
-            assert item.flags["C_CONTIGUOUS"]
-            ret_list.append(item)
-
-        else:
-            raise TypeError
-    return tuple(ret_list)
-
-
 class DeviceEnvironment:
     def __init__(self, device: int):
         r"""
@@ -247,7 +79,7 @@ class DeviceEnvironment:
         .. code-block:: python
 
             with DeviceEnvironment(device):
-                kernel((blocks,), (configure.cuda_threads,), ...)
+                kernel(grid, block, args)
 
 
         ----
@@ -266,7 +98,7 @@ class DeviceEnvironment:
         .. code-block:: python
 
             with DeviceEnvironment(device):
-                kernel((blocks,), (configure.cuda_threads,), ...)
+                kernel(grid, block, args)
         """
         self.device = device
         self.previous_device = None

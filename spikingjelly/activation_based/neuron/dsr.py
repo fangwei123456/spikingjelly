@@ -18,8 +18,6 @@ class DSRIFNode(base.MemoryModule):
         v_threshold_grad_scaling: float = 1.0,
         v_threshold_lower_bound: float = 0.01,
         step_mode="m",
-        backend="torch",
-        **kwargs,
     ):
         """
         **API Language** - :ref:`中文 <DSRIFNode.__init__-cn>` | :ref:`English <DSRIFNode.__init__-en>`
@@ -56,10 +54,6 @@ class DSRIFNode(base.MemoryModule):
         :param step_mode: 步进模式，仅支持 ``'m'`` （多步）
         :type step_mode: str
 
-        :param backend: 使用的后端。不同 ``step_mode`` 支持的后端可能不同。
-            可通过 ``self.supported_backends`` 查看当前步进模式支持的后端。
-            DSR-IF 仅支持 ``'torch'`` 后端
-        :type backend: str
 
         ----
 
@@ -93,10 +87,6 @@ class DSRIFNode(base.MemoryModule):
         :param step_mode: step mode, only `'m'` (multi-step) is supported
         :type step_mode: str
 
-        :param backend: backend of this neuron layer. Supported backends depend on ``step_mode``.
-            Users can print ``self.supported_backends`` to check availability.
-            DSR-IF only supports the ``'torch'`` backend
-        :type backend: str
         """
         assert isinstance(T, int)
         assert isinstance(v_threshold, float) and v_threshold >= v_threshold_lower_bound
@@ -107,7 +97,6 @@ class DSRIFNode(base.MemoryModule):
         assert step_mode == "m"
 
         super().__init__()
-        self.backend = backend
         self.step_mode = step_mode
         self.T = T
         if v_threshold_training:
@@ -117,10 +106,6 @@ class DSRIFNode(base.MemoryModule):
         self.alpha = alpha
         self.v_threshold_lower_bound = v_threshold_lower_bound
         self.v_threshold_grad_scaling = v_threshold_grad_scaling
-
-    @property
-    def supported_backends(self):
-        return "torch"
 
     def extra_repr(self):
         return (
@@ -205,8 +190,6 @@ class DSRLIFNode(base.MemoryModule):
         v_threshold_grad_scaling: float = 1.0,
         v_threshold_lower_bound: float = 0.1,
         step_mode="m",
-        backend="torch",
-        **kwargs,
     ):
         """
         **API Language** - :ref:`中文 <DSRLIFNode.__init__-cn>` | :ref:`English <DSRLIFNode.__init__-en>`
@@ -248,10 +231,6 @@ class DSRLIFNode(base.MemoryModule):
         :param step_mode: 步进模式，仅支持 ``'m'`` （多步）
         :type step_mode: str
 
-        :param backend: 使用的后端。不同 ``step_mode`` 支持的后端可能不同。
-            可通过 ``self.supported_backends`` 查看当前步进模式支持的后端。
-            DSR-LIF 仅支持 ``'torch'`` 后端
-        :type backend: str
 
         ----
 
@@ -291,10 +270,6 @@ class DSRLIFNode(base.MemoryModule):
         :param step_mode: step mode, only `'m'` (multi-step) is supported
         :type step_mode: str
 
-        :param backend: backend of this neuron layer. Supported backends depend on ``step_mode``.
-            Users can print ``self.supported_backends`` to check availability.
-            DSR-LIF only supports the ``'torch'`` backend
-        :type backend: str
         """
         assert isinstance(T, int)
         assert isinstance(v_threshold, float) and v_threshold >= v_threshold_lower_bound
@@ -305,7 +280,6 @@ class DSRLIFNode(base.MemoryModule):
         assert step_mode == "m"
 
         super().__init__()
-        self.backend = backend
         self.step_mode = step_mode
         self.T = T
         if v_threshold_training:
@@ -317,10 +291,6 @@ class DSRLIFNode(base.MemoryModule):
         self.alpha = alpha
         self.v_threshold_lower_bound = v_threshold_lower_bound
         self.v_threshold_grad_scaling = v_threshold_grad_scaling
-
-    @property
-    def supported_backends(self):
-        return "torch"
 
     def extra_repr(self):
         return (

@@ -15,30 +15,30 @@ from typing import Any
 
 import torch
 
-from spikingjelly.activation_based import neuron, surrogate
-from spikingjelly.activation_based.triton_kernel.fp8_capability import (
+from spikingjelly.activation_based import functional, neuron, surrogate
+from spikingjelly._ops.fp8_capability import (
     triton_fp8_neuron_capability_report,
 )
-from spikingjelly.activation_based.triton_kernel.neuron_kernel.integrate_and_fire import (
+from spikingjelly._ops.if_.triton_precision import (
     multistep_if,
     _multistep_if_mp,
     _multistep_if_mp_with_plan,
 )
-from spikingjelly.activation_based.triton_kernel.neuron_kernel.lif import (
+from spikingjelly._ops.lif.triton_precision import (
     multistep_lif,
     _multistep_lif_mp,
     _multistep_lif_mp_with_plan,
 )
-from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
+from spikingjelly._ops.plif.triton_precision import (
     multistep_plif,
     _multistep_plif_mp,
     _multistep_plif_mp_with_plan,
 )
-from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
+from spikingjelly._ops.triton_layout import (
     _TritonNeuronExecutionPlan,
     _prepare_triton_neuron_execution_plan,
 )
-from spikingjelly.activation_based.triton_kernel.triton_utils import (
+from spikingjelly._ops.triton_runtime import (
     normalize_triton_compute_dtype_name,
 )
 
@@ -804,49 +804,51 @@ def main() -> None:
                         "variants": [],
                     }
                     if neuron_type == "if":
-                        triton_ref = (
+                        automatic_ref = (
                             neuron.IFNode(
                                 v_threshold=1.0,
                                 v_reset=v_reset,
                                 step_mode="m",
-                                backend="triton",
                                 store_v_seq=True,
                             )
                             .to(device)
                             .eval()
                         )
                     elif neuron_type == "lif":
-                        triton_ref = (
+                        automatic_ref = (
                             neuron.LIFNode(
                                 tau=1.0 / r_tau,
                                 v_threshold=1.0,
                                 v_reset=v_reset,
                                 decay_input=bool(decay_input),
                                 step_mode="m",
-                                backend="triton",
                                 store_v_seq=True,
                             )
                             .to(device)
                             .eval()
                         )
                     else:
-                        triton_ref = (
+                        automatic_ref = (
                             neuron.ParametricLIFNode(
                                 init_tau=1.0 / r_tau,
                                 v_threshold=1.0,
                                 v_reset=v_reset,
                                 decay_input=bool(decay_input),
                                 step_mode="m",
-                                backend="triton",
                                 store_v_seq=True,
                             )
                             .to(device)
                             .eval()
                         )
                     with torch.no_grad():
-                        out_s = triton_ref(x)
-                    case_result["triton_fp32_reference"] = _metrics(
-                        ref_s, ref_v, ref_h, out_s, triton_ref.v_seq, None
+                        out_s = automatic_ref(x)
+                    case_result["automatic_fp32_reference"] = _metrics(
+                        ref_s, ref_v, ref_h, out_s, automatic_ref.v_seq, None
+                    )
+                    case_result["selected_implementation"] = (
+                        functional.neuron_implementation(
+                            neuron_type, device
+                        )["implementation"]
                     )
 
                     for dtype_name, storage_dtype in dtype_variants:

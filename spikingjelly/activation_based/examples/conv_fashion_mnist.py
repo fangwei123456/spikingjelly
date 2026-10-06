@@ -15,7 +15,7 @@ from spikingjelly import visualizing
 
 
 class CSNN(nn.Module):
-    def __init__(self, T: int, channels: int, use_cupy=False):
+    def __init__(self, T: int, channels: int):
         super().__init__()
         self.T = T
 
@@ -36,9 +36,6 @@ class CSNN(nn.Module):
         )
 
         functional.set_step_mode(self, step_mode="m")
-
-        if use_cupy:
-            functional.set_backend(self, backend="cupy")
 
     def forward(self, x: torch.Tensor):
         # x.shape = [N, C, H, W]
@@ -112,7 +109,6 @@ def main():
     parser.add_argument(
         "-amp", action="store_true", help="automatic mixed precision training"
     )
-    parser.add_argument("-cupy", action="store_true", help="use cupy backend")
     parser.add_argument("-opt", type=str, help="use which optimizer. SDG or Adam")
     parser.add_argument("-momentum", default=0.9, type=float, help="momentum for SGD")
     parser.add_argument("-lr", default=0.1, type=float, help="learning rate")
@@ -126,7 +122,7 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    net = CSNN(T=args.T, channels=args.channels, use_cupy=args.cupy)
+    net = CSNN(T=args.T, channels=args.channels)
 
     print(net)
 
@@ -246,9 +242,6 @@ def main():
 
     if args.amp:
         out_dir += "_amp"
-
-    if args.cupy:
-        out_dir += "_cupy"
 
     os.makedirs(out_dir, exist_ok=True)
 

@@ -1,13 +1,16 @@
 from functools import cache
+from pathlib import Path
 from typing import Literal, Optional
 
 import numpy as np
 import torch
+from torch.autograd.function import once_differentiable
 
 from spikingjelly.activation_based import surrogate
 from spikingjelly.logger import logger
 
 from .. import cuda_runtime as cuda_utils
+from ..surrogate import _surrogate_spec
 
 try:
     import cupy
@@ -20,140 +23,29 @@ except (ImportError, OSError) as e:
 _OUTPUTS_PER_THREAD = 4
 
 
-_LIF_CHARGE = r"""
-#define DECAY_INPUT {decay_input}
-
-__device__ __forceinline__ float neuron_charge(
-    float x, float v, float r_tau, float v_reset)
-{{
-    float temp;
-#if SOFT_RESET
-    temp = v;
-#else
-    temp = v - v_reset;
-#endif
-#if DECAY_INPUT
-    temp = r_tau * (x - temp);
-#else
-    temp = x - r_tau * temp;
-#endif
-    return temp + v;
-}}
-"""
-
-
-_CUDA_TEMPLATE = r"""
-#define OUTPUTS_PER_THREAD {outputs_per_thread}
-#define SOFT_RESET {soft_reset}
-
-{charge_code}
-
-__device__ __forceinline__ float neuron_reset(
-    float h, bool spike, float v_threshold, float v_reset)
-{{
-#if SOFT_RESET
-    return h - (float)spike * v_threshold;
-#else
-    return spike ? v_reset : h;
-#endif
-}}
-
-extern "C" __global__ void {kernel_name}(
-    const float* __restrict__ x_seq,
-    const float* __restrict__ v_init,
-    const float* __restrict__ weight_t,
-    const float* __restrict__ bias,
-    float* __restrict__ y_seq,
-    float* __restrict__ v_out,
-    int T, int M, int K, int N,
-    {charge_parameter}float v_threshold, float v_reset, int has_bias)
-{{
-    int n_per_block = blockDim.x * OUTPUTS_PER_THREAD;
-    int n_groups = (N + n_per_block - 1) / n_per_block;
-    int m = blockIdx.x / n_groups;
-    int n_group = blockIdx.x % n_groups;
-    int tid = threadIdx.x;
-
-    // Output groups recompute neuron state to avoid materializing spikes.
-    extern __shared__ unsigned char shared[];
-    float* v = reinterpret_cast<float*>(shared);
-    unsigned int* spike_masks = reinterpret_cast<unsigned int*>(
-        shared + K * sizeof(float));
-
-    for (int k = tid; k < K; k += blockDim.x)
-        v[k] = v_init[m * K + k];
-    __syncthreads();
-
-    for (int t = 0; t < T; t++) {{
-        float acc[OUTPUTS_PER_THREAD];
-#pragma unroll
-        for (int q = 0; q < OUTPUTS_PER_THREAD; q++) {{
-            int n = n_group * n_per_block + tid + q * blockDim.x;
-            acc[q] = has_bias && n < N ? bias[n] : 0.0f;
-        }}
-
-        for (int k0 = 0; k0 < K; k0 += blockDim.x) {{
-            int k = k0 + tid;
-            bool spike = false;
-            if (k < K) {{
-                float h = neuron_charge(
-                    x_seq[(t * M + m) * K + k], v[k]{charge_argument});
-                spike = h >= v_threshold;
-                v[k] = neuron_reset(h, spike, v_threshold, v_reset);
-            }}
-            unsigned int mask = __ballot_sync(0xffffffffu, spike);
-            if ((tid & 31) == 0) spike_masks[tid >> 5] = mask;
-            __syncthreads();
-
-            int tile_warps = (min((int)blockDim.x, K - k0) + 31) >> 5;
-            for (int w = 0; w < tile_warps; w++) {{
-                unsigned int active = spike_masks[w];
-                while (active) {{
-                    int k_active = k0 + (w << 5) + __ffs(active) - 1;
-#pragma unroll
-                    for (int q = 0; q < OUTPUTS_PER_THREAD; q++) {{
-                        int n = n_group * n_per_block + tid + q * blockDim.x;
-                        if (n < N) acc[q] += weight_t[k_active * N + n];
-                    }}
-                    active &= active - 1;
-                }}
-            }}
-            __syncthreads();
-        }}
-
-#pragma unroll
-        for (int q = 0; q < OUTPUTS_PER_THREAD; q++) {{
-            int n = n_group * n_per_block + tid + q * blockDim.x;
-            if (n < N) y_seq[(t * M + m) * N + n] = acc[q];
-        }}
-    }}
-
-    if (n_group == 0) {{
-        for (int k = tid; k < K; k += blockDim.x)
-            v_out[m * K + k] = v[k];
-    }}
-}}
-
-"""
-
-
 _MAX_CUDA_ELEMENTS = 2**31 - 1
 
 
 @cache
-def _get_lif_kernel(device: int, decay_input: bool, soft_reset: bool):
-    kernel_name = "lif_linear_kernel"
-    source = _CUDA_TEMPLATE.format(
-        outputs_per_thread=_OUTPUTS_PER_THREAD,
-        soft_reset=int(soft_reset),
-        charge_code=_LIF_CHARGE.format(decay_input=int(decay_input)),
-        kernel_name=kernel_name,
-        charge_parameter="float r_tau, ",
-        charge_argument=", r_tau, v_reset",
+def _get_kernels(device: int, decay_input: bool, soft_reset: bool):
+    source = Path(__file__).with_name("kernels.cuh")
+    options = (
+        "--std=c++17",
+        "--use_fast_math",
+        f"-I{source.parent.parent}",
+        f"-DSOFT_RESET={int(soft_reset)}",
+        f"-DDECAY_INPUT={int(decay_input)}",
     )
     with cuda_utils.DeviceEnvironment(device):
-        return RawModule(code=source, options=("--use_fast_math",)).get_function(
-            kernel_name
+        module = RawModule(
+            code=source.read_text(encoding="utf-8"),
+            options=options,
+            name_expressions=tuple(f"neuron_backward<{i}>" for i in range(-1, 7)),
+        )
+        return (
+            module.get_function("lif_linear_kernel"),
+            module.get_function("rematerialize"),
+            tuple(module.get_function(f"neuron_backward<{i}>") for i in range(-1, 7)),
         )
 
 
@@ -279,7 +171,7 @@ def cupy_lif_linear_forward(
     if tau <= 1.0:
         raise ValueError("tau must be greater than 1")
     dimensions = _check_forward_inputs(x_seq, v_init, weight_t, bias, threads)
-    kernel = _get_lif_kernel(dimensions[4], decay_input, soft_reset)
+    kernel = _get_kernels(dimensions[4], decay_input, soft_reset)[0]
     return _launch(
         kernel,
         x_seq,
@@ -328,39 +220,6 @@ def _cupy_lif_linear_forward_fake(
     return _fake_outputs(x_seq, v_init, weight_t)
 
 
-def _recompute_lif(
-    x_seq: torch.Tensor,
-    v: torch.Tensor,
-    ctx,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    from ..lif.cupy_generated import lif_multi_step
-    from ..lif.cupy_single_step import lif_step
-
-    if x_seq.shape[0] == 1:
-        spike, voltage = lif_step(
-            x_seq[0],
-            v,
-            ctx.v_threshold,
-            ctx.v_reset,
-            1.0 / ctx.tau,
-            ctx.decay_input,
-            ctx.surrogate_function,
-            ctx.detach_reset,
-        )
-        return spike.unsqueeze(0), voltage
-    spike, voltage = lif_multi_step(
-        x_seq,
-        v,
-        ctx.decay_input,
-        ctx.tau,
-        ctx.v_threshold,
-        ctx.v_reset,
-        ctx.detach_reset,
-        ctx.surrogate_function,
-    )
-    return spike, voltage[-1].clone()
-
-
 def _save_context(
     ctx,
     x_seq,
@@ -378,6 +237,7 @@ def _save_context(
     ctx.v_reset = None if soft_reset else v_reset
     ctx.detach_reset = detach_reset
     ctx.surrogate_function = cuda_utils.resolve_python_object(surrogate_id)
+    ctx.surrogate_handle = surrogate_id
 
 
 def _setup_lif_context(ctx, inputs, output):
@@ -412,33 +272,140 @@ def _setup_lif_context(ctx, inputs, output):
     ctx.decay_input = decay_input
 
 
-def _linear_backward(ctx, grad_y, grad_v_out, recompute):
-    x_seq, v_init, weight_t, bias = ctx.saved_tensors
-    if grad_y is None:
-        grad_y = torch.zeros(
-            (*x_seq.shape[:2], weight_t.shape[1]),
-            device=x_seq.device,
-            dtype=x_seq.dtype,
+@torch.library.custom_op(
+    "sj_lif_linear::cupy_backward",
+    mutates_args=(),
+    device_types="cuda",
+    schema=(
+        "(Tensor x_seq, Tensor v_init, Tensor weight_t, Tensor? bias, "
+        "Tensor grad_y, Tensor grad_v_out, "
+        "float tau, bool decay_input, "
+        "float v_threshold, float? v_reset, bool detach_reset, "
+        "int surrogate_handle) -> (Tensor, Tensor, Tensor, Tensor?)"
+    ),
+)
+def _backward_kernel(
+    x_seq: torch.Tensor,
+    v_init: torch.Tensor,
+    weight_t: torch.Tensor,
+    bias: Optional[torch.Tensor],
+    grad_y: torch.Tensor,
+    grad_v_out: torch.Tensor,
+    tau: float,
+    decay_input: bool,
+    v_threshold: float,
+    v_reset: Optional[float],
+    detach_reset: bool,
+    surrogate_handle: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    surrogate_function = cuda_utils.resolve_python_object(surrogate_handle)
+    T, M, K = x_seq.shape
+    spikes, charged = torch.empty_like(x_seq), torch.empty_like(x_seq)
+    grad_x, grad_v = torch.empty_like(x_seq), torch.empty_like(v_init)
+    parameters = (
+        np.float32(1.0 / tau),
+        np.float32(v_threshold),
+        np.float32(0.0 if v_reset is None else v_reset),
+    )
+    spec = _surrogate_spec(surrogate_function)
+    with cuda_utils.DeviceEnvironment(x_seq.get_device()):
+        _, rematerialize, backwards = _get_kernels(
+            x_seq.get_device(), decay_input, v_reset is None
         )
-    if grad_v_out is None:
-        grad_v_out = torch.zeros_like(v_init)
-
-    with torch.enable_grad():
-        x = x_seq.detach().requires_grad_()
-        v = v_init.detach().requires_grad_()
-        spike, v_out = recompute(x, v, ctx)
-        grad_spike = torch.matmul(grad_y, weight_t.t())
-        grad_x, grad_v = torch.autograd.grad(
-            (spike, v_out), (x, v), (grad_spike, grad_v_out)
+        grid, block = (min((M * K + 255) // 256, 65535),), (256,)
+        rematerialize(
+            grid,
+            block,
+            (
+                *(t.data_ptr() for t in (x_seq, v_init, spikes, charged)),
+                np.int32(T),
+                np.int32(M * K),
+                *parameters,
+            ),
         )
-    K, N = weight_t.shape
-    grad_w = torch.mm(spike.detach().reshape(-1, K).t(), grad_y.reshape(-1, N))
+        # Custom surrogates supply their PyTorch derivative as a tensor. Built-in
+        # surrogates evaluate the same explicit CUDA formula inside the kernel.
+        if spec is None:
+            with torch.enable_grad():
+                over_threshold = (charged - v_threshold).requires_grad_()
+                output = surrogate_function(over_threshold)
+                sg = torch.autograd.grad(
+                    output, over_threshold, torch.ones_like(output)
+                )[0]
+            sg_id, alpha = -1, 0.0
+        else:
+            sg_id, alpha = spec
+            sg = charged
+        grad_spike = torch.matmul(grad_y, weight_t.t()).contiguous()
+        grad_v_out, sg = grad_v_out.contiguous(), sg.contiguous()
+        backwards[sg_id + 1](
+            grid,
+            block,
+            (
+                *(
+                    t.data_ptr()
+                    for t in (grad_spike, grad_v_out, charged, sg, grad_x, grad_v)
+                ),
+                np.int32(T),
+                np.int32(M * K),
+                *parameters,
+                np.int32(detach_reset),
+                np.float32(alpha),
+            ),
+        )
+    N = weight_t.shape[1]
+    grad_w = torch.mm(spikes.reshape(-1, K).t(), grad_y.reshape(-1, N))
     grad_b = grad_y.reshape(-1, N).sum(0) if bias is not None else None
     return grad_x, grad_v, grad_w, grad_b
 
 
+@torch.library.register_fake("sj_lif_linear::cupy_backward")
+def _backward_fake(
+    x_seq,
+    v_init,
+    weight_t,
+    bias,
+    grad_y,
+    grad_v_out,
+    tau,
+    decay_input,
+    v_threshold,
+    v_reset,
+    detach_reset,
+    surrogate_handle,
+):
+    return (
+        torch.empty_like(x_seq),
+        torch.empty_like(v_init),
+        torch.empty_like(weight_t),
+        None if bias is None else torch.empty_like(bias),
+    )
+
+
+@once_differentiable
 def _lif_backward(ctx, grad_y, grad_v_out):
-    return _linear_backward(ctx, grad_y, grad_v_out, _recompute_lif) + (None,) * 8
+    x_seq, v_init, weight_t, bias = ctx.saved_tensors
+    if grad_y is None:
+        grad_y = x_seq.new_zeros((*x_seq.shape[:2], weight_t.shape[1]))
+    if grad_v_out is None:
+        grad_v_out = torch.zeros_like(v_init)
+    return (
+        _backward_kernel(
+            x_seq,
+            v_init,
+            weight_t,
+            bias,
+            grad_y,
+            grad_v_out,
+            ctx.tau,
+            ctx.decay_input,
+            ctx.v_threshold,
+            ctx.v_reset,
+            ctx.detach_reset,
+            ctx.surrogate_handle,
+        )
+        + (None,) * 8
+    )
 
 
 torch.library.register_autograd(

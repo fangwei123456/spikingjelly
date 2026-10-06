@@ -29,14 +29,13 @@ PYTHONPATH="$PWD" python benchmark/snn_llm/qwen_conversion/scaleout_smoke.py \
   --worktree-revision <REVISION> \
   --time-steps 160 \
   --calibration-levels 16 \
-  --calibration-quantile 0.999 \
-  --neuron-backend triton
+  --calibration-quantile 0.999
 ```
 
 ## Efficiency
 
-`scaleout_efficiency.py` performs paired dense, Torch-neuron, and
-Triton-neuron measurements from a previously validated calibration artifact.
+`scaleout_efficiency.py` measures dense and automatically dispatched SNN
+execution from a previously validated calibration artifact.
 Shared-GPU measurements are labelled and are not treated as absolute
 throughput claims.
 

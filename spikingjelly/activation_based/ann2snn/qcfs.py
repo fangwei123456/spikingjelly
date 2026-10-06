@@ -18,7 +18,6 @@ class SignedQCFSSequenceEncoder(nn.Module):
         scale: torch.Tensor,
         time_steps: int,
         *,
-        neuron_backend: str = "torch",
         channel_dim: int = -1,
         collect_statistics: bool = True,
         name: str = "activation",
@@ -42,8 +41,6 @@ class SignedQCFSSequenceEncoder(nn.Module):
         :type scale: torch.Tensor
         :param time_steps: 输出脉冲序列的时间步数，必须为正整数。
         :type time_steps: int
-        :param neuron_backend: ``ActivationAwareIFNode`` 后端。
-        :type neuron_backend: str
         :param channel_dim: 输入中的通道维；其长度必须等于 ``scale.numel()``。
         :type channel_dim: int
         :param collect_statistics: 是否采集 spike rate、计数、局部误差和边界修正比例。
@@ -51,7 +48,7 @@ class SignedQCFSSequenceEncoder(nn.Module):
         :param name: 统计报告中的模块名称。
         :type name: str
         :raises TypeError: 当 ``scale``、``time_steps`` 或 ``channel_dim`` 类型不合法。
-        :raises ValueError: 当 scale、时间步数或后端配置不合法。
+        :raises ValueError: 当 scale 或时间步数不合法。
 
         ----
 
@@ -72,8 +69,6 @@ class SignedQCFSSequenceEncoder(nn.Module):
         :type scale: torch.Tensor
         :param time_steps: Positive number of output time steps.
         :type time_steps: int
-        :param neuron_backend: Backend used by ``ActivationAwareIFNode``.
-        :type neuron_backend: str
         :param channel_dim: Input channel dimension; its size must equal
             ``scale.numel()``.
         :type channel_dim: int
@@ -84,7 +79,7 @@ class SignedQCFSSequenceEncoder(nn.Module):
         :type name: str
         :raises TypeError: If ``scale``, ``time_steps``, or ``channel_dim`` has an
             invalid type.
-        :raises ValueError: If the scale, time-step count, or backend is invalid.
+        :raises ValueError: If the scale or time-step count is invalid.
         """
         super().__init__()
         if not isinstance(scale, torch.Tensor):
@@ -97,10 +92,6 @@ class SignedQCFSSequenceEncoder(nn.Module):
             raise ValueError("time_steps must be positive.")
         if not isinstance(channel_dim, int) or isinstance(channel_dim, bool):
             raise TypeError("channel_dim must be an integer.")
-        if neuron_backend not in ("torch", "triton"):
-            raise ValueError(
-                f"Unsupported ActivationAwareIFNode backend={neuron_backend!r}."
-            )
         self.name = str(name)
         self.time_steps = time_steps
         self.channel_dim = channel_dim
@@ -112,7 +103,6 @@ class SignedQCFSSequenceEncoder(nn.Module):
             "v_reset": None,
             "surrogate_function": surrogate.DeterministicPass(),
             "step_mode": "m",
-            "backend": neuron_backend,
         }
         self.positive_neuron = neuron.ActivationAwareIFNode(**kwargs)
         self.negative_neuron = neuron.ActivationAwareIFNode(**kwargs)
@@ -445,7 +435,6 @@ class SignedQCFSSequenceEncoder(nn.Module):
             )
         return {
             "name": self.name,
-            "backend": self.positive_neuron.backend,
             "positive_spike_rate": self.positive_spike_rate,
             "negative_spike_rate": self.negative_spike_rate,
             "positive_spike_count": self.positive_spike_count,

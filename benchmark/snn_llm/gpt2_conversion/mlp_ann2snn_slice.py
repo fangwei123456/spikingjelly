@@ -87,7 +87,6 @@ class _SignedIFProxy(nn.Module):
             v_reset=None,
             surrogate_function=surrogate.DeterministicPass(),
             step_mode="m",
-            backend="torch",
         )
         self.negative_neuron = neuron.ActivationAwareIFNode(
             v_threshold=scale,
@@ -96,7 +95,6 @@ class _SignedIFProxy(nn.Module):
             v_reset=None,
             surrogate_function=surrogate.DeterministicPass(),
             step_mode="m",
-            backend="torch",
         )
         self.positive_spike_rate = 0.0
         self.negative_spike_rate = 0.0

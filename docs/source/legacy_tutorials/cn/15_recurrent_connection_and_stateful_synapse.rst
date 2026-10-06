@@ -124,9 +124,9 @@ Sequential FashionMNIST上的对比实验
         def __init__(self):
             super().__init__()
             self.fc1 = nn.Linear(28, 32)
-            self.sn1 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
+            self.sn1 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, )
             self.fc2 = nn.Linear(32, 10)
-            self.sn2 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
+            self.sn2 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, )
 
         def forward(self, x: torch.Tensor):
             # x.shape = [N, C, H, W]
@@ -146,10 +146,10 @@ Sequential FashionMNIST上的对比实验
         def __init__(self):
             super().__init__()
             self.fc1 = nn.Linear(28, 32)
-            self.sn1 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
+            self.sn1 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, )
             self.sy1 = layer.MultiStepContainer(layer.SynapseFilter(tau=2., learnable=True))
             self.fc2 = nn.Linear(32, 10)
-            self.sn2 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
+            self.sn2 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, )
 
         def forward(self, x: torch.Tensor):
             # x.shape = [N, C, H, W]
@@ -177,7 +177,7 @@ Sequential FashionMNIST上的对比实验
                 )
             )
             self.fc2 = nn.Linear(32, 10)
-            self.sn2 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
+            self.sn2 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, )
 
         def forward(self, x: torch.Tensor):
             # x.shape = [N, C, H, W]

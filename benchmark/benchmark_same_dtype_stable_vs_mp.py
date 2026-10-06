@@ -12,18 +12,19 @@ from typing import Any
 import torch
 
 from spikingjelly.activation_based import surrogate
-from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
-    integrate_and_fire,
+from spikingjelly._ops.if_.triton_precision import (
+    multistep_if,
+    _multistep_if_mp_with_plan,
 )
-from spikingjelly.activation_based.triton_kernel.neuron_kernel.lif import (
+from spikingjelly._ops.lif.triton_precision import (
     multistep_lif,
     _multistep_lif_mp_with_plan,
 )
-from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
+from spikingjelly._ops.plif.triton_precision import (
     multistep_plif,
     _multistep_plif_mp_with_plan,
 )
-from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
+from spikingjelly._ops.triton_layout import (
     _TritonNeuronExecutionPlan,
     _prepare_triton_neuron_execution_plan,
 )
@@ -51,7 +52,7 @@ def _stable_call(
     r_tau: torch.Tensor,
 ) -> tuple[torch.Tensor, ...]:
     if neuron_type == "if":
-        return integrate_and_fire.multistep_if(x, v, 1.0, 0.0, False, _SURROGATE)
+        return multistep_if(x, v, 1.0, 0.0, False, _SURROGATE)
     if neuron_type == "lif":
         return multistep_lif(x, v, True, 2.0, 1.0, 0.0, False, _SURROGATE)
     return multistep_plif(x, v, r_tau, True, 1.0, 0.0, False, _SURROGATE)
@@ -65,9 +66,7 @@ def _mp_call(
     plan: _TritonNeuronExecutionPlan,
 ) -> tuple[torch.Tensor, ...]:
     if neuron_type == "if":
-        return integrate_and_fire._multistep_if_mp_with_plan(
-            x, v, plan, v_threshold=1.0, v_reset=0.0
-        )
+        return _multistep_if_mp_with_plan(x, v, plan, v_threshold=1.0, v_reset=0.0)
     if neuron_type == "lif":
         return _multistep_lif_mp_with_plan(
             x,
