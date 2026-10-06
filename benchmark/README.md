@@ -41,6 +41,13 @@ SJ_LIF_CUDA_IMPLEMENTATION=triton uv run --no-sync python -m benchmark.check_tri
   --device cuda:0 --output /tmp/sj-benchmark/triton-lif.json
 ```
 
+For autocast training, ``--precision bf16`` retains input-dtype neuron state.
+That profile uses the Torch reference recurrence, including under fullgraph
+compilation. ``--precision bf16 --neuron-storage fp32`` explicitly selects FP32
+neuron state and fused precision kernels. These are different numerical policies;
+compare revisions with the same policy, and validate model accuracy when changing
+it. A device's selected provider does not imply that every dtype profile uses it.
+
 Use unprofiled runs for latency; use Nsight Systems for attribution. The full
 model runner and the kernel check test different workloads and should not be
 treated as interchangeable evidence. Benchmark JSON records the actual selected

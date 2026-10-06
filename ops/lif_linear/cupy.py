@@ -166,6 +166,8 @@ def cupy_lif_linear_forward(
     soft_reset: bool,
     detach_reset: bool,
     surrogate_id: int,
+    alpha: float,
+    surrogate_handle: int,
     threads: int,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     if tau <= 1.0:
@@ -215,6 +217,8 @@ def _cupy_lif_linear_forward_fake(
     soft_reset,
     detach_reset,
     surrogate_id,
+    alpha,
+    surrogate_handle,
     threads,
 ):
     return _fake_outputs(x_seq, v_init, weight_t)
@@ -231,13 +235,20 @@ def _save_context(
     soft_reset,
     detach_reset,
     surrogate_id,
+    alpha,
+    surrogate_handle,
 ):
     ctx.save_for_backward(x_seq, v_init, weight_t, bias)
     ctx.v_threshold = v_threshold
     ctx.v_reset = None if soft_reset else v_reset
     ctx.detach_reset = detach_reset
-    ctx.surrogate_function = cuda_utils.resolve_python_object(surrogate_id)
-    ctx.surrogate_handle = surrogate_id
+    ctx.surrogate_id = surrogate_id
+    ctx.alpha = alpha
+    # Keep custom surrogates alive until the saved autograd context is released.
+    ctx.surrogate_function = (
+        cuda_utils.resolve_python_object(surrogate_handle) if surrogate_id < 0 else None
+    )
+    ctx.surrogate_handle = surrogate_handle
 
 
 def _setup_lif_context(ctx, inputs, output):
@@ -254,6 +265,8 @@ def _setup_lif_context(ctx, inputs, output):
         soft_reset,
         detach_reset,
         surrogate_id,
+        alpha,
+        surrogate_handle,
         _,
     ) = inputs
     _save_context(
@@ -267,6 +280,8 @@ def _setup_lif_context(ctx, inputs, output):
         soft_reset,
         detach_reset,
         surrogate_id,
+        alpha,
+        surrogate_handle,
     )
     ctx.tau = tau
     ctx.decay_input = decay_input
@@ -281,7 +296,7 @@ def _setup_lif_context(ctx, inputs, output):
         "Tensor grad_y, Tensor grad_v_out, "
         "float tau, bool decay_input, "
         "float v_threshold, float? v_reset, bool detach_reset, "
-        "int surrogate_handle) -> (Tensor, Tensor, Tensor, Tensor?)"
+        "int surrogate_id, float alpha, int surrogate_handle) -> (Tensor, Tensor, Tensor, Tensor?)"
     ),
 )
 def _backward_kernel(
@@ -296,9 +311,10 @@ def _backward_kernel(
     v_threshold: float,
     v_reset: Optional[float],
     detach_reset: bool,
+    surrogate_id: int,
+    alpha: float,
     surrogate_handle: int,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
-    surrogate_function = cuda_utils.resolve_python_object(surrogate_handle)
     T, M, K = x_seq.shape
     spikes, charged = torch.empty_like(x_seq), torch.empty_like(x_seq)
     grad_x, grad_v = torch.empty_like(x_seq), torch.empty_like(v_init)
@@ -307,7 +323,6 @@ def _backward_kernel(
         np.float32(v_threshold),
         np.float32(0.0 if v_reset is None else v_reset),
     )
-    spec = _surrogate_spec(surrogate_function)
     with cuda_utils.DeviceEnvironment(x_seq.get_device()):
         _, rematerialize, backwards = _get_kernels(
             x_seq.get_device(), decay_input, v_reset is None
@@ -325,16 +340,16 @@ def _backward_kernel(
         )
         # Custom surrogates supply their PyTorch derivative as a tensor. Built-in
         # surrogates evaluate the same explicit CUDA formula inside the kernel.
-        if spec is None:
+        sg_id = surrogate_id
+        if sg_id < 0:
+            surrogate_function = cuda_utils.resolve_python_object(surrogate_handle)
             with torch.enable_grad():
                 over_threshold = (charged - v_threshold).requires_grad_()
                 output = surrogate_function(over_threshold)
                 sg = torch.autograd.grad(
                     output, over_threshold, torch.ones_like(output)
                 )[0]
-            sg_id, alpha = -1, 0.0
         else:
-            sg_id, alpha = spec
             sg = charged
         grad_spike = torch.matmul(grad_y, weight_t.t()).contiguous()
         grad_v_out, sg = grad_v_out.contiguous(), sg.contiguous()
@@ -372,6 +387,8 @@ def _backward_fake(
     v_threshold,
     v_reset,
     detach_reset,
+    surrogate_id,
+    alpha,
     surrogate_handle,
 ):
     return (
@@ -402,9 +419,11 @@ def _lif_backward(ctx, grad_y, grad_v_out):
             ctx.v_threshold,
             ctx.v_reset,
             ctx.detach_reset,
+            ctx.surrogate_id,
+            ctx.alpha,
             ctx.surrogate_handle,
         )
-        + (None,) * 8
+        + (None,) * 10
     )
 
 
@@ -427,6 +446,8 @@ def _prepare_inputs(
     torch.Tensor,
     Optional[torch.Tensor],
     int,
+    float,
+    int,
     bool,
 ]:
     if x.dim() == 2:
@@ -445,15 +466,21 @@ def _prepare_inputs(
         or weight_t.requires_grad
         or (bias is not None and bias.requires_grad)
     )
-    surrogate_id = (
-        cuda_utils.register_python_object(surrogate_function) if needs_backward else 0
+    spec = _surrogate_spec(surrogate_function)
+    surrogate_handle = (
+        cuda_utils.register_python_object(surrogate_function)
+        if spec is None and needs_backward
+        else 0
     )
+    surrogate_id, alpha = (-1, 0.0) if spec is None else spec
     return (
         x_seq.contiguous(),
         v.contiguous(),
         weight_t.contiguous(),
         None if bias is None else bias.contiguous(),
         surrogate_id,
+        alpha,
+        surrogate_handle,
         single_step,
     )
 
@@ -478,8 +505,8 @@ def lif_linear(
     Cache a contiguous ``weight_t`` to avoid copying it on every call.
     Backward rematerializes spikes and supports first-order gradients only.
     """
-    x_seq, v, weight_t, bias, surrogate_id, single_step = _prepare_inputs(
-        x, v, weight_t, bias, surrogate_function
+    x_seq, v, weight_t, bias, surrogate_id, alpha, surrogate_handle, single_step = (
+        _prepare_inputs(x, v, weight_t, bias, surrogate_function)
     )
     y_seq, v_out = cupy_lif_linear_forward(
         x_seq,
@@ -493,6 +520,8 @@ def lif_linear(
         soft_reset=v_reset is None,
         detach_reset=detach_reset,
         surrogate_id=surrogate_id,
+        alpha=alpha,
+        surrogate_handle=surrogate_handle,
         threads=threads,
     )
     return (y_seq[0] if single_step else y_seq), v_out

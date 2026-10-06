@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from functools import lru_cache
 
 import torch
 
@@ -97,6 +96,7 @@ def _spatial_offsets(
 
 
 _SUPPORTED_PLAN_NEURON_TYPES = frozenset({"if", "lif", "plif"})
+_TRITON_NEURON_EXECUTION_PLANS = {}
 
 
 @dataclass(frozen=True)
@@ -190,19 +190,31 @@ def _prepare_triton_neuron_execution_plan(
     spike_dtype: torch.dtype = torch.float32,
     save_intermediates: bool = True,
 ) -> _TritonNeuronExecutionPlan:
-    return _prepare_triton_neuron_execution_plan_cached(
-        neuron_type=neuron_type,
-        device=normalize_cuda_device(device),
-        storage_dtype=storage_dtype,
-        forward_compute_dtype=forward_compute_dtype,
-        backward_compute_dtype=backward_compute_dtype,
-        spike_dtype=spike_dtype,
-        save_intermediates=save_intermediates,
+    device = normalize_cuda_device(device)
+    key = (
+        neuron_type,
+        device,
+        storage_dtype,
+        forward_compute_dtype,
+        backward_compute_dtype,
+        spike_dtype,
+        save_intermediates,
     )
+    # Dynamo unwraps lru_cache and would repeat device checks and logging.
+    if key not in _TRITON_NEURON_EXECUTION_PLANS:
+        _TRITON_NEURON_EXECUTION_PLANS[key] = _make_triton_neuron_execution_plan(
+            neuron_type=neuron_type,
+            device=device,
+            storage_dtype=storage_dtype,
+            forward_compute_dtype=forward_compute_dtype,
+            backward_compute_dtype=backward_compute_dtype,
+            spike_dtype=spike_dtype,
+            save_intermediates=save_intermediates,
+        )
+    return _TRITON_NEURON_EXECUTION_PLANS[key]
 
 
-@lru_cache(maxsize=None)
-def _prepare_triton_neuron_execution_plan_cached(
+def _make_triton_neuron_execution_plan(
     *,
     neuron_type: str,
     device: torch.device,

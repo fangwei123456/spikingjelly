@@ -21,10 +21,15 @@ def _require_automatic_torch(
             f"{selection._environment_variable}={selection._requested!r} cannot "
             f"run this execution profile: {reason}."
         )
+    # Diagnostics must not introduce graph breaks into the Torch reference path.
+    if torch.compiler.is_compiling():
+        return
     index = device.index
     if index is None:
         index = torch.cuda.current_device()
     key = (index, reason)
+    if key in selection._selections:
+        return
     with selection._lock:
         if key not in selection._selections:
             selection._selections[key] = None

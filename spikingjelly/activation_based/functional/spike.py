@@ -585,7 +585,7 @@ def if_linear(
     :type v_reset: Optional[float]
     :param detach_reset: 是否分离重置分支的脉冲梯度。 默认 ``False``.
     :type detach_reset: bool
-    :param surrogate_function: spiking=True 的逐元素阶跃替代梯度；None 使用 Sigmoid。反向使用显式 CUDA 内核；自定义替代梯度通过其 PyTorch 导数参与反向。 默认 ``None``.
+    :param surrogate_function: spiking=True 的逐元素阶跃替代梯度；None 使用 Sigmoid。反向使用显式 CUDA 内核；自定义替代梯度通过其 PyTorch 导数参与反向。七种内置替代梯度支持 fullgraph 编译训练，自定义替代梯度仅支持 eager 训练。 默认 ``None``.
     :type surrogate_function: Optional[surrogate.SurrogateFunctionBase]
     :param threads: CUDA block 线程数，仅允许 128、256、512。 默认 ``256``.
     :type threads: Literal[128, 256, 512]
@@ -617,7 +617,7 @@ def if_linear(
     :type v_reset: Optional[float]
     :param detach_reset: Whether to detach spike gradients in the reset branch. Default: ``False``.
     :type detach_reset: bool
-    :param surrogate_function: Elementwise Heaviside surrogate with spiking=True; None selects Sigmoid. Backward uses explicit CUDA kernels; custom surrogates supply their PyTorch derivative. Default: ``None``.
+    :param surrogate_function: Elementwise Heaviside surrogate with spiking=True; None selects Sigmoid. Backward uses explicit CUDA kernels; custom surrogates supply their PyTorch derivative. The seven built-in surrogates support fullgraph compiled training; custom surrogates support eager training only. Default: ``None``.
     :type surrogate_function: Optional[surrogate.SurrogateFunctionBase]
     :param threads: CUDA threads per block; one of 128, 256, or 512. Default: ``256``.
     :type threads: Literal[128, 256, 512]
@@ -686,7 +686,7 @@ def lif_linear(
     :type v_reset: Optional[float]
     :param detach_reset: 是否分离重置分支的脉冲梯度。 默认 ``False``.
     :type detach_reset: bool
-    :param surrogate_function: spiking=True 的逐元素阶跃替代梯度；None 使用 Sigmoid。反向使用显式 CUDA 内核；自定义替代梯度通过其 PyTorch 导数参与反向。 默认 ``None``.
+    :param surrogate_function: spiking=True 的逐元素阶跃替代梯度；None 使用 Sigmoid。反向使用显式 CUDA 内核；自定义替代梯度通过其 PyTorch 导数参与反向。七种内置替代梯度支持 fullgraph 编译训练，自定义替代梯度仅支持 eager 训练。 默认 ``None``.
     :type surrogate_function: Optional[surrogate.SurrogateFunctionBase]
     :param threads: CUDA block 线程数，仅允许 128、256、512。 默认 ``256``.
     :type threads: Literal[128, 256, 512]
@@ -722,7 +722,7 @@ def lif_linear(
     :type v_reset: Optional[float]
     :param detach_reset: Whether to detach spike gradients in the reset branch. Default: ``False``.
     :type detach_reset: bool
-    :param surrogate_function: Elementwise Heaviside surrogate with spiking=True; None selects Sigmoid. Backward uses explicit CUDA kernels; custom surrogates supply their PyTorch derivative. Default: ``None``.
+    :param surrogate_function: Elementwise Heaviside surrogate with spiking=True; None selects Sigmoid. Backward uses explicit CUDA kernels; custom surrogates supply their PyTorch derivative. The seven built-in surrogates support fullgraph compiled training; custom surrogates support eager training only. Default: ``None``.
     :type surrogate_function: Optional[surrogate.SurrogateFunctionBase]
     :param threads: CUDA threads per block; one of 128, 256, or 512. Default: ``256``.
     :type threads: Literal[128, 256, 512]

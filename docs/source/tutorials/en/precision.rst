@@ -136,7 +136,7 @@ Some Transformer Engine recipes serialize FP8 metadata as a pickle. Set
 checkpoint; do not enable it for unknown checkpoints.
 
 Configuring neuron precision
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Triton precision is set by ``prepare_model_for_precision`` rather than on every
 neuron constructor. Regular layers can use BF16 with BF16 neuron storage
@@ -158,6 +158,30 @@ precision fields are set. The neuron module API has no backend argument.
 ``bf16``, or ``fp32``. FP8 arithmetic requires ``neuron_storage`` to be
 ``float8_e4m3fn`` or ``float8_e5m2``. Exponentials and sensitive surrogate
 operations remain FP32 inside the kernels and are not user options.
+
+
+Ordinary autocast does not change the neuron state policy: without
+``neuron_storage``, initial states follow the input dtype. FP16/BF16 states use
+the Torch reference equations, which also support fullgraph compilation. To
+use fused neuron kernels while ordinary layers use autocast, choose FP32 neuron
+state explicitly:
+
+.. code-block:: python
+
+    config = PrecisionConfig(mode="bf16", neuron_storage="fp32")
+    precision = prepare_model_for_precision(model, device, config)
+
+Fullgraph Torch reference execution follows PyTorch compilation semantics.
+Inductor may fuse FP16/BF16 intermediates, so rounding can differ from eager
+execution even when the state dtype is unchanged.
+
+Initialize precision with ``prepare_model_for_precision`` on the target device
+before compiling the model. For direct functional calls, first warm up the
+requested precision profile so device checks stay outside graph capture.
+
+This changes neuron state and recurrence precision; it is not numerically
+identical to BF16 state. Check the model's accuracy before adopting it.
+The benchmark equivalent is ``--precision bf16 --neuron-storage fp32``.
 
 Path 2: ``distributed.vision``
 --------------------------------

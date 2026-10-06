@@ -283,3 +283,80 @@ def test_cuda_fullgraph_compile_binds_provider_on_first_call():
         timeout=180,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("family", ["if", "lif", "plif"])
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_low_precision_state_reference_fullgraph(family, dtype):
+    from spikingjelly.activation_based import functional, surrogate
+
+    torch.compiler.reset()
+    torch.manual_seed(11)
+    x = (torch.randn(4, 33, device="cuda", dtype=dtype) * 0.1).requires_grad_()
+    v = torch.zeros(33, device="cuda", dtype=dtype, requires_grad=True)
+    w = torch.zeros((), device="cuda", requires_grad=True)
+    sg = surrogate.ATan()
+    op = getattr(functional, f"{family}_multi_step")
+
+    def run(x, v, w):
+        if family == "if":
+            return op(x, v, surrogate_function=sg)[:2]
+        if family == "lif":
+            return op(x, v, 2.0, surrogate_function=sg)[:2]
+        return op(x, v, w, surrogate_function=sg)[:2]
+
+    reference = importlib.import_module(
+        f"spikingjelly._ops.{'if_' if family == 'if' else family}.reference"
+    ).multi_step
+
+    def run_reference(x, v, w):
+        if family == "if":
+            return reference(x, v, 1.0, 0.0, sg, False)[:2]
+        if family == "lif":
+            return reference(x, v, 2.0, True, 1.0, 0.0, sg, False)[:2]
+        return reference(x, v, w, True, 1.0, 0.0, sg, False)[:2]
+
+    # Compile the first call too: the fallback has no device-selection work to do.
+    actual = torch.compile(run, fullgraph=True)(x, v, w)
+    # Inductor fuses low-precision arithmetic; compare the same compiler policy.
+    expected = torch.compile(run_reference, fullgraph=True)(x, v, w)
+    inputs = (x, v, w) if family == "plif" else (x, v)
+    torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(
+        torch.autograd.grad(sum(t.sum() for t in actual), inputs),
+        torch.autograd.grad(sum(t.sum() for t in expected), inputs),
+    )
+    assert actual[1].dtype == dtype
+
+
+@pytest.mark.parametrize("family", ["if", "lif", "plif"])
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_explicit_precision_node_fullgraph(family):
+    from spikingjelly.activation_based import neuron, surrogate
+    from spikingjelly.activation_based.precision import (
+        PrecisionConfig,
+        prepare_model_for_precision,
+    )
+
+    torch.compiler.reset()
+    node_class = {
+        "if": neuron.IFNode,
+        "lif": neuron.LIFNode,
+        "plif": neuron.ParametricLIFNode,
+    }[family]
+    model = node_class(step_mode="m", surrogate_function=surrogate.ATan()).cuda()
+    prepare_model_for_precision(
+        model, "cuda:0", PrecisionConfig(mode="bf16", neuron_storage="fp32")
+    )
+    x = torch.randn(4, 33, device="cuda", dtype=torch.bfloat16, requires_grad=True)
+    expected = model(x)
+    model.reset()
+    actual = torch.compile(model, fullgraph=True)(x)
+    torch.testing.assert_close(actual, expected)
+    inputs = (x, *model.parameters())
+    torch.testing.assert_close(
+        torch.autograd.grad(actual.sum(), inputs),
+        torch.autograd.grad(expected.sum(), inputs),
+    )
+    assert model.v.dtype == torch.float32

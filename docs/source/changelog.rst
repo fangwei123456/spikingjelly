@@ -29,6 +29,11 @@ Modules: ```spikingjelly.activation_based.functional.neuron```,
   per device from native CUDA, Triton, CuPy, then Torch. No neuron constructor,
   module property, model config, or ```functional.set_backend``` exposes provider
   choice. ```functional.neuron_implementation``` reports the actual selection.
+- IF/LIF/PLIF Torch reference execution with low-precision state can now be
+  captured with fullgraph compilation. Fallback diagnostics do not acquire
+  locks during capture or on steady-state cache hits; strict provider errors
+  remain unchanged. Initialized explicit precision plans also support fullgraph
+  model compilation without repeating device checks during capture.
 - Single-step IF/LIF/PLIF and supported FP16/BF16 inputs with FP32 state now
   enter the same registered operator as FP32 multi-step calls; reference-only
   execution obeys strict provider diagnostics. Retired experimental entry wrappers,
@@ -88,6 +93,9 @@ Modules: ``spikingjelly.activation_based.functional`` and
   Linear, and spike packing interfaces backed by ``ops``. Existing operator
   implementations retain their device/dtype constraints; Torch-to-Triton support
   also resides in ``ops``.
+- Fused IF/LIF-Linear supports fullgraph compiled forward and backward with
+  the seven built-in surrogates. Their IDs and alpha values are passed directly
+  to the operator; custom surrogates retain the eager Python-derivative path.
 - Added ``layer.SpikeLinear`` and ``layer.SpikeConv1d/2d/3d``. Dense binary operators
   save bool/packed inputs through autograd for repeated backward, and convolution
   backward uses PyTorch's existing ATen operator without import-time native

@@ -125,7 +125,7 @@ checkpoint 时，需要显式设置 ``NVTE_ALLOW_UNSAFE_PICKLE_EXTRA_STATE=1``�
 checkpoint 开启该选项。
 
 配置 自动分发的神经元
-~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
 
 Triton 精度也在 ``prepare_model_for_precision`` 中设置，不需要给每个神经元增加构造
 参数。例如，普通层可以使用 BF16，自动分发的神经元使用 BF16 存储和前向、FP32
@@ -147,6 +147,25 @@ Triton 精度也在 ``prepare_model_for_precision`` 中设置，不需要给每�
 ``fp32``。FP8 算术要求
 ``neuron_storage`` 为 ``float8_e4m3fn`` 或 ``float8_e5m2``。指数和敏感 surrogate
 计算固定在 kernel 内部使用 FP32，不是用户选项。
+
+
+普通 autocast 不会改变神经元状态策略：未设置 ``neuron_storage`` 时，初态跟随输入
+dtype。FP16/BF16 状态使用 Torch 参考公式，该路径也支持 fullgraph 编译。普通层使用
+autocast 时，如需使用融合神经元内核，可以显式选择 FP32 神经元状态：
+
+.. code-block:: python
+
+    config = PrecisionConfig(mode="bf16", neuron_storage="fp32")
+    precision = prepare_model_for_precision(model, device, config)
+
+Torch 参考路径的 fullgraph 执行遵循 PyTorch 编译语义。Inductor 可能融合 FP16/BF16
+中间计算，因此即使状态 dtype 不变，其舍入结果也可能与 eager 不同。
+
+在目标设备上调用 ``prepare_model_for_precision`` 完成精度初始化，再编译模型。
+直接调用 functional 精度接口时，先预热对应精度组合，避免在图捕获中做设备检查。
+
+这会改变神经元状态和递推精度，与 BF16 状态并不数值等价。采用前需验证模型精度。
+对应测速参数为 ``--precision bf16 --neuron-storage fp32``。
 
 路径二：``distributed.vision``
 --------------------------------

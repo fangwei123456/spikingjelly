@@ -131,11 +131,11 @@ also passed (6 tests).
 Wheel/sdist checks confirm explicit CUDA headers are shipped and no generated
 wrapper or CUDA code-generation framework remains.
 
-Public fused wrappers still bind a Python surrogate handle during eager
-training; fullgraph training through those wrappers is blocked by the existing
-Python registry lock. Registered tensor entries compile forward/backward when
-the handle is bound before capture. This cleanup does not add a compiler
-monkeypatch or claim fullgraph training support for the public fused wrappers.
+At the Auto CUDA cleanup checkpoint, public fused wrappers bound a Python
+surrogate handle during eager training; fullgraph training was blocked by the existing
+Python registry lock. Registered tensor entries compiled forward/backward when
+the handle was bound before capture. The follow-up below removes that limitation
+for built-in surrogates without a compiler monkeypatch.
 
 A same-host ATan training microbenchmark used `[M=8, K=256]` for T=1 and
 `[T=16, M=8, K=256]` for T=16, N=128, hard reset 0.2, an RTX 3090, and
@@ -226,3 +226,90 @@ Ruff, diff whitespace, Changelog generation, and Sphinx checks passed.
 Source cleanup removed **2,542 net lines** across Python/CUDA sources and five
 obsolete source files; the one restored source file is master's OCR protocol
 regression test.
+
+
+## Fullgraph and AMP follow-up (2026-10-06)
+
+Baseline: commit `55ef89b1`. Tests and measurements used an idle RTX 3090 on g1,
+Torch 2.7.1+cu118, Triton 3.3.1, and CuPy 13.6.0. Each task used an isolated
+source directory and private compiler caches; shared dependencies were retained.
+No Vast.ai instance was rented: additional Vast.ai charges were **$0**. These
+measurements are not RTX 5090 results.
+
+Three changes resolve the observed capture failures:
+
+- Fused IF/LIF-Linear passes built-in surrogate IDs and alpha directly through
+  the existing forward/backward schemas. Only custom surrogates need Python
+  handles. The public wrappers now support fullgraph training with the seven
+  built-ins; custom surrogates retain the eager derivative path. No extra
+  operator wrapper, `assume_constant_result`, or compiler monkeypatch was added.
+- Torch-reference fallback diagnostics bypass capture and return before acquiring
+  a lock on eager cache hits. Strict provider errors are still checked first.
+  This removes graph breaks without changing eager recurrence or state dtype.
+- Precision execution plans use a direct cache lookup instead of `lru_cache`.
+  Dynamo previously unwrapped that decorator and repeated device-name queries
+  and logging even after initialization. Device and FP8 capability checks still
+  run when preparing the plan. Initialize with `prepare_model_for_precision`, or
+  warm up a direct functional precision call, before fullgraph capture.
+
+AMP keeps its existing state policy. Ordinary FP16/BF16 state uses Torch
+reference arithmetic; `PrecisionConfig(mode="bf16", neuron_storage="fp32")`
+explicitly selects fused FP32 neuron state. This is a different numerical policy,
+not an interchangeable baseline. IF/LIF/PLIF dtype and first-order gradient
+checks passed. Inductor results match directly compiled Torch reference
+formulas exactly in the six low-state-dtype probes. Compared with eager, ordinary
+Inductor fusion changes low-precision rounding (up to one stored-state ULP in
+these probes); no bitwise eager/compile equivalence is claimed.
+
+Unprofiled standard training runner results use ATan, T=4, B=8, three independent
+alternating process pairs, one CPU thread, and medians over each run's CUDA-event
+step samples. The diagnostic Spikformer-Ti cases use 64px inputs, 30 warmups and
+100 samples. Spikformer-S uses 224px inputs, 50 warmups and 100 samples.
+
+| Training case | Before (ms/step) | After (ms/step) | Change | Graph breaks |
+| --- | ---: | ---: | ---: | --- |
+| Spikformer-Ti, BF16 input/state, compile | 38.600 | 15.536 | -59.75% | 27 → 0 |
+| Spikformer-Ti, BF16 autocast + explicit FP32 neuron state, compile | 40.809 | 14.442 | -64.61% | 28 → 0 |
+| Spikformer-S, BF16 input/state, compile | 47.302 | 39.514 | -16.47% | 27 → 0 |
+
+The explicit-state row compares the first follow-up snapshot (fallback logging
+fixed, precision cache still using `lru_cache`) against the final snapshot.
+The other rows compare `55ef89b1` against the fallback fix/final snapshot with
+unchanged state policy. After-run median spread is 1.68%, 1.53%, and 0.59%,
+respectively. FP32 Spikformer-Ti eager/compile/CUDA Graph changes were +0.53%,
++0.16%, and +0.10%; no stable FP32 improvement is claimed. BF16 eager remains
+host-variable (5.51% repeat spread), while CUDA Graph changes are below 0.4%.
+The Triton kernel sources and launch configurations were not changed.
+
+The standard NSYS capture/analyzer used CUDA, NVTX, OS runtime and Python GIL
+tracing. Every GPU event in the five captures was assigned to a complete step.
+Profiled timings are attribution evidence, not the unprofiled latencies above:
+
+- BF16 eager: 2,562 GPU events/step, 7.54 ms GPU busy time, 61.18 ms idle within
+  the GPU span. Moving to explicit FP32 state reduces this to 591 events and
+  4.65 ms busy time, at the cost of changing precision policy.
+- BF16 compile before/after: 542 → 488 GPU events/step, 3.81 → 3.39 ms GPU busy
+  time, 38.75 → 20.96 ms idle time. Main-thread GIL holding decreases from
+  23.43 → 7.34 ms; measured GIL waiting is zero. The improvement primarily
+  removes host submission overhead and graph boundaries, rather than changing
+  an individual neuron kernel.
+
+A separate fused CuPy training-call probe (ATan, M=8/K=256/N=128, T=1/16,
+three alternating process pairs, seven batches of 50 calls) observed +3.3% to
++4.9% eager wall time from the scalar-metadata interface change; the first IF
+candidate process was unstable. This is a compile-support change, not an eager
+CuPy speedup. No further CUDA/CuPy tuning was done, as requested.
+
+Validation: 1,524 local tests passed (509 skipped); final nearest local checks
+passed 51 tests (141 skipped). GPU fused/dispatch checks passed 69 tests
+(1 skipped); final fullgraph dtype/precision checks passed 9 tests; the final
+precision matrix passed 93 tests (26 skipped). Scoped Ruff, formatting, logging,
+Changelog generation and Sphinx checks passed. The whole-repository logging
+checker still reports three pre-existing training/NIR violations outside this
+change. Native CUDA and RTX 5090 were not revalidated in this follow-up.
+
+Raw case JSON, monitors, source hashes, NSYS reports, analysis, commands and test
+logs are saved on g1 in `/tmp/sj-opt-results` and the task source directories
+`/home/allenyolk/CodeRepo/sj-opt-{baseline,candidate,final}-20261006`. A local copy
+of the summary, source manifest and evidence archive is at
+`/tmp/sj-opt-evidence-20261006/`.
