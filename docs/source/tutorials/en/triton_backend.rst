@@ -3,10 +3,12 @@ Automatic Neuron Execution
 
 Neuron modules select execution from the input tensor's device. CPU uses the
 Torch reference implementation. CUDA calls a registered PyTorch operator, which
-selects and caches a compatible implementation for each CUDA device. Known GPU
-compute capabilities use priorities measured offline per neuron family. Unknown
-devices retain native CUDA, Triton, CuPy, then Torch. Selection never runs online
-profiling; the checked-in priorities are read only on first binding.
+selects and caches compatible implementations per device and execution path.
+Eager uses offline priorities per neuron family and GPU compute capability;
+unknown devices retain native CUDA, Triton, CuPy, then Torch. Inductor expansion
+prefers Triton, native CUDA, CuPy, then Torch in a separate cache. Eager calls do
+not check compilation mode. CUDA Graphs retain the warmed choice of the function
+being captured. Selection never runs online profiling.
 
 The neuron API has no backend constructor argument or mutable backend property.
 This applies to IF, LIF, PLIF, QIF, EIF, Izhikevich, I-LIF, ActivationAwareIF,
@@ -24,11 +26,13 @@ Inspect the selected implementation when diagnosing a CUDA run:
     lif = neuron.LIFNode(step_mode="m").to(device)
     output = lif(torch.rand(4, 128, device=device))
     print(functional.neuron_implementation("lif", device))
+    print(functional.neuron_implementation("lif", device, execution="compile"))
 
 The query reports the selected provider and why earlier candidates were
 unavailable. Importing SpikingJelly does not initialize CUDA; selection happens
-when the CUDA operator is first executed. SpikingJelly logs the selection once
-through its logger.
+on first use of each path (or an explicit diagnostic query). SpikingJelly logs
+each path's selection once through its logger. Compiled selection targets the
+Inductor expansion; arbitrary compiler backends need separate evaluation.
 
 Advanced diagnostics may set ``SJ_<NEURON>_CUDA_IMPLEMENTATION`` before Python
 starts, for example ``SJ_LIF_CUDA_IMPLEMENTATION=triton``. The default is

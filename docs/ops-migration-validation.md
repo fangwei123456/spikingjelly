@@ -535,3 +535,106 @@ files (27 exploratory and 27 final), commands, logs, cProfile summaries and sour
 hashes are saved in `.agents/artifacts/neuron-host-dispatch-20261007` in the primary
 checkout. Benchmark JSON now explicitly labels its domain as
 `synchronized_eager_wall_time`; its timing and ranking algorithms are unchanged.
+
+## Separate eager/compile selection (2026-10-07)
+
+The registered device kernel retains the original eager getter/cache. Compiler
+expansion uses a separate per-device cache, preferring Triton, native CUDA, CuPy,
+Torch for all nine ordinary registered neuron families. Each cache entry holds
+one forward/backward pair; CPU behavior, mathematical kernels and operator
+schemas are unchanged. There is no per-call `is_compiling()` or graph-capture
+check in the eager entry. The three eager getter method ASTs exactly match
+`29c1ce79`. Compilation fingerprints and once-only selection logs include path.
+Strict environment overrides apply to both paths. Spike compression retains its
+existing provider order; FlexSN/explicit precision retain their existing rules.
+
+`functional.neuron_implementation(..., execution="compile")` queries the
+compiler expansion binding; the default remains eager. This is a binding query,
+not a dtype-profile or arbitrary-compiler-backend execution detector. Ordinary
+CUDA Graphs retain the warmed eager choice; capturing a compiled function retains
+its compiled choice. Loading and warmup must precede capture. A process can use
+native CUDA eagerly and Triton in compiled functions without rebinding global
+CUDA dispatch slots or altering an earlier autograd graph's backward choice.
+
+Validation on g2/A100 (sm80, Torch 2.7.1+cu118, Triton 3.3.1, CuPy 13.6.0) passed
+41 GPU dispatch checks, including all nine families in both initialization
+orders, delayed eager backward after compiled calls, compiler-visible Triton
+forward/backward and native/CuPy/Triton compiler-cache isolation. Local nearest
+checks passed 34 tests (31 skipped). The expanded local suites passed 1,788 tests
+(522 skipped), with one existing unrelated SNN-LLM reproduction failure: its
+literal assertion expects two source locks while the unchanged baseline
+`sources.json` already contains four. This change does not edit either file.
+Scoped Ruff/formatting/logging, Changelog generation/check and Sphinx passed.
+
+Paired cache probe: one process, same selected entry in baseline/candidate
+selectors, 30 alternating batches of 100,000 reads including `tensor.device`.
+Baseline median was 0.323108 us and candidate 0.317097 us; paired delta was
+-0.005925 us. No added overhead or meaningful speedup is claimed. Three separate
+alternating baseline/candidate process pairs also measured complete ordinary
+calls for IF/LIF/PLIF/Izhikevich; none showed a median regression. Their varying
+absolute host timings are retained, not treated as proof of a code speedup.
+
+The new benchmark `--execution eager|compile|cuda_graph` modes measure matched
+complete calls. Graph cases capture one warmed complete call and measure replay
+wall time, including graph submission; these are not the previous GPU-only
+100-call graph timings. Cases explicitly record `selected_implementation` and
+execution path. Summary groups execution modes separately, while older records
+without this field remain eager. `--implementation auto` validates automatic
+selection; automatic records are kept separately when deriving forced rankings.
+
+All four providers and auto were measured for IF/LIF/PLIF/Izhikevich, FP32
+input/state, ATan, T=4, N=32768 and 2097152, final-state output, hard detached
+reset, 50 warmups, seven batches of 50 calls, three alternating process rounds.
+Each of 180 worker processes validated all outputs and input/initial-state/
+parameter gradients against Torch. Graph replay results were also checked.
+Two source directories isolated the exact baseline from the candidate, with
+matching existing native binaries on the same host. GPU0 was idle for testing;
+other users' GPU jobs were left running. One brief diagnostic-process overlap
+was detected by the idle-GPU guard; nearby candidate records were rejected and
+rerun without that process. No paid instance was used.
+
+Median forward+first-backward times at T=4/N=32768 (us, complete call/replay wall
+time; medians across three independent process medians):
+
+| Family | Execution | Native CUDA | Triton | CuPy | Torch | Auto |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| if | eager | 191.11 | 336.28 | 352.13 | 938.16 | 189.77 |
+| if | compile | 217.84 | 189.16 | 448.10 | 222.69 | 190.20 |
+| if | cuda_graph | 8.06 | 7.31 | 8.15 | 184.38 | 8.06 |
+| lif | eager | 211.36 | 362.82 | 376.51 | 1114.76 | 210.73 |
+| lif | compile | 222.36 | 190.76 | 459.63 | 229.90 | 190.31 |
+| lif | cuda_graph | 8.65 | 7.46 | 8.58 | 225.04 | 8.65 |
+| plif | eager | 284.82 | 485.82 | 497.56 | 1421.49 | 285.75 |
+| plif | compile | 303.52 | 235.16 | 592.41 | 249.60 | 235.93 |
+| plif | cuda_graph | 26.90 | 25.45 | 25.75 | 324.97 | 26.92 |
+| izhikevich | eager | 306.19 | 501.95 | 517.12 | 1844.94 | 304.34 |
+| izhikevich | compile | 249.20 | 214.12 | 551.57 | 278.00 | 213.51 |
+| izhikevich | cuda_graph | 9.90 | 8.21 | 9.94 | 344.06 | 9.86 |
+
+Auto selected native CUDA for every eager/raw-graph case and Triton for every
+compiled case. All four families favored Triton for compiled forward/backward at
+both tested sizes. Raw graph replay sometimes favors Triton substantially at
+large N (e.g. IF: 155.54 vs 179.94 us); this version deliberately retains capture
+selection rather than claiming that its graph policy is optimal.
+
+Standard Spikformer-Ti FP32 LIF/ATan training used T=4/B=8/64px, SGD, 50 warmups,
+100 measured steps and three alternating source pairs. Manifests confirm the
+actual provider; compiled runs have zero graph breaks. Before/after medians and
+paired changes:
+
+| Execution | Before (ms/step) | After (ms/step) | Paired change | Before → after provider |
+| --- | ---: | ---: | ---: | --- |
+| Eager | 13.878 | 13.800 | -0.68% | CUDA → CUDA |
+| Compile | 8.004 | 6.696 | -15.73% | CUDA → Triton |
+| CUDA Graph | 6.242 | 6.237 | 0.00% | CUDA → CUDA |
+
+No eager/graph speedup is claimed. Compiled pair improvements ranged from about
+15.3% to 16.4%; absolute process median spread was 7.06% before and 6.56% after,
+so matched pairs, not a universal absolute latency, support the improvement.
+Other GPU architectures and compiler backends were not remeasured in this
+follow-up. The policy is Inductor-oriented, not a claim of universal optimality.
+
+Raw samples, all four-provider/auto forward and backward results at both sizes,
+baseline/candidate calls, cache controls, 18 model JSONs, commands, source/binary
+hashes and rejected-run evidence are preserved under
+`.agents/artifacts/neuron-execution-selection-20261007` in the primary checkout.

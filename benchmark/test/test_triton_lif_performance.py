@@ -198,9 +198,7 @@ def test_captured_graphs_write_same_buffers_and_read_live_inputs():
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_round_captures_the_automatically_dispatched_triton_path(
-    tmp_path, monkeypatch
-):
+def test_round_captures_the_automatically_dispatched_triton_path(tmp_path, monkeypatch):
     pytest.importorskip("triton")
     if torch.cuda.get_allocator_backend() != "native":
         pytest.skip("shared graph buffers require the native CUDA allocator")
@@ -209,6 +207,7 @@ def test_round_captures_the_automatically_dispatched_triton_path(
 
     monkeypatch.setattr(_selection, "_requested", "triton")
     monkeypatch.setattr(_selection, "_selections", {})
+    monkeypatch.setattr(_selection, "_compiled_selections", {})
 
     class Network(torch.nn.Module):
         def __init__(self):

@@ -48,6 +48,17 @@ _CUDA_PRIORITIES = {
     },
 }
 _DEFAULT_CUDA_PRIORITY = ("cuda", "triton", "cupy", "torch")
+_COMPILE_CUDA_PRIORITIES = {
+    "sj_if": ("triton", "cuda", "cupy", "torch"),
+    "sj_lif": ("triton", "cuda", "cupy", "torch"),
+    "sj_plif": ("triton", "cuda", "cupy", "torch"),
+    "sj_qif": ("triton", "cuda", "cupy", "torch"),
+    "sj_eif": ("triton", "cuda", "cupy", "torch"),
+    "sj_izhikevich": ("triton", "cuda", "cupy", "torch"),
+    "sj_ilif": ("triton", "cuda", "cupy", "torch"),
+    "sj_activation_aware_if": ("triton", "cuda", "cupy", "torch"),
+    "sj_stbif": ("triton", "cuda", "cupy", "torch"),
+}
 
 
 def _require_automatic_torch(
@@ -125,9 +136,10 @@ class _CudaSelection:
         self._cpu_forward = cpu_forward
         self._cpu_backward = cpu_backward
         self._selections = {}
+        self._compiled_selections = {}
         self._lock = threading.Lock()
 
-    def _select(self, index: int):
+    def _select(self, index: int, *, execution: str = "eager"):
         if self._requested not in ("auto", *_DEFAULT_CUDA_PRIORITY):
             raise ValueError(
                 f"{self._environment_variable} must be auto, cuda, triton, cupy, or torch; "
@@ -141,6 +153,8 @@ class _CudaSelection:
         priority = _CUDA_PRIORITIES.get(capability, {}).get(
             self._namespace, _DEFAULT_CUDA_PRIORITY
         )
+        if execution == "compile":
+            priority = _COMPILE_CUDA_PRIORITIES.get(self._namespace, priority)
         unavailable = {}
         candidates = priority if self._requested == "auto" else (self._requested,)
         with torch.cuda.device(index):
@@ -205,6 +219,7 @@ class _CudaSelection:
                         selected,
                         capability=capability,
                         priority=candidates,
+                        execution=execution,
                     )
                 return selected
         reasons = "; ".join(f"{name}: {reason}" for name, reason in unavailable.items())
@@ -219,12 +234,12 @@ class _CudaSelection:
             raise RuntimeError(
                 f"SpikingJelly neurons support CPU and NVIDIA CUDA, not {device}"
             )
-        return self._get_cuda_selection(device).trace_forward
+        return self._get_compile_selection(device).trace_forward
 
     def get_trace_backward(self, device: torch.device):
         if device.type == "cpu":
             return self._cpu_backward
-        return self._get_cuda_selection(device).trace_backward
+        return self._get_compile_selection(device).trace_backward
 
     def get_cuda_forward(self, device: torch.device):
         return self._get_cuda_selection(device).eager_forward
@@ -243,14 +258,30 @@ class _CudaSelection:
                     self._selections[key] = self._select(index)
         return self._selections[key]
 
-    def diagnostics(self, device: torch.device) -> dict[str, object]:
+    def _get_compile_selection(self, device: torch.device):
+        index = device.index
+        if index is None:
+            index = torch.cuda.current_device()
+        if index not in self._compiled_selections:
+            with self._lock:
+                if index not in self._compiled_selections:
+                    self._compiled_selections[index] = self._select(
+                        index, execution="compile"
+                    )
+        return self._compiled_selections[index]
+
+    def diagnostics(
+        self, device: torch.device, *, execution: str = "eager"
+    ) -> dict[str, object]:
         if device.type != "cuda":
             raise ValueError("neuron_implementation expects a CUDA device")
-        self.get_trace_forward(device)
-        index = (
-            device.index if device.index is not None else torch.cuda.current_device()
+        if execution not in ("eager", "compile"):
+            raise ValueError("execution must be eager or compile")
+        selected = (
+            self._get_cuda_selection(device)
+            if execution == "eager"
+            else self._get_compile_selection(device)
         )
-        selected = self._selections[index]
         return {
             "implementation": selected.name,
             "unavailable": dict(selected.unavailable),

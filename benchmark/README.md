@@ -17,12 +17,18 @@ Use an otherwise idle GPU and warm up before measuring.
 
 Neuron modules select execution from the tensor device. CPU uses the Torch
 reference; CUDA uses the registered operator and caches a compatible
-implementation per device. Known GPU architectures use checked-in offline
+implementation per device and execution path. Known GPU architectures use offline
 priorities per neuron family; unknown architectures retain native CUDA → Triton →
 CuPy → Torch. Runtime selection never profiles candidates. Normal model construction
 has no backend argument.
+Inductor expansion has a separate cache and prefers Triton → native CUDA → CuPy
+→ Torch. The existing eager and expansion entries choose the cache; ordinary
+calls do not check `is_compiling()`. Raw CUDA Graphs retain the warmed eager
+choice, while graphs captured from compiled functions retain the compiled choice.
 To inspect the selected implementation, call
-`functional.neuron_implementation(neuron_type, device)`.
+`functional.neuron_implementation(neuron_type, device)` for eager or add
+`execution="compile"` for compiler expansion. A query reports the path's binding;
+reference-only precision profiles can still follow their documented fallback.
 
 For provider diagnostics only, set `SJ_<NEURON>_CUDA_IMPLEMENTATION` before
 starting Python. The default is `auto`; a value such as `triton` is strict and

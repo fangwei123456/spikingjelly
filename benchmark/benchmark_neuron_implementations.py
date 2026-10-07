@@ -42,12 +42,16 @@ def _priority(scores):
 def _rank(records):
     grouped = {}
     for record in records:
-        key = (tuple(record["capability"]), record["neuron"])
+        key = (
+            tuple(record["capability"]),
+            record["neuron"],
+            record.get("execution", "eager"),
+        )
         grouped.setdefault(key, {}).setdefault(record["implementation"], []).append(
             record
         )
     result = []
-    for (capability, neuron), implementations in sorted(grouped.items()):
+    for (capability, neuron, execution), implementations in sorted(grouped.items()):
         if set(implementations) != set(IMPLEMENTATIONS):
             raise ValueError(f"Incomplete calibration for {capability}/{neuron}")
         environments = {
@@ -132,6 +136,7 @@ def _rank(records):
             {
                 "capability": capability,
                 "neuron": neuron,
+                "execution": execution,
                 "priority": order if stable else None,
                 "status": "stable" if stable else "inconclusive",
                 "round_priorities": round_orders,
@@ -165,9 +170,18 @@ def _case(args):
         f"spikingjelly._ops.{'if_' if args.neuron == 'if' else args.neuron}"
     )
     binding_start = time.perf_counter()
-    selected = package._selection.diagnostics(torch.device(args.device))
+    selected = package._selection.diagnostics(
+        torch.device(args.device),
+        execution="compile" if args.execution == "compile" else "eager",
+    )
     binding_ms = (time.perf_counter() - binding_start) * 1000
-    assert selected["implementation"] == args.implementation
+    if args.implementation != "auto":
+        assert selected["implementation"] == args.implementation
+    forward = (
+        torch.compile(package._forward, fullgraph=True)
+        if args.execution == "compile"
+        else package._forward
+    )
     measurements = []
     for dtype_name in args.dtype:
         dtype = getattr(torch, dtype_name)
@@ -176,7 +190,7 @@ def _case(args):
             torch.manual_seed(42)
             values, inputs = _arguments(args.neuron, T, N, args.device, dtype)
             started = time.perf_counter()
-            actual = package._forward(*values)
+            actual = forward(*values)
             torch.cuda.synchronize()
             first_forward_ms = (time.perf_counter() - started) * 1000
             expected = package._selection._cpu_forward(*values)
@@ -197,7 +211,7 @@ def _case(args):
             for mode in ("inference", "training") if inputs else ("inference",):
 
                 def call():
-                    output = package._forward(*values)
+                    output = forward(*values)
                     if mode == "training":
                         return torch.autograd.grad(output[:visible], inputs, gradients)
                     return output
@@ -205,7 +219,22 @@ def _case(args):
                 with torch.enable_grad() if mode == "training" else torch.no_grad():
                     for _ in range(args.warmup):
                         call()
-                    measurement = _measure(call, args.iterations, args.samples)
+                    if args.execution == "cuda_graph":
+                        graph = torch.cuda.CUDAGraph()
+                        with torch.cuda.graph(
+                            graph, stream=torch.cuda.current_stream()
+                        ):
+                            captured = call()
+                        graph.replay()
+                        torch.cuda.synchronize()
+                        torch.testing.assert_close(
+                            captured, call(), rtol=2e-4, atol=2e-5
+                        )
+                        measurement = _measure(
+                            graph.replay, args.iterations, args.samples
+                        )
+                    else:
+                        measurement = _measure(call, args.iterations, args.samples)
                 measurements.append(
                     {
                         "dtype": dtype_name,
@@ -226,9 +255,11 @@ def _case(args):
     sources += sorted(Path(package.__file__).parent.glob("_native_build.json"))
     sources += [root / "_cuda.cuh", root / "cuda_surrogate.cuh"]
     return {
-        "timing_domain": "synchronized_eager_wall_time",
+        "timing_domain": f"synchronized_{args.execution}_wall_time",
+        "execution": args.execution,
         "neuron": args.neuron,
         "implementation": args.implementation,
+        "selected_implementation": selected["implementation"],
         "round": args.round,
         "capability": torch.cuda.get_device_capability(),
         "gpu": torch.cuda.get_device_name(),
@@ -250,7 +281,12 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summarize", type=Path)
     parser.add_argument("--neuron", choices=FAMILIES, default="lif")
-    parser.add_argument("--implementation", choices=IMPLEMENTATIONS, default="triton")
+    parser.add_argument(
+        "--implementation", choices=("auto", *IMPLEMENTATIONS), default="triton"
+    )
+    parser.add_argument(
+        "--execution", choices=("eager", "compile", "cuda_graph"), default="eager"
+    )
     parser.add_argument("--round", type=int, default=0)
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument(
@@ -273,7 +309,8 @@ def main():
             [json.loads(p.read_text()) for p in sorted(args.summarize.glob("*.json"))]
         )
     else:
-        result = _case(args)
+        with torch.cuda.stream(torch.cuda.Stream(device=args.device)):
+            result = _case(args)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n")
 

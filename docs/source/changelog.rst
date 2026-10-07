@@ -54,6 +54,12 @@ Modules: ```spikingjelly.activation_based.functional.neuron```,
   family and GPU compute capability, without runtime profiling. Unknown devices
   retain the existing availability order. The calibration benchmark compares
   complete eager inference/training calls and rejects inconsistent rankings.
+- Ordinary eager and Inductor expansion now cache separate CUDA implementations:
+  eager retains its offline priority, while expansion prefers Triton. Forward
+  and backward use the same path's binding; eager adds no per-call compile check.
+  CUDA Graphs retain the implementation chosen before capture. Query the
+  compiler binding with ```functional.neuron_implementation(..., execution="compile")```;
+  strict diagnostic overrides apply to both paths.
 - QIF native CUDA and CuPy recurrences now match Torch's FP32 reciprocal rounding
   for scalar time constants, preserving spikes at a low-precision threshold edge.
 - Ordinary CUDA backward uses the selected fused implementation. When a

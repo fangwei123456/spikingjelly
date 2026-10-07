@@ -698,7 +698,11 @@ def run_case(args: argparse.Namespace) -> dict[str, Any]:
         _stop_monitor(monitor)
 
     dynamo_metrics = _dynamo_metrics()
-    selection = functional.neuron_implementation(args.neuron_family, device)
+    selection = functional.neuron_implementation(
+        args.neuron_family,
+        device,
+        execution="compile" if args.execution == "compile" else "eager",
+    )
     metadata["neuron_implementation"] = selection["implementation"]
     result = {
         "schema_version": 1,

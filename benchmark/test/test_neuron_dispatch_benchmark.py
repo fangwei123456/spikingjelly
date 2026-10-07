@@ -90,6 +90,11 @@ def test_offline_ranking_weights_training_and_keeps_near_ties_stable():
     ranked = _rank(records)[0]
     assert ranked["priority"] == ["triton", "cupy", "cuda", "torch"]
     assert ranked["score_us"]["cuda"] == pytest.approx(4)
+    compiled_records = [{**r, "execution": "compile"} for r in records]
+    assert {r["execution"] for r in _rank(records + compiled_records)} == {
+        "eager",
+        "compile",
+    }
     with pytest.raises(ValueError, match="Incomplete calibration"):
         _rank(records[:-3])
     records[1]["source_sha256"]["ops/lif/kernels.cuh"] = "changed"

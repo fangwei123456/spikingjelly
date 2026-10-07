@@ -79,7 +79,9 @@ __all__ = [
 SurrogateFunction = Callable[[torch.Tensor], torch.Tensor]
 
 
-def neuron_implementation(neuron_type: str, device: torch.device) -> dict[str, object]:
+def neuron_implementation(
+    neuron_type: str, device: torch.device, *, execution: str = "eager"
+) -> dict[str, object]:
     r"""
     **API Language** - :ref:`中文 <neuron_implementation-cn>` | :ref:`English <neuron_implementation-en>`
 
@@ -89,16 +91,19 @@ def neuron_implementation(neuron_type: str, device: torch.device) -> dict[str, o
 
     * **中文**
 
-    查询神经元在指定设备上的当前实现。CPU 返回 Torch 参考实现；CUDA 查询会
-    初始化并缓存该设备对应的算子选择，不执行神经元计算，也不改变模块状态。
+    查询神经元在指定设备和执行路径上的绑定实现。CPU 返回 Torch 参考实现；CUDA
+    查询会初始化并缓存对应路径的选择，不执行神经元计算，也不改变模块状态。
 
     :param neuron_type: ``if``、``lif``、``plif``、``qif``、``eif``、``izhikevich``、``ilif``、``activation_aware_if`` 或 ``stbif``。
     :type neuron_type: str
     :param device: CPU 或 NVIDIA CUDA 设备；省略 CUDA 索引时使用当前设备。
     :type device: torch.device
+    :param execution: ``eager``（默认）查询普通调用或由其捕获的 CUDA Graph；
+        ``compile`` 查询 Inductor 编译展开路径。低精度等参考执行特例不由此查询判断。
+    :type execution: str
     :return: 包含实际 ``implementation`` 名称和各不可用候选 ``unavailable`` 原因的字典副本。
     :rtype: dict[str, object]
-    :raises ValueError: 神经元名称或设备类型无效。
+    :raises ValueError: 神经元名称、设备类型或执行路径无效。
     :raises RuntimeError: CUDA 设备没有可用实现。
 
     ----
@@ -107,17 +112,22 @@ def neuron_implementation(neuron_type: str, device: torch.device) -> dict[str, o
 
     * **English**
 
-    Query the selected implementation for a neuron on a device. CPU returns the
-    Torch reference. A CUDA query initializes and caches that device's operator
-    selection; it does not run neuron computation or mutate module state.
+    Query the bound implementation for a neuron on a device and execution path.
+    CPU returns the Torch reference. A CUDA query initializes and caches the
+    corresponding path's selection without computation or module-state changes.
 
     :param neuron_type: One of ``if``, ``lif``, ``plif``, ``qif``, ``eif``, ``izhikevich``, ``ilif``, ``activation_aware_if``, or ``stbif``.
     :type neuron_type: str
     :param device: CPU or NVIDIA CUDA device; an omitted CUDA index uses the current device.
     :type device: torch.device
+    :param execution: ``eager`` (default) queries ordinary calls or CUDA Graphs
+        captured from them; ``compile`` queries the Inductor expansion path.
+        Reference-only profiles such as low-precision state are not determined
+        by this query.
+    :type execution: str
     :return: A copy of ``implementation`` and the ``unavailable`` reasons for rejected candidates.
     :rtype: dict[str, object]
-    :raises ValueError: Invalid neuron name or device type.
+    :raises ValueError: Invalid neuron name, device type or execution path.
     :raises RuntimeError: No CUDA implementation is available.
     """
     packages = {
@@ -133,12 +143,14 @@ def neuron_implementation(neuron_type: str, device: torch.device) -> dict[str, o
     }
     if neuron_type not in packages:
         raise ValueError(f"Unknown neuron type {neuron_type!r}.")
+    if execution not in ("eager", "compile"):
+        raise ValueError("execution must be eager or compile")
     if device.type == "cpu":
         return {"implementation": "torch-reference", "unavailable": {}}
     if device.type != "cuda":
         raise ValueError(f"Unsupported neuron device {device}.")
     package = importlib.import_module(f"..._ops.{packages[neuron_type]}", __package__)
-    return package._selection.diagnostics(device)
+    return package._selection.diagnostics(device, execution=execution)
 
 
 def lava_cuba_lif_step(

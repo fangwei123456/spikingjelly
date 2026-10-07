@@ -87,15 +87,15 @@ def test_cpu_and_fake_cuda_do_not_choose_a_cuda_provider(monkeypatch):
 
 
 @pytest.mark.parametrize("family", FAMILIES)
+@pytest.mark.parametrize("compile_first", [False, True])
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_compilation_keeps_triton_kernels_visible(family):
+def test_compilation_keeps_triton_kernels_visible(family, compile_first, monkeypatch):
     # Each case specializes the same OpOverload.__call__ frame to a different op.
     torch.compiler.reset()
     package = importlib.import_module(f"spikingjelly._ops.{family}")
+    monkeypatch.setattr(package._selection, "_selections", {})
+    monkeypatch.setattr(package._selection, "_compiled_selections", {})
     device = torch.device("cuda", 0)
-    selected = package._selection.diagnostics(device)["implementation"]
-    if selected != "triton":
-        pytest.skip("requires the family's CUDA implementation to be triton")
     trainable = family not in ("activation_aware_if", "stbif")
     x = torch.full((3, 33), 0.3, device=device, requires_grad=trainable)
     v = torch.zeros(33, device=device, requires_grad=trainable)
@@ -132,7 +132,13 @@ def test_compilation_keeps_triton_kernels_visible(family):
         "stbif": (x, v, w, th, pos, neg),
     }[family]
     inputs = (x, v, w) if family in ("plif", "izhikevich") else (x, v)
-    expected = package._forward(*parameters)
+    expected = package._selection._cpu_forward(*parameters)
+    eager = None if compile_first else package._forward(*parameters)
+    selected = package._selection.diagnostics(device, execution="compile")[
+        "implementation"
+    ]
+    if selected != "triton":
+        pytest.skip("requires the family's compiled implementation to be triton")
     captured = []
     from torch._dynamo.backends.common import aot_autograd
     from torch._functorch.aot_autograd import make_boxed_func
@@ -147,11 +153,20 @@ def test_compilation_keeps_triton_kernels_visible(family):
         fullgraph=True,
     )
     actual = compiled(*parameters)
+    if eager is None:
+        eager = package._forward(*parameters)
     torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(eager, expected)
     if trainable:
         visible = 3 if family == "izhikevich" else 2
         torch.testing.assert_close(
             torch.autograd.grad(sum(t.sum() for t in actual[:visible]), inputs),
+            torch.autograd.grad(
+                sum(t.sum() for t in expected[:visible]), inputs, retain_graph=True
+            ),
+        )
+        torch.testing.assert_close(
+            torch.autograd.grad(sum(t.sum() for t in eager[:visible]), inputs),
             torch.autograd.grad(sum(t.sum() for t in expected[:visible]), inputs),
         )
     assert len(captured) == (2 if trainable else 1)
@@ -366,6 +381,16 @@ def test_offline_priorities_bind_per_device_and_strict_override(monkeypatch):
     from contextlib import nullcontext
     from types import SimpleNamespace
     from spikingjelly._ops import selection
+    from spikingjelly.activation_based import functional
+
+    assert (
+        functional.neuron_implementation(
+            "lif", torch.device("cpu"), execution="compile"
+        )["implementation"]
+        == "torch-reference"
+    )
+    with pytest.raises(ValueError, match="execution"):
+        functional.neuron_implementation("lif", torch.device("cpu"), execution="other")
 
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda index: (8, index))
     monkeypatch.setattr(torch.cuda, "device", lambda index: nullcontext())
@@ -387,6 +412,20 @@ def test_offline_priorities_bind_per_device_and_strict_override(monkeypatch):
     )
     assert selector.diagnostics(torch.device("cuda", 0))["implementation"] == "triton"
     assert selector.diagnostics(torch.device("cuda", 1))["implementation"] == "torch"
+    assert (
+        selector.diagnostics(torch.device("cuda", 1), execution="compile")[
+            "implementation"
+        ]
+        == "triton"
+    )
+    assert (
+        selector.get_trace_forward(torch.device("cuda", 1)).func is module._forward_impl
+    )
+    assert (
+        selector.get_trace_backward(torch.device("cuda", 1)).func
+        is module._backward_impl
+    )
+    assert selector.get_cuda_backward(torch.device("cuda", 1)) is module._backward_impl
     # Changing the table cannot silently rebind a device after first use.
     selection._CUDA_PRIORITIES[(8, 0)]["sj_lif"] = ("torch", "triton")
     assert selector.diagnostics(torch.device("cuda", 0))["implementation"] == "triton"
@@ -395,3 +434,9 @@ def test_offline_priorities_bind_per_device_and_strict_override(monkeypatch):
         "test", "sj_lif", "SJ_LIF_CUDA_IMPLEMENTATION", module._forward_impl
     )
     assert forced.diagnostics(torch.device("cuda", 0))["implementation"] == "torch"
+    assert (
+        forced.diagnostics(torch.device("cuda", 0), execution="compile")[
+            "implementation"
+        ]
+        == "torch"
+    )

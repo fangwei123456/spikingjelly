@@ -44,19 +44,22 @@ def _source_cache_tag(namespace, scope, module, trainable):
     return f"|sj-ops:{namespace}:{scope}:{digest.hexdigest()}"
 
 
-def _update_cache_tag(namespace, index, module, selected, *, capability, priority):
+def _update_cache_tag(
+    namespace, index, module, selected, *, capability, priority, execution
+):
     tag = _source_cache_tag(
         namespace,
-        f"{index}:{selected.name}",
+        f"{index}:{execution}:{selected.name}",
         module,
         selected.trace_backward is not None,
     )
     _include_cache_tag(tag)
     logger.info(
-        "ops selection operator={} device=cuda:{} ({}) capability={} priority={} implementation={} forward={} backward={} unavailable={}",
+        "ops selection operator={} device=cuda:{} ({}) execution={} capability={} priority={} implementation={} forward={} backward={} unavailable={}",
         namespace,
         index,
         torch.cuda.get_device_name(index),
+        execution,
         capability,
         priority,
         selected.name,
@@ -133,12 +136,9 @@ def _register_dispatch(namespace, cpu, selection):
                 ):
                     with unset_fake_temporarily():
                         selection.get_trace_forward(device)
-                    index = (
-                        device.index
-                        if device.index is not None
-                        else torch.cuda.current_device()
+                    _include_cache_tag(
+                        selection._get_compile_selection(device).cache_tag
                     )
-                    _include_cache_tag(selection._selections[index].cache_tag)
                 return reference_fake(*args, **kwargs)
 
             return call
