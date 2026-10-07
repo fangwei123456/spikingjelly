@@ -80,3 +80,10 @@ all three rounds give the same order. An inconclusive result leaves the previous
 order in place. Preserve raw samples, environment and source hashes with the
 summary. This measures steady-state eager execution; first-load/JIT costs are
 recorded separately, and compile workloads require separate validation.
+
+These scores include Python validation, tensor allocation, parameter handling,
+kernel submission, and autograd. They compare the installed implementation's
+complete eager path, not GPU kernels alone. To isolate GPU execution, capture
+many complete calls in one CUDA Graph and time its replay with CUDA events;
+timing an eager loop with CUDA events can still include gaps while the CPU
+submits work. Compare eager, compile, and CUDA Graph model runs separately.

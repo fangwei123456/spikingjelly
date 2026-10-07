@@ -434,3 +434,104 @@ Raw samples, summaries, source hashes, commands and test logs are retained at
 `.agents/artifacts/neuron-priorities-20261006` in the primary checkout, with
 host-side records in `/tmp/sj-ranking-results`. Runtime priorities are reviewed
 and updated with this evidence; no developer calibration runs on user startup.
+
+
+## Eager call-path attribution (2026-10-07)
+
+The offline scores measure synchronized complete eager calls, not GPU kernel
+throughput. Native CUDA's large advantage is reproducible in that metric and
+primarily comes from host-side implementation work. This does not invalidate the
+eager result, and it does not establish the fastest provider for compile or
+CUDA Graph execution.
+
+Follow-up runs used the same isolated g2/A100 source and native binaries, Torch
+2.7.1+cu118, Triton 3.3.1, CuPy 13.6.0, one CPU thread pinned to core 2, FP32 state
+and inputs, ATan, hard reset, detached reset and final-state output. IF/LIF/PLIF
+were compared at all four calibration sizes. Every ordinary forward/first-gradient
+comparison against Torch passed. CUDA Graph replay outputs/gradients were also
+checked against the ordinary call. No production checks or execution paths were
+changed, and no paid instance was used.
+
+Each GPU measurement captures 100 complete calls into a single CUDA Graph,
+warms ten replays, then times 20 replays with CUDA events and divides by 100.
+This removes per-call Python submission gaps while retaining the provider's
+captured GPU operations. Eager CUDA-event spans alone would not remove those
+gaps. Inputs, cotangents and warmups were created on the capture stream; the
+initial prototype's default-stream training capture failed and was corrected.
+The GPU column is graph execution per call, not a sum of profiler kernel events.
+
+Representative T=4/N=32768 timings (us):
+
+| Family | Provider | Eager forward | GPU graph forward | Eager forward+backward | GPU graph forward+backward |
+| --- | --- | ---: | ---: | ---: | ---: |
+| IF | CUDA | 29.90 | 3.40 | 259.19 | 7.39 |
+| IF | Triton | 93.42 | 3.28 | 471.39 | 6.65 |
+| IF | CuPy | 98.47 | 3.38 | 507.72 | 7.41 |
+| LIF | CUDA | 31.21 | 3.53 | 293.64 | 7.92 |
+| LIF | Triton | 95.91 | 3.50 | 504.22 | 6.64 |
+| LIF | CuPy | 103.77 | 3.53 | 543.88 | 7.88 |
+| PLIF | CUDA | 37.68 | 5.64 | 411.26 | 26.65 |
+| PLIF | Triton | 116.58 | 5.40 | 716.56 | 24.84 |
+| PLIF | CuPy | 125.07 | 5.69 | 756.86 | 25.20 |
+
+All providers pass through the shared schema/autograd/device entry and device
+cache. Native CUDA then performs validation, contiguous conversion, allocation,
+stream lookup and kernel submission inside its C++ operator. Triton performs
+those frontend steps in Python and enters the JIT launcher's specialization/cache
+lookup and argument binding on each call. CuPy performs Python frontend steps,
+current-stream wrapping, tensor-pointer/NumPy-scalar packing and RawKernel launch.
+A JIT cache hit removes compilation, not all launcher work. Native still has an
+additional operator dispatch; its cheaper host implementation outweighs that cost
+in these eager cases. No GIL holding-time measurement is claimed.
+
+A separate LIF forward probe (same T/N, 100 warmups, 11 batches of 100 calls)
+measured the following synchronized wall times. Skipping checks and reusing
+outputs/packed arguments were temporary diagnostic controls with validated fixed
+inputs; they are not proposed production contracts.
+
+| Probe (us) | CUDA | Triton | CuPy |
+| --- | ---: | ---: | ---: |
+| Shared production entry | 30.84 | 96.60 | 102.47 |
+| Shared entry with Python GC disabled | 30.56 | 96.07 | 101.95 |
+| Direct provider entry | 24.30 | 65.29 | 68.46 |
+| Direct provider with Python validation skipped | — | 51.89 | 50.87 |
+| Prepared outputs/arguments, raw launcher | — | 25.20 | 17.19 |
+
+Disabling GC barely changes the result. Python validation accounts for part of
+the gap, and allocations/context/argument preparation account for more; warmed
+Triton launch still has substantial CPU cost. cProfile locates those functions,
+but its instrumented timings overlap and distort absolute latency, so they are
+not subtracted from the unprofiled numbers. The native direct entry retains its
+normal C++ checks and allocations. These probe rows have different work and are
+not substitutes for the shared-entry comparison.
+
+The standard `benchmark_snn_single_gpu.py` training runner independently confirmed
+an end-to-end eager benefit. Spikformer-Ti, LIF/ATan, FP32, T=4, B=8, 64px,
+SGD, three alternating provider rounds, 50 warmups and 100 samples per process:
+
+| Execution | CUDA (ms/step) | Triton (ms/step) | CuPy (ms/step) |
+| --- | ---: | ---: | ---: |
+| Eager | 21.268 | 28.664 | 29.610 |
+| Compile | 11.594 | 9.821 | 22.161 |
+| CUDA Graph | 6.531 | 6.475 | 6.537 |
+
+Each manifest confirms the requested actual provider. All losses/outputs remained
+finite; compiled runs recorded zero graph breaks. Across the three final rounds,
+eager median spread was 0.68%/0.51%/1.22%; compile spread was 0.34%/2.37%/0.53%;
+CUDA Graph spread was 0.03%/0.21%/0.06% for CUDA/Triton/CuPy. The earlier 20-warmup,
+50-sample exploratory cohort had a substantial native eager outlier and is kept
+separately, not pooled with this final cohort. Whole-model graph replay includes
+all captured training work and differs from the synthetic operator graph above.
+
+Native CUDA reduced final eager step time by 25.8% vs Triton and 28.2% vs CuPy.
+Triton reduced compiled step time by 15.3% vs native CUDA; model CUDA Graph times
+were within about 1%. The current offline policy therefore has evidence for its
+declared eager objective, not a universal optimum across execution modes. Future
+policy changes should use the intended model/execution mix rather than treating
+either GPU-only or eager-only timing as universally representative.
+
+All 72 synthetic profile records, host-control measurements, 54 model case JSON
+files (27 exploratory and 27 final), commands, logs, cProfile summaries and source
+hashes are saved in `.agents/artifacts/neuron-host-dispatch-20261007` in the primary
+checkout. Benchmark JSON now explicitly labels its domain as
+`synchronized_eager_wall_time`; its timing and ranking algorithms are unchanged.

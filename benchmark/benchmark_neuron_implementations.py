@@ -226,6 +226,7 @@ def _case(args):
     sources += sorted(Path(package.__file__).parent.glob("_native_build.json"))
     sources += [root / "_cuda.cuh", root / "cuda_surrogate.cuh"]
     return {
+        "timing_domain": "synchronized_eager_wall_time",
         "neuron": args.neuron,
         "implementation": args.implementation,
         "round": args.round,
