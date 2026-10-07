@@ -1090,11 +1090,6 @@ def test_stbif_step_matches_reference_sequence():
         q_ref, acc_q_ref = step[1:3]
 
 
-def test_functional_neuron_exports():
-    for name in functional_neuron.__all__:
-        assert getattr(functional, name) is getattr(functional_neuron, name)
-
-
 def test_functional_neuron_public_api_documentation():
     for name in functional_neuron.__all__:
         function = getattr(functional_neuron, name)

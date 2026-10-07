@@ -12,53 +12,25 @@ from .native_loader import _check_native_device
 
 
 # Offline complete-call rankings; see benchmark/benchmark_neuron_implementations.py.
-_CUDA_PRIORITIES = {
-    (8, 0): {
-        "sj_activation_aware_if": ("cuda", "triton", "torch"),
-        "sj_eif": ("cuda", "triton", "torch"),
-        "sj_if": ("cuda", "triton", "torch"),
-        "sj_ilif": ("cuda", "triton", "torch"),
-        "sj_izhikevich": ("cuda", "triton", "torch"),
-        "sj_lif": ("cuda", "triton", "torch"),
-        "sj_plif": ("cuda", "triton", "torch"),
-        "sj_qif": ("cuda", "triton", "torch"),
-        "sj_stbif": ("cuda", "triton", "torch"),
-    },
-    (8, 6): {
-        "sj_activation_aware_if": ("cuda", "triton", "torch"),
-        "sj_eif": ("cuda", "triton", "torch"),
-        "sj_if": ("cuda", "triton", "torch"),
-        "sj_ilif": ("cuda", "triton", "torch"),
-        "sj_izhikevich": ("cuda", "triton", "torch"),
-        "sj_lif": ("cuda", "triton", "torch"),
-        "sj_plif": ("cuda", "triton", "torch"),
-        "sj_qif": ("cuda", "triton", "torch"),
-        "sj_stbif": ("cuda", "triton", "torch"),
-    },
-    (12, 0): {
-        "sj_activation_aware_if": ("cuda", "triton", "torch"),
-        "sj_eif": ("cuda", "triton", "torch"),
-        "sj_if": ("cuda", "triton", "torch"),
-        "sj_ilif": ("cuda", "triton", "torch"),
-        "sj_izhikevich": ("cuda", "triton", "torch"),
-        "sj_lif": ("cuda", "triton", "torch"),
-        "sj_plif": ("cuda", "triton", "torch"),
-        "sj_qif": ("cuda", "triton", "torch"),
-        "sj_stbif": ("cuda", "triton", "torch"),
-    },
-}
+_NEURON_NAMESPACES = (
+    "sj_activation_aware_if",
+    "sj_eif",
+    "sj_if",
+    "sj_ilif",
+    "sj_izhikevich",
+    "sj_lif",
+    "sj_plif",
+    "sj_qif",
+    "sj_stbif",
+)
 _DEFAULT_CUDA_PRIORITY = ("cuda", "triton", "torch")
-_COMPILE_CUDA_PRIORITIES = {
-    "sj_if": ("triton", "cuda", "torch"),
-    "sj_lif": ("triton", "cuda", "torch"),
-    "sj_plif": ("triton", "cuda", "torch"),
-    "sj_qif": ("triton", "cuda", "torch"),
-    "sj_eif": ("triton", "cuda", "torch"),
-    "sj_izhikevich": ("triton", "cuda", "torch"),
-    "sj_ilif": ("triton", "cuda", "torch"),
-    "sj_activation_aware_if": ("triton", "cuda", "torch"),
-    "sj_stbif": ("triton", "cuda", "torch"),
+_CUDA_PRIORITIES = {
+    capability: dict.fromkeys(_NEURON_NAMESPACES, _DEFAULT_CUDA_PRIORITY)
+    for capability in ((8, 0), (8, 6), (12, 0))
 }
+_COMPILE_CUDA_PRIORITIES = dict.fromkeys(
+    _NEURON_NAMESPACES, ("triton", "cuda", "torch")
+)
 
 
 def _require_automatic_torch(

@@ -352,15 +352,6 @@ def test_triton_neuron_dtype_id_roundtrip():
         triton_utils.triton_neuron_dtype_id_to_torch_dtype(999)
 
 
-def test_mixed_precision_uses_custom_op_not_autograd_function():
-    assert not hasattr(if_triton_kernel, "_MixedPrecisionIF")
-    assert not hasattr(lif_triton_kernel, "_MixedPrecisionLIF")
-    assert not hasattr(plif_triton_kernel, "_MixedPrecisionPLIF")
-    assert hasattr(if_triton_kernel, "multistep_if_mp_forward")
-    assert hasattr(lif_triton_kernel, "multistep_lif_mp_forward")
-    assert hasattr(plif_triton_kernel, "multistep_plif_mp_forward")
-
-
 def test_fp8_backward_capability_uses_backward_probe(monkeypatch):
     storage_dtype = getattr(torch, "float8_e4m3fn", None)
     if storage_dtype is None:

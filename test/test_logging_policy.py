@@ -61,16 +61,6 @@ assert output.getvalue().strip() == "user-sink-still-active"
     subprocess.run([sys.executable, "-c", script], check=True)
 
 
-def test_logging_benchmark_rejects_nonpositive_counts():
-    result = subprocess.run(
-        [sys.executable, "benchmark/benchmark_logging.py", "--calls", "0"],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 2
-    assert "value must be > 0" in result.stderr
-
-
 def test_operator_binding_is_logged_once_only_when_enabled():
     script = """
 import io

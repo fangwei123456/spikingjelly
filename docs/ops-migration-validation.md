@@ -711,3 +711,55 @@ are preserved in `.agents/artifacts/no-cupy-migration-20261007` in the primary
 checkout. The remote source is isolated at
 `/home/allenyolk/CodeRepo/sj-no-cupy-g2-20261007`; the pre-change comparison source
 is a separate directory. Rollback is the preceding commit, without legacy aliases.
+
+## Benchmark/test cleanup and Ponytail review (2026-10-07)
+
+Removed five superseded or one-off scripts: the logging migration benchmark,
+standalone I-LIF and final-state runners, same-dtype stable/mixed-precision
+comparison, and exploratory LIF FP8 probe. Their remaining coverage lives in
+implementation/layout/precision benchmarks and numerical tests. Kept the standard
+Triton regression gate, Spikformer/Nsight workflow, binary projection benchmarks,
+and independent conversion/distributed/SNN-LLM workflows. Updated the benchmark
+index; tutorials were not changed in this cleanup.
+
+Removed three tests that checked retired private classes, simple re-exports, or
+the deleted logging benchmark's argument parser. Numerical, gradient, state,
+dtype, surrogate, registration, installation and error-boundary checks remain.
+Ponytail findings also removed repeated priority literals and the five identical
+IF/LIF projection helpers. The helpers now live in the existing projection module;
+their ASTs and selector method ASTs match the preceding commit. No new wrappers,
+configuration, dependencies or registrations were introduced.
+
+Validation against baseline `b02665f9`:
+
+- Local `pytest -q test`: 1,582 passed, 534 skipped, 29 existing warnings.
+- Local `pytest -q benchmark/test`: 289 passed, three skipped.
+- A100/g2, Torch 2.7.1+cu118, under the CuPy import guard: projection,
+  dispatch, registered-kernel and compression suites passed 581 checks, with two
+  extra-device checks skipped. Native and missing-extension reference paths,
+  gradients and fullgraph compilation were exercised. Unchanged native binaries
+  from the preceding build were reused; native sources/ABI were not modified.
+- Pure Python wheel and sdist built successfully. The wheel installed outside the
+  checkout, imported both fused projection APIs and executed CPU gradients.
+  Distribution checks verified the mapped projection module, absent CuPy extras
+  and native binaries in the pure wheel, and retained native sources in sdist.
+- Scoped Ruff/formatting, `git diff --check`, and operator logging policy passed.
+  The whole-package logging checker reports three existing violations in
+  distributed vision training and NIR imports; these are outside this cleanup.
+
+A same-machine complete forward/backward timing check alternated before/after
+process order across three rounds, pinned CPU core 2 and used GPU 0, 50 warmups,
+and seven batches of 50 synchronized calls. Seeded outputs and every saved
+first gradient were exactly equal. IF→Linear before/after round medians in us
+were 469.95/400.53, 400.13/400.97, 402.61/401.75; LIF→Linear were
+492.89/423.01, 423.37/423.45, 436.61/429.97. The first process pair also exhibited
+drift in unchanged projection controls. These samples show no consistent
+slowdown in the moved helpers and do not establish a performance improvement.
+The workload remains T=4/M=8/K=128/N=64, FP32, ATan, hard detached reset;
+this cleanup did not revalidate other devices or full-model performance.
+
+Commands, raw timing/correctness JSON and logs are preserved in
+`.agents/artifacts/ops-cleanup-20261007` in the primary checkout. The isolated
+remote candidate is `/home/allenyolk/CodeRepo/sj-ops-cleanup-g2-20261007`.
+No paid instance was rented. The operator-registration and CuPy-removal work can
+be checkpointed; tutorial migration remains a separate follow-up.

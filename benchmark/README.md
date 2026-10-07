@@ -10,8 +10,8 @@ Use an otherwise idle GPU and warm up before measuring.
 | Offline neuron implementation priorities | `benchmark_neuron_implementations.py` |
 | Triton LIF regression check | `check_triton_lif_performance.py` |
 | Nsight Systems capture | `nsys_snn.sh`, `nsys_lif_example.py`, `nsys_multigpu_example.py` |
-| Neuron layouts and final-state execution | `benchmark_neuron_layout.py`, `benchmark_neuron_last_state.py`, `benchmark_ilif.py` |
-| Precision and memory | `benchmark_fp8_training_inference.py`, `probe_lif_fp8_triton.py`, `benchmark_same_dtype_stable_vs_mp.py`, `benchmark_train_precision_snn_fc.py`, `benchmark_memopt.py` |
+| Neuron layouts and final-state execution | `benchmark_neuron_layout.py` |
+| Precision and memory | `benchmark_fp8_training_inference.py`, `benchmark_triton_neuron_kernels.py`, `benchmark_train_precision_snn_fc.py`, `benchmark_memopt.py` |
 | ANN-to-SNN conversion | `benchmark_ann2snn_*.py`, `snn_llm/` |
 | Distributed vision and language models | `vision_distributed.py`, `vision_inference.py`, `snn_llm/` |
 
