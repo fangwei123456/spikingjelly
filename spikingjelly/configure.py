@@ -86,21 +86,6 @@ space but takes longer to read.
 """
 
 
-save_bool_spike_level = _get_integer("SJ_SAVE_BOOL_SPIKE_LEVEL", 0)
-r"""
-布尔脉冲保存级别，由 ``SJ_SAVE_BOOL_SPIKE_LEVEL`` 配置，默认值为 ``0``。
-``0`` 使用逐元素布尔值，``1`` 将每 8 个脉冲打包到一个 uint8 中。
-
-Boolean spike storage level, configured by ``SJ_SAVE_BOOL_SPIKE_LEVEL``. The
-default is ``0``. Level ``0`` stores element-wise booleans; level ``1`` packs
-eight spikes into each uint8.
-"""
-if save_bool_spike_level not in (0, 1):
-    raise ValueError(
-        f"SJ_SAVE_BOOL_SPIKE_LEVEL must be 0 or 1, got {save_bool_spike_level!r}"
-    )
-
-
 triton_neuron_kernel_static_range_max_T = _get_integer(
     "SJ_TRITON_NEURON_KERNEL_STATIC_RANGE_MAX_T", 64
 )

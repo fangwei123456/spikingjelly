@@ -638,3 +638,76 @@ Raw samples, all four-provider/auto forward and backward results at both sizes,
 baseline/candidate calls, cache controls, 18 model JSONs, commands, source/binary
 hashes and rejected-run evidence are preserved under
 `.agents/artifacts/neuron-execution-selection-20261007` in the primary checkout.
+
+## Package-wide CuPy removal (2026-10-07)
+
+The package has no CuPy import, runtime provider or installation extra. Ordinary
+neuron eager/compile selection now considers native CUDA/Triton/Torch only.
+Legacy SpikeLinear/SpikeConv layers, their functional/dense operator paths and
+`save_bool_spike_level` / `SJ_SAVE_BOOL_SPIKE_LEVEL` were deleted. Ordinary Torch
+layers plus independent memopt own activation-memory optimization. memopt
+compression, public flat compression and projection row packing remain available.
+
+Fused IF/LIF→Linear and packed/sparse Linear preserve their distinct algorithms.
+Existing handwritten kernels moved into native CUDA extensions; reset/decay
+macros became compiled template variants. Projection compilation retains
+`--use_fast_math`; ordinary neuron compilation retains `--fmad=false`. The fused
+forward avoids intermediate spikes on the native path and rematerializes in
+backward. Custom surrogate Python derivatives and autograd-owned lifetime handling
+remain in `surrogate_runtime.py`, without CuPy device/stream management. Native
+kernels use the current PyTorch CUDA stream. Algorithm/dtype/state/gradient
+contracts, bias casting, packed-row padding and sparse-index workspace remain.
+
+When a matching extension is missing, projections execute Torch reference
+mathematics on CUDA tensors; there is no runtime native JIT or toolchain install.
+Reference fused execution can materialize intermediate spikes and does not promise
+the native fusion memory/performance benefit. The package stays a pure Python
+PyPI wheel with optional local native builds. No fallback hides unknown kernel,
+JIT, gradient or OOM failures. The obsolete provider wrappers/loaders, tutorial
+and live installation references were removed; historical Changelog/benchmark
+measurements and externally pinned older-framework reproduction remain historical.
+
+A100/g2, Torch 2.7.1+cu118: all 12 native extensions built with CUDA 11.8, including
+three new projection extensions. Under a meta-path guard rejecting `cupy` and
+`cupy_backends`, projection tests passed 138 cases (two skipped for extra devices)
+across native and missing-extension reference paths. Neuron/dispatch/compile/cache/
+flat-compression checks passed 442 cases. The final sparse-helper cleanup passed
+54 checks (two skipped). No shared dependency was uninstalled or replaced.
+
+The committed pre-migration CuPy snapshot was independently run against the native
+candidate using identical seeded FP32 inputs. All outputs and input/initial-state/
+weight/bias gradients matched within 1e-4/1e-5. A single-process-pair latency check,
+50 warmups and seven batches of 50 complete forward/backward calls, observed:
+
+| Projection | Before CuPy (us) | Native candidate (us) |
+| --- | ---: | ---: |
+| IF→Linear | 592.19 | 472.01 |
+| LIF→Linear | 625.01 | 508.47 |
+| Packed Linear | 395.78 | 340.36 |
+| Sparse Linear | 393.93 | 302.55 |
+
+Fused cases used T=4/M=8/K=128/N=64, ATan, hard detached reset; matrix projections
+used M=64/K=129/N=64 and binary density 0.1. This limited run found no regression;
+it is not evidence of a universal speedup. Other GPU architectures were not
+revalidated for the new projection extensions in this task. No paid GPU was rented.
+
+Local broad tests passed 1,773 cases (467 skipped), with the pre-existing unrelated
+SNN-LLM lock-manifest assertion failure described above. Final nearest checks
+passed 221 cases (371 skipped). Scoped Ruff, formatting, production logging,
+Changelog generation and Sphinx succeeded.
+
+Distribution: the pure wheel has no CuPy-named files, CuPy requirements/extras or
+native dynamic libraries. Its sdist contains all three new native sources/headers.
+A fresh uv-managed environment installed the wheel outside the checkout; CPU
+forward/backward and retained API imports succeeded under the CuPy-blocking guard,
+with retired interfaces absent. The local Linux native wheel has 12 extensions
+and 12 matching build metadata files, no CuPy requirements/files. Installed in a
+separate environment outside the repository, it executed fused/projection gradients
+under the CuPy guard and a forbidden-subprocess guard, confirming runtime execution
+loads binaries and does not invoke a compiler. Native wheels were not published.
+
+Raw logs, source/binary metadata, wheel checks, old/new tensors and timing samples
+are preserved in `.agents/artifacts/no-cupy-migration-20261007` in the primary
+checkout. The remote source is isolated at
+`/home/allenyolk/CodeRepo/sj-no-cupy-g2-20261007`; the pre-change comparison source
+is a separate directory. Rollback is the preceding commit, without legacy aliases.

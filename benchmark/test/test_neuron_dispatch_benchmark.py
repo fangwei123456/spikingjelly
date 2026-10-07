@@ -53,7 +53,7 @@ def test_offline_ranking_weights_training_and_keeps_near_ties_stable():
     from benchmark.benchmark_neuron_implementations import _rank
 
     records = []
-    times = {"cuda": (1, 8), "triton": (10, 2), "cupy": (10, 2.01), "torch": (100, 100)}
+    times = {"cuda": (1, 8), "triton": (10, 2), "torch": (100, 100)}
     for implementation, (forward, training) in times.items():
         for index in range(3):
             records.append(
@@ -88,7 +88,7 @@ def test_offline_ranking_weights_training_and_keeps_near_ties_stable():
                 }
             )
     ranked = _rank(records)[0]
-    assert ranked["priority"] == ["triton", "cupy", "cuda", "torch"]
+    assert ranked["priority"] == ["triton", "cuda", "torch"]
     assert ranked["score_us"]["cuda"] == pytest.approx(4)
     compiled_records = [{**r, "execution": "compile"} for r in records]
     assert {r["execution"] for r in _rank(records + compiled_records)} == {

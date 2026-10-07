@@ -14,50 +14,50 @@ from .native_loader import _check_native_device
 # Offline complete-call rankings; see benchmark/benchmark_neuron_implementations.py.
 _CUDA_PRIORITIES = {
     (8, 0): {
-        "sj_activation_aware_if": ("cuda", "triton", "cupy", "torch"),
-        "sj_eif": ("cuda", "triton", "cupy", "torch"),
-        "sj_if": ("cuda", "triton", "cupy", "torch"),
-        "sj_ilif": ("cuda", "triton", "cupy", "torch"),
-        "sj_izhikevich": ("cuda", "triton", "cupy", "torch"),
-        "sj_lif": ("cuda", "triton", "cupy", "torch"),
-        "sj_plif": ("cuda", "triton", "cupy", "torch"),
-        "sj_qif": ("cuda", "triton", "cupy", "torch"),
-        "sj_stbif": ("cuda", "triton", "cupy", "torch"),
+        "sj_activation_aware_if": ("cuda", "triton", "torch"),
+        "sj_eif": ("cuda", "triton", "torch"),
+        "sj_if": ("cuda", "triton", "torch"),
+        "sj_ilif": ("cuda", "triton", "torch"),
+        "sj_izhikevich": ("cuda", "triton", "torch"),
+        "sj_lif": ("cuda", "triton", "torch"),
+        "sj_plif": ("cuda", "triton", "torch"),
+        "sj_qif": ("cuda", "triton", "torch"),
+        "sj_stbif": ("cuda", "triton", "torch"),
     },
     (8, 6): {
-        "sj_activation_aware_if": ("cuda", "triton", "cupy", "torch"),
-        "sj_eif": ("cuda", "triton", "cupy", "torch"),
-        "sj_if": ("cuda", "triton", "cupy", "torch"),
-        "sj_ilif": ("cuda", "triton", "cupy", "torch"),
-        "sj_izhikevich": ("cuda", "triton", "cupy", "torch"),
-        "sj_lif": ("cuda", "triton", "cupy", "torch"),
-        "sj_plif": ("cuda", "triton", "cupy", "torch"),
-        "sj_qif": ("cuda", "triton", "cupy", "torch"),
-        "sj_stbif": ("cuda", "triton", "cupy", "torch"),
+        "sj_activation_aware_if": ("cuda", "triton", "torch"),
+        "sj_eif": ("cuda", "triton", "torch"),
+        "sj_if": ("cuda", "triton", "torch"),
+        "sj_ilif": ("cuda", "triton", "torch"),
+        "sj_izhikevich": ("cuda", "triton", "torch"),
+        "sj_lif": ("cuda", "triton", "torch"),
+        "sj_plif": ("cuda", "triton", "torch"),
+        "sj_qif": ("cuda", "triton", "torch"),
+        "sj_stbif": ("cuda", "triton", "torch"),
     },
     (12, 0): {
-        "sj_activation_aware_if": ("cuda", "triton", "cupy", "torch"),
-        "sj_eif": ("cuda", "triton", "cupy", "torch"),
-        "sj_if": ("cuda", "triton", "cupy", "torch"),
-        "sj_ilif": ("cuda", "triton", "cupy", "torch"),
-        "sj_izhikevich": ("cuda", "triton", "cupy", "torch"),
-        "sj_lif": ("cuda", "triton", "cupy", "torch"),
-        "sj_plif": ("cuda", "triton", "cupy", "torch"),
-        "sj_qif": ("cuda", "triton", "cupy", "torch"),
-        "sj_stbif": ("cuda", "triton", "cupy", "torch"),
+        "sj_activation_aware_if": ("cuda", "triton", "torch"),
+        "sj_eif": ("cuda", "triton", "torch"),
+        "sj_if": ("cuda", "triton", "torch"),
+        "sj_ilif": ("cuda", "triton", "torch"),
+        "sj_izhikevich": ("cuda", "triton", "torch"),
+        "sj_lif": ("cuda", "triton", "torch"),
+        "sj_plif": ("cuda", "triton", "torch"),
+        "sj_qif": ("cuda", "triton", "torch"),
+        "sj_stbif": ("cuda", "triton", "torch"),
     },
 }
-_DEFAULT_CUDA_PRIORITY = ("cuda", "triton", "cupy", "torch")
+_DEFAULT_CUDA_PRIORITY = ("cuda", "triton", "torch")
 _COMPILE_CUDA_PRIORITIES = {
-    "sj_if": ("triton", "cuda", "cupy", "torch"),
-    "sj_lif": ("triton", "cuda", "cupy", "torch"),
-    "sj_plif": ("triton", "cuda", "cupy", "torch"),
-    "sj_qif": ("triton", "cuda", "cupy", "torch"),
-    "sj_eif": ("triton", "cuda", "cupy", "torch"),
-    "sj_izhikevich": ("triton", "cuda", "cupy", "torch"),
-    "sj_ilif": ("triton", "cuda", "cupy", "torch"),
-    "sj_activation_aware_if": ("triton", "cuda", "cupy", "torch"),
-    "sj_stbif": ("triton", "cuda", "cupy", "torch"),
+    "sj_if": ("triton", "cuda", "torch"),
+    "sj_lif": ("triton", "cuda", "torch"),
+    "sj_plif": ("triton", "cuda", "torch"),
+    "sj_qif": ("triton", "cuda", "torch"),
+    "sj_eif": ("triton", "cuda", "torch"),
+    "sj_izhikevich": ("triton", "cuda", "torch"),
+    "sj_ilif": ("triton", "cuda", "torch"),
+    "sj_activation_aware_if": ("triton", "cuda", "torch"),
+    "sj_stbif": ("triton", "cuda", "torch"),
 }
 
 
@@ -142,7 +142,7 @@ class _CudaSelection:
     def _select(self, index: int, *, execution: str = "eager"):
         if self._requested not in ("auto", *_DEFAULT_CUDA_PRIORITY):
             raise ValueError(
-                f"{self._environment_variable} must be auto, cuda, triton, cupy, or torch; "
+                f"{self._environment_variable} must be auto, cuda, triton, or torch; "
                 f"got {self._requested!r}"
             )
         if torch.version.hip:

@@ -7,17 +7,25 @@ from spikingjelly._ops.if_linear import if_linear
 from spikingjelly._ops.lif_linear import lif_linear
 
 
-try:
-    __import__("cupy")
-    _HAS_CUPY = True
-except (ImportError, OSError):
-    _HAS_CUPY = False
-
-
 pytestmark = pytest.mark.skipif(
-    not _HAS_CUPY or not torch.cuda.is_available(),
-    reason="requires cupy and CUDA",
+    not torch.cuda.is_available(),
+    reason="requires CUDA",
 )
+
+
+@pytest.fixture(params=["native", "reference"], autouse=True)
+def projection_execution(request, monkeypatch):
+    from spikingjelly._ops.if_linear import functional as if_ops
+    from spikingjelly._ops.lif_linear import functional as lif_ops
+    from spikingjelly._ops.native_loader import _native_available
+
+    packages = (if_ops, lif_ops)
+    for package in packages:
+        if request.param == "native":
+            if not _native_available(package.__package__, 0):
+                pytest.skip("native extension not built")
+        else:
+            monkeypatch.setattr(package, "_native_available", lambda *args: False)
 
 
 def _reference(

@@ -26,7 +26,7 @@ Modules: ```spikingjelly.activation_based.functional.neuron```,
 
 - All production neuron families now use registered CPU/CUDA operator dispatch.
   CPU runs the Torch reference; CUDA selects a compatible implementation once
-  per device from native CUDA, Triton, CuPy, then Torch. No neuron constructor,
+  per device from native CUDA, Triton, then Torch. No neuron constructor,
   module property, model config, or ```functional.set_backend``` exposes provider
   choice. ```functional.neuron_implementation``` reports the actual selection.
 - IF/LIF/PLIF Torch reference execution with low-precision state can now be
@@ -60,14 +60,14 @@ Modules: ```spikingjelly.activation_based.functional.neuron```,
   CUDA Graphs retain the implementation chosen before capture. Query the
   compiler binding with ```functional.neuron_implementation(..., execution="compile")```;
   strict diagnostic overrides apply to both paths.
-- QIF native CUDA and CuPy recurrences now match Torch's FP32 reciprocal rounding
+- QIF native CUDA recurrences now match Torch's FP32 reciprocal rounding
   for scalar time constants, preserving spikes at a low-precision threshold edge.
 - Ordinary CUDA backward uses the selected fused implementation. When a
   higher-order gradient graph is requested, the Torch reference equations are
   recomputed on CPU or CUDA so double backward remains available.
 - Operator sources are installed in the same SpikingJelly package as
   ```spikingjelly._ops```. Default PyPI wheels remain pure Python; optional native
-  CUDA builds use the local PyTorch/CUDA toolchain, while Triton and CuPy retain
+  CUDA builds use the local PyTorch/CUDA toolchain, while Triton retains
   JIT compilation.
 - Removed the legacy ```activation_based/cuda_kernel``` and
   ```activation_based/triton_kernel``` packages and the experimental neuron module.
@@ -101,18 +101,22 @@ Binary Spike Operators
 Modules: ``spikingjelly.activation_based.functional`` and
 ``spikingjelly.activation_based.layer``.
 
-- Added migrated binary Linear/convolution, fused IF/LIF-Linear, sparse/prepacked
+- Added fused IF/LIF-Linear, sparse/prepacked
   Linear, and spike packing interfaces backed by ``ops``. Existing operator
   implementations retain their device/dtype constraints; Torch-to-Triton support
   also resides in ``ops``.
 - Fused IF/LIF-Linear supports fullgraph compiled forward and backward with
   the seven built-in surrogates. Their IDs and alpha values are passed directly
   to the operator; custom surrogates retain the eager Python-derivative path.
-- Added ``layer.SpikeLinear`` and ``layer.SpikeConv1d/2d/3d``. Dense binary operators
-  save bool/packed inputs through autograd for repeated backward, and convolution
-  backward uses PyTorch's existing ATen operator without import-time native
-  compilation. GPU generated-kernel launches use PyTorch's current stream.
-- Registered flat spike packing supports CPU plus optional Triton/CuPy CUDA
+- Removed legacy ``layer.SpikeLinear``/``SpikeConv*``, functional ``spike_linear``/
+  ``spike_conv*``, their dense operator implementations and ``save_bool_spike_level``
+  (``SJ_SAVE_BOOL_SPIKE_LEVEL``). Use ordinary Torch layers with ``memopt``.
+- Removed all production CuPy providers, loaders, diagnostics choices and
+  ``cupy11``/``cupy12`` installation extras. Fused IF/LIF-Linear and packed/sparse
+  projection now use optional native CUDA extensions; without them, CUDA tensors
+  execute Torch reference equations. Native fused forward avoids materializing
+  intermediate spikes; reference execution does not promise this memory behavior.
+- Registered flat spike packing supports CPU plus optional Triton CUDA
   implementations, fake tensors and compilation. Decompression accepts an output
   dtype and defaults to uint8; row-packed and flat-packed layouts remain distinct.
 - Removed Auto CUDA's source translator, kernel-building DSL, generated-neuron
@@ -123,7 +127,7 @@ Modules: ``spikingjelly.activation_based.functional`` and
 - Removed the unused Auto CUDA settings ``cuda_threads``, ``cuda_compiler_options``,
   ``cuda_compiler_backend``, and ``save_spike_as_bool_in_neuron_kernel``, together
   with their ``SJ_*`` environment variables. Operator sources own their launch and
-  compilation settings; binary Linear/convolution retains ``save_bool_spike_level``.
+  compilation settings; ``memopt`` owns configurable activation compression.
 - Precision Triton kernels tune separately for physical layouts with CUDA Graph
   timing and reuse upstream 64-bit addressing fixes. SlidingPSN's gemm dtype
   regression and TD chunked-gradient rounding tolerances are synchronized with

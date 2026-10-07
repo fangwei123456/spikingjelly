@@ -81,7 +81,7 @@ def test_case_parser_rejects_removed_backend_option(tmp_path: Path):
                 "--steps",
                 "25",
                 "--neuron-backend",
-                "cupy",
+                "triton",
                 "--output",
                 str(tmp_path / "removed.json"),
             ]

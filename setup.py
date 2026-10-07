@@ -80,7 +80,15 @@ def _native_extensions():
                 "ops/_cuda.cuh",
                 "ops/cuda_surrogate.cuh",
             ],
-            extra_compile_args={"nvcc": ["-O3", "--fmad=false", *arch_flags]},
+            extra_compile_args={
+                "nvcc": [
+                    "-O3",
+                    "--use_fast_math"
+                    if source.parent.name in {"if_linear", "lif_linear", "spike_linear"}
+                    else "--fmad=false",
+                    *arch_flags,
+                ]
+            },
         )
         for source in sorted(Path("ops").glob("*/native.cu"))
     ], {"build_ext": NativeBuildExtension}

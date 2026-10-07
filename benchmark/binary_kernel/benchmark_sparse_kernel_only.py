@@ -7,7 +7,6 @@ import os
 import time
 from pathlib import Path
 
-import cupy
 import torch
 
 from spikingjelly._ops.spike_linear.sparse import sparse_linear
@@ -107,7 +106,6 @@ def main():
             "total_memory_bytes": properties.total_memory,
             "torch_version": torch.__version__,
             "cuda_version": torch.version.cuda,
-            "cupy_version": cupy.__version__,
             "tf32_matmul": torch.backends.cuda.matmul.allow_tf32,
             "warmup": args.warmup,
             "iterations": args.iters,

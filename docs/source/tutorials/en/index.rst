@@ -28,7 +28,6 @@
     :maxdepth: 1
     :caption: Advanced
 
-    /tutorials/en/cupy_neuron
     /tutorials/en/triton_backend
     /tutorials/en/flexsn
     /tutorials/en/memopt

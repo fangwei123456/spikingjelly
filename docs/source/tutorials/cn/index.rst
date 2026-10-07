@@ -28,7 +28,6 @@
     :maxdepth: 1
     :caption: 高级
 
-    /tutorials/cn/cupy_neuron
     /tutorials/cn/triton_backend
     /tutorials/cn/flexsn
     /tutorials/cn/memopt

@@ -50,8 +50,6 @@ classifiers = [
 license-files = ["LICENSE", "LICENSES/NOTICE"]
 
 [project.optional-dependencies]
-cupy11 = ["cupy-cuda11x"]
-cupy12 = ["cupy-cuda12x"]
 triton = ["triton>=3.2.0"]
 nir = ["nir>=1.0.7,<2", "nirtorch>=2.6,<2.7"]
 lightning = ["lightning", "jsonargparse[signatures]"]

@@ -26,7 +26,7 @@ FAMILIES = (
     "activation_aware_if",
     "stbif",
 )
-IMPLEMENTATIONS = ("triton", "cuda", "cupy", "torch")
+IMPLEMENTATIONS = ("triton", "cuda", "torch")
 
 
 def _priority(scores):

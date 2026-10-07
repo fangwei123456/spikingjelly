@@ -9,7 +9,6 @@ import pytest
 ENV_NAMES = (
     "SJ_MAX_THREADS_NUMBER_FOR_DATASETS_PREPROCESS",
     "SJ_SAVE_DATASETS_COMPRESSED",
-    "SJ_SAVE_BOOL_SPIKE_LEVEL",
     "SJ_TRITON_NEURON_KERNEL_STATIC_RANGE_MAX_T",
 )
 
@@ -20,7 +19,6 @@ from spikingjelly import configure
 print(json.dumps({
     "dataset_threads": configure.max_threads_number_for_datasets_preprocess,
     "compressed": configure.save_datasets_compressed,
-    "bool_spike_level": configure.save_bool_spike_level,
     "triton_static_T": configure.triton_neuron_kernel_static_range_max_T,
 }))
 """
@@ -46,7 +44,6 @@ def test_defaults_and_environment_overrides():
     assert json.loads(defaults.stdout) == {
         "dataset_threads": 16,
         "compressed": True,
-        "bool_spike_level": 0,
         "triton_static_T": 64,
     }
 
@@ -54,7 +51,6 @@ def test_defaults_and_environment_overrides():
         {
             "SJ_MAX_THREADS_NUMBER_FOR_DATASETS_PREPROCESS": "4",
             "SJ_SAVE_DATASETS_COMPRESSED": "0",
-            "SJ_SAVE_BOOL_SPIKE_LEVEL": "1",
             "SJ_TRITON_NEURON_KERNEL_STATIC_RANGE_MAX_T": "32",
         }
     )
@@ -62,7 +58,6 @@ def test_defaults_and_environment_overrides():
     assert json.loads(configured.stdout) == {
         "dataset_threads": 4,
         "compressed": False,
-        "bool_spike_level": 1,
         "triton_static_T": 32,
     }
 
@@ -94,7 +89,6 @@ def test_boolean_environment_requires_zero_or_one(value):
     [
         ("SJ_MAX_THREADS_NUMBER_FOR_DATASETS_PREPROCESS", "-1"),
         ("SJ_TRITON_NEURON_KERNEL_STATIC_RANGE_MAX_T", "0"),
-        ("SJ_SAVE_BOOL_SPIKE_LEVEL", "2"),
     ],
 )
 def test_invalid_environment_value_fails_at_import(name, value):

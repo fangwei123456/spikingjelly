@@ -2,25 +2,18 @@
 
 ``sparse_linear`` exposes a row-index sparse kernel and a cuBLAS fallback.
 The slower v3 kernel remains available only as a low-level custom op for
-pre-packed spike tensors. Both kernels require CUDA, CuPy, contiguous FP32,
-FP16, or BF16 tensors, and explicitly registered fake/autograd implementations.
+pre-packed spike tensors. Both kernels accept contiguous CUDA FP32,
+FP16, or BF16 tensors, with fake/autograd registrations. Missing native
+extensions use Torch reference execution.
 """
 
 from typing import Literal, Optional
 
 import torch
 
-from spikingjelly.logger import logger
 
-from .. import cuda_runtime as cuda_utils
-
-try:
-    import cupy
-    from cupy import RawModule
-except (ImportError, OSError) as e:
-    logger.info("Optional CuPy dependency unavailable: {}", e)
-    cupy = None
-
+from ..native_loader import _native_available
+from ..surrogate import _DTYPES
 
 __all__ = [
     "bit_pack_spike_dense",
@@ -29,350 +22,15 @@ __all__ = [
 
 
 # ----------------------------------------------------------------------
-# CUDA sources: bit-pack helper, low-level v3, and sparse v15
+# Projection validation and dtype contracts
 # ----------------------------------------------------------------------
 
-_BIT_PACK_SRC = r"""
-#include <cuda_fp16.h>
-#include <cuda_bf16.h>
-
-extern "C" __global__ void pack_kernel(
-    const void* __restrict__ S,
-    unsigned char* __restrict__ S_packed,
-    int M, int K, int K_PACKED, int dtype)
-{
-    int m = blockIdx.x;
-    if (m >= M) return;
-    for (int kp = threadIdx.x; kp < K_PACKED; kp += blockDim.x) {
-        unsigned char b = 0;
-        #pragma unroll
-        for (int i = 0; i < 8; i++) {
-            int k = kp * 8 + i;
-            int offset = m * K + k;
-            bool active = false;
-            if (k < K) {
-                if (dtype == 0) {
-                    active = static_cast<const float*>(S)[offset] > 0.5f;
-                } else if (dtype == 1) {
-                    active = __half2float(
-                        static_cast<const __half*>(S)[offset]) > 0.5f;
-                } else {
-                    active = __bfloat162float(
-                        static_cast<const __nv_bfloat16*>(S)[offset]) > 0.5f;
-                }
-            }
-            b |= ((unsigned char)active) << i;
-        }
-        S_packed[m * K_PACKED + kp] = b;
-    }
-}
-"""
-
-
-_CUDA_SRC = (
-    _BIT_PACK_SRC
-    + r"""
-#include <cuda_runtime.h>
-
-
-template <typename scalar_t>
-__device__ __forceinline__ float scalar_to_float(scalar_t value);
-
-template <>
-__device__ __forceinline__ float scalar_to_float<float>(float value)
-{
-    return value;
-}
-
-template <>
-__device__ __forceinline__ float scalar_to_float<__half>(__half value)
-{
-    return __half2float(value);
-}
-
-template <>
-__device__ __forceinline__ float scalar_to_float<__nv_bfloat16>(
-    __nv_bfloat16 value)
-{
-    return __bfloat162float(value);
-}
-
-
-template <typename scalar_t>
-__device__ __forceinline__ scalar_t float_to_scalar(float value);
-
-template <>
-__device__ __forceinline__ float float_to_scalar<float>(float value)
-{
-    return value;
-}
-
-template <>
-__device__ __forceinline__ __half float_to_scalar<__half>(float value)
-{
-    return __float2half_rn(value);
-}
-
-template <>
-__device__ __forceinline__ __nv_bfloat16 float_to_scalar<__nv_bfloat16>(
-    float value)
-{
-    return __float2bfloat16_rn(value);
-}
-
-
-// ====================================================================
-// v3: bit-packed dense GEMM with register tiling and shared-mem tile.
-// Block: (16, 8) = 128 threads, each computes TM=8 x TN=8 = 64 outputs.
-// Block tile: BM=64 rows, BN=128 cols, BK_PACKED=8 (=64 K values per
-// inner iter). Shared mem: 128*64*4 + 64*8 = 33KB (within 48KB limit).
-// ====================================================================
-
-#define TY_V3 8
-#define TX_V3 16
-#define TM_V3 8
-#define TN_V3 8
-#define BK_PACKED_V3 8
-#define BM_V3 (TY_V3 * TM_V3)
-#define BN_V3 (TX_V3 * TN_V3)
-
-template <typename scalar_t>
-__device__ __forceinline__ void spike_linear_v3_tiled(
-    const unsigned char* __restrict__ S_packed,
-    const scalar_t* __restrict__ W,
-    scalar_t* __restrict__ Y,
-    float* s_W,
-    unsigned char* s_S,
-    int M, int N, int K, int K_PACKED)
-{
-    int blocks_n = (N + BN_V3 - 1) / BN_V3;
-    int block_index = blockIdx.x;
-    int n0 = (block_index % blocks_n) * BN_V3;
-    int m0 = (block_index / blocks_n) * BM_V3;
-    int ty = threadIdx.y;
-    int tx = threadIdx.x;
-
-    float acc[TM_V3][TN_V3];
-    #pragma unroll
-    for (int i = 0; i < TM_V3; i++)
-        #pragma unroll
-        for (int j = 0; j < TN_V3; j++)
-            acc[i][j] = 0.0f;
-
-    int tid = ty * TX_V3 + tx;
-    int block_threads = TY_V3 * TX_V3;
-
-    for (int k_chunk = 0; k_chunk < K_PACKED; k_chunk += BK_PACKED_V3) {
-        int w_total = BN_V3 * BK_PACKED_V3 * 8;
-        for (int idx = tid; idx < w_total; idx += block_threads) {
-            int n_local = idx / (BK_PACKED_V3 * 8);
-            int kk = idx % (BK_PACKED_V3 * 8);
-            int n_global = n0 + n_local;
-            int k_global = k_chunk * 8 + kk;
-            float w = 0.0f;
-            if (n_global < N && k_global < K) {
-                w = scalar_to_float(W[n_global * K + k_global]);
-            }
-            s_W[n_local * BK_PACKED_V3 * 8 + kk] = w;
-        }
-
-        int s_total = BM_V3 * BK_PACKED_V3;
-        for (int idx = tid; idx < s_total; idx += block_threads) {
-            int m_local = idx / BK_PACKED_V3;
-            int kp_local = idx % BK_PACKED_V3;
-            int m_global = m0 + m_local;
-            int kp_global = k_chunk + kp_local;
-            unsigned char s = 0;
-            if (m_global < M && kp_global < K_PACKED) {
-                s = S_packed[m_global * K_PACKED + kp_global];
-            }
-            s_S[m_local * BK_PACKED_V3 + kp_local] = s;
-        }
-
-        __syncthreads();
-
-        #pragma unroll
-        for (int kp = 0; kp < BK_PACKED_V3; kp++) {
-            unsigned char s_bits[TM_V3];
-            float w_vals[TN_V3][8];
-            #pragma unroll
-            for (int i = 0; i < TM_V3; i++) {
-                s_bits[i] = s_S[(ty * TM_V3 + i) * BK_PACKED_V3 + kp];
-            }
-            #pragma unroll
-            for (int j = 0; j < TN_V3; j++) {
-                #pragma unroll
-                for (int i = 0; i < 8; i++) {
-                    w_vals[j][i] = s_W[
-                        (tx * TN_V3 + j) * BK_PACKED_V3 * 8 + kp * 8 + i
-                    ];
-                }
-            }
-            #pragma unroll
-            for (int i = 0; i < TM_V3; i++) {
-                #pragma unroll
-                for (int j = 0; j < TN_V3; j++) {
-                    #pragma unroll
-                    for (int b = 0; b < 8; b++) {
-                        acc[i][j] += w_vals[j][b] * (float)((s_bits[i] >> b) & 1);
-                    }
-                }
-            }
-        }
-        __syncthreads();
-    }
-
-    #pragma unroll
-    for (int i = 0; i < TM_V3; i++) {
-        int m_global = m0 + ty * TM_V3 + i;
-        if (m_global >= M) continue;
-        #pragma unroll
-        for (int j = 0; j < TN_V3; j++) {
-            int n_global = n0 + tx * TN_V3 + j;
-            if (n_global >= N) continue;
-            Y[m_global * N + n_global] = float_to_scalar<scalar_t>(acc[i][j]);
-        }
-    }
-}
-
-#define DEFINE_V3_KERNEL(name, scalar_t)                                      \
-extern "C" __global__ void name(                                             \
-    const unsigned char* S_packed, const scalar_t* W, scalar_t* Y,            \
-    int M, int N, int K, int K_PACKED)                                        \
-{                                                                              \
-    __shared__ float s_W[BN_V3 * BK_PACKED_V3 * 8];                           \
-    __shared__ unsigned char s_S[BM_V3 * BK_PACKED_V3];                       \
-    spike_linear_v3_tiled(S_packed, W, Y, s_W, s_S, M, N, K, K_PACKED);      \
-}
-
-DEFINE_V3_KERNEL(spike_linear_v3_tiled_kernel_fp32, float)
-DEFINE_V3_KERNEL(spike_linear_v3_tiled_kernel_fp16, __half)
-DEFINE_V3_KERNEL(spike_linear_v3_tiled_kernel_bf16, __nv_bfloat16)
-
-
-// ====================================================================
-// v15: per-row sparse indices + W transposed for coalesced reads.
-// The fixed-capacity [M, K] index workspace avoids data-dependent host
-// synchronization when allocating a compact CSR buffer.
-// ====================================================================
-
-template <typename scalar_t>
-__device__ __forceinline__ void spike_to_row_indices(
-    const scalar_t* __restrict__ S,
-    int* __restrict__ row_counts,
-    int* __restrict__ row_indices,
-    int M, int K)
-{
-    int m = blockIdx.x;
-    if (m >= M || threadIdx.x != 0) return;
-
-    int count = 0;
-    for (int k = 0; k < K; k++) {
-        if (scalar_to_float(S[m * K + k]) > 0.5f) {
-            row_indices[m * K + count] = k;
-            count++;
-        }
-    }
-    row_counts[m] = count;
-}
-
-#define DEFINE_INDEX_KERNEL(name, scalar_t)                                   \
-extern "C" __global__ void name(                                             \
-    const scalar_t* S, int* row_counts, int* row_indices, int M, int K)       \
-{                                                                              \
-    spike_to_row_indices(S, row_counts, row_indices, M, K);                   \
-}
-
-DEFINE_INDEX_KERNEL(spike_to_row_indices_kernel_fp32, float)
-DEFINE_INDEX_KERNEL(spike_to_row_indices_kernel_fp16, __half)
-DEFINE_INDEX_KERNEL(spike_to_row_indices_kernel_bf16, __nv_bfloat16)
-
-template <typename scalar_t>
-__device__ __forceinline__ void spike_linear_v15_sparse_wT(
-    const int* __restrict__ row_counts,
-    const int* __restrict__ row_indices,
-    const scalar_t* __restrict__ W_T,
-    scalar_t* __restrict__ Y,
-    int M, int N, int K)
-{
-    int blocks_n = (N + blockDim.x - 1) / blockDim.x;
-    int block_index = blockIdx.x;
-    int m = block_index / blocks_n;
-    if (m >= M) return;
-
-    int n = (block_index % blocks_n) * blockDim.x + threadIdx.x;
-    if (n >= N) return;
-
-    int row_nnz = row_counts[m];
-    float acc = 0.0f;
-    for (int j = 0; j < row_nnz; j++) {
-        int k = row_indices[m * K + j];
-        acc += scalar_to_float(W_T[k * N + n]);
-    }
-    Y[m * N + n] = float_to_scalar<scalar_t>(acc);
-}
-
-#define DEFINE_V15_KERNEL(name, scalar_t)                                     \
-extern "C" __global__ void name(                                             \
-    const int* row_counts, const int* row_indices,                            \
-    const scalar_t* W_T, scalar_t* Y, int M, int N, int K)                   \
-{                                                                              \
-    spike_linear_v15_sparse_wT(row_counts, row_indices, W_T, Y, M, N, K);    \
-}
-
-DEFINE_V15_KERNEL(spike_linear_v15_sparse_wT_kernel_fp32, float)
-DEFINE_V15_KERNEL(spike_linear_v15_sparse_wT_kernel_fp16, __half)
-DEFINE_V15_KERNEL(spike_linear_v15_sparse_wT_kernel_bf16, __nv_bfloat16)
-
-"""
-)
-
-
-# ----------------------------------------------------------------------
-# Module-level compile / cache
-# ----------------------------------------------------------------------
-
-_main_modules: dict[int, object] = {}
-_kernel_cache: dict[tuple[int, str], object] = {}
 _MAX_CUDA_ELEMENTS = 2**31 - 1
-_DTYPE_KERNEL_INFO = {
-    torch.float32: ("fp32", 0),
-    torch.float16: ("fp16", 1),
-    torch.bfloat16: ("bf16", 2),
-}
 
 
-def _get_main_module(device: int):
-    if cupy is None:
-        raise RuntimeError("cupy is required for CUDA SpikeLinear")
-    if device not in _main_modules:
-        with cuda_utils.DeviceEnvironment(device):
-            _main_modules[device] = RawModule(
-                code=_CUDA_SRC,
-                options=("--use_fast_math",),
-            )
-    return _main_modules[device]
-
-
-def _get_kernel(name: str, device: int):
-    key = (device, name)
-    if key not in _kernel_cache:
-        with cuda_utils.DeviceEnvironment(device):
-            _kernel_cache[key] = _get_main_module(device).get_function(name)
-    return _kernel_cache[key]
-
-
-def _launch(kernel, grid, block, args, device: int):
-    with cuda_utils.DeviceEnvironment(device):
-        stream = cupy.cuda.ExternalStream(torch.cuda.current_stream(device).cuda_stream)
-        kernel(grid, block, args, stream=stream)
-
-
-def _dtype_kernel_info(tensor: torch.Tensor, name: str) -> tuple[str, int]:
-    try:
-        return _DTYPE_KERNEL_INFO[tensor.dtype]
-    except KeyError as e:
-        raise TypeError(f"{name} must have dtype float32, float16, or bfloat16") from e
+def _check_dtype(tensor: torch.Tensor, name: str) -> None:
+    if tensor.dtype not in _DTYPES:
+        raise TypeError(f"{name} must have dtype float32, float16, or bfloat16")
 
 
 def _check_cuda_tensor(
@@ -445,7 +103,6 @@ def bit_pack_spike_dense(spike: torch.Tensor) -> torch.Tensor:
     :raises TypeError: ``spike`` 的 dtype 不受支持
     :raises ValueError: ``spike`` 不是二维、连续 CUDA 张量，或元素数超过
         CUDA kernel 的 ``int32`` 索引上限
-    :raises RuntimeError: 未安装 CuPy
 
     ----
 
@@ -466,11 +123,10 @@ def bit_pack_spike_dense(spike: torch.Tensor) -> torch.Tensor:
     :raises TypeError: If ``spike`` has an unsupported dtype
     :raises ValueError: If ``spike`` is not a two-dimensional contiguous CUDA
         tensor, or exceeds the CUDA kernel's ``int32`` indexing limit
-    :raises RuntimeError: If CuPy is unavailable
     """
     if spike.dim() != 2:
         raise ValueError("spike must be 2D")
-    _, dtype = _dtype_kernel_info(spike, "spike")
+    _check_dtype(spike, "spike")
     if not spike.is_cuda:
         raise ValueError("spike must be a CUDA tensor")
     if not spike.is_contiguous():
@@ -486,16 +142,15 @@ def bit_pack_spike_dense(spike: torch.Tensor) -> torch.Tensor:
     if M == 0 or K_PACKED == 0:
         return out
 
-    device = spike.get_device()
-    kernel = _get_kernel("pack_kernel", device)
-    _launch(
-        kernel,
-        (M,),
-        (min(K_PACKED, 256),),
-        (spike.data_ptr(), out.data_ptr(), M, K, K_PACKED, dtype),
-        device,
+    if _native_available(__package__, spike.get_device()):
+        return torch.ops.sj_spike_linear.kernel_pack_rows(spike)
+    values = torch.nn.functional.pad(spike > 0.5, (0, K_PACKED * 8 - K))
+    shifts = torch.arange(8, device=spike.device, dtype=torch.int64)
+    return (
+        (values.reshape(M, K_PACKED, 8).to(torch.int64) << shifts)
+        .sum(-1)
+        .to(torch.uint8)
     )
-    return out
 
 
 # ----------------------------------------------------------------------
@@ -503,20 +158,18 @@ def bit_pack_spike_dense(spike: torch.Tensor) -> torch.Tensor:
 # ----------------------------------------------------------------------
 
 
-@torch.library.custom_op(
-    "sj_spike_linear::cupy_spike_linear_v3_dense_forward", mutates_args=()
-)
-def cupy_spike_linear_v3_dense_forward(
+@torch.library.custom_op("sj_spike_linear::packed", mutates_args=())
+def _packed_forward(
     spike_packed: torch.Tensor,
     weight: torch.Tensor,
     bias: Optional[torch.Tensor],
 ) -> torch.Tensor:
     r"""
-    **API Language** - :ref:`中文 <cupy_spike_linear_v3_dense_forward-cn>` | :ref:`English <cupy_spike_linear_v3_dense_forward-en>`
+    **API Language** - :ref:`中文 <_packed_forward-cn>` | :ref:`English <_packed_forward-en>`
 
     ----
 
-    .. _cupy_spike_linear_v3_dense_forward-cn:
+    .. __packed_forward-cn:
 
     * **中文**
 
@@ -535,11 +188,10 @@ def cupy_spike_linear_v3_dense_forward(
     :rtype: torch.Tensor
     :raises TypeError: 输入 dtype 不满足约束
     :raises ValueError: 输入 shape、连续性、设备或元素数量不满足约束
-    :raises RuntimeError: 未安装 CuPy
 
     ----
 
-    .. _cupy_spike_linear_v3_dense_forward-en:
+    .. __packed_forward-en:
 
     * **English**
 
@@ -561,61 +213,42 @@ def cupy_spike_linear_v3_dense_forward(
     :raises TypeError: If an input dtype violates the contract
     :raises ValueError: If an input shape, layout, device, or element count
         violates the contract
-    :raises RuntimeError: If CuPy is unavailable
     """
-    if cupy is None:
-        raise RuntimeError("cupy is required for CUDA SpikeLinear")
     _check_cuda_tensor(spike_packed, "spike_packed", torch.uint8, 2)
     if weight.dim() != 2:
         raise ValueError("weight must be 2D")
     M, K_PACKED = spike_packed.shape
     N, K = weight.shape
-    dtype_suffix, _ = _dtype_kernel_info(weight, "weight")
+    _check_dtype(weight, "weight")
     _check_weight_bias(weight, bias, K, spike_packed.device, weight.dtype)
     if K_PACKED != (K + 7) // 8:
         raise ValueError("spike_packed.shape[1] must equal ceil(weight.shape[1] / 8)")
     if M * N > _MAX_CUDA_ELEMENTS:
         raise ValueError("output exceeds the CUDA kernel element limit")
 
-    Y = torch.empty((M, N), dtype=weight.dtype, device=spike_packed.device)
-    if M > 0 and N > 0:
-        if K == 0:
-            Y.zero_()
-        else:
-            device = spike_packed.get_device()
-            kernel = _get_kernel(f"spike_linear_v3_tiled_kernel_{dtype_suffix}", device)
-            gx = (N + 16 * 8 - 1) // (16 * 8)
-            gy = (M + 8 * 8 - 1) // (8 * 8)
-            _launch(
-                kernel,
-                (gx * gy,),
-                (16, 8),
-                (
-                    spike_packed.data_ptr(),
-                    weight.data_ptr(),
-                    Y.data_ptr(),
-                    M,
-                    N,
-                    K,
-                    K_PACKED,
-                ),
-                device,
-            )
-
+    if _native_available(__package__, weight.get_device()):
+        Y = torch.ops.sj_spike_linear.kernel_packed(spike_packed, weight)
+    else:
+        shifts = torch.arange(8, device=spike_packed.device, dtype=torch.uint8)
+        values = ((spike_packed.unsqueeze(-1) >> shifts) & 1).reshape(M, K_PACKED * 8)[
+            :, :K
+        ]
+        # The CUDA kernel accumulates in FP32, then casts before adding bias.
+        Y = (values.float() @ weight.float().t()).to(weight.dtype)
     if bias is not None:
         Y = Y + bias
     return Y
 
 
-@torch.library.register_fake("sj_spike_linear::cupy_spike_linear_v3_dense_forward")
-def _cupy_spike_linear_v3_dense_forward_fake(
+@torch.library.register_fake("sj_spike_linear::packed")
+def __packed_forward_fake(
     spike_packed: torch.Tensor,
     weight: torch.Tensor,
     bias: Optional[torch.Tensor],
 ) -> torch.Tensor:
     if spike_packed.dtype != torch.uint8:
         raise TypeError("spike_packed must have dtype uint8")
-    if weight.dtype not in _DTYPE_KERNEL_INFO:
+    if weight.dtype not in _DTYPES:
         raise TypeError("weight must have dtype float32, float16, or bfloat16")
     if weight.device != spike_packed.device:
         raise ValueError("spike_packed and weight must be on the same device")
@@ -661,7 +294,7 @@ def _v3_backward(ctx, grad_output):
 
 
 torch.library.register_autograd(
-    "sj_spike_linear::cupy_spike_linear_v3_dense_forward",
+    "sj_spike_linear::packed",
     _v3_backward,
     setup_context=_setup_v3_context,
 )
@@ -672,20 +305,18 @@ torch.library.register_autograd(
 # ----------------------------------------------------------------------
 
 
-@torch.library.custom_op(
-    "sj_spike_linear::cupy_spike_linear_sparse_forward", mutates_args=()
-)
-def cupy_spike_linear_sparse_forward(
+@torch.library.custom_op("sj_spike_linear::sparse", mutates_args=())
+def _sparse_forward(
     spike: torch.Tensor,
     weight: torch.Tensor,
     bias: Optional[torch.Tensor],
 ) -> torch.Tensor:
     r"""
-    **API Language** - :ref:`中文 <cupy_spike_linear_sparse_forward-cn>` | :ref:`English <cupy_spike_linear_sparse_forward-en>`
+    **API Language** - :ref:`中文 <_sparse_forward-cn>` | :ref:`English <_sparse_forward-en>`
 
     ----
 
-    .. _cupy_spike_linear_sparse_forward-cn:
+    .. __sparse_forward-cn:
 
     * **中文**
 
@@ -705,11 +336,10 @@ def cupy_spike_linear_sparse_forward(
     :rtype: torch.Tensor
     :raises TypeError: 输入 dtype 不满足约束
     :raises ValueError: 输入 shape、连续性、设备或元素数量不满足约束
-    :raises RuntimeError: 未安装 CuPy
 
     ----
 
-    .. _cupy_spike_linear_sparse_forward-en:
+    .. __sparse_forward-en:
 
     * **English**
 
@@ -734,11 +364,8 @@ def cupy_spike_linear_sparse_forward(
     :raises TypeError: If an input dtype violates the contract
     :raises ValueError: If an input shape, layout, device, or element count
         violates the contract
-    :raises RuntimeError: If CuPy is unavailable
     """
-    if cupy is None:
-        raise RuntimeError("cupy is required for CUDA SpikeLinear")
-    dtype_suffix, _ = _dtype_kernel_info(spike, "spike")
+    _check_dtype(spike, "spike")
     _check_cuda_tensor(spike, "spike", spike.dtype, 2)
     if weight.dim() != 2:
         raise ValueError("weight must be 2D")
@@ -750,62 +377,22 @@ def cupy_spike_linear_sparse_forward(
     if M * N > _MAX_CUDA_ELEMENTS:
         raise ValueError("output exceeds the CUDA kernel element limit")
 
-    Y = torch.empty((M, N), dtype=spike.dtype, device=spike.device)
-    if M > 0 and N > 0:
-        device = spike.get_device()
-        row_counts = torch.zeros(M, dtype=torch.int32, device=spike.device)
-        row_indices = torch.empty((M, K), dtype=torch.int32, device=spike.device)
-        if K > 0:
-            index_kernel = _get_kernel(
-                f"spike_to_row_indices_kernel_{dtype_suffix}", device
-            )
-            _launch(
-                index_kernel,
-                (M,),
-                (1,),
-                (
-                    spike.data_ptr(),
-                    row_counts.data_ptr(),
-                    row_indices.data_ptr(),
-                    M,
-                    K,
-                ),
-                device,
-            )
-
-        weight_t = weight.t().contiguous()
-        kernel = _get_kernel(
-            f"spike_linear_v15_sparse_wT_kernel_{dtype_suffix}", device
-        )
-        n_blocks = (N + 255) // 256
-        _launch(
-            kernel,
-            (M * n_blocks,),
-            (256, 1, 1),
-            (
-                row_counts.data_ptr(),
-                row_indices.data_ptr(),
-                weight_t.data_ptr(),
-                Y.data_ptr(),
-                M,
-                N,
-                K,
-            ),
-            device,
-        )
-
+    if _native_available(__package__, spike.get_device()):
+        Y = torch.ops.sj_spike_linear.kernel_sparse(spike, weight)
+    else:
+        Y = ((spike > 0.5).float() @ weight.float().t()).to(spike.dtype)
     if bias is not None:
         Y = Y + bias
     return Y
 
 
-@torch.library.register_fake("sj_spike_linear::cupy_spike_linear_sparse_forward")
-def _cupy_spike_linear_sparse_forward_fake(
+@torch.library.register_fake("sj_spike_linear::sparse")
+def __sparse_forward_fake(
     spike: torch.Tensor,
     weight: torch.Tensor,
     bias: Optional[torch.Tensor],
 ) -> torch.Tensor:
-    if spike.dtype not in _DTYPE_KERNEL_INFO:
+    if spike.dtype not in _DTYPES:
         raise TypeError("spike must have dtype float32, float16, or bfloat16")
     if weight.dtype != spike.dtype:
         raise TypeError("spike and weight must have the same dtype")
@@ -847,7 +434,7 @@ def _v15_backward(ctx, grad_output):
 
 
 torch.library.register_autograd(
-    "sj_spike_linear::cupy_spike_linear_sparse_forward",
+    "sj_spike_linear::sparse",
     _v15_backward,
     setup_context=_setup_v15_context,
 )
@@ -893,7 +480,6 @@ def sparse_linear(
     :rtype: torch.Tensor
     :raises ValueError: ``strategy`` 未知，或稀疏策略的 shape、设备、元素数量不满足约束
     :raises TypeError: 稀疏策略的 dtype 不满足约束
-    :raises RuntimeError: 稀疏策略下未安装 CuPy
 
     ----
 
@@ -926,7 +512,6 @@ def sparse_linear(
     :raises ValueError: If ``strategy`` is unknown, or a sparse input shape,
         device, or element count violates the contract
     :raises TypeError: If a sparse input dtype violates the contract
-    :raises RuntimeError: If CuPy is unavailable for the sparse strategy
     """
     if strategy not in ("torch", "sparse"):
         raise ValueError(
@@ -934,7 +519,7 @@ def sparse_linear(
         )
     if strategy == "torch":
         return torch.nn.functional.linear(spike, weight, bias)
-    return cupy_spike_linear_sparse_forward(
+    return _sparse_forward(
         spike.contiguous(),
         weight.contiguous(),
         None if bias is None else bias.contiguous(),
@@ -943,7 +528,7 @@ def sparse_linear(
 
 @torch.library.register_fake("sj_spike_linear::pack_rows")
 def _pack_rows_fake(spike):
-    _dtype_kernel_info(spike, "spike")
+    _check_dtype(spike, "spike")
     torch._check(spike.ndim == 2, lambda: "spike must be 2D")
     torch._check(spike.device.type in ("cuda", "meta"), lambda: "spike must be CUDA")
     torch._check(spike.is_contiguous(), lambda: "spike must be contiguous")

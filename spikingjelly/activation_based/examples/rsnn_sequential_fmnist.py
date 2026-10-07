@@ -62,7 +62,7 @@ class FeedBackNet(nn.Module):
 
 
 def main():
-    # python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt adam -lr 0.001 -j 8 -model plain
+    # python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt adam -lr 0.001 -j 8 -model plain
     parser = argparse.ArgumentParser(description="Classify Sequential Fashion-MNIST")
     parser.add_argument(
         "-model",

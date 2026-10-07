@@ -329,7 +329,7 @@ def main():
         "--neuron", choices=("lif", "if", "plif", "izhikevich"), default="lif"
     )
     parser.add_argument(
-        "--implementation", choices=("triton", "cuda", "cupy"), default="triton"
+        "--implementation", choices=("triton", "cuda"), default="triton"
     )
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument(

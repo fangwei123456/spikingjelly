@@ -22,8 +22,7 @@ class SResNetTrainer(train_classify.Trainer):
 
     - 数据预处理：将 ``[N, C, H, W]`` 形状的输入扩展为 ``[T, N, C, H, W]`` ，其中 ``T`` 为总时间步数。
     - 模型输出处理：将 ``T`` 个时间步的输出沿时间维取均值，作为最终的预测结果（发放率）。
-    - 模型加载：支持从 :mod:`spiking_resnet` 加载多种脉冲 ResNet 模型，并可选择 CuPy 后端加速。
-    - 额外命令行参数：添加了 ``--T`` （时间步数）和 ``--cupy`` （是否使用 CuPy 后端）参数。
+    - 模型加载：支持从 :mod:`spiking_resnet` 加载多种脉冲 ResNet 模型，并自动选择兼容的 GPU 实现。
 
     ----
 

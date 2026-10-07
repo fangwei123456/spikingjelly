@@ -19,9 +19,9 @@ Neuron modules select execution from the tensor device. CPU uses the Torch
 reference; CUDA uses the registered operator and caches a compatible
 implementation per device and execution path. Known GPU architectures use offline
 priorities per neuron family; unknown architectures retain native CUDA → Triton →
-CuPy → Torch. Runtime selection never profiles candidates. Normal model construction
+Torch. Runtime selection never profiles candidates. Normal model construction
 has no backend argument.
-Inductor expansion has a separate cache and prefers Triton → native CUDA → CuPy
+Inductor expansion has a separate cache and prefers Triton → native CUDA
 → Torch. The existing eager and expansion entries choose the cache; ordinary
 calls do not check `is_compiling()`. Raw CUDA Graphs retain the warmed eager
 choice, while graphs captured from compiled functions retain the compiled choice.
@@ -64,7 +64,7 @@ treated as interchangeable evidence. Benchmark JSON records the actual selected
 implementation where applicable.
 
 To recalibrate priorities, run each of the nine families with each of `cuda`,
-`triton`, `cupy`, and `torch` in three separate process rounds. Alternate candidate
+`triton`, and `torch` in three separate process rounds. Alternate candidate
 order between rounds, pin the same idle CPU core with `taskset`, and use an idle
 GPU. Each invocation validates outputs and first gradients against Torch before
 measuring warmed, synchronized complete eager calls:
@@ -81,7 +81,7 @@ The default matrix uses FP32 state, FP32/FP16/BF16 inputs, ATan where applicable
 and four T/N sizes: 1/512, 4/32768, 16/32768, and 4/2097152. Training receives
 two-thirds of the score, inference one-third; inference-only families use forward
 only. Scores are weighted geometric means with equal dtype/size weights. Within
-5%, prefer Triton, then native CUDA, CuPy, and Torch. Publish a priority only when
+5%, prefer Triton, then native CUDA and Torch. Publish a priority only when
 all three rounds give the same order. An inconclusive result leaves the previous
 order in place. Preserve raw samples, environment and source hashes with the
 summary. This measures steady-state eager execution; first-load/JIT costs are

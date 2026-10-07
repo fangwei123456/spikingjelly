@@ -1,11 +1,28 @@
 import importlib.util
 import json
 import re
+from functools import cache
 from pathlib import Path
 
 import torch
 
+from spikingjelly.logger import logger
+
 from . import _NATIVE_ABI
+
+
+@cache
+def _native_available(package: str, index: int) -> bool:
+    try:
+        info = _load_native(package)
+        _check_native_device(info, index)
+    except (ImportError, OSError) as error:
+        logger.info(
+            "{} native CUDA unavailable; using Torch reference: {}", package, error
+        )
+        return False
+    logger.info("{} device=cuda:{} implementation=native-cuda", package, index)
+    return True
 
 
 def _load_native(package: str) -> dict:

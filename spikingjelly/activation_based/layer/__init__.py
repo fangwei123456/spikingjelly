@@ -5,5 +5,3 @@ from .dropout import *
 from .misc import *
 from .online_learning import *
 from .stateless_wrapper import *
-
-from .spike import *

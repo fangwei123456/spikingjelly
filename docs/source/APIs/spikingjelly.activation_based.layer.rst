@@ -400,5 +400,3 @@ Binary Spike Layers / 二值脉冲层
 ++++++++++++++++++++++++++++++++
 
 .. toctree::
-
-   spike <spikingjelly.activation_based.layer.spike>

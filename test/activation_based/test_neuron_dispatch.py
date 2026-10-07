@@ -60,7 +60,7 @@ def test_import_registers_all_families_without_loading_cuda_providers():
                 )
             assert not any(
                 package + "." + provider in sys.modules
-                for provider in ("native", "triton", "cupy")
+                for provider in ("native", "triton")
             )
         assert not torch.cuda.is_initialized()
     """)
@@ -222,7 +222,7 @@ def test_compiler_cache_distinguishes_cuda_implementations(tmp_path):
         calls = []
         original_call = torch._ops.OpOverload.__call__
         def observe(op, *args, **kwargs):
-            if op.name() in ("sj_lif::native_forward", "sj_lif::cupy_forward"):
+            if op.name() in ("sj_lif::native_forward",):
                 calls.append(op.name())
             return original_call(op, *args, **kwargs)
         with patch.object(torch._ops.OpOverload, "__call__", observe):
@@ -233,15 +233,13 @@ def test_compiler_cache_distinguishes_cuda_implementations(tmp_path):
             torch.autograd.grad(reference[0].sum() + reference[1].sum(), (x, v)),
         )
         assert torch.compiler.config.cache_key_tag.startswith("caller-tag")
-        if provider == "cupy":
-            assert calls == ["sj_lif::cupy_forward"], calls
-        elif provider == "cuda":
+        if provider == "cuda":
             assert calls == ["sj_lif::native_forward"], calls
         else:
             assert not calls, calls
         print(provider, "correct compiled provider", flush=True)
     """)
-    for provider in ("cuda", "cupy", "triton", "cuda", "cupy"):
+    for provider in ("cuda", "triton", "cuda"):
         result = subprocess.run(
             [sys.executable, "-c", code],
             env={

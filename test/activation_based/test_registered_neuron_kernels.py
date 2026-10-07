@@ -5,7 +5,6 @@ import os
 import subprocess
 import sys
 import textwrap
-from pathlib import Path
 
 import pytest
 import torch
@@ -418,20 +417,14 @@ def test_separate_cuda_selections_in_fresh_process():
     choices = {
         "if": "triton",
         "lif": "cuda",
-        "plif": "cupy",
+        "plif": "triton",
         "qif": "cuda",
         "eif": "triton",
-        "izhikevich": "cupy",
+        "izhikevich": "triton",
         "ilif": "cuda",
         "activation_aware_if": "triton",
-        "stbif": "cupy",
+        "stbif": "triton",
     }
-    from torch.utils.cpp_extension import CUDA_HOME
-
-    if not (Path(CUDA_HOME or "") / "include/cuda_bf16.h").is_file():
-        choices = {
-            kind: provider for kind, provider in choices.items() if provider != "cupy"
-        }
     code = """
         import torch
         from spikingjelly.activation_based import functional, surrogate
@@ -622,39 +615,6 @@ def test_common_neuron_modes_use_registered_entry(
     _assert_gradients(actual, expected, (x, v, w) if kind == "plif" else (x, v))
     assert calls == [dtype]
     assert actual[0].dtype == dtype
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="NVIDIA CUDA unavailable")
-@pytest.mark.parametrize("layout", ["contiguous", "channels_last", "broadcast"])
-def test_compiled_cupy_plif_keeps_initial_state_and_parameter_gradient(layout):
-    from torch.utils.cpp_extension import CUDA_HOME
-    from pathlib import Path
-
-    if CUDA_HOME is None or not (Path(CUDA_HOME) / "include/cuda_bf16.h").is_file():
-        pytest.skip("CuPy neuron compilation needs CUDA toolkit headers")
-    pytest.importorskip("cupy")
-    from spikingjelly._ops.plif.cupy import _forward
-    from spikingjelly._ops.plif.reference import _forward_impl
-
-    torch.manual_seed(753)
-    source = torch.rand(4, 2, 3, 2, 8, device="cuda")
-    if layout == "channels_last":
-        source = source.transpose(2, 4)
-    elif layout == "broadcast":
-        source = source[:1].expand_as(source)
-    source.requires_grad_()
-    v = torch.full(source.shape[1:], 0.17, device="cuda", requires_grad=True)
-    w = torch.tensor(-0.3, device="cuda", requires_grad=True)
-    parameters = (source, v, w, True, 0.7, 0.2, False, 2.0, True, 1)
-    expected = _forward_impl(*parameters)
-    actual = torch.compile(_forward, fullgraph=True)(*parameters)
-    torch.testing.assert_close(actual[:2], expected[:2])
-    grads = torch.autograd.grad(actual[0].sum() + actual[1].sum(), (source, v, w))
-    reference_grads = torch.autograd.grad(
-        expected[0].sum() + expected[1].sum(), (source, v, w)
-    )
-    torch.testing.assert_close(grads, reference_grads, rtol=1e-4, atol=1e-5)
-    assert reference_grads[-1].abs() > 0
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

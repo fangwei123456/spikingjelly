@@ -8,24 +8,34 @@ a pre-packed uint8 spike tensor.
 import pytest
 import torch
 
-try:
-    __import__("cupy")
-    _HAS_CUPY = True
-except (ImportError, OSError):
-    _HAS_CUPY = False
 
 from spikingjelly._ops.spike_linear.sparse import (
     bit_pack_spike_dense,
-    cupy_spike_linear_sparse_forward,
-    cupy_spike_linear_v3_dense_forward,
+    _sparse_forward,
+    _packed_forward,
     sparse_linear,
 )
 
 
 pytestmark = pytest.mark.skipif(
-    not _HAS_CUPY or not torch.cuda.is_available(),
-    reason="requires cupy and CUDA",
+    not torch.cuda.is_available(),
+    reason="requires CUDA",
 )
+
+
+@pytest.fixture(params=["native", "reference"], autouse=True)
+def projection_execution(request, monkeypatch):
+    from spikingjelly._ops.spike_linear import sparse as spike_ops
+    from spikingjelly._ops.native_loader import _native_available
+
+    packages = (spike_ops,)
+    for package in packages:
+        if request.param == "native":
+            if not _native_available(package.__package__, 0):
+                pytest.skip("native extension not built")
+        else:
+            monkeypatch.setattr(package, "_native_available", lambda *args: False)
+
 
 _DTYPES = (torch.float32, torch.float16, torch.bfloat16)
 
@@ -107,21 +117,19 @@ def test_custom_ops_validate_input_contracts():
     with pytest.raises(TypeError, match="float32, float16, or bfloat16"):
         bit_pack_spike_dense(torch.zeros(4, 16, dtype=torch.int32, device="cuda"))
     with pytest.raises(TypeError, match="same dtype"):
-        cupy_spike_linear_sparse_forward(s.half(), W, None)
+        _sparse_forward(s.half(), W, None)
     with pytest.raises(TypeError, match="float32, float16, or bfloat16"):
-        cupy_spike_linear_v3_dense_forward(
+        _packed_forward(
             torch.zeros(4, 2, dtype=torch.uint8, device="cuda"),
             W.to(torch.int32),
             None,
         )
     with pytest.raises(ValueError, match=r"weight\.shape"):
-        cupy_spike_linear_sparse_forward(s, W[:, :-1].contiguous(), None)
+        _sparse_forward(s, W[:, :-1].contiguous(), None)
     with pytest.raises(ValueError, match="contiguous"):
-        cupy_spike_linear_sparse_forward(s[:, ::2], W[:, ::2], None)
+        _sparse_forward(s[:, ::2], W[:, ::2], None)
     with pytest.raises(ValueError, match=r"packed\.shape"):
-        cupy_spike_linear_v3_dense_forward(
-            torch.zeros(4, 1, dtype=torch.uint8, device="cuda"), W, None
-        )
+        _packed_forward(torch.zeros(4, 1, dtype=torch.uint8, device="cuda"), W, None)
 
 
 def test_nondefault_stream():
@@ -150,7 +158,7 @@ def test_noncurrent_cuda_device():
 
     W_other = torch.randn(16, 64, dtype=dtype, device="cuda:0")
     with pytest.raises(ValueError, match="same CUDA device"):
-        cupy_spike_linear_sparse_forward(s, W_other, None)
+        _sparse_forward(s, W_other, None)
 
 
 @pytest.mark.parametrize("M,K,N", [(0, 8, 4), (4, 8, 0), (4, 0, 8)])
@@ -167,14 +175,14 @@ def test_flattened_grid_exceeds_legacy_y_limit():
     N = 256 * 65_535 + 1
     s = torch.empty(1, 0, device="cuda")
     W = torch.empty(N, 0, device="cuda")
-    y = cupy_spike_linear_sparse_forward(s, W, None)
+    y = _sparse_forward(s, W, None)
     assert y.shape == (1, N)
     assert torch.count_nonzero(y).item() == 0
 
     M = 64 * 65_535 + 1
     packed = torch.zeros(M, 1, dtype=torch.uint8, device="cuda")
     W = torch.zeros(1, 1, device="cuda")
-    y = cupy_spike_linear_v3_dense_forward(packed, W, None)
+    y = _packed_forward(packed, W, None)
     assert y.shape == (M, 1)
     assert torch.count_nonzero(y).item() == 0
 
@@ -211,7 +219,7 @@ def test_v3_takes_prepacked_input(dtype):
     b_ref = b.detach().clone().requires_grad_()
     packed = bit_pack_spike_dense(s)
     y_ref = torch.nn.functional.linear(s, W_ref, b_ref)
-    y_v3 = cupy_spike_linear_v3_dense_forward(packed, W, b)
+    y_v3 = _packed_forward(packed, W, b)
     assert y_v3.dtype == dtype
     _assert_close(y_v3, y_ref)
 
@@ -232,8 +240,8 @@ def test_v3_user_packs_repeated_calls():
     y_ref2 = torch.nn.functional.linear(s, W2)
 
     packed = bit_pack_spike_dense(s)
-    y1 = cupy_spike_linear_v3_dense_forward(packed, W1, None)
-    y2 = cupy_spike_linear_v3_dense_forward(packed, W2, None)
+    y1 = _packed_forward(packed, W1, None)
+    y2 = _packed_forward(packed, W2, None)
     torch.testing.assert_close(y1, y_ref1, rtol=1e-4, atol=1e-5)
     torch.testing.assert_close(y2, y_ref2, rtol=1e-4, atol=1e-5)
 
@@ -261,14 +269,10 @@ def test_fake_tensor_shape():
     s_meta = torch.randn(M, K, dtype=dtype, device="meta")
     packed_meta = torch.empty(M, (K + 7) // 8, dtype=torch.uint8, device="meta")
     W_meta = torch.randn(N, K, dtype=dtype, device="meta")
-    y_meta = torch.ops.sj_spike_linear.cupy_spike_linear_v3_dense_forward(
-        packed_meta, W_meta, None
-    )
+    y_meta = torch.ops.sj_spike_linear.packed(packed_meta, W_meta, None)
     assert y_meta.shape == (M, N)
     assert y_meta.dtype == dtype
-    y_meta = torch.ops.sj_spike_linear.cupy_spike_linear_sparse_forward(
-        s_meta, W_meta, None
-    )
+    y_meta = torch.ops.sj_spike_linear.sparse(s_meta, W_meta, None)
     assert y_meta.shape == (M, N)
     assert y_meta.dtype == dtype
 
@@ -284,20 +288,14 @@ def test_fake_tensor_input_contracts():
         weight_cpu = torch.empty(N, K, device="cpu")
         bias_cpu = torch.empty(N, device="cpu")
         with pytest.raises(ValueError, match="same device"):
-            torch.ops.sj_spike_linear.cupy_spike_linear_sparse_forward(
-                spike_cuda0, weight_cpu, None
-            )
+            torch.ops.sj_spike_linear.sparse(spike_cuda0, weight_cpu, None)
         with pytest.raises(ValueError, match="same device"):
-            torch.ops.sj_spike_linear.cupy_spike_linear_v3_dense_forward(
-                packed_cuda0, weight_cpu, None
-            )
+            torch.ops.sj_spike_linear.packed(packed_cuda0, weight_cpu, None)
         with pytest.raises(ValueError, match="same device"):
-            torch.ops.sj_spike_linear.cupy_spike_linear_sparse_forward(
-                spike_cuda0, weight_cuda0, bias_cpu
-            )
+            torch.ops.sj_spike_linear.sparse(spike_cuda0, weight_cuda0, bias_cpu)
 
     with pytest.raises(TypeError, match="float32, float16, or bfloat16"):
-        torch.ops.sj_spike_linear.cupy_spike_linear_sparse_forward(
+        torch.ops.sj_spike_linear.sparse(
             torch.empty(M, K, dtype=torch.int32, device="meta"),
             torch.empty(N, K, dtype=torch.int32, device="meta"),
             None,
@@ -313,7 +311,7 @@ def test_v3_via_torch_compile():
     W = torch.randn(N, K, dtype=dtype, device="cuda")
 
     def f(packed, W):
-        return cupy_spike_linear_v3_dense_forward(packed, W, None)
+        return _packed_forward(packed, W, None)
 
     explanation = torch._dynamo.explain(f)(packed, W)
     assert explanation.graph_count == 1

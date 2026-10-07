@@ -214,7 +214,6 @@ def _gpu_uuid():
 
 
 def main():
-    import cupy
 
     started_at = datetime.now(timezone.utc).isoformat()
     parser = argparse.ArgumentParser()
@@ -385,7 +384,6 @@ def main():
             "compute_capability": f"{properties.major}.{properties.minor}",
             "torch_version": torch.__version__,
             "cuda_version": torch.version.cuda,
-            "cupy_version": cupy.__version__,
             "dtype": str(x.dtype),
             "float32_matmul_precision": torch.get_float32_matmul_precision(),
             "tf32_matmul": torch.backends.cuda.matmul.allow_tf32,

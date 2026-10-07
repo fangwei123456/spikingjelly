@@ -5,8 +5,8 @@ Neuron modules select execution from the input tensor's device. CPU uses the
 Torch reference implementation. CUDA calls a registered PyTorch operator, which
 selects and caches compatible implementations per device and execution path.
 Eager uses offline priorities per neuron family and GPU compute capability;
-unknown devices retain native CUDA, Triton, CuPy, then Torch. Inductor expansion
-prefers Triton, native CUDA, CuPy, then Torch in a separate cache. Eager calls do
+unknown devices retain native CUDA, Triton, then Torch. Inductor expansion
+prefers Triton, native CUDA, then Torch in a separate cache. Eager calls do
 not check compilation mode. CUDA Graphs retain the warmed choice of the function
 being captured. Selection never runs online profiling.
 
@@ -42,7 +42,7 @@ also raised rather than hidden by fallback. Restart the process after changing
 these variables.
 
 Operator sources are kept in the repository-root ``ops/`` tree and installed
-inside the SpikingJelly package as ``spikingjelly._ops``. Triton and CuPy retain
-their JIT compilation and caches. The optional native CUDA implementation is
+inside the SpikingJelly package as ``spikingjelly._ops``. Triton retains
+its JIT compilation and caches. The optional native CUDA implementation is
 built locally when the matching PyTorch/CUDA toolchain is available; regular
 PyPI wheels remain pure Python.

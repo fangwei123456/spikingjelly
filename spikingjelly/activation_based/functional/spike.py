@@ -1,15 +1,10 @@
-from typing import Literal, Optional, Union
+from typing import Literal, Optional
 
 import torch
-from torch.nn import functional as F
 
 from .. import surrogate
 
 __all__ = [
-    "spike_linear",
-    "spike_conv1d",
-    "spike_conv2d",
-    "spike_conv3d",
     "bit_spike_compress",
     "bit_spike_decompress",
     "bit_pack_spike_dense",
@@ -18,300 +13,6 @@ __all__ = [
     "if_linear",
     "lif_linear",
 ]
-
-
-def _spatial_parameters(value, dimensions):
-    return list(value) if isinstance(value, (tuple, list)) else [value] * dimensions
-
-
-def spike_linear(
-    spike: torch.Tensor, weight: torch.Tensor, bias: Optional[torch.Tensor] = None
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <registered-spike_linear-cn>` | :ref:`English <registered-spike_linear-en>`
-
-    ----
-
-    .. _registered-spike_linear-cn:
-
-    * **中文**
-
-    执行已注册的二值 Linear/卷积，数值运算由 PyTorch 分发至 CPU 或 CUDA（cuBLAS/cuDNN）。反向通过 save_for_backward 保存二值输入；configure.save_bool_spike_level=1 使用位压缩，否则使用 bool。支持一阶梯度及重复反向，不在导入或运行时编译原生扩展。输入必须为 0/1；不进行会同步设备的数值检查。dtype/shape/device 约束遵循对应 PyTorch 运算。
-
-    :param spike: 二值（0/1）输入；支持非连续张量，按行打包与 sparse 策略要求连续二维 CUDA FP32/FP16/BF16。
-    :type spike: torch.Tensor
-    :param weight: 与输入同设备的权重；Linear 形状 [N, K]，卷积形状遵循对应 PyTorch conv。
-    :type weight: torch.Tensor
-    :param bias: 同设备可选 [N] 偏置；None 不加偏置。 默认 ``None``.
-    :type bias: Optional[torch.Tensor]
-    :return: 与 PyTorch 对应运算一致的输出形状、dtype 和 device。
-    :rtype: torch.Tensor
-    :raises RuntimeError: 张量约束无效、所需实现不可用或算子执行失败。
-
-    ----
-
-    .. _registered-spike_linear-en:
-
-    * **English**
-
-    Run registered binary Linear/convolution with arithmetic dispatched by PyTorch to CPU or CUDA (cuBLAS/cuDNN). Backward saves binary inputs with save_for_backward; configure.save_bool_spike_level=1 bit-packs them, otherwise bool storage is used. Supports first-order and repeated backward without compiling native extensions at import or runtime. Inputs must be 0/1; values are not checked to avoid device synchronization. Dtype/shape/device constraints follow the corresponding PyTorch operation.
-
-    :param spike: Binary (0/1) input; noncontiguous tensors are supported except row packing and sparse strategy, which require contiguous 2D CUDA FP32/FP16/BF16.
-    :type spike: torch.Tensor
-    :param weight: Weight on the input device; [N, K] for Linear, or the corresponding PyTorch conv shape.
-    :type weight: torch.Tensor
-    :param bias: Optional [N] bias on the input device; None omits bias. Default: ``None``.
-    :type bias: Optional[torch.Tensor]
-    :return: Output shape, dtype, and device matching the corresponding PyTorch operation.
-    :rtype: torch.Tensor
-    :raises RuntimeError: Invalid tensor constraints, unavailable implementation, or execution failure.
-    """
-    from ..._ops.spike_linear.dense import _linear
-
-    return _linear(spike, weight, bias)
-
-
-def spike_conv1d(
-    spike: torch.Tensor,
-    weight: torch.Tensor,
-    bias: Optional[torch.Tensor] = None,
-    stride: Union[int, tuple[int, ...]] = 1,
-    padding: Union[str, int, tuple[int, ...]] = 0,
-    dilation: Union[int, tuple[int, ...]] = 1,
-    groups: int = 1,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <registered-spike_conv1d-cn>` | :ref:`English <registered-spike_conv1d-en>`
-
-    ----
-
-    .. _registered-spike_conv1d-cn:
-
-    * **中文**
-
-    执行已注册的二值 Linear/卷积，数值运算由 PyTorch 分发至 CPU 或 CUDA（cuBLAS/cuDNN）。反向通过 save_for_backward 保存二值输入；configure.save_bool_spike_level=1 使用位压缩，否则使用 bool。支持一阶梯度及重复反向，不在导入或运行时编译原生扩展。输入必须为 0/1；不进行会同步设备的数值检查。dtype/shape/device 约束遵循对应 PyTorch 运算。
-
-    :param spike: CPU/CUDA 二值（0/1）输入，支持 3 维 batch 或 2 维无 batch 张量及非连续存储；dtype 遵循 PyTorch conv1d。
-    :type spike: torch.Tensor
-    :param weight: 与输入同设备的卷积权重 ``[out_channels, in_channels/groups, *kernel_size]``。
-    :type weight: torch.Tensor
-    :param bias: 同设备可选 [N] 偏置；None 不加偏置。 默认 ``None``.
-    :type bias: Optional[torch.Tensor]
-    :param stride: 正步幅，遵循 PyTorch conv 语义。 默认 ``1``.
-    :type stride: Union[int, tuple[int, ...]]
-    :param padding: 非负填充或 same/valid；字符串填充直接使用 PyTorch。 默认 ``0``.
-    :type padding: Union[str, int, tuple[int, ...]]
-    :param dilation: 正膨胀率，遵循 PyTorch conv 语义。 默认 ``1``.
-    :type dilation: Union[int, tuple[int, ...]]
-    :param groups: 正分组数，整除输入和输出通道数。 默认 ``1``.
-    :type groups: int
-    :return: 与 PyTorch 对应运算一致的输出形状、dtype 和 device。
-    :rtype: torch.Tensor
-    :raises RuntimeError: 张量约束无效、所需实现不可用或算子执行失败。
-
-    ----
-
-    .. _registered-spike_conv1d-en:
-
-    * **English**
-
-    Run registered binary Linear/convolution with arithmetic dispatched by PyTorch to CPU or CUDA (cuBLAS/cuDNN). Backward saves binary inputs with save_for_backward; configure.save_bool_spike_level=1 bit-packs them, otherwise bool storage is used. Supports first-order and repeated backward without compiling native extensions at import or runtime. Inputs must be 0/1; values are not checked to avoid device synchronization. Dtype/shape/device constraints follow the corresponding PyTorch operation.
-
-    :param spike: CPU/CUDA binary (0/1) input, with 3 batched or 2 unbatched dimensions; noncontiguous storage is supported. Dtype follows PyTorch conv1d.
-    :type spike: torch.Tensor
-    :param weight: Convolution weight ``[out_channels, in_channels/groups, *kernel_size]`` on the input device.
-    :type weight: torch.Tensor
-    :param bias: Optional [N] bias on the input device; None omits bias. Default: ``None``.
-    :type bias: Optional[torch.Tensor]
-    :param stride: Positive stride, following PyTorch conv semantics. Default: ``1``.
-    :type stride: Union[int, tuple[int, ...]]
-    :param padding: Nonnegative padding or same/valid; string padding directly uses PyTorch. Default: ``0``.
-    :type padding: Union[str, int, tuple[int, ...]]
-    :param dilation: Positive dilation, following PyTorch conv semantics. Default: ``1``.
-    :type dilation: Union[int, tuple[int, ...]]
-    :param groups: Positive group count dividing input and output channel counts. Default: ``1``.
-    :type groups: int
-    :return: Output shape, dtype, and device matching the corresponding PyTorch operation.
-    :rtype: torch.Tensor
-    :raises RuntimeError: Invalid tensor constraints, unavailable implementation, or execution failure.
-    """
-    from ..._ops.spike_conv import _convolution
-
-    if isinstance(padding, str):
-        return F.conv1d(spike, weight, bias, stride, padding, dilation, groups)
-    unbatched = spike.ndim == 2
-    result = _convolution(
-        spike.unsqueeze(0) if unbatched else spike,
-        weight,
-        bias,
-        _spatial_parameters(stride, 1),
-        _spatial_parameters(padding, 1),
-        _spatial_parameters(dilation, 1),
-        groups,
-    )
-    return result.squeeze(0) if unbatched else result
-
-
-def spike_conv2d(
-    spike: torch.Tensor,
-    weight: torch.Tensor,
-    bias: Optional[torch.Tensor] = None,
-    stride: Union[int, tuple[int, ...]] = 1,
-    padding: Union[str, int, tuple[int, ...]] = 0,
-    dilation: Union[int, tuple[int, ...]] = 1,
-    groups: int = 1,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <registered-spike_conv2d-cn>` | :ref:`English <registered-spike_conv2d-en>`
-
-    ----
-
-    .. _registered-spike_conv2d-cn:
-
-    * **中文**
-
-    执行已注册的二值 Linear/卷积，数值运算由 PyTorch 分发至 CPU 或 CUDA（cuBLAS/cuDNN）。反向通过 save_for_backward 保存二值输入；configure.save_bool_spike_level=1 使用位压缩，否则使用 bool。支持一阶梯度及重复反向，不在导入或运行时编译原生扩展。输入必须为 0/1；不进行会同步设备的数值检查。dtype/shape/device 约束遵循对应 PyTorch 运算。
-
-    :param spike: CPU/CUDA 二值（0/1）输入，支持 4 维 batch 或 3 维无 batch 张量及非连续存储；dtype 遵循 PyTorch conv2d。
-    :type spike: torch.Tensor
-    :param weight: 与输入同设备的卷积权重 ``[out_channels, in_channels/groups, *kernel_size]``。
-    :type weight: torch.Tensor
-    :param bias: 同设备可选 [N] 偏置；None 不加偏置。 默认 ``None``.
-    :type bias: Optional[torch.Tensor]
-    :param stride: 正步幅，遵循 PyTorch conv 语义。 默认 ``1``.
-    :type stride: Union[int, tuple[int, ...]]
-    :param padding: 非负填充或 same/valid；字符串填充直接使用 PyTorch。 默认 ``0``.
-    :type padding: Union[str, int, tuple[int, ...]]
-    :param dilation: 正膨胀率，遵循 PyTorch conv 语义。 默认 ``1``.
-    :type dilation: Union[int, tuple[int, ...]]
-    :param groups: 正分组数，整除输入和输出通道数。 默认 ``1``.
-    :type groups: int
-    :return: 与 PyTorch 对应运算一致的输出形状、dtype 和 device。
-    :rtype: torch.Tensor
-    :raises RuntimeError: 张量约束无效、所需实现不可用或算子执行失败。
-
-    ----
-
-    .. _registered-spike_conv2d-en:
-
-    * **English**
-
-    Run registered binary Linear/convolution with arithmetic dispatched by PyTorch to CPU or CUDA (cuBLAS/cuDNN). Backward saves binary inputs with save_for_backward; configure.save_bool_spike_level=1 bit-packs them, otherwise bool storage is used. Supports first-order and repeated backward without compiling native extensions at import or runtime. Inputs must be 0/1; values are not checked to avoid device synchronization. Dtype/shape/device constraints follow the corresponding PyTorch operation.
-
-    :param spike: CPU/CUDA binary (0/1) input, with 4 batched or 3 unbatched dimensions; noncontiguous storage is supported. Dtype follows PyTorch conv2d.
-    :type spike: torch.Tensor
-    :param weight: Convolution weight ``[out_channels, in_channels/groups, *kernel_size]`` on the input device.
-    :type weight: torch.Tensor
-    :param bias: Optional [N] bias on the input device; None omits bias. Default: ``None``.
-    :type bias: Optional[torch.Tensor]
-    :param stride: Positive stride, following PyTorch conv semantics. Default: ``1``.
-    :type stride: Union[int, tuple[int, ...]]
-    :param padding: Nonnegative padding or same/valid; string padding directly uses PyTorch. Default: ``0``.
-    :type padding: Union[str, int, tuple[int, ...]]
-    :param dilation: Positive dilation, following PyTorch conv semantics. Default: ``1``.
-    :type dilation: Union[int, tuple[int, ...]]
-    :param groups: Positive group count dividing input and output channel counts. Default: ``1``.
-    :type groups: int
-    :return: Output shape, dtype, and device matching the corresponding PyTorch operation.
-    :rtype: torch.Tensor
-    :raises RuntimeError: Invalid tensor constraints, unavailable implementation, or execution failure.
-    """
-    from ..._ops.spike_conv import _convolution
-
-    if isinstance(padding, str):
-        return F.conv2d(spike, weight, bias, stride, padding, dilation, groups)
-    unbatched = spike.ndim == 3
-    result = _convolution(
-        spike.unsqueeze(0) if unbatched else spike,
-        weight,
-        bias,
-        _spatial_parameters(stride, 2),
-        _spatial_parameters(padding, 2),
-        _spatial_parameters(dilation, 2),
-        groups,
-    )
-    return result.squeeze(0) if unbatched else result
-
-
-def spike_conv3d(
-    spike: torch.Tensor,
-    weight: torch.Tensor,
-    bias: Optional[torch.Tensor] = None,
-    stride: Union[int, tuple[int, ...]] = 1,
-    padding: Union[str, int, tuple[int, ...]] = 0,
-    dilation: Union[int, tuple[int, ...]] = 1,
-    groups: int = 1,
-) -> torch.Tensor:
-    r"""
-    **API Language** - :ref:`中文 <registered-spike_conv3d-cn>` | :ref:`English <registered-spike_conv3d-en>`
-
-    ----
-
-    .. _registered-spike_conv3d-cn:
-
-    * **中文**
-
-    执行已注册的二值 Linear/卷积，数值运算由 PyTorch 分发至 CPU 或 CUDA（cuBLAS/cuDNN）。反向通过 save_for_backward 保存二值输入；configure.save_bool_spike_level=1 使用位压缩，否则使用 bool。支持一阶梯度及重复反向，不在导入或运行时编译原生扩展。输入必须为 0/1；不进行会同步设备的数值检查。dtype/shape/device 约束遵循对应 PyTorch 运算。
-
-    :param spike: CPU/CUDA 二值（0/1）输入，支持 5 维 batch 或 4 维无 batch 张量及非连续存储；dtype 遵循 PyTorch conv3d。
-    :type spike: torch.Tensor
-    :param weight: 与输入同设备的卷积权重 ``[out_channels, in_channels/groups, *kernel_size]``。
-    :type weight: torch.Tensor
-    :param bias: 同设备可选 [N] 偏置；None 不加偏置。 默认 ``None``.
-    :type bias: Optional[torch.Tensor]
-    :param stride: 正步幅，遵循 PyTorch conv 语义。 默认 ``1``.
-    :type stride: Union[int, tuple[int, ...]]
-    :param padding: 非负填充或 same/valid；字符串填充直接使用 PyTorch。 默认 ``0``.
-    :type padding: Union[str, int, tuple[int, ...]]
-    :param dilation: 正膨胀率，遵循 PyTorch conv 语义。 默认 ``1``.
-    :type dilation: Union[int, tuple[int, ...]]
-    :param groups: 正分组数，整除输入和输出通道数。 默认 ``1``.
-    :type groups: int
-    :return: 与 PyTorch 对应运算一致的输出形状、dtype 和 device。
-    :rtype: torch.Tensor
-    :raises RuntimeError: 张量约束无效、所需实现不可用或算子执行失败。
-
-    ----
-
-    .. _registered-spike_conv3d-en:
-
-    * **English**
-
-    Run registered binary Linear/convolution with arithmetic dispatched by PyTorch to CPU or CUDA (cuBLAS/cuDNN). Backward saves binary inputs with save_for_backward; configure.save_bool_spike_level=1 bit-packs them, otherwise bool storage is used. Supports first-order and repeated backward without compiling native extensions at import or runtime. Inputs must be 0/1; values are not checked to avoid device synchronization. Dtype/shape/device constraints follow the corresponding PyTorch operation.
-
-    :param spike: CPU/CUDA binary (0/1) input, with 5 batched or 4 unbatched dimensions; noncontiguous storage is supported. Dtype follows PyTorch conv3d.
-    :type spike: torch.Tensor
-    :param weight: Convolution weight ``[out_channels, in_channels/groups, *kernel_size]`` on the input device.
-    :type weight: torch.Tensor
-    :param bias: Optional [N] bias on the input device; None omits bias. Default: ``None``.
-    :type bias: Optional[torch.Tensor]
-    :param stride: Positive stride, following PyTorch conv semantics. Default: ``1``.
-    :type stride: Union[int, tuple[int, ...]]
-    :param padding: Nonnegative padding or same/valid; string padding directly uses PyTorch. Default: ``0``.
-    :type padding: Union[str, int, tuple[int, ...]]
-    :param dilation: Positive dilation, following PyTorch conv semantics. Default: ``1``.
-    :type dilation: Union[int, tuple[int, ...]]
-    :param groups: Positive group count dividing input and output channel counts. Default: ``1``.
-    :type groups: int
-    :return: Output shape, dtype, and device matching the corresponding PyTorch operation.
-    :rtype: torch.Tensor
-    :raises RuntimeError: Invalid tensor constraints, unavailable implementation, or execution failure.
-    """
-    from ..._ops.spike_conv import _convolution
-
-    if isinstance(padding, str):
-        return F.conv3d(spike, weight, bias, stride, padding, dilation, groups)
-    unbatched = spike.ndim == 4
-    result = _convolution(
-        spike.unsqueeze(0) if unbatched else spike,
-        weight,
-        bias,
-        _spatial_parameters(stride, 3),
-        _spatial_parameters(padding, 3),
-        _spatial_parameters(dilation, 3),
-        groups,
-    )
-    return result.squeeze(0) if unbatched else result
 
 
 def bit_spike_compress(spike: torch.Tensor) -> torch.Tensor:
@@ -324,7 +25,7 @@ def bit_spike_compress(spike: torch.Tensor) -> torch.Tensor:
 
     * **中文**
 
-    执行无梯度的二值位打包或解压；每字节最低位对应最早输入，尾部补零。普通压缩支持 CPU/CUDA 任意形状；按行打包仅支持 CuPy CUDA。
+    将任意形状的二值输入按最低位优先打包为一维 uint8；尾部补零。CPU 使用 Torch，CUDA 自动选择 Triton/Torch。没有梯度。
 
     :param spike: 二值（0/1）输入；支持非连续张量，按行打包与 sparse 策略要求连续二维 CUDA FP32/FP16/BF16。
     :type spike: torch.Tensor
@@ -338,7 +39,7 @@ def bit_spike_compress(spike: torch.Tensor) -> torch.Tensor:
 
     * **English**
 
-    Perform nondifferentiable binary packing or unpacking, least-significant bit first with zero-padded tails. Flat packing supports arbitrary CPU/CUDA shapes; row packing requires CuPy CUDA.
+    Pack binary input of any shape into flat uint8, least-significant-bit first with zero-padded tails. CPU uses Torch; CUDA selects Triton/Torch. This operation is nondifferentiable.
 
     :param spike: Binary (0/1) input; noncontiguous tensors are supported except row packing and sparse strategy, which require contiguous 2D CUDA FP32/FP16/BF16.
     :type spike: torch.Tensor
@@ -363,7 +64,7 @@ def bit_spike_decompress(
 
     * **中文**
 
-    执行无梯度的二值位打包或解压；每字节最低位对应最早输入，尾部补零。普通压缩支持 CPU/CUDA 任意形状；按行打包仅支持 CuPy CUDA。
+    将一维位打包输入解压，恢复指定 shape 和 dtype；设备保持不变。CPU 使用 Torch，CUDA 自动选择 Triton/Torch。
 
     :param packed: 同设备 uint8 打包数据；解压要求一维，packed Linear 要求 [M, ceil(K/8)] 连续二维 CUDA 数据。
     :type packed: torch.Tensor
@@ -381,7 +82,7 @@ def bit_spike_decompress(
 
     * **English**
 
-    Perform nondifferentiable binary packing or unpacking, least-significant bit first with zero-padded tails. Flat packing supports arbitrary CPU/CUDA shapes; row packing requires CuPy CUDA.
+    Unpack flat packed bits into the requested shape and dtype on the same device. CPU uses Torch; CUDA selects Triton/Torch.
 
     :param packed: Packed uint8 data; decompression requires 1D input, packed Linear requires contiguous 2D CUDA [M, ceil(K/8)] data.
     :type packed: torch.Tensor
@@ -408,7 +109,7 @@ def bit_pack_spike_dense(spike: torch.Tensor) -> torch.Tensor:
 
     * **中文**
 
-    执行无梯度的二值位打包或解压；每字节最低位对应最早输入，尾部补零。普通压缩支持 CPU/CUDA 任意形状；按行打包仅支持 CuPy CUDA。
+    将连续二维 CUDA FP32/FP16/BF16 二值输入逐行打包为 uint8，各行尾部单独补零。原生扩展可用时执行 CUDA kernel，否则使用 Torch。没有梯度。
 
     :param spike: 二值（0/1）输入；支持非连续张量，按行打包与 sparse 策略要求连续二维 CUDA FP32/FP16/BF16。
     :type spike: torch.Tensor
@@ -424,7 +125,7 @@ def bit_pack_spike_dense(spike: torch.Tensor) -> torch.Tensor:
 
     * **English**
 
-    Perform nondifferentiable binary packing or unpacking, least-significant bit first with zero-padded tails. Flat packing supports arbitrary CPU/CUDA shapes; row packing requires CuPy CUDA.
+    Pack contiguous 2D CUDA FP32/FP16/BF16 binary input into uint8 rows, padding each row independently. Use a native CUDA kernel when built, otherwise Torch. This operation is nondifferentiable.
 
     :param spike: Binary (0/1) input; noncontiguous tensors are supported except row packing and sparse strategy, which require contiguous 2D CUDA FP32/FP16/BF16.
     :type spike: torch.Tensor
@@ -451,7 +152,7 @@ def packed_spike_linear(
 
     * **中文**
 
-    执行迁入 ops 的二值 Linear 实现。CuPy kernel 支持 CUDA FP32/FP16/BF16；torch 策略遵循 PyTorch。打包输入仅对权重/偏置可微，sparse 策略支持输入梯度。
+    对逐行打包的二值输入执行 Linear，支持 CUDA FP32/FP16/BF16 权重。原生扩展不可用时使用 Torch 参考路径。仅权重和偏置可微。
 
     :param packed: 同设备 uint8 打包数据；解压要求一维，packed Linear 要求 [M, ceil(K/8)] 连续二维 CUDA 数据。
     :type packed: torch.Tensor
@@ -471,7 +172,7 @@ def packed_spike_linear(
 
     * **English**
 
-    Run migrated binary Linear implementations in ops. CuPy kernels support CUDA FP32/FP16/BF16; torch strategy follows PyTorch. Packed input permits weight/bias gradients only; sparse strategy also supports input gradients.
+    Apply Linear to row-packed binary input with CUDA FP32/FP16/BF16 weights. Use Torch reference execution when the native extension is unavailable. Only weights and bias are differentiable.
 
     :param packed: Packed uint8 data; decompression requires 1D input, packed Linear requires contiguous 2D CUDA [M, ceil(K/8)] data.
     :type packed: torch.Tensor
@@ -485,9 +186,9 @@ def packed_spike_linear(
     :raises TypeError: Unsupported dtype.
     :raises RuntimeError: Invalid tensor constraints, unavailable implementation, or execution failure.
     """
-    from ..._ops.spike_linear.sparse import cupy_spike_linear_v3_dense_forward
+    from ..._ops.spike_linear.sparse import _packed_forward
 
-    return cupy_spike_linear_v3_dense_forward(packed, weight, bias)
+    return _packed_forward(packed, weight, bias)
 
 
 def sparse_linear(
@@ -505,7 +206,7 @@ def sparse_linear(
 
     * **中文**
 
-    执行迁入 ops 的二值 Linear 实现。CuPy kernel 支持 CUDA FP32/FP16/BF16；torch 策略遵循 PyTorch。打包输入仅对权重/偏置可微，sparse 策略支持输入梯度。
+    对未打包的二值输入执行 Linear。torch 策略调用 PyTorch；sparse 策略使用原生 CUDA 稀疏 kernel，未构建时使用 Torch 参考路径。支持输入、权重及偏置梯度。
 
     :param spike: 二值（0/1）输入；支持非连续张量，按行打包与 sparse 策略要求连续二维 CUDA FP32/FP16/BF16。
     :type spike: torch.Tensor
@@ -513,7 +214,7 @@ def sparse_linear(
     :type weight: torch.Tensor
     :param bias: 同设备可选 [N] 偏置；None 不加偏置。 默认 ``None``.
     :type bias: Optional[torch.Tensor]
-    :param strategy: torch 直接调用 PyTorch Linear；sparse 使用 CuPy CUDA 稀疏 kernel。 默认 ``'torch'``.
+    :param strategy: torch 直接调用 PyTorch Linear；sparse 使用原生 CUDA 或 Torch 参考路径。 默认 ``'torch'``.
     :type strategy: Literal['torch', 'sparse']
     :return: 同设备、同权重 dtype 的 Linear 输出，最后一维为 N。
     :rtype: torch.Tensor
@@ -527,7 +228,7 @@ def sparse_linear(
 
     * **English**
 
-    Run migrated binary Linear implementations in ops. CuPy kernels support CUDA FP32/FP16/BF16; torch strategy follows PyTorch. Packed input permits weight/bias gradients only; sparse strategy also supports input gradients.
+    Apply Linear to unpacked binary input. The torch strategy calls PyTorch; sparse uses the native sparse CUDA kernel, with Torch reference execution when not built. Input, weight and bias gradients are supported.
 
     :param spike: Binary (0/1) input; noncontiguous tensors are supported except row packing and sparse strategy, which require contiguous 2D CUDA FP32/FP16/BF16.
     :type spike: torch.Tensor
@@ -535,7 +236,7 @@ def sparse_linear(
     :type weight: torch.Tensor
     :param bias: Optional [N] bias on the input device; None omits bias. Default: ``None``.
     :type bias: Optional[torch.Tensor]
-    :param strategy: torch directly calls PyTorch Linear; sparse uses the CuPy CUDA sparse kernel. Default: ``'torch'``.
+    :param strategy: torch directly calls PyTorch Linear; sparse uses native CUDA or Torch reference execution. Default: ``'torch'``.
     :type strategy: Literal['torch', 'sparse']
     :return: Linear output on the same device and in the weight dtype, with last dimension N.
     :rtype: torch.Tensor
@@ -569,7 +270,7 @@ def if_linear(
 
     * **中文**
 
-    执行已注册的 CuPy IF/LIF 后接 Linear 融合算子，不物化中间脉冲。保持输入与初态，返回输出及最终电位。支持一阶梯度，反向重新计算脉冲。
+    执行 IF/LIF 后接 Linear；已构建的原生 CUDA 融合前向不物化中间脉冲，未构建时使用 Torch 参考路径。保持输入与初态，返回输出及最终电位。支持一阶梯度，反向重新计算脉冲。
 
     :param x: CUDA FP32 输入 [M, K] 或 [T, M, K]，维度非空；支持非连续存储，在入口转为连续。
     :type x: torch.Tensor
@@ -601,7 +302,7 @@ def if_linear(
 
     * **English**
 
-    Run registered CuPy fused IF/LIF followed by Linear without materializing intermediate spikes. Preserve inputs and initial state; return output and final voltage. Supports first-order gradients by recomputing spikes in backward.
+    Run IF/LIF followed by Linear. The built native CUDA fused forward avoids intermediate spikes; without the extension, use Torch reference execution. Preserve inputs and initial state; return output and final voltage. Supports first-order gradients by recomputing spikes in backward.
 
     :param x: CUDA FP32 input [M, K] or [T, M, K], with nonempty dimensions; noncontiguous storage is made contiguous at entry.
     :type x: torch.Tensor
@@ -666,7 +367,7 @@ def lif_linear(
 
     * **中文**
 
-    执行已注册的 CuPy IF/LIF 后接 Linear 融合算子，不物化中间脉冲。保持输入与初态，返回输出及最终电位。支持一阶梯度，反向重新计算脉冲。
+    执行 IF/LIF 后接 Linear；已构建的原生 CUDA 融合前向不物化中间脉冲，未构建时使用 Torch 参考路径。保持输入与初态，返回输出及最终电位。支持一阶梯度，反向重新计算脉冲。
 
     :param x: CUDA FP32 输入 [M, K] 或 [T, M, K]，维度非空；支持非连续存储，在入口转为连续。
     :type x: torch.Tensor
@@ -702,7 +403,7 @@ def lif_linear(
 
     * **English**
 
-    Run registered CuPy fused IF/LIF followed by Linear without materializing intermediate spikes. Preserve inputs and initial state; return output and final voltage. Supports first-order gradients by recomputing spikes in backward.
+    Run IF/LIF followed by Linear. The built native CUDA fused forward avoids intermediate spikes; without the extension, use Torch reference execution. Preserve inputs and initial state; return output and final voltage. Supports first-order gradients by recomputing spikes in backward.
 
     :param x: CUDA FP32 input [M, K] or [T, M, K], with nonempty dimensions; noncontiguous storage is made contiguous at entry.
     :type x: torch.Tensor
