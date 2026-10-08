@@ -145,8 +145,8 @@ def main() -> None:
             "loop_seconds": loop_seconds,
             "automatic_implementation": (
                 functional.neuron_implementation("stbif", device)["implementation"]
-                if device.type == "cuda"
-                else "torch"
+                if device.type == "cuda" and x_seq.dtype == torch.float32
+                else "torch-reference"
             ),
             "automatic_seconds": automatic_seconds,
             "automatic_speedup_vs_loop": _safe_speedup(loop_seconds, automatic_seconds),

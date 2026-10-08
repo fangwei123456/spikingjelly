@@ -5,6 +5,7 @@ import csv
 import hashlib
 import importlib
 import importlib.metadata
+import importlib.util
 from functools import wraps
 import json
 import os

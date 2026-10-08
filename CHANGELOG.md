@@ -11,6 +11,12 @@ and the archived documentation linked from the project README.
 
 ### Fixes
 
+- Binary neuron projection benchmarks use the correct IF surrogate argument and
+  reference method key; layout and SpikeZIP benchmark artifacts report the
+  reference implementation used with low-precision membrane state.
+- ActivationAwareIF avoids allocating unused channel indices for scalar
+  threshold/offset parameters on the Torch path.
+
 - Multi-step IF/LIF/PLIF modules record voltage trajectories through the same
   sequence operator used without trajectories, preserving initial-state and
   parameter gradients.

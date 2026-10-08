@@ -68,14 +68,16 @@ def test_cpu_scan_is_visible_to_fullgraph_compile():
 
 
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
-def test_multi_input_output_and_state_counts(device):
+@pytest.mark.parametrize("detach_first_output", [False, True])
+def test_multi_input_output_and_state_counts(device, detach_first_output):
     if device == "cuda" and not torch.cuda.is_available():
         pytest.skip("CUDA required")
 
     def core(x, y, v, w, scale):
         v_next = v + x
         w_next = w + y * scale
-        return x + y, x - y, v_next, w_next
+        output = (x + y).detach() if detach_first_output else x + y
+        return output, x - y, v_next, w_next
 
     scale = torch.nn.Parameter(torch.tensor(2.0, device=device))
     module = FlexSN(core, 2, (scale,), store_state_seqs=True)
@@ -85,7 +87,9 @@ def test_multi_input_output_and_state_counts(device):
     w0 = torch.randn(2, device=device, requires_grad=True)
     module.states = (v0, w0)
     outputs = module(x, y)
-    expected = (x + y, x - y)
+    if device == "cuda":
+        assert module._triton_handle is not None
+    expected = ((x + y).detach() if detach_first_output else x + y, x - y)
     traces = (v0 + x.cumsum(0), w0 + (y * scale).cumsum(0))
     for got, want in zip(outputs, expected, strict=True):
         torch.testing.assert_close(got, want)

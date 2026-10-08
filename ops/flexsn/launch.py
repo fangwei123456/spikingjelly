@@ -66,22 +66,9 @@ def _inference_final_state(f, info: _FlexSNInfo, *args) -> tuple:
     dtype = x_example.dtype
     output_seqs = [torch.empty_like(x_example) for _ in range(info.num_outputs)]
     init_states = args[info.num_inputs : info.num_inputs + info.num_states]
-    final_states = [
-        init_states[i].new_empty(init_states[i].shape)
-        if i < len(init_states)
-        else x_example.new_empty(x_example.shape[1:])
-        for i in range(info.num_states)
-    ]
     if T == 0:
-        final_states = [
-            (
-                init_states[i].clone()
-                if i < len(init_states)
-                else x_example.new_zeros(x_example.shape[1:])
-            )
-            for i in range(info.num_states)
-        ]
-        return (*output_seqs, *final_states)
+        return (*output_seqs, *(state.clone() for state in init_states))
+    final_states = [state.new_empty(state.shape) for state in init_states]
     grid = _make_grid(NCL)
 
     f[grid](

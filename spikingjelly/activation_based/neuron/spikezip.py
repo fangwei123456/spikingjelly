@@ -186,23 +186,6 @@ class STBIFNode(base.MemoryModule):
         )
         return (out_seq,), (q, acc_q, cur_output)
 
-    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
-        states = self.materialize_states(
-            (x_seq, *args), tuple(self._memories.values()), "m"
-        )
-        out_seq, q, acc_q, cur_output = functional.stbif_multi_step(
-            x_seq,
-            states[0],
-            states[1],
-            self.q_threshold,
-            self.pos_max,
-            self.neg_min,
-        )
-        self.q = q
-        self.acc_q = acc_q
-        self.cur_output = cur_output
-        return out_seq
-
     @property
     def accumulated(self) -> torch.Tensor:
         if self.acc_q is None:

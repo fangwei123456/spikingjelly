@@ -10,36 +10,12 @@ def step(x, v, threshold, offset, reset, surrogate_function, detach):
     return spike, voltage(h, spike, threshold, reset, detach)
 
 
-def multi_step(
-    x_seq,
-    v,
-    threshold,
-    offset,
-    reset,
-    surrogate_function,
-    detach,
-    store_v_seq=False,
-):
-    outputs, voltages = [], []
-    for x in x_seq:
-        spike, v = step(x, v, threshold, offset, reset, surrogate_function, detach)
-        outputs.append(spike)
-        if store_v_seq:
-            voltages.append(v)
-    return torch.stack(outputs), torch.stack(voltages) if store_v_seq else v
-
-
 def _forward_impl(x_seq, v, threshold, offset, channels, inner, reset, store_v_seq):
     _check(x_seq, v, threshold, offset, channels, inner, reset, store_v_seq)
-    if channels <= 0 or inner <= 0 or v.numel() % (channels * inner):
-        raise ValueError(
-            "channel dimensions must be positive and divide the state size"
-        )
-    if threshold.numel() not in (1, channels) or offset.numel() not in (1, channels):
-        raise ValueError("threshold and offset must be scalar or match channel count")
-    indices = (
-        torch.arange(v.numel(), device=x_seq.device) // inner % channels
-    ).reshape(v.shape)
+    if threshold.numel() > 1 or offset.numel() > 1:
+        indices = (
+            torch.arange(v.numel(), device=x_seq.device) // inner % channels
+        ).reshape(v.shape)
     threshold = (
         threshold.reshape(-1)[indices]
         if threshold.numel() > 1

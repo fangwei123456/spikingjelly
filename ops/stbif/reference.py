@@ -17,14 +17,6 @@ def step(x, q, acc_q, q_threshold, pos_max, neg_min):
     return current * q_threshold, q, acc_q, current
 
 
-def multi_step(x_seq, q, acc_q, cur_output, q_threshold, pos_max, neg_min):
-    outputs = []
-    for x in x_seq:
-        output, q, acc_q, cur_output = step(x, q, acc_q, q_threshold, pos_max, neg_min)
-        outputs.append(output)
-    return torch.stack(outputs), q, acc_q, cur_output
-
-
 def _forward_impl(x_seq, q, acc_q, q_threshold, pos_max, neg_min):
     _check(x_seq, q, acc_q, q_threshold, pos_max, neg_min)
     outputs = []

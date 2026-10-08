@@ -17,9 +17,10 @@ def _forward_impl(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     _check(x, v, threshold, offset, channels, inner, reset, store_v_seq)
     outputs, voltages = ([], [])
-    indices = (torch.arange(v.numel(), device=x.device) // inner % channels).reshape(
-        v.shape
-    )
+    if threshold.numel() > 1 or offset.numel() > 1:
+        indices = (
+            torch.arange(v.numel(), device=x.device) // inner % channels
+        ).reshape(v.shape)
     threshold = (
         threshold.reshape(-1)[indices]
         if threshold.numel() > 1

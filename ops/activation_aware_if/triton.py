@@ -38,7 +38,6 @@ def _kernel(
     else:
         off = tl.load(OFF + c, mask, 0.0)
     v = tl.load(V + n, mask, 0)
-    cur = tl.full((BLOCK,), 0.0, tl.float32)
     reset = tl.cast(reset, tl.float32)
     for t in range(T):
         i = t.to(tl.int64) * N + n

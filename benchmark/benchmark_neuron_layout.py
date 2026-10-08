@@ -138,9 +138,11 @@ def main():
         "torch": torch.__version__,
         "cuda": torch.version.cuda,
         "gpu": torch.cuda.get_device_name(),
-        "neuron_implementation": functional.neuron_implementation(
-            "lif", torch.device("cuda")
-        ),
+        # All workloads above use FP16 input-following membrane state.
+        "neuron_implementation": {
+            "implementation": "torch-reference",
+            "unavailable": {},
+        },
         "input_shape": list(x.shape),
         "input_stride": list(x.stride()),
         "source_shape": list(source.shape),
