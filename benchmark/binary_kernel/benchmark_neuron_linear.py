@@ -2,7 +2,6 @@
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import os
 import socket
@@ -15,8 +14,10 @@ import torch
 import torch.nn.functional as F
 
 from spikingjelly.activation_based import functional, surrogate
-from spikingjelly.activation_based.cuda_kernel.neuron_linear import (
+from spikingjelly._ops.if_linear import (
     if_linear,
+)
+from spikingjelly._ops.lif_linear import (
     lif_linear,
 )
 
@@ -30,30 +31,6 @@ def _neuron_torch(x_seq, v, sg, neuron):
             spike, v = functional.lif_step(x, v, 2.0, True, 1.0, 0.0, sg)
         spikes.append(spike)
     return torch.stack(spikes), v
-
-
-def _neuron_cupy(x_seq, v, sg, neuron):
-    if neuron == "if":
-        if x_seq.shape[0] == 1:
-            spike, v = functional.if_step_cupy(x_seq[0], v, 1.0, 0.0, sg)
-            return spike.unsqueeze(0), v
-        spike, v, _ = functional.if_multi_step_cupy(x_seq, v, 1.0, 0.0, sg)
-        return spike, v
-    if x_seq.shape[0] == 1:
-        spike, v = functional.lif_step_cupy(x_seq[0], v, 2.0, True, 1.0, 0.0, sg)
-        return spike.unsqueeze(0), v
-    spike, v, _ = functional.lif_multi_step_cupy(x_seq, v, 2.0, True, 1.0, 0.0, sg)
-    return spike, v
-
-
-def _neuron_triton(x_seq, v, sg, neuron):
-    if neuron == "if":
-        spike, v, _ = functional.if_multi_step_triton(x_seq, v, 1.0, 0.0, sg)
-    else:
-        spike, v, _ = functional.lif_multi_step_triton(
-            x_seq, v, 2.0, True, 1.0, 0.0, sg
-        )
-    return spike, v
 
 
 @torch.no_grad()
@@ -186,21 +163,14 @@ def _methods(x, v, weight, bias, sg, mode, neuron, thread_counts):
         spike, v_out = _neuron_torch(x, v, sg, neuron)
         return F.linear(spike, weight, bias), v_out
 
-    def cupy_dense():
-        spike, v_out = _neuron_cupy(x, v, sg, neuron)
+    def automatic_dense():
+        if neuron == "if":
+            spike, v_out, _ = functional.if_multi_step(x, v, 1.0, 0.0, sg)
+        else:
+            spike, v_out, _ = functional.lif_multi_step(x, v, 2.0, True, 1.0, 0.0, sg)
         return F.linear(spike, weight, bias), v_out
 
-    methods = {
-        "torch_dense": torch_dense,
-        "cupy_dense": cupy_dense,
-    }
-    if x.shape[0] > 1 and importlib.util.find_spec("triton") is not None:
-
-        def triton_dense():
-            spike, v_out = _neuron_triton(x, v, sg, neuron)
-            return F.linear(spike, weight, bias), v_out
-
-        methods["triton_dense"] = triton_dense
+    methods = {"torch_reference": torch_dense, "automatic_dense": automatic_dense}
 
     fused_x = x[0] if x.shape[0] == 1 else x
     fused_op = if_linear if neuron == "if" else lif_linear
@@ -240,7 +210,6 @@ def _gpu_uuid():
 
 
 def main():
-    import cupy
 
     started_at = datetime.now(timezone.utc).isoformat()
     parser = argparse.ArgumentParser()
@@ -300,7 +269,7 @@ def main():
                                 args.threads,
                             )
                             with torch.no_grad():
-                                expected = methods["torch_dense"]()
+                                expected = methods["torch_reference"]()
                                 for name, fn in methods.items():
                                     actual = fn()
                                     torch.testing.assert_close(
@@ -411,7 +380,6 @@ def main():
             "compute_capability": f"{properties.major}.{properties.minor}",
             "torch_version": torch.__version__,
             "cuda_version": torch.version.cuda,
-            "cupy_version": cupy.__version__,
             "dtype": str(x.dtype),
             "float32_matmul_precision": torch.get_float32_matmul_precision(),
             "tf32_matmul": torch.backends.cuda.matmul.allow_tf32,

@@ -221,7 +221,7 @@ The outputs are:
     BlockContainer(
     (synapse): Linear(in_features=8, out_features=1, bias=False)
     (neuron): CubaLIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m, backend=torch
+        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m
         (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
     )
     )

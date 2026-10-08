@@ -320,17 +320,16 @@ def test_ilif_rejects_incompatible_surrogate():
         )
 
 
-def test_ilif_reuses_lif_dynamics_and_limits_triton_to_multi_step():
+def test_ilif_uses_registered_device_dispatch_without_backend_api():
     node = neuron.ILIFNode(step_mode="s")
 
     assert isinstance(node, neuron.LIFNode)
     assert node.tau == pytest.approx(4.0 / 3.0)
     assert node.decay_input is False
     assert node.v_reset is None
-    assert node.supported_backends == ("torch",)
-    assert neuron.ILIFNode(step_mode="m").supported_backends == ("torch", "triton")
-    with pytest.raises(NotImplementedError):
-        neuron.ILIFNode(step_mode="s", backend="triton")
+    assert not hasattr(node, "backend")
+    with pytest.raises(TypeError, match="backend"):
+        neuron.ILIFNode(backend="torch")
 
 
 def test_ilif_training_outputs_integer_counts_and_updates_voltage():
@@ -453,8 +452,9 @@ def test_ilif_supports_custom_gradient_window():
         (False, True, 4.0, torch.float32),
     ],
 )
-def test_ilif_triton_matches_torch_training(store_v_seq, detach_reset, tau, dtype):
-    pytest.importorskip("triton")
+def test_ilif_cuda_auto_matches_training_reference(
+    store_v_seq, detach_reset, tau, dtype
+):
     if dtype == torch.bfloat16 and torch.cuda.get_device_capability()[0] < 8:
         pytest.skip("BF16 requires compute capability >= 8.")
     torch_node = neuron.ILIFNode(
@@ -462,7 +462,6 @@ def test_ilif_triton_matches_torch_training(store_v_seq, detach_reset, tau, dtyp
         tau=tau,
         detach_reset=detach_reset,
         step_mode="m",
-        backend="torch",
         store_v_seq=store_v_seq,
     ).to(device="cuda", dtype=dtype)
     triton_node = neuron.ILIFNode(
@@ -470,7 +469,6 @@ def test_ilif_triton_matches_torch_training(store_v_seq, detach_reset, tau, dtyp
         tau=tau,
         detach_reset=detach_reset,
         step_mode="m",
-        backend="triton",
         store_v_seq=store_v_seq,
     ).to(device="cuda", dtype=dtype)
     x, v = _safe_ilif_sequence(tau, dtype)
@@ -519,8 +517,7 @@ def test_ilif_triton_matches_torch_training(store_v_seq, detach_reset, tau, dtyp
         (False, 4.0, torch.float32),
     ],
 )
-def test_ilif_triton_matches_torch_eval(store_v_seq, tau, dtype):
-    pytest.importorskip("triton")
+def test_ilif_cuda_auto_matches_eval_reference(store_v_seq, tau, dtype):
     if dtype == torch.bfloat16 and torch.cuda.get_device_capability()[0] < 8:
         pytest.skip("BF16 requires compute capability >= 8.")
     torch_node = (
@@ -528,7 +525,6 @@ def test_ilif_triton_matches_torch_eval(store_v_seq, tau, dtype):
             v_threshold=0.5,
             tau=tau,
             step_mode="m",
-            backend="torch",
             store_v_seq=store_v_seq,
         )
         .to(device="cuda", dtype=dtype)
@@ -539,7 +535,6 @@ def test_ilif_triton_matches_torch_eval(store_v_seq, tau, dtype):
             v_threshold=0.5,
             tau=tau,
             step_mode="m",
-            backend="triton",
             store_v_seq=store_v_seq,
         )
         .to(device="cuda", dtype=dtype)
@@ -561,11 +556,9 @@ def test_ilif_triton_matches_torch_eval(store_v_seq, tau, dtype):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_ilif_triton_rounds_half_to_even():
-    pytest.importorskip("triton")
+def test_ilif_cuda_auto_rounds_half_to_even():
     node = neuron.ILIFNode(
         step_mode="m",
-        backend="triton",
     ).cuda()
     x_seq = torch.tensor(
         [[[0.5, 1.5, 2.5, 3.5, 4.5]]],
@@ -581,8 +574,7 @@ def test_ilif_triton_rounds_half_to_even():
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_ilif_triton_matches_custom_gradient_window():
-    pytest.importorskip("triton")
+def test_ilif_cuda_auto_matches_custom_gradient_window():
     torch_node = neuron.ILIFNode(
         tau=4.0 / 3.0,
         surrogate_function=surrogate.MultiLevelSpikeCount(
@@ -590,7 +582,6 @@ def test_ilif_triton_matches_custom_gradient_window():
             grad_window=(-0.5, 4.5),
         ),
         step_mode="m",
-        backend="torch",
     ).cuda()
     triton_node = neuron.ILIFNode(
         tau=4.0 / 3.0,
@@ -599,7 +590,6 @@ def test_ilif_triton_matches_custom_gradient_window():
             grad_window=(-0.5, 4.5),
         ),
         step_mode="m",
-        backend="triton",
     ).cuda()
     x = torch.tensor(
         [[[-0.25, 4.25, 4.75]], [[0.0, 0.0, 0.0]]],

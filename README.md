@@ -17,7 +17,7 @@
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Core Capabilities](#core-capabilities)
-  - [Backend Performance](#backend-performance)
+  - [Operator Execution](#operator-execution)
   - [Large-Scale SNN Systems](#large-scale-snn-systems)
   - [Datasets](#datasets)
   - [Interchange and Deployment](#interchange-and-deployment)
@@ -34,7 +34,7 @@ SpikingJelly is a PyTorch-native framework for spiking neural networks (SNNs), w
 - Beginner-friendly API
 - ANN2SNN conversion
 - Event-based datasets
-- Acceleration backends: `torch`, `cupy`, `triton`
+- Automatic operator execution: Torch, Triton and optional native CUDA
 - Memory-efficient training, distributed execution, precision control
 - Hardware deployment and framework exchange
 
@@ -48,13 +48,13 @@ SpikingJelly is built on PyTorch. Install [PyTorch, torchvision, and torchaudio]
 Install the latest stable PyPI release:
 
 ```bash
-pip install spikingjelly
+uv pip install spikingjelly
 ```
 
 Install V2 pre-releases from PyPI when they are published:
 
 ```bash
-pip install --pre spikingjelly
+uv pip install --pre spikingjelly
 ```
 
 Install the latest development version from source:
@@ -62,17 +62,29 @@ Install the latest development version from source:
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
-pip install .
+uv pip install .
 ```
 
 Optional dependencies:
 
 | Feature | Install |
 | --- | --- |
-| CuPy backend | `pip install cupy-cuda12x` or `pip install cupy-cuda11x` |
-| Triton backend | `pip install triton==3.3.1` |
-| NIR exchange | `pip install "spikingjelly[nir]"` (PyPI) or `pip install ".[nir]"` (source checkout) |
-| Lightning integration | `pip install lightning jsonargparse[signatures]` |
+| Automatic CUDA execution (Triton) | `uv pip install "spikingjelly[triton]"` or `uv pip install --editable ".[triton]"` in a source checkout |
+| NIR exchange | `uv pip install "spikingjelly[nir]"` (PyPI) or `uv pip install ".[nir]"` (source checkout) |
+| Lightning integration | `uv pip install lightning jsonargparse[signatures]` |
+
+Regular wheels do not contain precompiled native CUDA libraries. Optional local
+builds require matching CUDA Torch, a CUDA Toolkit with nvcc, a C++ compiler,
+`setuptools>=77.0.3` and ninja:
+
+```bash
+SJ_BUILD_NATIVE_CUDA=1 uv pip install --no-build-isolation .
+```
+
+Missing toolchains emit a message and skip extensions; actual compilation failures
+are errors. Runtime does not compile native CUDA. Triton uses its own JIT; not all
+platforms' CUDA Torch distributions include usable Triton. Changes to Torch/CUDA
+or target GPUs may require rebuilding.
 
 ## Quick Start
 
@@ -101,24 +113,25 @@ Next steps:
 | --- | --- |
 | SNN modeling | Activation-based SNN components: spiking neurons, surrogate gradients, stateful and stateless modules. Predefined SNN models. |
 | Training workflows | PyTorch-native training flows, online-learning utilities, and ANN2SNN conversion |
-| Performance | `torch`, `cupy`, and `triton` backends, FlexSN for customized neuron kernels, and mixed-precision training utilities (e.g., `fp8`) |
+| Performance | automatic Torch/Triton/native CUDA execution, FlexSN for customized neuron kernels, and mixed-precision training utilities (e.g., `fp8`) |
 | Scaling | Memory-efficient training, and distributed training |
 | Datasets | Neuromorphic datasets, and data preprocessing pipelines |
 | Analysis | FLOPs / SynOps / memory-access profiling, and inference energy estimation |
 | Interchange and deployment | NIR, Lava, and Lynxi-oriented exchange interfaces for neuromorphic workflows |
 
-### Backend Performance
+### Operator Execution
 
-Spiking neuron models run on `torch`, `cupy`, or `triton` backends. The backend is set at neuron creation and can be changed later. All backends are compatible with `torch.compile`.
+Neuron execution is selected automatically from tensor device and execution path:
+CPU uses Torch; CUDA eager prefers compatible native CUDA, while Inductor
+expansion prefers Triton. CUDA Graph retains its pre-capture choice. No public
+neuron backend argument and no CuPy dependency are required. Low-precision
+state profiles can use Torch reference execution.
 
-Below: FP16 forward-and-backward execution time for multi-step LIF neurons on
-an RTX 4090 across `torch`, `cupy`, and `triton`. See the
-[Triton backend tutorial](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/en/triton_backend.html)
-for the benchmark setup and limitations.
-
-<p align="center">
-  <img src="./docs/source/_static/tutorials/triton_backend/Performance-float16.png" alt="FP16 backend benchmark for multi-step LIF neurons" width="640" />
-</p>
+Pure Python wheels include Torch reference and optional Triton execution.
+Optional native neuron, fused IF/LIF-Linear and packed/sparse projection builds
+are described under [Installation](#installation). Missing extensions use Torch reference
+for projections; fused no-intermediate-spike performance requires the extension.
+Use ordinary Linear/Conv plus `memopt` instead of retired `SpikeLinear/SpikeConv`.
 
 ### Large-Scale SNN Systems
 

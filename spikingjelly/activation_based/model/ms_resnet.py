@@ -46,12 +46,10 @@ class _MSBlock(nn.Module):
     @classmethod
     def _make_lif(
         cls,
-        backend: str,
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         kwargs: Optional[Dict[str, Any]] = None,
     ) -> neuron.BaseNode:
         return _make_multi_step_neuron(
-            backend,
             spiking_neuron,
             kwargs or {},
             {
@@ -68,17 +66,16 @@ class _MSBlock(nn.Module):
         in_channels: int,
         out_channels: int,
         stride: int,
-        backend: str,
         downsample: nn.Module | None,
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         neuron_kwargs: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__()
-        self.spike1 = self._make_lif(backend, spiking_neuron, neuron_kwargs)
+        self.spike1 = self._make_lif(spiking_neuron, neuron_kwargs)
         self.conv1 = _conv3x3(in_channels, out_channels, stride)
         self.bn1 = layer.BatchNorm2d(out_channels, step_mode="m")
         nn.init.constant_(self.bn1.weight, self.bn_weight)
-        self.spike2 = self._make_lif(backend, spiking_neuron, neuron_kwargs)
+        self.spike2 = self._make_lif(spiking_neuron, neuron_kwargs)
         self.conv2 = _conv3x3(out_channels, out_channels)
         self.bn2 = layer.BatchNorm2d(out_channels, step_mode="m")
         nn.init.constant_(self.bn2.weight, 0.0 if self.zero_init else self.bn_weight)
@@ -99,12 +96,10 @@ class _MaxResNetBlock(_MSBlock):
     @classmethod
     def _make_lif(
         cls,
-        backend: str,
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         kwargs: Optional[Dict[str, Any]] = None,
     ) -> neuron.BaseNode:
         return _make_multi_step_neuron(
-            backend,
             spiking_neuron,
             kwargs or {},
             {"tau": cls.tau, "detach_reset": True},
@@ -117,7 +112,6 @@ class _MaxResNetMaxBlock(_MaxResNetBlock):
         in_channels: int,
         out_channels: int,
         stride: int,
-        backend: str,
         downsample: nn.Module | None,
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         neuron_kwargs: Optional[Dict[str, Any]] = None,
@@ -126,7 +120,6 @@ class _MaxResNetMaxBlock(_MaxResNetBlock):
             in_channels,
             out_channels,
             1,
-            backend,
             downsample,
             spiking_neuron,
             neuron_kwargs,
@@ -179,8 +172,6 @@ class MSResNet(nn.Module):
     :param stage_channels: 各 stage 的通道数；为 ``None`` 时从
         ``base_channels`` 逐级翻倍
     :type stage_channels: tuple[int, ...] | None
-    :param backend: 内部脉冲神经元使用的后端
-    :type backend: str
     :param spiking_neuron: 自定义神经元类；``None`` 保留各位置的论文默认值
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: 传给所有内部神经元的参数；指定自定义类时这些参数完整决定神经元构造
@@ -222,8 +213,6 @@ class MSResNet(nn.Module):
     :param stage_channels: channels in each stage; ``None`` doubles
         ``base_channels`` at every stage
     :type stage_channels: tuple[int, ...] | None
-    :param backend: backend used by the internal spiking neurons
-    :type backend: str
     :param spiking_neuron: custom neuron class; ``None`` keeps each paper default
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: arguments passed to every internal neuron; with a custom class,
@@ -254,7 +243,6 @@ class MSResNet(nn.Module):
         stem_stride: int = 2,
         stem_pool: bool = False,
         stage_channels: tuple[int, ...] | None = None,
-        backend: str = "torch",
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         **kwargs: Any,
     ) -> None:
@@ -267,7 +255,6 @@ class MSResNet(nn.Module):
             raise ValueError("stage_channels must match layers")
         self.T = T
         self.inplanes = base_channels
-        self.backend = backend
         self._spiking_neuron = spiking_neuron
         self._neuron_kwargs = kwargs
         stem_bn = layer.BatchNorm2d(base_channels, step_mode="m")
@@ -299,7 +286,7 @@ class MSResNet(nn.Module):
         )
         final_channels = stage_channels[-1]
         self.head_lif = self._block_type._make_lif(
-            backend, self._spiking_neuron, self._neuron_kwargs
+            self._spiking_neuron, self._neuron_kwargs
         )
         self.avgpool = layer.AdaptiveAvgPool2d((1, 1), step_mode="m")
         self.head = layer.Linear(final_channels, num_classes, step_mode="m")
@@ -322,7 +309,6 @@ class MSResNet(nn.Module):
                 self.inplanes,
                 out_channels,
                 stride,
-                self.backend,
                 downsample,
                 self._spiking_neuron,
                 self._neuron_kwargs,
@@ -334,7 +320,6 @@ class MSResNet(nn.Module):
                 out_channels,
                 out_channels,
                 1,
-                self.backend,
                 None,
                 self._spiking_neuron,
                 self._neuron_kwargs,
@@ -424,7 +409,6 @@ def ms_resnet18(
     T: int = 6,
     in_channels: int = 3,
     num_classes: int = 1000,
-    backend: str = "torch",
     spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
     **kwargs: Any,
 ) -> MSResNet:
@@ -445,8 +429,6 @@ def ms_resnet18(
     :type in_channels: int
     :param num_classes: 分类类别数
     :type num_classes: int
-    :param backend: 内部脉冲神经元使用的后端
-    :type backend: str
     :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认值
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: 传给内部神经元的参数
@@ -468,8 +450,6 @@ def ms_resnet18(
     :type in_channels: int
     :param num_classes: number of classes
     :type num_classes: int
-    :param backend: backend used by the internal spiking neurons
-    :type backend: str
     :param spiking_neuron: custom neuron class; ``None`` keeps the paper default
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: arguments passed to the internal neurons
@@ -481,7 +461,6 @@ def ms_resnet18(
         T=T,
         in_channels=in_channels,
         num_classes=num_classes,
-        backend=backend,
         spiking_neuron=spiking_neuron,
         **kwargs,
     )
@@ -491,7 +470,6 @@ def ms_resnet34(
     T: int = 6,
     in_channels: int = 3,
     num_classes: int = 1000,
-    backend: str = "torch",
     spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
     **kwargs: Any,
 ) -> MSResNet:
@@ -512,8 +490,6 @@ def ms_resnet34(
     :type in_channels: int
     :param num_classes: 分类类别数
     :type num_classes: int
-    :param backend: 内部脉冲神经元使用的后端
-    :type backend: str
     :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认值
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: 传给内部神经元的参数
@@ -535,8 +511,6 @@ def ms_resnet34(
     :type in_channels: int
     :param num_classes: number of classes
     :type num_classes: int
-    :param backend: backend used by the internal spiking neurons
-    :type backend: str
     :param spiking_neuron: custom neuron class; ``None`` keeps the paper default
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: arguments passed to the internal neurons
@@ -549,7 +523,6 @@ def ms_resnet34(
         in_channels=in_channels,
         num_classes=num_classes,
         layers=(3, 4, 6, 3),
-        backend=backend,
         spiking_neuron=spiking_neuron,
         **kwargs,
     )
@@ -559,7 +532,6 @@ def max_resnet18(
     T: int = 4,
     in_channels: int = 3,
     num_classes: int = 10,
-    backend: str = "torch",
     spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
     **kwargs: Any,
 ) -> MaxResNet:
@@ -581,8 +553,6 @@ def max_resnet18(
     :type in_channels: int
     :param num_classes: 分类类别数
     :type num_classes: int
-    :param backend: 内部脉冲神经元使用的后端
-    :type backend: str
     :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认值
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: 传给内部神经元的参数
@@ -605,8 +575,6 @@ def max_resnet18(
     :type in_channels: int
     :param num_classes: number of classes
     :type num_classes: int
-    :param backend: backend used by the internal spiking neurons
-    :type backend: str
     :param spiking_neuron: custom neuron class; ``None`` keeps the paper default
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: arguments passed to the internal neurons
@@ -628,7 +596,6 @@ def max_resnet18(
         stem_kernel_size=3,
         stem_stride=1,
         stem_pool=False,
-        backend=backend,
         spiking_neuron=spiking_neuron,
         **kwargs,
     )

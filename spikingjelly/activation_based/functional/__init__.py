@@ -8,3 +8,5 @@ from .neuron import *
 from .online_learning import *
 
 # conv_bn_fusion is not imported to avoid circular import
+
+from .spike import *

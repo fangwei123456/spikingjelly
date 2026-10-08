@@ -11,8 +11,8 @@ SpikingJelly 有三条精度配置路径，应根据使用场景选择入口：
 * ``distributed.llm`` 使用 Megatron Core 自己的 ``TransformerConfig`` 和
   ``OptimizerConfig``，不使用 ``PrecisionConfig``。
 
-模型级 FP16、BF16 和 FP8 与 Triton 神经元精度是两个独立维度：
-普通层可以使用 BF16，同时让 Triton 神经元保持 FP32。
+模型级 FP16、BF16 和 FP8 与 自动分发的神经元精度是两个独立维度：
+普通层可以使用 BF16，同时让 自动分发的神经元保持 FP32。
 
 安装
 ----
@@ -23,7 +23,7 @@ BF16 和 FP16 只需要 PyTorch。模型级 FP8 需要 Transformer Engine：
 
     uv pip install --editable ".[fp8]"
 
-Triton 神经元 mixed precision 另外需要：
+自动分发的神经元 mixed precision 另外需要：
 
 .. code-block:: bash
 
@@ -124,29 +124,84 @@ autocast 和 TE 模块输出边界，不表示这些算子已使用 FP8 kernel�
 checkpoint 时，需要显式设置 ``NVTE_ALLOW_UNSAFE_PICKLE_EXTRA_STATE=1``；不要为未知
 checkpoint 开启该选项。
 
-配置 Triton 神经元
-~~~~~~~~~~~~~~~~~~
+输入、状态和计算精度
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Triton 精度也在 ``prepare_model_for_precision`` 中设置，不需要给每个神经元增加构造
-参数。例如，普通层可以使用 BF16，Triton 神经元使用 BF16 存储和前向、FP32
-反向：
+普通层的 autocast 控制层内运算；神经元还区分输入 dtype、跨时间步的状态存储
+dtype，以及前后向计算 dtype。下表说明多步 IFNode、LIFNode 和 ParametricLIFNode
+的配置，其他神经元需查对应 API。
+
+.. list-table:: 神经元精度配置
+    :header-rows: 1
+    :widths: 40 60
+
+    * - 配置
+      - 当前行为
+    * - 普通 FP32 输入与状态
+      - 根据设备和执行路径自动执行
+    * - 普通 FP16/BF16 输入
+      - 未配置状态精度时，膜电位跟随输入，已有 FP32 状态也会转换
+    * - FP16/BF16 状态
+      - 普通调用使用 Torch 参考递推，也支持 fullgraph 编译
+    * - 显式 FP32 状态＋低精度输入
+      - functional 可直接传入 FP32 初态；模块需要显式配置存储精度。数值策略不同于低精度状态
+    * - 显式存储／前向／反向精度
+      - CUDA Triton 功能，要求受支持的内置替代梯度与精度组合
+    * - FP8 状态和计算
+      - 实验性功能，受设备、格式和组合限制；不是所有神经元通用能力
+
+普通层使用 BF16、神经元状态保留 FP32 时，先将模型移到目标设备，再准备精度，
+然后创建 optimizer。下面的 CUDA 训练示例使用随机输入：
+
+.. code-block:: python
+
+    import torch
+    from torch import nn
+    from spikingjelly.activation_based import neuron, functional, surrogate
+    from spikingjelly.activation_based.precision import (
+        PrecisionConfig,
+        prepare_model_for_precision,
+    )
+
+    device = torch.device("cuda:0")
+    model = nn.Sequential(
+        nn.Linear(16, 16),
+        neuron.LIFNode(step_mode="m", surrogate_function=surrogate.ATan()),
+        nn.Linear(16, 4),
+    ).to(device)
+    precision = prepare_model_for_precision(
+        model, device, PrecisionConfig(mode="bf16", neuron_storage="fp32")
+    )
+    optimizer = torch.optim.SGD(precision.model.parameters(), lr=0.01)
+    optimizer.zero_grad(set_to_none=True)
+    with precision.autocast_context():
+        output = precision.model(torch.rand(4, 2, 16, device=device))
+        loss = output.float().square().mean()
+    precision.backward(loss, optimizer)
+    functional.reset_net(precision.model)
+
+要分别设置存储、前向和反向精度，可将上例的 config 换成：
 
 .. code-block:: python
 
     config = PrecisionConfig(
-        mode="bf16",
-        triton_storage="bf16",
-        triton_fwd="bf16",
-        triton_bwd="fp32",
+        mode="bf16", neuron_storage="bf16", neuron_fwd="bf16", neuron_bwd="fp32"
     )
-    precision = prepare_model_for_precision(model, device, config)
 
-只有 ``backend="triton"``、``step_mode="m"`` 的 IFNode、LIFNode 和
-ParametricLIFNode 会使用这些设置；函数不会替模型切换 backend。
-``triton_fwd`` 和 ``triton_bwd`` 可分别取 ``fp8``、``fp16``、``bf16`` 或
-``fp32``。FP8 算术要求
-``triton_storage`` 为 ``float8_e4m3fn`` 或 ``float8_e5m2``。指数和敏感 surrogate
-计算固定在 kernel 内部使用 FP32，不是用户选项。
+显式神经元精度使用 Triton，不给模块添加 backend 参数。``neuron_fwd`` 和
+``neuron_bwd`` 可取 ``fp8``、``fp16``、``bf16`` 或 ``fp32``，但并非任意组合都有效。
+FP8 算术要求状态存储为 ``float8_e4m3fn`` 或 ``float8_e5m2``。指数和敏感 surrogate
+计算在 kernel 内使用 FP32。七种受支持的替代梯度见 :doc:`./surrogate`。
+不支持的显式配置报错，不以另一种数值策略替代。
+
+执行查询只报告普通路径的选择，具体精度配置仍需检查其支持范围。先准备精度，再
+编译模型；直接调用 functional 显式精度接口时，先预热相同组合，让设备检查在
+图捕获前完成。
+
+改变状态或递推精度可能影响脉冲、最终状态和梯度，采用新配置前应验证模型精度。
+Inductor 还可能改变低精度运算的融合与舍入，因此结果可能与 eager 有逐位差异。
+测速应保持相同状态策略，例如 ``--precision bf16 --neuron-storage fp32``。
+自动执行和编译流程见 :doc:`./triton_backend`。
 
 路径二：``distributed.vision``
 --------------------------------
@@ -165,16 +220,16 @@ ParametricLIFNode 会使用这些设置；函数不会替模型切换 backend。
         dataset_builder=dataset_builder,
         precision=PrecisionConfig(
             mode="bf16",
-            triton_storage="bf16",
-            triton_fwd="bf16",
-            triton_bwd="fp32",
+            neuron_storage="bf16",
+            neuron_fwd="bf16",
+            neuron_bwd="fp32",
         ),
     )
     result = distributed.vision.train_classification(config)
 
 使用仓库的命令行示例时，``--precision`` 映射到 ``mode``，其余字段由
-``--fp8-recipe``、``--triton-storage``、``--triton-fwd`` 和
-``--triton-bwd`` 设置：
+``--fp8-recipe``、``--neuron-storage``、``--neuron-fwd`` 和
+``--neuron-bwd`` 设置：
 
 .. code-block:: bash
 
@@ -186,7 +241,7 @@ ParametricLIFNode 会使用这些设置；函数不会替模型切换 backend。
         --batch-size 32 --max-steps 10
 
 ``distributed.vision`` 会在 DDP 包装和 optimizer 创建前准备精度，并用 DDP 进程组
-同步 Transformer Engine 的 scaling metadata。模型 FP8 和 Triton 神经元 mixed
+同步 Transformer Engine 的 scaling metadata。模型 FP8 和 自动分发的神经元 mixed
 precision 目前只支持 DDP，且 TP=PP=1。Vision PP 只支持 FP32 和 BF16；普通
 FP32/BF16 不受这个实验性精度限制。
 
@@ -295,18 +350,18 @@ FP8 也不等于固定省显存。在 4096×3200×8 的交叉点，FP8 训练/�
     * - workload
       - 训练 FP8 / FP16、BF16
       - 推理 FP8 / FP16、BF16
-    * - FC-SNN：T16, batch 256, width 4096, depth 20（Triton LIF，FP16 fallback）
+    * - FC-SNN：T16, batch 256, width 4096, depth 20（automatically dispatched LIF，FP16 fallback）
       - 1.533x / 1.677x
       - 1.578x / 1.786x
-    * - FC-SNN：T16, batch 256, width 8192, depth 10（Triton LIF，FP32 fallback）
+    * - FC-SNN：T16, batch 256, width 8192, depth 10（automatically dispatched LIF，FP32 fallback）
       - 1.544x / 1.468x
       - 1.648x / 1.471x
 
 这里的比值仍依次为 ``FP8 / FP16`` 和 ``FP8 / BF16``，且是端到端吞吐比值。两组
-FC-SNN 都使用现有 Triton LIF；FP8 神经元 ``triton_storage`` 未启用，神经元计算仍
+FC-SNN 都使用自动分发的 LIF；FP8 神经元 ``neuron_storage`` 未启用，神经元计算仍
 保持高精度。W4096 使用 ``fp8_fallback_dtype="fp16"``，训练/推理峰值 allocated
 memory 为 4279.1/1460.3 MiB；W8192 是未启用外层 autocast 的既有结果。因此，这些
-结果说明“FP8 Linear + Triton LIF”已经在该规模上超过 FP16/BF16，而不是说明所有
+结果说明“FP8 Linear + automatically dispatched LIF”已经在该规模上超过 FP16/BF16，而不是说明所有
 神经元都已经用 FP8，也不能据此假定 FP8 固定节省显存。
 
 旧教程中的慢速 FC-SNN 数字来自 Torch LIF，只保留在 nsys 根因报告中，不再作为
@@ -318,17 +373,17 @@ W4096/depth20 的 requested FP8 tracked dense-MAC coverage 为 100%。
 
 .. code-block:: bash
 
-    nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
+    SJ_LIF_CUDA_IMPLEMENTATION=triton nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
       --trace=cuda,nvtx,cublas,osrt --sample=none --cpuctxsw=none \
       -o fcsnn-fp8 \
       uv run python benchmark/benchmark_train_precision_snn_fc.py \
-        --backend triton --precisions fp8 --fp8-fallback-dtype fp16 \
+        --precisions fp8 --fp8-fallback-dtype fp16 \
         --profile --profile-steps 10 --output fcsnn-fp8.json
 
 单卡 Spikformer
 ~~~~~~~~~~~~~~~~
 
-``spikformer_ti`` 使用 ``T=4``、输入 ``224``、eager、Triton LIF，在 RTX 5090 上的
+``spikformer_ti`` 使用 ``T=4``、输入 ``224``、eager、automatically dispatched LIF，在 RTX 5090 上的
 端到端结果如下。训练行使用 1024 类仅用于满足当前 TE FP8 backward 的 16 对齐要求；
 真实 1000 类 head 的 FP8 训练会触发 ``lda % 16 == 0``，当前不支持。
 
@@ -410,13 +465,13 @@ Spikformer 也会加速。可以用下面的命令重新采集单卡 profile（`
 
 .. code-block:: bash
 
-    nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
+    SJ_LIF_CUDA_IMPLEMENTATION=triton nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
       --trace=cuda,nvtx,cublas,osrt --sample=none --cpuctxsw=none \
       -o spikformer-fp8 \
       uv run python benchmark/benchmark_snn_single_gpu.py case \
         --model spikformer_ti --phase inference --execution eager \
         --batch-size 64 --warmup 50 --steps 10 --profile --precision fp8 \
-        --neuron-backend triton --fp8-fallback-dtype bf16 \
+        --fp8-fallback-dtype bf16 \
         --tensor-metadata spikformer-fp8.tensors.jsonl \
         --output spikformer-fp8.json
 
@@ -449,7 +504,7 @@ dense-MAC coverage 为 41.98%。当前 RTX 5090 软件栈没有 FP8 Conv2d，不
 如何选择
 --------
 
-默认先用 BF16。FC-SNN 只有在使用 Triton LIF 且矩阵达到表中规模后才建议测试 FP8；
+默认先用 BF16。FC-SNN 只有在使用 automatically dispatched LIF 且矩阵达到表中规模后才建议测试 FP8；
 Spikformer 等 CNN/神经元占比较高的模型，在完成 FP32 边界优化前继续使用 FP16/BF16。
 profile 必须以端到端 step 为准；FP8 的显存也可能高于 BF16，不应把它当作显存优化开关。
 

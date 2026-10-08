@@ -108,3 +108,37 @@ Here is an example of using the functional API:
 
 Most surrogate functions have one or many hyper-parameters to control the shape, e.g., ``alpha`` of :class:`spikingjelly.activation_based.surrogate.Sigmoid`. \
 In SpikingJelly, the default shape hyper-parameters are set to make the maximum of the surrogate function's gradient to be 1, which can relieve the gradient vanishing or exploding problem caused by the cumulative product of gradients.
+
+Surrogates and automatic execution
+----------------------------------
+
+Ordinary fused neuron paths support Sigmoid, ATan, PiecewiseQuadratic,
+PiecewiseExp, SoftSign, SuperSpike and Erf. Pass the object as ``surrogate_function``
+without selecting a backend. Standalone forward/backward example:
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import neuron, surrogate
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    node = neuron.LIFNode(
+        step_mode="m", surrogate_function=surrogate.ATan(alpha=2.0)
+    ).to(device)
+    x = torch.rand(4, 2, 8, device=device, requires_grad=True)
+    spikes = node(x)
+    (spikes.sum() + node.v.sum()).backward()
+    assert torch.isfinite(x.grad).all()
+    node.reset()
+
+Ordinary IF/LIF/PLIF neurons also accept other surrogates or Python callables
+that satisfy their APIs and can run through Torch reference equations.
+``spiking=False`` selects a continuous primitive. Fused step-function firing
+accepts fixed built-in configurations; custom surrogates and trainable surrogate
+parameters use the corresponding reference path.
+
+Explicit neuron precision requires supported built-in surrogates; see
+:doc:`./precision`. Fused ``if_linear``/``lif_linear`` support first gradients;
+the seven built-ins support compiled training, while custom surrogates support
+eager training only. See :doc:`./memopt`. Check the surrogate support of the
+specific interface when using explicit precision or fused projections.

@@ -431,7 +431,6 @@ SpikeZIP ViT-Small ImageNet Benchmark
       --device cuda:0 \
       --time-steps 64 \
       --step-mode m \
-      --stbif-backend triton \
       --batch-size 16 \
       --snn-batch-size 4 \
       --samples 50000 \
@@ -460,7 +459,7 @@ SpikeZIP ViT-Small ImageNet Benchmark
       - 50000
       - 81.566
       - 96.034
-      - ``step_mode="m"``，``stbif_backend="triton"``
+      - ``step_mode="m"``，CUDA 实现自动选择
 
 Top-1 差值为 ``+0.090`` 个百分点，Top-1 prediction agreement 为 ``97.34%``。QANN 推理耗时 ``79.20`` 秒；SNN 推理耗时 ``3719.15`` 秒（``61.99`` 分钟），使用 ``snn_batch_size=4``，峰值 CUDA allocated memory 为 ``25.63`` GiB。benchmark 中 ``parity_pass=false`` 是因为该字段使用 ``torch.allclose(snn_logits, qann_logits, atol=parity_atol, rtol=1e-5)`` 检查 logits；本次记录的 ``parity_atol`` 为 ``1e-4``。
 
@@ -743,7 +742,6 @@ Qwen2 校准会为每个通道估计绝对激活边界 :math:`R`。当
         time_steps=160,
         calibration_levels=16,
         calibration_quantile=0.999,
-        neuron_backend="triton",
     )
     calibration_text = [
         "Spiking neural networks communicate with discrete events.",
@@ -782,8 +780,7 @@ Qwen2 校准会为每个通道估计绝对激活边界 :math:`R`。当
 
 校准状态只包含张量和基础 Python 值，可用
 ``Qwen2SNNCalibration.from_state_dict(torch.load(..., weights_only=True))``
-恢复；校准元数据必须与转换配置完全一致。Torch 神经元 backend 用作参考实现，
-Triton backend 只支持 CUDA 多步推理。
+恢复；校准元数据必须与转换配置完全一致。CPU 使用 Torch 参考实现；CUDA 会自动选择兼容的 STBIF 推理实现。
 
 正式质量证据
 ^^^^^^^^^^^^^^

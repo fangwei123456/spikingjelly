@@ -17,7 +17,7 @@
 - [安装](#安装)
 - [快速开始](#快速开始)
 - [核心能力](#核心能力)
-  - [后端性能](#后端性能)
+  - [算子执行](#算子执行)
   - [大规模 SNN 系统](#大规模-snn-系统)
   - [数据集](#数据集)
   - [转换与部署](#转换与部署)
@@ -34,7 +34,7 @@ SpikingJelly 是一个 PyTorch 原生的脉冲神经网络（SNN）框架，支�
 - 对 SNN 新手友好
 - ANN2SNN 转换
 - 事件数据集
-- 加速后端：`torch`、`cupy`、`triton`
+- 算子自动执行：Torch、Triton 和可选原生 CUDA
 - 显存优化训练、分布式执行、精度控制
 - 硬件部署与框架转换
 
@@ -48,13 +48,13 @@ SpikingJelly 基于 PyTorch。请先安装 [PyTorch、torchvision 和 torchaudio
 安装最新 PyPI 稳定版：
 
 ```bash
-pip install spikingjelly
+uv pip install spikingjelly
 ```
 
 安装已发布的 V2 先行版：
 
 ```bash
-pip install --pre spikingjelly
+uv pip install --pre spikingjelly
 ```
 
 从源码安装最新开发版：
@@ -62,17 +62,27 @@ pip install --pre spikingjelly
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
-pip install .
+uv pip install .
 ```
 
 可选依赖：
 
 | 功能 | 安装方式 |
 | --- | --- |
-| CuPy 后端 | `pip install cupy-cuda12x` 或 `pip install cupy-cuda11x` |
-| Triton 后端 | `pip install triton==3.3.1` |
-| NIR exchange | `pip install "spikingjelly[nir]"`（PyPI）或 `pip install ".[nir]"`（源码目录） |
-| Lightning 集成 | `pip install lightning jsonargparse[signatures]` |
+| CUDA 自动执行（Triton） | `uv pip install "spikingjelly[triton]"` 或源码目录 `uv pip install --editable ".[triton]"` |
+| NIR exchange | `uv pip install "spikingjelly[nir]"`（PyPI）或 `uv pip install ".[nir]"`（源码目录） |
+| Lightning 集成 | `uv pip install lightning jsonargparse[signatures]` |
+
+常规 wheel 不包含预编译原生 CUDA 动态库。可选本地构建需要先准备匹配的
+CUDA 版 Torch、CUDA Toolkit（含 nvcc）、C++ 编译器、`setuptools>=77.0.3` 和 ninja：
+
+```bash
+SJ_BUILD_NATIVE_CUDA=1 uv pip install --no-build-isolation .
+```
+
+缺少工具链时给出提示并跳过扩展，实际编译失败会报错；运行时不编译原生 CUDA。
+Triton 自身采用 JIT。不能假定所有平台的 CUDA Torch 都自带可用 Triton。
+更换 Torch/CUDA 或目标 GPU 后可能需要重新构建原生扩展。
 
 ## 快速开始
 
@@ -101,23 +111,24 @@ net = nn.Sequential(
 | --- | --- |
 | SNN 建模 | activation-based SNN 组件、脉冲神经元、替代梯度、有状态与无状态模块，以及预定义 SNN 模型 |
 | 训练工作流 | PyTorch 原生训练流程、在线学习工具、ANN2SNN 转换 |
-| 性能 | `torch`、`cupy`、`triton` 后端、自定义神经元内核模块 FlexSN、以及混合精度训练工具（如 `fp8` 支持） |
+| 性能 | Torch/Triton/原生 CUDA 自动执行、自定义神经元 FlexSN、以及混合精度训练工具（如 `fp8` 支持） |
 | 扩展 | 显存优化训练和分布式训练 |
 | 数据集 | 神经形态数据集和数据预处理流程 |
 | 分析 | FLOPs / SynOps / 访存 profiling，以及推理能耗估算 |
 | 转换与部署 | 面向神经形态工作流的 NIR、Lava、Lynxi 转换接口 |
 
-### 后端性能
+### 算子执行
 
-多步神经元支持 `torch`、`cupy` 或 `triton` 后端。后端在创建神经元时指定，后续可更改。所有后端均兼容 `torch.compile`。
+只需将模块和输入移动到目标设备。CPU 使用 Torch；CUDA eager 优先兼容的原生 CUDA，
+Inductor 编译展开优先 Triton。CUDA Graph 保留被捕获函数预热后的选择。
+神经元没有 backend 参数，也不依赖 CuPy。低精度状态等配置可能使用 Torch 参考路径。
 
-下图对比多步 LIF 神经元在 RTX 4090 上使用 `torch`、`cupy` 和
-`triton` 后端进行 FP16 前向与反向传播的执行时间。完整的测试配置和限制见
-[Triton 后端教程](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/triton_backend.html)。
+常规 PyPI wheel 是纯 Python 包，包含 Torch 参考和可选 Triton 执行代码。
+原生神经元、融合 IF/LIF-Linear 和 packed/sparse 投影可从源码本地构建。
+未构建投影扩展时采用 Torch 参考公式；融合前向不物化中间脉冲的特性依赖原生扩展。
+普通 Linear/Conv 的省显存训练使用 `memopt`，旧 `SpikeLinear/SpikeConv` 已删除。
 
-<p align="center">
-  <img src="./docs/source/_static/tutorials/triton_backend/Performance-float16.png" alt="多步 LIF 神经元 FP16 后端 benchmark" width="640" />
-</p>
+使用、编译和诊断见[神经元自动执行教程](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/triton_backend.html)。
 
 ### 大规模 SNN 系统
 

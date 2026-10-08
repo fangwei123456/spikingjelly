@@ -229,82 +229,78 @@ The results are:
 .. image:: ../../_static/tutorials/neuron/2.*
     :width: 100%
 
-Step mode and backend
--------------------------------------------
+Training IF, LIF and PLIF
+----------------------------
 
-We have introduced step modes in :doc:`./basic_concept`. In the above codes, we use the single-step mode. \
-By setting ``step_mode``, we can switch to multi-step easily:
-
-.. code-block:: python
-
-    import torch
-    from spikingjelly.activation_based import neuron, functional
-    if_layer = neuron.IFNode(step_mode='s')
-    T = 8
-    N = 2
-    x_seq = torch.rand([T, N])
-    y_seq = functional.multi_step_forward(x_seq, if_layer)
-    if_layer.reset()
-
-    if_layer.step_mode = 'm'
-    y_seq = if_layer(x_seq)
-    if_layer.reset()
-
-Some neurons support the ``cupy`` backend in both single-step and multi-step modes. In addition, ``triton`` backend is also available for multi-step ``IFNode``, ``LIFNode``, ``ParametricLIFNode``, etc. These accelerated backends can speed up forward and backward.
+``step_mode`` controls single- or multi-step execution, and the input selects
+the device. Move the module and inputs to the same device. PLIF's public class,
+``ParametricLIFNode``, has trainable parameters. This example uses random inputs
+to run forward/backward and check PLIF parameter updates:
 
 .. code-block:: python
 
     import torch
-    from spikingjelly.activation_based import neuron
+    from spikingjelly.activation_based import functional, neuron, surrogate
 
-    if_layer = neuron.IFNode()
-    print(f'if_layer.backend={if_layer.backend}')
-    # if_layer.backend=torch
+    torch.manual_seed(1)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    for node_type in (neuron.IFNode, neuron.LIFNode, neuron.ParametricLIFNode):
+        node = node_type(
+            step_mode="m", surrogate_function=surrogate.ATan()
+        ).to(device)
+        x = torch.rand(4, 2, 8, device=device, requires_grad=True)  # [T, N, C]
+        parameters = list(node.parameters())
+        optimizer = torch.optim.SGD(parameters, lr=0.01) if parameters else None
+        before = [p.detach().clone() for p in parameters]
+        spikes = node(x)
+        loss = spikes.sum() + node.v.sum()
+        loss.backward()
+        assert spikes.shape == x.shape and torch.isfinite(x.grad).all()
+        if optimizer is not None:
+            assert all(p.grad is not None for p in parameters)
+            optimizer.step()
+            assert any(not torch.equal(old, p) for old, p in zip(before, parameters))
+        functional.reset_net(node)  # Reset after backward/update.
 
-    print(f'step_mode={if_layer.step_mode}, supported_backends={if_layer.supported_backends}')
-    # step_mode=s, supported_backends=('torch', 'cupy')
+Module calls advance state such as ``node.v``. For independent samples/batches,
+call ``functional.reset_net`` after backward and parameter updates. Retain state
+for a continuous sequence; use ``functional.detach_net`` to truncate BPTT without
+resetting voltage. See :doc:`./triton_backend` for execution/compilation/diagnostics
+and :doc:`./precision` for precision policies.
 
-    if_layer.step_mode = 'm'
-    print(f'step_mode={if_layer.step_mode}, supported_backends={if_layer.supported_backends}')
-    # step_mode=m, supported_backends=('torch', 'cupy', 'triton')
+Explicit initial state, final state and traces
+----------------------------------------------
 
-    device = 'cuda:0'
-    if_layer.to(device)
-    if_layer.backend = 'cupy'  # switch to the cupy backend
-    print(f'if_layer.backend={if_layer.backend}')
-    # if_layer.backend=cupy
-
-    x_seq = torch.rand([8, 4], device=device)
-    y_seq = if_layer(x_seq)
-    if_layer.reset()
-
-    if_layer.backend = 'triton'  # switch to the triton backend
-    print(f'if_layer.backend={if_layer.backend}')
-    # if_layer.backend=triton
-
-    y_seq = if_layer(x_seq)
-    if_layer.reset()
-
-To configure a whole network at once, use :func:`set_step_mode <spikingjelly.activation_based.functional.net_config.set_step_mode>` and :func:`set_backend <spikingjelly.activation_based.functional.net_config.set_backend>`. \
-Because ``supported_backends`` depends on ``step_mode``, call ``set_step_mode`` **before** ``set_backend``. Otherwise a backend that is only available in the other step mode \
-(for example ``cupy`` for ``ParametricLIFNode``, or ``triton`` for ``IFNode``, ``LIFNode`` and ``ParametricLIFNode``) is rejected with a warning and the existing backend is kept:
+With ``functional.if_multi_step``, ``lif_multi_step`` or ``plif_multi_step``,
+the caller supplies initial state, keeps final state and decides whether to
+detach between sequence segments. These functions do not manage module memory.
+``store_v_seq=True`` returns a monitoring trace. With the default ``False``,
+the third result is ``None``; the second always contains final state.
 
 .. code-block:: python
 
-    import torch.nn as nn
-    from spikingjelly.activation_based import neuron, functional, layer
+    import torch
+    from spikingjelly.activation_based import functional, surrogate
 
-    net = nn.Sequential(layer.Linear(8, 4), neuron.ParametricLIFNode())
-    functional.set_step_mode(net, 'm')  # first: supported_backends depends on step_mode
-    functional.set_backend(net, 'cupy', instance=neuron.ParametricLIFNode)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    x = torch.rand(4, 2, 8, device=device, requires_grad=True)
+    v0 = torch.zeros(2, 8, device=device, requires_grad=True)
+    spikes, v_final, v_seq = functional.lif_multi_step(
+        x, v0, tau=2.0, surrogate_function=surrogate.ATan(), store_v_seq=True
+    )
+    assert v_final.shape == v0.shape and v_seq.shape == x.shape
+    assert torch.equal(v_final, v_seq[-1])
+    (spikes.sum() + v_final.sum()).backward()
+    assert v0.grad is not None and torch.isfinite(v0.grad).all()
+    assert torch.equal(v0.detach(), torch.zeros_like(v0))
+    # Pass v_final to the next segment; detach it to truncate BPTT.
 
 Custom Spiking Neurons
 -------------------------------------------
-SpikingJelly provides separate interfaces for modifying neuron dynamics and for
-high-performance execution. ``Simple`` in ``SimpleBaseNode`` describes the role
-of the interface, not a neuron mathematical model. This pure-PyTorch interface
-exposes charge, fire, and reset directly so that users can understand the role of
-a neuron in an SNN and customize its dynamics.
+SpikingJelly has two interfaces for custom neurons. ``Simple`` describes the
+interface of ``SimpleBaseNode``; subclasses define the equations. It uses pure
+PyTorch to run charge, fire and reset in order, making it suitable for learning
+neuron behavior or trying new dynamics.
 
 .. list-table:: Neuron extension interfaces
     :header-rows: 1
@@ -319,9 +315,9 @@ a neuron in an SNN and customize its dynamics.
       - General state-substitution path
       - Teaching, dynamics experiments, and rapid prototypes
     * - :class:`BaseNode <spikingjelly.activation_based.neuron.BaseNode>`
-      - Native functional transition with optional sequence kernels
+      - Native functional state transition
       - Direct functional-forward call
-      - Production neurons and backend implementations
+      - Production neuron implementations
 
 Inherit from ``SimpleBaseNode`` when only the neuron equation needs to change. Its
 single-step forward always applies charge, fire, and reset in order, and its
@@ -411,8 +407,8 @@ The outputs are:
             [0.],
             [0.]])
 
-To implement a production neuron that converts directly like ``LIFNode`` and can
-provide CuPy or Triton kernels, inherit from ``BaseNode`` and implement
+To implement a production neuron that uses explicit functional state transitions,
+inherit from ``BaseNode`` and implement
 ``single_step_functional_forward``. Its interface is
 ``(self, inputs, states, **kwargs) -> (outputs, updated_states)``. The method must
 not mutate registered module memories or the supplied ``states``. Override
@@ -425,5 +421,4 @@ or specialized kernel exists.
     ``neuronal_charge``, ``neuronal_fire``, and ``neuronal_reset`` have been
     removed from it. Existing subclasses that customize Python neuron equations
     through these methods should change their base class to ``SimpleBaseNode``;
-    their existing equations do not need to be rewritten. Production neurons and
-    custom backends should migrate to the functional interface described above.
+    their existing equations do not need to be rewritten. Production neurons should use the functional state interface described above.

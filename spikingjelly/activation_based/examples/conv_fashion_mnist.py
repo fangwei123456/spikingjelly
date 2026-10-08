@@ -15,7 +15,7 @@ from spikingjelly import visualizing
 
 
 class CSNN(nn.Module):
-    def __init__(self, T: int, channels: int, use_cupy=False):
+    def __init__(self, T: int, channels: int):
         super().__init__()
         self.T = T
 
@@ -37,9 +37,6 @@ class CSNN(nn.Module):
 
         functional.set_step_mode(self, step_mode="m")
 
-        if use_cupy:
-            functional.set_backend(self, backend="cupy")
-
     def forward(self, x: torch.Tensor):
         # x.shape = [N, C, H, W]
         x_seq = x.unsqueeze(0).expand(
@@ -60,7 +57,7 @@ def main():
         (sj-dev) wfang@Precision-5820-Tower-X-Series:~/spikingjelly_dev$ python -m spikingjelly.activation_based.examples.conv_fashion_mnist -h
 
         usage: conv_fashion_mnist.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-data-dir DATA_DIR] [-out-dir OUT_DIR]
-                                     [-resume RESUME] [-amp] [-cupy] [-opt OPT] [-momentum MOMENTUM] [-lr LR]
+                                     [-resume RESUME] [-amp] [-opt OPT] [-momentum MOMENTUM] [-lr LR]
 
         Classify Fashion-MNIST
 
@@ -75,14 +72,13 @@ def main():
           -out-dir OUT_DIR    root dir for saving logs and checkpoint
           -resume RESUME      resume from the checkpoint path
           -amp                automatic mixed precision training
-          -cupy               use cupy neuron and multi-step forward mode
           -opt OPT            use which optimizer. SDG or Adam
           -momentum MOMENTUM  momentum for SGD
           -save-es            dir for saving a batch spikes encoded by the first {Conv2d-BatchNorm2d-IFNode}
     """
-    # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8
+    # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt sgd -lr 0.1 -j 8
 
-    # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 4 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -resume ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy/checkpoint_latest.pth -save-es ./logs
+    # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 4 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt sgd -lr 0.1 -j 8 -resume ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy/checkpoint_latest.pth -save-es ./logs
     parser = argparse.ArgumentParser(description="Classify Fashion-MNIST")
     parser.add_argument("-T", default=4, type=int, help="simulating time-steps")
     parser.add_argument("-device", default="cuda:0", help="device")
@@ -112,7 +108,6 @@ def main():
     parser.add_argument(
         "-amp", action="store_true", help="automatic mixed precision training"
     )
-    parser.add_argument("-cupy", action="store_true", help="use cupy backend")
     parser.add_argument("-opt", type=str, help="use which optimizer. SDG or Adam")
     parser.add_argument("-momentum", default=0.9, type=float, help="momentum for SGD")
     parser.add_argument("-lr", default=0.1, type=float, help="learning rate")
@@ -126,7 +121,7 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    net = CSNN(T=args.T, channels=args.channels, use_cupy=args.cupy)
+    net = CSNN(T=args.T, channels=args.channels)
 
     print(net)
 
@@ -246,9 +241,6 @@ def main():
 
     if args.amp:
         out_dir += "_amp"
-
-    if args.cupy:
-        out_dir += "_cupy"
 
     os.makedirs(out_dir, exist_ok=True)
 

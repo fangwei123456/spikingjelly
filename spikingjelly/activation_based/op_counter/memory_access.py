@@ -413,6 +413,7 @@ class MemoryAccessCounter(BaseCounter):
             aten.logical_or.default: _memory_element_wise_binary,
             aten.logical_xor.default: _memory_element_wise_binary,
             aten.logical_not.default: _memory_element_wise_binary,
+            aten.sigmoid.default: _memory_read_write,
             aten.sigmoid_.default: _memory_read_write,
             aten.stack.default: _memory_stack,
             aten.clone.default: _memory_read_write,
@@ -420,6 +421,9 @@ class MemoryAccessCounter(BaseCounter):
             aten.full_like.default: _memory_full_like,
             aten.ones_like.default: _memory_full_like,
             aten.view.default: _memory_null,
+            aten.unsqueeze.default: _memory_null,
+            aten.squeeze.dim: _memory_null,
+            aten.unbind.int: _memory_null,
             aten.empty.memory_format: _memory_null,
             aten.select.int: _memory_null,  # return a view
             aten.select_backward.default: _memory_select_backward,  # involve load store

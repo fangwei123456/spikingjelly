@@ -3,6 +3,14 @@
 Classify DVS128 Gesture
 ======================================
 
+.. warning::
+
+    This is an unmaintained archive for older SpikingJelly, not current V2
+    instructions. Code/commands using CuPy or retired backends do not run directly
+    with the current package. See :doc:`/tutorials/en/neuron` and
+    :doc:`/tutorials/en/migrate_from_legacy` for current usage.
+
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 We have learned how to use neuromorphic datasets in last tutorial :doc:`Neuromorphic Datasets Processing <./13_neuromorphic_datasets>`.
@@ -141,10 +149,10 @@ net in the layer-by-layer mode with CUDA neurons:
                 nn.Flatten(2),
                 layer.MultiStepDropout(0.5),
                 layer.SeqToANNContainer(nn.Linear(channels * 4 * 4, channels * 2 * 2, bias=False)),
-                neuron.MultiStepLIFNode(tau=2.0, surrogate_function=surrogate.ATan(), detach_reset=True, backend='cupy'),
+                neuron.MultiStepLIFNode(tau=2.0, surrogate_function=surrogate.ATan(), detach_reset=True),
                 layer.MultiStepDropout(0.5),
                 layer.SeqToANNContainer(nn.Linear(channels * 2 * 2, 110, bias=False)),
-                neuron.MultiStepLIFNode(tau=2.0, surrogate_function=surrogate.ATan(), detach_reset=True, backend='cupy')
+                neuron.MultiStepLIFNode(tau=2.0, surrogate_function=surrogate.ATan(), detach_reset=True)
             )
             self.vote = VotingLayer(10)
 
@@ -160,7 +168,7 @@ net in the layer-by-layer mode with CUDA neurons:
                     nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
                     nn.BatchNorm2d(out_channels),
                 ),
-                neuron.MultiStepLIFNode(tau=2.0, surrogate_function=surrogate.ATan(), detach_reset=True, backend='cupy')
+                neuron.MultiStepLIFNode(tau=2.0, surrogate_function=surrogate.ATan(), detach_reset=True)
             ]
 
 We can find that the two kind of models are similar. All stateless layers, e,g, ``Conv2d``, will be contained in
@@ -193,7 +201,6 @@ We add more arguments:
 
     parser.add_argument('-resume', type=str, help='resume from the checkpoint path')
     parser.add_argument('-amp', action='store_true', help='automatic mixed precision training')
-    parser.add_argument('-cupy', action='store_true', help='use CUDA neuron and multi-step forward mode')
 
 
     parser.add_argument('-opt', type=str, help='use which optimizer. SDG or Adam')
@@ -334,8 +341,8 @@ It takes 27.76s to finish an epoch. We stop it and train the faster network:
 
 .. code:: bash
 
-    (test-env) root@de41f92009cf3011eb0ac59057a81652d2d0-fangw1714-0:/userhome/test# python -m spikingjelly.activation_based.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cupy -epochs 256
-    Namespace(T=16, T_max=64, amp=True, b=16, cupy=True, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=256, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
+    (test-env) root@de41f92009cf3011eb0ac59057a81652d2d0-fangw1714-0:/userhome/test# python -m spikingjelly.activation_based.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -epochs 256
+    Namespace(T=16, T_max=64, amp=True, b=16, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=256, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
     CextNet(
       (conv): Sequential(
         (0): SeqToANNContainer(
@@ -408,13 +415,13 @@ It takes 27.76s to finish an epoch. We stop it and train the faster network:
     )
     The directory [/userhome/datasets/DVS128Gesture/frames_number_16_split_by_number] already exists.
     The directory [/userhome/datasets/DVS128Gesture/frames_number_16_split_by_number] already exists.
-    Mkdir ./logs/T_16_b_16_c_128_Adam_lr_0.001_CosALR_64_amp_cupy.
-    Namespace(T=16, T_max=64, amp=True, b=16, cupy=True, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=256, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
+    Mkdir ./logs/T_16_b_16_c_128_Adam_lr_0.001_CosALR_64_amp.
+    Namespace(T=16, T_max=64, amp=True, b=16, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=256, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
     epoch=0, train_loss=0.06690179117738385, train_acc=0.4092465753424658, test_loss=0.049108295158172645, test_acc=0.6145833333333334, max_test_acc=0.6145833333333334, total_time=18.169376373291016
 
     ...
 
-    Namespace(T=16, T_max=64, amp=True, b=16, cupy=True, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=256, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
+    Namespace(T=16, T_max=64, amp=True, b=16, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=256, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
     epoch=255, train_loss=0.00021228195577325645, train_acc=1.0, test_loss=0.008522209396485576, test_acc=0.9375, max_test_acc=0.9618055555555556, total_time=17.49005389213562
 
 It takes 18.17s to finish an epoch, which is much faster. After 256 epochs, we will get the maximum accuracy 96.18%. The

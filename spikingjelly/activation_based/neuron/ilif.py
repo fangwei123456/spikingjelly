@@ -16,7 +16,6 @@ class ILIFNode(LIFNode):
         ),
         detach_reset: bool = False,
         step_mode: str = "s",
-        backend: str = "torch",
         store_v_seq: bool = False,
     ) -> None:
         r"""
@@ -142,9 +141,6 @@ class ILIFNode(LIFNode):
         :param step_mode: 步进模式，``"s"`` 为单步，``"m"`` 为多步，默认为
             ``"s"``
         :type step_mode: str
-        :param backend: 后端名称。单步模式仅支持 ``"torch"``；多步模式支持
-            ``"torch"`` 和 ``"triton"``，默认为 ``"torch"``
-        :type backend: str
         :param store_v_seq: 是否将每个输入步后的膜电位保存到 ``self.v_seq``，默认为
             ``False``。单步模式下膜电位会逐步追加，直到调用 ``reset()``；每一步都会
             复制整个序列，因此该选项主要用于监控和调试
@@ -292,10 +288,6 @@ class ILIFNode(LIFNode):
         :type detach_reset: bool
         :param step_mode: Step mode, ``"s"`` or ``"m"``; defaults to ``"s"``
         :type step_mode: str
-        :param backend: Backend name. Single-step mode supports ``"torch"`` only;
-            multi-step mode supports ``"torch"`` and ``"triton"``; defaults to
-            ``"torch"``
-        :type backend: str
         :param store_v_seq: Whether to store the membrane voltage after each input
             step in ``self.v_seq``; defaults to ``False``. In single-step mode the
             voltage is appended step by step until ``reset()`` is called and every
@@ -321,13 +313,8 @@ class ILIFNode(LIFNode):
             surrogate_function=surrogate_function,
             detach_reset=detach_reset,
             step_mode=step_mode,
-            backend=backend,
             store_v_seq=store_v_seq,
         )
-
-    @property
-    def supported_backends(self) -> tuple[str, ...]:
-        return ("torch",) if self.step_mode == "s" else ("torch", "triton")
 
     def single_step_functional_forward(
         self,
@@ -357,39 +344,29 @@ class ILIFNode(LIFNode):
         x_seq = inputs[0]
         v = states[0]
 
-        if self.backend == "triton":
-            spike_seq, v, _ = functional.ilif_multi_step_triton(
-                x_seq,
-                v,
-                self.tau,
-                self.v_threshold,
-                self.surrogate_function,
-                self.detach_reset,
-            )
-        elif self.backend == "torch":
-            return super().multi_step_functional_forward(inputs, states, **kwargs)
-        else:
-            raise ValueError(self.backend)
-
+        spike_seq, v, _ = functional.ilif_multi_step(
+            x_seq,
+            v,
+            self.tau,
+            self.v_threshold,
+            self.surrogate_function,
+            self.detach_reset,
+            False,
+        )
         return (spike_seq,), (v,)
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
-        if not self.store_v_seq or self.backend == "torch":
-            return super().multi_step_forward(x_seq, *args, **kwargs)
-
         states = self.materialize_states(
             (x_seq, *args), tuple(self._memories.values()), "m"
         )
-        if self.backend != "triton":
-            raise ValueError(self.backend)
-        spike_seq, v, v_seq = functional.ilif_multi_step_triton(
+        spike_seq, v, v_seq = functional.ilif_multi_step(
             x_seq,
             states[0],
             self.tau,
             self.v_threshold,
             self.surrogate_function,
             self.detach_reset,
-            store_v_seq=True,
+            store_v_seq=self.store_v_seq,
         )
         self.v = v
         self.v_seq = v_seq

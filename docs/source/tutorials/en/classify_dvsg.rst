@@ -64,7 +64,7 @@ Train
 -------------------------------------------
 How to define the training method, loss function, and classification result are identical to previous tutorials, and we will not introduce them in this tutorial. We will only introduce the difference.
 
-We use multi-step mode for faster training speed, and use `cupy` backend if `args.cupy`:
+We use multi-step mode for faster training speed, and use automatic device-based neuron execution:
 
 .. code-block:: python
 
@@ -89,8 +89,6 @@ We use multi-step mode for faster training speed, and use `cupy` backend if `arg
         net = parametric_lif_net.DVSGestureNet(channels=args.channels, spiking_neuron=neuron.LIFNode, surrogate_function=surrogate.ATan(), detach_reset=True)
 
         functional.set_step_mode(net, 'm')
-        if args.cupy:
-            functional.set_backend(net, 'cupy', instance=neuron.LIFNode)
         # ...
 
 Define the dataset:
@@ -168,47 +166,47 @@ Train the network:
 
 .. code-block:: shell
 
-    python -m spikingjelly.activation_based.examples.classify_dvsg -T 16 -device cuda:0 -b 16 -epochs 64 -data-dir /datasets/DVSGesture/ -amp -cupy -opt adam -lr 0.001 -j 8
+    python -m spikingjelly.activation_based.examples.classify_dvsg -T 16 -device cuda:0 -b 16 -epochs 64 -data-dir /datasets/DVSGesture/ -amp -opt adam -lr 0.001 -j 8
 
 The outputs are:
 
 .. code-block:: shell
 
-    Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+    Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
     DVSGestureNet(
     (conv_fc): Sequential(
         (0): Conv2d(2, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
         (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
         (2): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
         (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
         (4): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
         (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
         (6): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
         (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
         (8): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
         (9): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
         (10): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
         (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (11): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
         (12): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
         (13): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
         (14): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
         (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (15): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
         (16): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
         (17): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
         (18): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
         (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (19): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
@@ -216,13 +214,13 @@ The outputs are:
         (21): Dropout(p=0.5)
         (22): Linear(in_features=2048, out_features=512, bias=True)
         (23): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
         (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (24): Dropout(p=0.5)
         (25): Linear(in_features=512, out_features=110, bias=True)
         (26): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
         (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (27): VotingLayer(voting_size=10, step_mode=m)
@@ -230,23 +228,23 @@ The outputs are:
     )
     The directory [/datasets/DVSGesture/frames_number_16_split_by_number] already exists.
     The directory [/datasets/DVSGesture/frames_number_16_split_by_number] already exists.
-    Mkdir ./logs/T16_b16_adam_lr0.001_c128_amp_cupy.
-    Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
-    ./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+    Mkdir ./logs/T16_b16_adam_lr0.001_c128_amp.
+    Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+    ./logs/T16_b16_adam_lr0.001_c128_amp
     epoch = 0, train_loss = 0.0666, train_acc = 0.3964, test_loss = 0.0514, test_acc = 0.6042, max_test_acc = 0.6042
     train speed = 92.7646 images/s, test speed = 115.2935 images/s
     escape time = 2022-05-25 21:31:54
 
-    Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
-    ./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+    Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+    ./logs/T16_b16_adam_lr0.001_c128_amp
     epoch = 1, train_loss = 0.0463, train_acc = 0.6036, test_loss = 0.0439, test_acc = 0.6319, max_test_acc = 0.6319
     train speed = 101.5938 images/s, test speed = 120.5184 images/s
     escape time = 2022-05-25 21:30:48
 
     ...
 
-    Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
-    ./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+    Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+    ./logs/T16_b16_adam_lr0.001_c128_amp
     epoch = 63, train_loss = 0.0011, train_acc = 0.9991, test_loss = 0.0103, test_acc = 0.9375, max_test_acc = 0.9375
     train speed = 100.4324 images/s, test speed = 121.0402 images/s
     escape time = 2022-05-25 21:30:51
@@ -261,3 +259,16 @@ The following figure shows the accuracy curves during the training process:
 
 
 .. [#PLIF] Fang, Wei, et al. "Incorporating learnable membrane time constant to enhance learning of spiking neural networks." Proceedings of t                                                                                  
+
+Running the examples and interpreting results
+-------------------------------------------------
+
+The model runs on its input device automatically. Reset independent batches
+with ``functional.reset_net`` after backward and parameter updates; see
+:doc:`./neuron` for continuous state. AMP and fused neuron execution are separate
+policies. See :doc:`./precision` for state precision and :doc:`./triton_backend`
+for compilation and diagnostics.
+
+The accuracy, curves and logs on this page come from historical experiments;
+some runs lack an exact version. They have not been retrained or verified on
+current V2, so they cannot establish its speed or accuracy.

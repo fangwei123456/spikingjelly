@@ -21,7 +21,6 @@ class QIFNode(BaseNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
-        backend="torch",
         store_v_seq: bool = False,
     ):
         """
@@ -69,10 +68,6 @@ class QIFNode(BaseNode):
 
         :param step_mode: 步进模式，可选 ``'s'`` （单步）或 ``'m'`` （多步）
         :type step_mode: str
-
-        :param backend: 计算后端。不同 ``step_mode`` 支持的后端可能不同，可通过 ``self.supported_backends`` 查看。
-            在支持的情况下，``'cupy'`` 或 ``'triton'`` 后端通常具有最高的执行效率
-        :type backend: str
 
         :param store_v_seq: 当 ``step_mode = 'm'`` 且输入形状为 ``[T, N, *]`` 时，是否保存所有时间步的膜电位序列 ``self.v_seq``（形状为 ``[T, N, *]``）。
             若为 ``False``，仅保留最后一个时间步的膜电位 ``self.v``（形状为 ``[N, *]``），以降低内存开销。
@@ -124,11 +119,6 @@ class QIFNode(BaseNode):
         :param step_mode: step mode, either ``'s'`` (single-step) or ``'m'`` (multi-step)
         :type step_mode: str
 
-        :param backend: backend for this neuron. Different ``step_mode`` may support different backends.
-            Supported backends can be queried via ``self.supported_backends``.
-            If available, ``'cupy'`` or ``'triton'`` usually provides the fastest execution
-        :type backend: str
-
         :param store_v_seq: when ``step_mode = 'm'`` and input shape is ``[T, N, *]``,
             whether to store the membrane potential at all time steps in ``self.v_seq``.
             If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage.
@@ -149,8 +139,7 @@ class QIFNode(BaseNode):
             surrogate_function,
             detach_reset,
             step_mode,
-            backend,
-            store_v_seq,
+            store_v_seq=store_v_seq,
         )
         self.tau = tau
         self.v_c = v_c
@@ -185,51 +174,32 @@ class QIFNode(BaseNode):
         )
         return (spike,), (v, *states[1:])
 
-    @property
-    def supported_backends(self):
-        if self.step_mode == "s":
-            return ("torch",)
-        elif self.step_mode == "m":
-            return ("torch", "cupy")
-        else:
-            raise ValueError(self.step_mode)
-
     def multi_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        if self.backend == "torch":
-            return super().multi_step_functional_forward(inputs, states, **kwargs)
-        elif self.backend == "cupy":
-            x_seq = inputs[0]
-            v = states[0]
-            spike_seq, v, _ = functional.qif_multi_step_cupy(
-                x_seq,
-                v,
-                self.tau,
-                self.v_threshold,
-                self.v_reset,
-                self.v_rest,
-                self.v_c,
-                self.a0,
-                self.detach_reset,
-                self.surrogate_function,
-                False,
-            )
-            return (spike_seq,), (v,)
-        else:
-            raise ValueError(self.backend)
+        spike_seq, v, _ = functional.qif_multi_step(
+            inputs[0],
+            states[0],
+            self.tau,
+            self.v_threshold,
+            self.v_reset,
+            self.v_rest,
+            self.v_c,
+            self.a0,
+            self.detach_reset,
+            self.surrogate_function,
+            False,
+        )
+        return (spike_seq,), (v,)
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
-        if not self.store_v_seq or self.backend != "cupy":
-            return super().multi_step_forward(x_seq, *args, **kwargs)
-
         states = self.materialize_states(
             (x_seq, *args), tuple(self._memories.values()), "m"
         )
-        spike_seq, self.v, self.v_seq = functional.qif_multi_step_cupy(
+        spike_seq, self.v, self.v_seq = functional.qif_multi_step(
             x_seq,
             states[0],
             self.tau,
@@ -240,7 +210,7 @@ class QIFNode(BaseNode):
             self.a0,
             self.detach_reset,
             self.surrogate_function,
-            True,
+            self.store_v_seq,
         )
         return spike_seq
 
@@ -257,7 +227,6 @@ class EIFNode(BaseNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
-        backend="torch",
         store_v_seq: bool = False,
     ):
         """
@@ -306,10 +275,6 @@ class EIFNode(BaseNode):
 
         :param step_mode: 步进模式，可选 ``'s'`` （单步）或 ``'m'`` （多步）
         :type step_mode: str
-
-        :param backend: 计算后端。不同 ``step_mode`` 支持的后端可能不同，可通过 ``self.supported_backends`` 查看。
-            在支持的情况下，``'cupy'`` 或 ``'triton'`` 后端通常具有最高的执行效率
-        :type backend: str
 
         :param store_v_seq: 当 ``step_mode = 'm'`` 且输入形状为 ``[T, N, *]`` 时，是否保存所有时间步的膜电位序列 ``self.v_seq``（形状为 ``[T, N, *]``）。
             若为 ``False``，仅保留最后一个时间步的膜电位 ``self.v``（形状为 ``[N, *]``），以降低内存开销。
@@ -362,11 +327,6 @@ class EIFNode(BaseNode):
         :param step_mode: step mode, either ``'s'`` (single-step) or ``'m'`` (multi-step)
         :type step_mode: str
 
-        :param backend: backend for this neuron. Different ``step_mode`` may support different backends.
-            Supported backends can be queried via ``self.supported_backends``.
-            If available, ``'cupy'`` or ``'triton'`` usually provides the fastest execution
-        :type backend: str
-
         :param store_v_seq: when ``step_mode = 'm'`` and input shape is ``[T, N, *]``,
             whether to store the membrane potential at all time steps in ``self.v_seq``.
             If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage.
@@ -387,8 +347,7 @@ class EIFNode(BaseNode):
             surrogate_function,
             detach_reset,
             step_mode,
-            backend,
-            store_v_seq,
+            store_v_seq=store_v_seq,
         )
         self.tau = tau
         self.delta_T = delta_T
@@ -423,51 +382,32 @@ class EIFNode(BaseNode):
         )
         return (spike,), (v, *states[1:])
 
-    @property
-    def supported_backends(self):
-        if self.step_mode == "s":
-            return ("torch",)
-        elif self.step_mode == "m":
-            return ("torch", "cupy")
-        else:
-            raise ValueError(self.step_mode)
-
     def multi_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        if self.backend == "torch":
-            return super().multi_step_functional_forward(inputs, states, **kwargs)
-        elif self.backend == "cupy":
-            x_seq = inputs[0]
-            v = states[0]
-            spike_seq, v, _ = functional.eif_multi_step_cupy(
-                x_seq,
-                v,
-                self.tau,
-                self.v_threshold,
-                self.v_reset,
-                self.v_rest,
-                self.theta_rh,
-                self.delta_T,
-                self.detach_reset,
-                self.surrogate_function,
-                False,
-            )
-            return (spike_seq,), (v,)
-        else:
-            raise ValueError(self.backend)
+        spike_seq, v, _ = functional.eif_multi_step(
+            inputs[0],
+            states[0],
+            self.tau,
+            self.v_threshold,
+            self.v_reset,
+            self.v_rest,
+            self.theta_rh,
+            self.delta_T,
+            self.detach_reset,
+            self.surrogate_function,
+            False,
+        )
+        return (spike_seq,), (v,)
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
-        if not self.store_v_seq or self.backend != "cupy":
-            return super().multi_step_forward(x_seq, *args, **kwargs)
-
         states = self.materialize_states(
             (x_seq, *args), tuple(self._memories.values()), "m"
         )
-        spike_seq, self.v, self.v_seq = functional.eif_multi_step_cupy(
+        spike_seq, self.v, self.v_seq = functional.eif_multi_step(
             x_seq,
             states[0],
             self.tau,
@@ -478,6 +418,6 @@ class EIFNode(BaseNode):
             self.delta_T,
             self.detach_reset,
             self.surrogate_function,
-            True,
+            self.store_v_seq,
         )
         return spike_seq

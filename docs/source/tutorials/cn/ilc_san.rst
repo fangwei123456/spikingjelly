@@ -66,8 +66,6 @@
             self.neurons = neuron.IFNode(v_threshold=0.999, v_reset=None, surrogate_function=surrogate.DeterministicPass(), detach_reset=True)
 
             functional.set_step_mode(self, step_mode='m')
-            functional.set_backend(self, backend='torch')
-
         def forward(self, obs):
             obs = obs.view(-1, self.obs_dim, 1)
 
@@ -108,8 +106,6 @@
             self.hidden_layers = nn.Sequential(hidden_layers)
 
             functional.set_step_mode(self, step_mode='m')
-            functional.set_backend(self, backend='torch')
-
         def forward(self, in_pop_spikes):
             return self.hidden_layers(in_pop_spikes)
 
@@ -135,8 +131,6 @@
                 )
 
                 functional.set_step_mode(self, step_mode='m')
-                functional.set_backend(self, backend='torch')
-
         def forward(self, out_pop_spikes):
             if self.decode == 'fr-mlp':
                 out_pop_fr = out_pop_spikes.mean(dim=0).view(-1, self.act_dim, self.pop_dim)

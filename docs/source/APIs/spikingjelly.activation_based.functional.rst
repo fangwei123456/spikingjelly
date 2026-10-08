@@ -34,11 +34,11 @@ spikingjelly.activation_based.functional package
 Network Configuration Functions
 +++++++++++++++++++++++++++++++++++
 
-这些函数帮助用户统一设置网络中每个 **子模块的配置** ，如步进模式、后端等。
+这些函数帮助用户统一设置网络中每个 **子模块的配置** ，如步进模式。
 
 ----
 
-These functions help users set **configurations for each submodule** in a network, such as step mode and backend.
+These functions help users set **configurations for each submodule** in a network, such as step mode.
 
 .. list-table::
 
@@ -46,8 +46,6 @@ These functions help users set **configurations for each submodule** in a networ
      - Reset the state of a network.
    * - :func:`set_step_mode <spikingjelly.activation_based.functional.net_config.set_step_mode>`
      - Set the step mode for a network.
-   * - :func:`set_backend <spikingjelly.activation_based.functional.net_config.set_backend>`
-     - Set the computational backend for a network.
    * - :func:`detach_net <spikingjelly.activation_based.functional.net_config.detach_net>`
      - Detach the network's parameters from the computation graph.
 
@@ -86,21 +84,22 @@ SpikingJelly's **forward functions** provide multi-step forward propagation logi
 Neuron State Updates
 ++++++++++++++++++++
 
-这些函数显式接收并返回神经元状态。``*_step`` 表示一个时间步的完整更新；
-``*_multi_step`` 表示具有独立实现的时间序列更新，而不是对 ``*_step`` 的 Python
-循环包装。backend 仍由 ``MemoryModule`` 选择，因此 backend 专用函数在名称中
-标出 ``cupy`` 或 ``triton``。
+这些函数显式接收并返回神经元状态。``*_step`` 表示一个时间步的完整更新，
+``*_multi_step`` 消费时间优先序列并返回最终状态。设备决定执行路径：CPU 使用
+Torch 参考实现，CUDA 通过注册算子自动选择实现。神经元模块不公开 backend 参数。
 
 ----
 
 These functions receive and return neuron states explicitly. ``*_step`` denotes
-one complete time-step update. ``*_multi_step`` denotes an independently implemented
-sequence update, not a Python-loop wrapper around ``*_step``. Backend selection
-remains a ``MemoryModule`` responsibility, so backend-specific functions identify
-``cupy`` or ``triton`` in their names.
+one complete time-step update; ``*_multi_step`` consumes a time-major sequence
+and returns the final state. The input device selects execution: CPU uses the
+Torch reference, while CUDA selects an implementation through the registered
+operator. Neuron modules do not expose a backend argument.
 
 .. list-table::
 
+   * - :func:`neuron_implementation <spikingjelly.activation_based.functional.neuron.neuron_implementation>`
+     - Query the automatically selected implementation for a neuron and device.
    * - :func:`if_step <spikingjelly.activation_based.functional.neuron.if_step>`
      - One IF state update.
    * - :func:`qif_step <spikingjelly.activation_based.functional.neuron.qif_step>`
@@ -131,30 +130,6 @@ remains a ``MemoryModule`` responsibility, so backend-specific functions identif
      - One GatedLIF state update.
    * - :func:`stbif_step <spikingjelly.activation_based.functional.neuron.stbif_step>`
      - One SpikeZIP STBIF state update.
-   * - :func:`if_step_cupy <spikingjelly.activation_based.functional.neuron.if_step_cupy>`
-     - One IF update with caller-selected CuPy kernels.
-   * - :func:`lif_step_cupy <spikingjelly.activation_based.functional.neuron.lif_step_cupy>`
-     - One LIF update with caller-selected CuPy kernels.
-   * - :func:`if_multi_step_cupy <spikingjelly.activation_based.functional.neuron.if_multi_step_cupy>`
-     - IF sequence update with CuPy.
-   * - :func:`lif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.lif_multi_step_cupy>`
-     - LIF sequence update with CuPy.
-   * - :func:`plif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.plif_multi_step_cupy>`
-     - ParametricLIF sequence update with CuPy.
-   * - :func:`qif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.qif_multi_step_cupy>`
-     - QIF sequence update with CuPy.
-   * - :func:`eif_multi_step_cupy <spikingjelly.activation_based.functional.neuron.eif_multi_step_cupy>`
-     - EIF sequence update with CuPy.
-   * - :func:`izhikevich_multi_step_cupy <spikingjelly.activation_based.functional.neuron.izhikevich_multi_step_cupy>`
-     - Izhikevich sequence update with CuPy.
-   * - :func:`if_multi_step_triton <spikingjelly.activation_based.functional.neuron.if_multi_step_triton>`
-     - IF sequence update with Triton.
-   * - :func:`lif_multi_step_triton <spikingjelly.activation_based.functional.neuron.lif_multi_step_triton>`
-     - LIF sequence update with Triton.
-   * - :func:`plif_multi_step_triton <spikingjelly.activation_based.functional.neuron.plif_multi_step_triton>`
-     - ParametricLIF sequence update with Triton.
-   * - :func:`activation_aware_if_multi_step_triton <spikingjelly.activation_based.functional.neuron.activation_aware_if_multi_step_triton>`
-     - ActivationAwareIF sequence update with Triton.
 
 以下示例分别展示单状态、多状态和队列状态。最后的 IF 与 Delay 各自管理局部状态；
 组合时无需把两个状态合成通用容器。函数不读取或写入 ``MemoryModule`` memory。
@@ -321,3 +296,10 @@ Other auxiliary **tool functions** .
    :hidden:
 
    misc <spikingjelly.activation_based.functional.misc>
+
+Binary Spike Operators / 二值脉冲算子
+++++++++++++++++++++++++++++++++++++++
+
+.. toctree::
+
+   spike <spikingjelly.activation_based.functional.spike>

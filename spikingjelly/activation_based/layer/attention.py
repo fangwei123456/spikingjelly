@@ -303,7 +303,6 @@ class SpikingSelfAttention(nn.Module):
         self,
         dim: int,
         num_heads: int = 8,
-        backend: str = "torch",
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         **kwargs: Any,
     ) -> None:
@@ -331,8 +330,6 @@ class SpikingSelfAttention(nn.Module):
         :param num_heads: 多头自注意力的头数量，默认为 ``8``
         :type num_heads: int
 
-        :param backend: 本模块内部神经元使用的后端，默认为 ``torch``
-        :type backend: str
         :param spiking_neuron: 自定义神经元类；``None`` 保留各位置的默认 LIF 参数
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
         :param kwargs: 传给所有内部神经元的参数；指定自定义类时统一决定其构造
@@ -364,8 +361,6 @@ class SpikingSelfAttention(nn.Module):
         :param num_heads: number of heads in multi-head self-attention. Default: ``8``
         :type num_heads: int
 
-        :param backend: backend used by the internal neurons of this module. Default: ``torch``
-        :type backend: str
         :param spiking_neuron: custom neuron class; ``None`` keeps each position's
             default LIF parameters
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
@@ -386,11 +381,10 @@ class SpikingSelfAttention(nn.Module):
             nn.BatchNorm1d(dim * 3),
         )
         self.qkv_lif = _make_multi_step_neuron(
-            backend, spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
+            spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
         )
 
         self.attn_lif = _make_multi_step_neuron(
-            backend,
             spiking_neuron,
             kwargs,
             {"tau": 2.0, "v_threshold": 0.5, "detach_reset": True},
@@ -401,23 +395,8 @@ class SpikingSelfAttention(nn.Module):
             nn.BatchNorm1d(dim),
         )
         self.proj_lif = _make_multi_step_neuron(
-            backend, spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
+            spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
         )
-
-    @property
-    def backend(self):
-        """
-        一旦设置，本模块中所有神经元的后端都会被同样地设置。
-
-        Once set, the backend of all neurons in this module is changed together.
-        """
-        return self.qkv_lif.backend
-
-    @backend.setter
-    def backend(self, value: str):
-        self.qkv_lif.backend = value
-        self.attn_lif.backend = value
-        self.proj_lif.backend = value
 
     @staticmethod
     def _ssa_kernel_torch(qkv, scale):
@@ -460,7 +439,7 @@ class SpikingSelfAttention(nn.Module):
         return x_seq
 
     def extra_repr(self):
-        return f"dim={self.dim}, num_heads={self.num_heads}, backend={self.backend}"
+        return f"dim={self.dim}, num_heads={self.num_heads}"
 
 
 class QKAttention(nn.Module):
@@ -469,7 +448,6 @@ class QKAttention(nn.Module):
         dim: int,
         num_heads: int = 8,
         qka_type: str = "token",
-        backend: str = "torch",
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         **kwargs: Any,
     ) -> None:
@@ -499,8 +477,6 @@ class QKAttention(nn.Module):
         :param qka_type: QKAttention的类型，可选值为 ``token`` 和 ``channel``。默认为 ``token``，生成逐token的掩码
         :type qka_type: str
 
-        :param backend: 本模块内部神经元使用的后端，默认为 ``torch``
-        :type backend: str
         :param spiking_neuron: 自定义神经元类；``None`` 保留各位置的默认 LIF 参数
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
         :param kwargs: 传给所有内部神经元的参数；指定自定义类时统一决定其构造
@@ -536,8 +512,6 @@ class QKAttention(nn.Module):
                           The default is ``token``, which generates a token-wise mask.
         :type qka_type: str
 
-        :param backend: backend used by the internal neurons of this module. Default: ``torch``.
-        :type backend: str
         :param spiking_neuron: custom neuron class; ``None`` keeps each position's
             default LIF parameters
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
@@ -562,12 +536,11 @@ class QKAttention(nn.Module):
             nn.BatchNorm1d(dim * 2),
         )
         self.qk_lif = _make_multi_step_neuron(
-            backend, spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
+            spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
         )
 
         self.sum_dim = 3 if qka_type == "token" else 4
         self.attn_lif = _make_multi_step_neuron(
-            backend,
             spiking_neuron,
             kwargs,
             {"tau": 2.0, "v_threshold": 0.5, "detach_reset": True},
@@ -578,23 +551,8 @@ class QKAttention(nn.Module):
             nn.BatchNorm1d(dim),
         )
         self.proj_lif = _make_multi_step_neuron(
-            backend, spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
+            spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
         )
-
-    @property
-    def backend(self):
-        """
-        一旦设置，本模块中所有神经元的后端都会被同样地设置。
-
-        Once set, the backend of all neurons in this module is changed together.
-        """
-        return self.qk_lif.backend
-
-    @backend.setter
-    def backend(self, value: str):
-        self.qk_lif.backend = value
-        self.attn_lif.backend = value
-        self.proj_lif.backend = value
 
     @property
     def qka_type(self):
@@ -643,10 +601,7 @@ class QKAttention(nn.Module):
         return x_seq
 
     def extra_repr(self):
-        return (
-            f"dim={self.dim}, num_heads={self.num_heads}, "
-            f"qka_type={self.qka_type}, backend={self.backend}"
-        )
+        return f"dim={self.dim}, num_heads={self.num_heads}, qka_type={self.qka_type}"
 
 
 class TokenQKAttention(QKAttention):
@@ -654,7 +609,6 @@ class TokenQKAttention(QKAttention):
         self,
         dim: int,
         num_heads: int = 8,
-        backend: str = "torch",
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         **kwargs: Any,
     ) -> None:
@@ -673,8 +627,6 @@ class TokenQKAttention(QKAttention):
         :type dim: int
         :param num_heads: 注意力头数，默认 ``8``。
         :type num_heads: int
-        :param backend: 内部神经元使用的后端，默认 ``"torch"``。
-        :type backend: str
         :param spiking_neuron: 自定义神经元类；``None`` 保留每个位置的默认 LIF 参数。
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
         :param kwargs: 传给所有内部神经元的构造参数；自定义类时统一生效。
@@ -694,8 +646,6 @@ class TokenQKAttention(QKAttention):
         :type dim: int
         :param num_heads: Number of attention heads. Default: ``8``.
         :type num_heads: int
-        :param backend: Backend used by internal neurons. Default: ``"torch"``.
-        :type backend: str
         :param spiking_neuron: Custom neuron class; ``None`` keeps each position's
             default LIF parameters.
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
@@ -708,7 +658,6 @@ class TokenQKAttention(QKAttention):
             dim,
             num_heads,
             qka_type="token",
-            backend=backend,
             spiking_neuron=spiking_neuron,
             **kwargs,
         )
@@ -719,7 +668,6 @@ class ChannelQKAttention(QKAttention):
         self,
         dim: int,
         num_heads: int = 8,
-        backend: str = "torch",
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         **kwargs: Any,
     ) -> None:
@@ -738,8 +686,6 @@ class ChannelQKAttention(QKAttention):
         :type dim: int
         :param num_heads: 注意力头数，默认 ``8``。
         :type num_heads: int
-        :param backend: 内部神经元使用的后端，默认 ``"torch"``。
-        :type backend: str
         :param spiking_neuron: 自定义神经元类；``None`` 保留每个位置的默认 LIF 参数。
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
         :param kwargs: 传给所有内部神经元的构造参数；自定义类时统一生效。
@@ -759,8 +705,6 @@ class ChannelQKAttention(QKAttention):
         :type dim: int
         :param num_heads: Number of attention heads. Default: ``8``.
         :type num_heads: int
-        :param backend: Backend used by internal neurons. Default: ``"torch"``.
-        :type backend: str
         :param spiking_neuron: Custom neuron class; ``None`` keeps each position's
             default LIF parameters.
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
@@ -773,7 +717,6 @@ class ChannelQKAttention(QKAttention):
             dim,
             num_heads,
             qka_type="channel",
-            backend=backend,
             spiking_neuron=spiking_neuron,
             **kwargs,
         )
@@ -784,7 +727,6 @@ class SpikeDrivenSelfAttention(nn.Module):
         self,
         dim: int,
         num_heads: int = 8,
-        backend: str = "torch",
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         **kwargs: Any,
     ) -> None:
@@ -805,8 +747,6 @@ class SpikeDrivenSelfAttention(nn.Module):
         :type dim: int
         :param num_heads: attention head 数
         :type num_heads: int
-        :param backend: 内部脉冲神经元使用的后端
-        :type backend: str
         :param spiking_neuron: 自定义神经元类；``None`` 保留各位置的默认 LIF 参数
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
         :param kwargs: 传给所有内部神经元的参数；指定自定义类时统一决定其构造
@@ -828,8 +768,6 @@ class SpikeDrivenSelfAttention(nn.Module):
         :type dim: int
         :param num_heads: number of attention heads
         :type num_heads: int
-        :param backend: backend used by the internal spiking neurons
-        :type backend: str
         :param spiking_neuron: custom neuron class; ``None`` keeps each position's
             default LIF parameters
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
@@ -850,72 +788,30 @@ class SpikeDrivenSelfAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.shortcut_lif = _make_multi_step_neuron(
-            backend, spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
+            spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
         )
         self.q_conv = Conv2d(dim, dim, 1, bias=False, step_mode="m")
         self.q_bn = BatchNorm2d(dim, step_mode="m")
         self.q_lif = _make_multi_step_neuron(
-            backend, spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
+            spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
         )
         self.k_conv = Conv2d(dim, dim, 1, bias=False, step_mode="m")
         self.k_bn = BatchNorm2d(dim, step_mode="m")
         self.k_lif = _make_multi_step_neuron(
-            backend, spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
+            spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
         )
         self.v_conv = Conv2d(dim, dim, 1, bias=False, step_mode="m")
         self.v_bn = BatchNorm2d(dim, step_mode="m")
         self.v_lif = _make_multi_step_neuron(
-            backend, spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
+            spiking_neuron, kwargs, {"tau": 2.0, "detach_reset": True}
         )
         self.attn_lif = _make_multi_step_neuron(
-            backend,
             spiking_neuron,
             kwargs,
             {"tau": 2.0, "v_threshold": 0.5, "detach_reset": True},
         )
         self.proj_conv = Conv2d(dim, dim, 1, step_mode="m")
         self.proj_bn = BatchNorm2d(dim, step_mode="m")
-
-    @property
-    def backend(self) -> str:
-        r"""
-        **API Language** - :ref:`中文 <SpikeDrivenSelfAttention.backend-cn>` | :ref:`English <SpikeDrivenSelfAttention.backend-en>`
-
-        ----
-
-        .. _SpikeDrivenSelfAttention.backend-cn:
-
-        * **中文**
-
-        内部脉冲神经元的后端。赋值会同时更新所有内部脉冲神经元。
-
-        :return: 后端名称
-        :rtype: str
-
-        ----
-
-        .. _SpikeDrivenSelfAttention.backend-en:
-
-        * **English**
-
-        Backend of the internal spiking neurons. Assignment updates every internal
-        spiking neuron.
-
-        :return: backend name
-        :rtype: str
-        """
-        return self.q_lif.backend
-
-    @backend.setter
-    def backend(self, value: str) -> None:
-        for module in (
-            self.shortcut_lif,
-            self.q_lif,
-            self.k_lif,
-            self.v_lif,
-            self.attn_lif,
-        ):
-            module.backend = value
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         r"""
@@ -969,4 +865,4 @@ class SpikeDrivenSelfAttention(nn.Module):
         return self.proj_bn(self.proj_conv(x)) + identity
 
     def extra_repr(self) -> str:
-        return f"dim={self.dim}, num_heads={self.num_heads}, backend={self.backend}"
+        return f"dim={self.dim}, num_heads={self.num_heads}"

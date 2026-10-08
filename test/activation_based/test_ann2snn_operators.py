@@ -179,9 +179,6 @@ def test_td_multistep_compact_state_preserves_chunked_gradients():
     y_chunked = torch.cat((chunked(x_chunked[:3]), chunked(x_chunked[3:])))
     y_chunked.square().sum().backward()
 
-    # The chunked run accumulates the same values in a different order, so the
-    # difference is float32 rounding noise; the previous atol=1e-6/1e-5 bounds
-    # sat right at the observed noise and made this test flaky on random input.
     torch.testing.assert_close(y_chunked, y_full)
     torch.testing.assert_close(x_chunked.grad, x_full.grad)
     torch.testing.assert_close(chunked.weight.grad, full.weight.grad)
@@ -1507,3 +1504,26 @@ class TestTDMultiheadAttention:
                 attn_mask=torch.zeros(5, 5),
                 is_causal=True,
             )
+
+
+@pytest.mark.parametrize("implementation", ["cpu", "reference"])
+def test_activation_aware_scalar_parameters_do_not_build_channel_indices(
+    implementation, monkeypatch
+):
+    import importlib
+
+    module = importlib.import_module(
+        "spikingjelly._ops.activation_aware_if." + implementation
+    )
+    x = torch.tensor([[0.4, 1.1, 0.2], [0.8, 0.1, 1.0]])
+    v = torch.zeros(3)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("scalar parameters must not allocate channel indices")
+
+    monkeypatch.setattr(torch, "arange", forbidden)
+    output, final = module._forward_impl(
+        x, v, torch.tensor(1.0), torch.tensor(0.0), 3, 1, 0.0, False
+    )
+    torch.testing.assert_close(output, torch.tensor([[0.0, 1.0, 0.0], [1.0, 0.0, 1.0]]))
+    torch.testing.assert_close(final, torch.tensor([0.0, 0.1, 0.0]))

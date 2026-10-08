@@ -429,7 +429,6 @@ The ``vit-small-imagenet-relu-q32-81.59.pth`` checkpoint used in this tutorial c
       --device cuda:0 \
       --time-steps 64 \
       --step-mode m \
-      --stbif-backend triton \
       --batch-size 16 \
       --snn-batch-size 4 \
       --samples 50000 \
@@ -458,7 +457,7 @@ The full validation result below was measured on ``g2`` with an NVIDIA A100-SXM4
       - 50000
       - 81.566
       - 96.034
-      - ``step_mode="m"``, ``stbif_backend="triton"``
+      - ``step_mode="m"`` with automatic CUDA execution
 
 The Top-1 difference is ``+0.090`` percentage points, and the Top-1 prediction agreement is ``97.34%``. QANN inference took ``79.20`` seconds; SNN inference took ``3719.15`` seconds (``61.99`` minutes), using ``snn_batch_size=4`` and peaking at ``25.63`` GiB of allocated CUDA memory. In the benchmark output, ``parity_pass=false`` because that field checks logits with ``torch.allclose(snn_logits, qann_logits, atol=parity_atol, rtol=1e-5)``; this run used ``parity_atol=1e-4``.
 
@@ -775,7 +774,6 @@ requires the pinned WikiText-2 calibration protocol in
         time_steps=160,
         calibration_levels=16,
         calibration_quantile=0.999,
-        neuron_backend="triton",
     )
     calibration_text = [
         "Spiking neural networks communicate with discrete events.",
@@ -815,8 +813,8 @@ requires the pinned WikiText-2 calibration protocol in
 The calibration state contains tensors and basic Python values and can be
 restored with ``Qwen2SNNCalibration.from_state_dict(torch.load(...,
 weights_only=True))``. Calibration metadata must exactly match the conversion
-configuration. Use the Torch neuron backend for a reference implementation;
-the Triton backend is CUDA, multi-step, inference-only.
+configuration. Use the CPU uses the Torch reference; CUDA automatically selects a compatible
+inference implementation for STBIF.
 
 Reference quality evidence
 ^^^^^^^^^^^^^^^^^^^^^^^^^^

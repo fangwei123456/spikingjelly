@@ -8,6 +8,7 @@ from typing import Callable
 import torch
 
 from .. import base
+from spikingjelly.logger import logger
 
 __all__ = ["FlexSN"]
 
@@ -83,7 +84,6 @@ class FlexSN(base.MemoryModule):
         num_states: int,
         static_inputs: tuple[torch.Tensor, ...] = (),
         step_mode: str = "m",
-        backend: str = "triton",
         store_state_seqs: bool = False,
     ) -> None:
         r"""
@@ -109,16 +109,13 @@ class FlexSN(base.MemoryModule):
         :param static_inputs: 每个时间步复用的 Tensor。Parameter 注册为参数，
             其他 Tensor 注册为 buffer。
         :type static_inputs: tuple[torch.Tensor, ...]
-        :param step_mode: ``"s"`` 或 ``"m"``。HOP/Triton 仅支持 ``"m"``。
+        :param step_mode: ``"s"`` 或 ``"m"``；CUDA 多步调用自动选择兼容实现。
         :type step_mode: str
-        :param backend: ``"torch"``、``"hop"`` 或 ``"triton"``。
-        :type backend: str
         :param store_state_seqs: managed 多步调用是否保存完整状态序列。
         :type store_state_seqs: bool
         :raises TypeError: ``core`` 捕获 Tensor/模块，或 static input 不是 Tensor。
-        :raises ValueError: 参数或 backend/step-mode 组合无效。
+        :raises ValueError: 参数或 step_mode 无效。
         :raises RuntimeError: ``core`` 无法使用构造期单位张量执行。
-        :raises ImportError: 选择 Triton 后端但未安装 Triton。
 
         ----
 
@@ -143,16 +140,13 @@ class FlexSN(base.MemoryModule):
         :param static_inputs: Tensors reused at every step. Parameters are
             registered as parameters and other tensors as buffers.
         :type static_inputs: tuple[torch.Tensor, ...]
-        :param step_mode: ``"s"`` or ``"m"``; HOP/Triton only support ``"m"``.
+        :param step_mode: ``"s"`` or ``"m"``; CUDA multi-step calls select a compatible implementation automatically.
         :type step_mode: str
-        :param backend: ``"torch"``, ``"hop"``, or ``"triton"``.
-        :type backend: str
         :param store_state_seqs: Save full state sequences for managed multi-step calls.
         :type store_state_seqs: bool
         :raises TypeError: If ``core`` captures tensors/modules or a static input is not a Tensor.
-        :raises ValueError: If an argument or backend/step-mode combination is invalid.
+        :raises ValueError: If an argument or step_mode is invalid.
         :raises RuntimeError: If ``core`` cannot run with the construction-time unit tensors.
-        :raises ImportError: If the Triton backend is selected without Triton installed.
         """
         super().__init__()
         if not callable(core):
@@ -188,12 +182,12 @@ class FlexSN(base.MemoryModule):
         self._triton_handle: int | None = None
         self._triton_handle_finalizer = None
         self._triton_runtime_dtype: torch.dtype | None = None
+        self._triton_capability: dict[tuple[torch.device, torch.dtype], bool] = {}
         self.state_seqs: tuple[torch.Tensor, ...] | None = None
         self._store_state_seqs = bool(store_state_seqs)
 
         self._infer_output_arity()
         self.step_mode = step_mode
-        self.backend = backend
 
     @property
     def static_inputs(self) -> tuple[torch.Tensor, ...]:
@@ -225,28 +219,6 @@ class FlexSN(base.MemoryModule):
         self.state_seqs = None
 
     @property
-    def supported_backends(self) -> tuple[str, ...]:
-        return ("torch", "hop", "triton")
-
-    @property
-    def backend(self) -> str:
-        return self._backend
-
-    @backend.setter
-    def backend(self, value: str) -> None:
-        if value not in self.supported_backends:
-            raise NotImplementedError(f"Unsupported FlexSN backend: {value!r}.")
-        if value != "torch" and self.step_mode != "m":
-            raise RuntimeError(f"FlexSN backend={value!r} requires step_mode='m'.")
-        if value == "triton":
-            base.check_backend_library(value)
-        self._backend = value
-        if hasattr(self, "state_seqs"):
-            self.state_seqs = None
-        if hasattr(self, "_triton_handle"):
-            self._build_triton_runtime()
-
-    @property
     def step_mode(self) -> str:
         return self._step_mode
 
@@ -254,11 +226,6 @@ class FlexSN(base.MemoryModule):
     def step_mode(self, value: str) -> None:
         if value not in ("s", "m"):
             raise ValueError(f"Unsupported FlexSN step_mode: {value!r}.")
-        backend = getattr(self, "_backend", "torch")
-        if value == "s" and backend != "torch":
-            raise RuntimeError(
-                f"FlexSN backend={backend!r} does not support step_mode='s'."
-            )
         self._step_mode = value
         if hasattr(self, "state_seqs"):
             self.state_seqs = None
@@ -470,7 +437,8 @@ class FlexSN(base.MemoryModule):
         static_inputs: tuple[torch.Tensor, ...],
         store_state_seqs: bool,
     ):
-        from ..triton_kernel.flexsn.hop import _eager_scan, _hop_scan
+        from ..._ops.flexsn.hop import _eager_scan
+        from .flexsn_hop import _hop_scan
 
         num_outputs = self._num_outputs
         flat_args = (*inputs, *states, *static_inputs)
@@ -499,21 +467,21 @@ class FlexSN(base.MemoryModule):
         dtype: torch.dtype,
         device: torch.device,
     ) -> None:
+        if device.type != "cuda":
+            raise RuntimeError("FlexSN Triton lowering requires CUDA tensors.")
         if self._triton_handle is not None:
             if self._triton_runtime_dtype == dtype:
                 return
             self._release_triton_runtime()
         if not torch.cuda.is_available():
-            raise RuntimeError("FlexSN backend='triton' requires CUDA.")
+            raise RuntimeError("FlexSN Triton lowering requires CUDA.")
 
-        from ..triton_kernel.flexsn.custom_ops import (
-            attach_flexsn_handle_finalizer,
-            register_flexsn_kernel_handle,
+        from ..._ops.flexsn.triton import (
+            _attach_handle_finalizer,
+            _register_kernel_handle,
         )
-        from ..triton_kernel.flexsn.kernel import (
-            build_inference_kernels,
-            build_training_kernels,
-        )
+        from ..._ops.flexsn.kernel import _build_kernels
+        from .flexsn_trace import _trace_core
 
         total_states = self.num_states + len(self._static_input_names)
         examples = tuple(
@@ -521,49 +489,15 @@ class FlexSN(base.MemoryModule):
             for _ in range(self._num_inputs + total_states)
         )
         wrapped = self._wrapped_core(self._num_inputs, self._num_outputs)
-        with torch.enable_grad():
-            inference_kernel, final_kernel, inference_info = build_inference_kernels(
-                wrapped,
-                self._num_inputs,
-                total_states,
-                self._num_outputs,
-                examples,
-            )
-            forward_kernel, backward_kernel, training_info = build_training_kernels(
-                wrapped,
-                self._num_inputs,
-                total_states,
-                self._num_outputs,
-                examples,
-            )
-        self._triton_handle = register_flexsn_kernel_handle(
-            inference_kernel=inference_kernel,
-            inference_info=inference_info,
-            inference_final_state_kernel=final_kernel,
-            forward_kernel=forward_kernel,
-            backward_kernel=backward_kernel,
-            training_info=training_info,
+        graphs = _trace_core(wrapped, examples, self._num_outputs, total_states)
+        kernels = _build_kernels(
+            wrapped.__name__, self._num_inputs, total_states, self._num_outputs, *graphs
         )
-        self._triton_handle_finalizer = attach_flexsn_handle_finalizer(
+        self._triton_handle = _register_kernel_handle(**kernels)
+        self._triton_handle_finalizer = _attach_handle_finalizer(
             self, self._triton_handle
         )
         self._triton_runtime_dtype = dtype
-
-    def _build_triton_runtime(self) -> None:
-        if (
-            self.backend != "triton"
-            or self.step_mode != "m"
-            or self._triton_handle is not None
-            or not torch.cuda.is_available()
-        ):
-            return
-        static_inputs = self.static_inputs
-        dtype = static_inputs[0].dtype if static_inputs else torch.float32
-        device = next(
-            (tensor.device for tensor in static_inputs if tensor.device.type == "cuda"),
-            torch.device("cuda", torch.cuda.current_device()),
-        )
-        self._ensure_triton_runtime(dtype, device)
 
     def _infer_output_arity(self) -> None:
         static_inputs = self.static_inputs
@@ -597,7 +531,7 @@ class FlexSN(base.MemoryModule):
         store_state_seqs: bool,
         reference: torch.Tensor,
     ):
-        from ..triton_kernel.flexsn.custom_ops import (
+        from ..._ops.flexsn.triton import (
             flexsn_triton_inference,
             flexsn_triton_training,
         )
@@ -629,15 +563,37 @@ class FlexSN(base.MemoryModule):
         store_state_seqs: bool,
     ):
         reference = self._validate_operands(inputs, states, static_inputs, "m")
-        if self.backend == "torch":
+        if reference.device.type != "cuda":
             return self._torch_scan(inputs, states, static_inputs, store_state_seqs)
-        if self.backend == "hop":
-            return self._hop_scan(inputs, states, static_inputs, store_state_seqs)
-        if self.backend == "triton":
+        key = (reference.device, reference.dtype)
+        if key not in self._triton_capability:
+            try:
+                self._ensure_triton_runtime(reference.dtype, reference.device)
+            except (
+                ImportError,
+                OSError,
+                NotImplementedError,
+                torch.fx.proxy.TraceError,
+            ) as error:
+                self._triton_capability[key] = False
+                logger.info(
+                    "FlexSN selection device={} dtype={} implementation=hop reason={}",
+                    reference.device,
+                    reference.dtype,
+                    error,
+                )
+            else:
+                self._triton_capability[key] = True
+                logger.info(
+                    "FlexSN selection device={} dtype={} implementation=triton",
+                    reference.device,
+                    reference.dtype,
+                )
+        if self._triton_capability[key]:
             return self._triton_scan(
                 inputs, states, static_inputs, store_state_seqs, reference
             )
-        raise ValueError(self.backend)
+        return self._hop_scan(inputs, states, static_inputs, store_state_seqs)
 
     def multi_step_functional_forward(
         self,
@@ -682,8 +638,8 @@ class FlexSN(base.MemoryModule):
 
     def _apply(self, fn):
         self._release_triton_runtime()
+        self._triton_capability.clear()
         result = super()._apply(fn)
-        self._build_triton_runtime()
         return result
 
     def __deepcopy__(self, memo):
@@ -717,5 +673,5 @@ class FlexSN(base.MemoryModule):
         return (
             f"core={core_name}, num_states={self.num_states}, "
             f"num_static_inputs={len(self._static_input_names)}, "
-            f"step_mode={self.step_mode!r}, backend={self.backend!r}"
+            f"step_mode={self.step_mode!r}"
         )

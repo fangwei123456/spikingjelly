@@ -6,7 +6,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from . import quantize
-from .cuda_kernel.auto_cuda import cfunction
 
 
 def heaviside(x: torch.Tensor):
@@ -131,100 +130,6 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
         "manual=",
         x_grad_manual[idx],
     )
-
-
-def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
-    r"""
-    **API Language** - :ref:`中文 <check_cuda_grad-cn>` | :ref:`English <check_cuda_grad-en>`
-
-    ----
-
-    .. _check_cuda_grad-cn:
-
-    * **中文**
-
-    检查CUDA（CuPy）后端的梯度是否正确。将CuPy后端的梯度与PyTorch后端的梯度进行比较。
-
-    :param neu: 神经元类
-    :type neu: type
-    :param surrogate_function: 替代函数类（未实例化）
-    :type surrogate_function: type
-    :param device: 设备
-    :type device: str or torch.device
-    :param args: 传递给替代函数的位置参数
-    :type args: tuple
-    :param kwargs: 传递给替代函数的关键字参数
-    :type kwargs: dict
-    :return: 无返回值，直接打印对比结果
-
-    .. admonition:: Example
-        :class: tip
-
-        .. code-block:: python
-
-            check_cuda_grad(
-                neuron.IFNode, surrogate.S2NN, device="cuda:1", alpha=4.0, beta=1.0
-            )
-
-    ----
-
-    .. _check_cuda_grad-en:
-
-    * **English**
-
-    Check whether the CUDA (CuPy) backend gradient is correct, by comparing the gradient of CuPy backend
-    and the PyTorch backend.
-
-    :param neu: neuron class
-    :type neu: type
-    :param surrogate_function: surrogate function class (not instantiated)
-    :type surrogate_function: type
-    :param device: device
-    :type device: str or torch.device
-    :param args: positional arguments to pass to the surrogate function
-    :type args: tuple
-    :param kwargs: keyword arguments to pass to the surrogate function
-    :type kwargs: dict
-    :return: no return value, directly prints comparison results
-
-    .. admonition:: Example
-        :class: tip
-
-        .. code-block:: python
-
-            check_cuda_grad(
-                neuron.IFNode, surrogate.S2NN, device="cuda:1", alpha=4.0, beta=1.0
-            )
-    """
-    for dtype in [torch.float, torch.half]:
-        print("Checking CUDA surrogate gradient dtype=", dtype)
-        net = neu(surrogate_function=surrogate_function(*args, **kwargs), step_mode="m")
-        net.to(device)
-        x = torch.arange(-2, 2, 32 / 8192, device=device, dtype=dtype)
-        x.requires_grad_(True)
-        net.backend = "torch"
-        net(x.unsqueeze(0)).sum().backward()
-        x_grad_py = x.grad.clone()
-        x.grad.zero_()
-        net.reset()
-        net.backend = "cupy"
-        net(x.unsqueeze(0)).sum().backward()
-
-        x_grad_cp = x.grad.clone()
-        abs_error = (x_grad_cp - x_grad_py).abs()
-        idx = abs_error.argmax()
-        print(
-            "CUDA surrogate gradient maximum error=",
-            abs_error[idx],
-            "at x=",
-            x[idx],
-        )
-        print(
-            "CUDA surrogate gradient values: python=",
-            x_grad_py[idx],
-            "cupy=",
-            x_grad_cp[idx],
-        )
 
 
 def plot_surrogate_function(surrogate_function):
@@ -356,46 +261,6 @@ class SurrogateFunctionBase(nn.Module):
             return self.spiking_function(x, **self._sg_params)
         else:
             return self.primitive_function(x, **self._sg_params)
-
-    def cuda_codes(self, y: str, x: str, dtype: str) -> str:
-        r"""
-        **API Language** - :ref:`中文 <SurrogateFunctionBase.cuda_codes-cn>` | :ref:`English <SurrogateFunctionBase.cuda_codes-en>`
-
-        ----
-
-        .. _SurrogateFunctionBase.cuda_codes-cn:
-
-        * **中文**
-
-        生成替代梯度的 CUDA 代码。``y`` 可以是输出变量名，也可以包含其 CUDA 类型声明；``dtype`` 必须为 ``"float"`` 或 ``"half2"``。
-
-        :param y: 输出变量名，可包含 CUDA 类型声明
-        :type y: str
-        :param x: 输入表达式
-        :type x: str
-        :param dtype: CUDA 数据类型，``"float"`` 对应 FP32，``"half2"`` 对应 FP16
-        :type dtype: str
-        :return: 替代梯度 CUDA 语句
-        :rtype: str
-
-        ----
-
-        .. _SurrogateFunctionBase.cuda_codes-en:
-
-        * **English**
-
-        Generate CUDA code for the surrogate gradient. ``y`` may be an output variable name or include its CUDA type declaration; ``dtype`` must be ``"float"`` or ``"half2"``.
-
-        :param y: output variable name, optionally including its CUDA type declaration
-        :type y: str
-        :param x: input expression
-        :type x: str
-        :param dtype: CUDA data type, ``"float"`` for FP32 or ``"half2"`` for FP16
-        :type dtype: str
-        :return: surrogate-gradient CUDA statements
-        :rtype: str
-        """
-        raise NotImplementedError
 
 
 def piecewise_quadratic_backward(
@@ -929,9 +794,6 @@ class Sigmoid(SurrogateFunctionBase):
     def backward(grad_output, x, alpha):
         return sigmoid_backward(grad_output, x, alpha)[0]
 
-    def cuda_codes(self, y: str, x: str, dtype: str):
-        return cfunction.sigmoid_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
-
 
 def soft_sign_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     r"""
@@ -1240,9 +1102,6 @@ class SuperSpike(SurrogateFunctionBase):
     def backward(grad_output, x, alpha):
         return super_spike_backward(grad_output, x, alpha)[0]
 
-    def cuda_codes(self, y: str, x: str, dtype: str):
-        raise NotImplementedError
-
 
 def atan_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     r"""
@@ -1407,9 +1266,6 @@ class ATan(SurrogateFunctionBase):
     @staticmethod
     def backward(grad_output, x, alpha):
         return atan_backward(grad_output, x, alpha)[0]
-
-    def cuda_codes(self, y: str, x: str, dtype: str):
-        return cfunction.atan_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
 
 
 def nonzero_sign_log_abs_backward(
@@ -1995,11 +1851,6 @@ class PiecewiseLeakyReLU(SurrogateFunctionBase):
                 + mask2 * (x / (2 * w) + 1 / 2)
             )
 
-    def cuda_codes(self, y: str, x: str, dtype: str):
-        return cfunction.piecewise_leaky_relu_backward(
-            y=y, x=x, w=self.w, c=self.c, dtype=dtype
-        )
-
 
 class squarewave_fourier_series(torch.autograd.Function):
     r"""
@@ -2280,11 +2131,6 @@ class S2NN(SurrogateFunctionBase):
         )
         # abs and 1e-5 are used to avoid nan
 
-    def cuda_codes(self, y: str, x: str, dtype: str):
-        return cfunction.s2nn_backward(
-            y=y, x=x, alpha=self.alpha, beta=self.beta, dtype=dtype
-        )
-
 
 class q_pseudo_spike(torch.autograd.Function):
     r"""
@@ -2419,11 +2265,6 @@ class QPseudoSpike(SurrogateFunctionBase):
 
         return mask_nonnegative - mask_sign * (
             0.5 * ((1.0 + 2.0 / (alpha - 1.0) * x * mask_sign).pow_(1.0 - alpha))
-        )
-
-    def cuda_codes(self, y: str, x: str, dtype: str):
-        return cfunction.q_pseudo_spike_backward(
-            y=y, x=x, alpha=self.alpha, dtype=dtype
         )
 
 
@@ -2643,11 +2484,6 @@ class LeakyKReLU(SurrogateFunctionBase):
 
         return f(x, self.leak, self.k)
 
-    def cuda_codes(self, y: str, x: str, dtype: str):
-        return cfunction.leaky_k_relu_backward(
-            y=y, x=x, leak=self.leak, k=self.k, dtype=dtype
-        )
-
 
 def fake_numerical_gradient_backward(
     grad_output: torch.Tensor, x: torch.Tensor, alpha: float
@@ -2794,11 +2630,6 @@ class FakeNumericalGradient(SurrogateFunctionBase):
     @staticmethod
     def backward(grad_output, x, alpha):
         return fake_numerical_gradient_backward(grad_output, x, alpha)[0]
-
-    def cuda_codes(self, y: str, x: str, dtype: str):
-        return cfunction.fake_numerical_gradient_backward(
-            y=y, x=x, alpha=self.alpha, dtype=dtype
-        )
 
 
 def log_tailed_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
@@ -3005,11 +2836,6 @@ class LogTailedReLU(SurrogateFunctionBase):
     @staticmethod
     def backward(grad_output, x, alpha):
         return log_tailed_relu_backward(grad_output, x, alpha)[0]
-
-    def cuda_codes(self, y: str, x: str, dtype: str):
-        return cfunction.log_tailed_relu_backward(
-            y=y, x=x, alpha=self.alpha, dtype=dtype
-        )
 
 
 class deterministic_pass(torch.autograd.Function):

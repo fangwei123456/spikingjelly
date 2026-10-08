@@ -48,7 +48,6 @@ from spikingjelly.activation_based.ann2snn.recipes.sta_transformer import (
     _STASpikeEncoder,
 )
 from spikingjelly.activation_based.neuron import STBIFNode
-from spikingjelly.activation_based.triton_kernel.neuron_kernel import stbif
 
 TinyModelOutput = namedtuple("TinyModelOutput", ["logits", "hidden"])
 
@@ -782,18 +781,6 @@ def test_spikezip_stbif_matches_quantizer_accumulation():
     assert set(torch.unique(neuron.cur_output).tolist()).issubset({-1.0, 0.0, 1.0})
 
 
-def test_spikezip_stbif_backend_at_construction():
-    assert STBIFNode(0.25, level=8).backend == "torch"
-    if _TRITON_AVAILABLE:
-        assert (
-            STBIFNode(0.25, level=8, step_mode="m", backend="triton").backend
-            == "triton"
-        )
-    else:
-        with pytest.raises(ImportError, match="Triton is not installed"):
-            STBIFNode(0.25, level=8, step_mode="m", backend="triton")
-
-
 def test_spikezip_stbif_state_follows_module_dtype():
     quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
     neuron = STBIFNode.from_quantizer(quantizer)
@@ -834,7 +821,6 @@ def test_spikezip_stbif_optimized_torch_matches_single_step_reference(sym, x):
     functional.set_step_mode(neuron, "m")
     y_seq = neuron(x_seq)
 
-    assert neuron.backend == "torch"
     assert torch.allclose(y_seq, loop_seq, atol=1e-6, rtol=1e-6)
     assert torch.allclose(neuron.q, loop_q, atol=1e-6, rtol=1e-6)
     assert torch.allclose(neuron.acc_q, loop_acc_q, atol=1e-6, rtol=1e-6)
@@ -850,13 +836,10 @@ def test_spikezip_stbif_rejects_invalid_level(level):
         STBIFNode(0.25, level=level, sym=True)
 
 
-@pytest.mark.skipif(
-    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
-    reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
-)
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
 @pytest.mark.parametrize("time_steps", [8, 64])
-def test_spikezip_stbif_triton_matches_torch(dtype, time_steps):
+def test_spikezip_stbif_cuda_matches_torch(dtype, time_steps):
     quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
     x = (torch.randn(7, 13, device="cuda", dtype=dtype) * 0.2).contiguous()
     x_seq = _first_real_then_zero_sequence(x, time_steps=time_steps)
@@ -865,28 +848,31 @@ def test_spikezip_stbif_triton_matches_torch(dtype, time_steps):
     functional.set_step_mode(torch_neuron, "m")
     torch_seq = torch_neuron(x_seq)
 
-    triton_neuron = STBIFNode.from_quantizer(quantizer).cuda()
-    triton_neuron.backend = "triton"
-    functional.set_step_mode(triton_neuron, "m")
-    triton_seq = triton_neuron(x_seq)
+    cuda_neuron = STBIFNode.from_quantizer(quantizer).cuda()
+    functional.set_step_mode(cuda_neuron, "m")
+    cuda_seq = cuda_neuron(x_seq)
 
-    assert torch.allclose(triton_seq, torch_seq, atol=1e-3, rtol=1e-3)
-    assert torch.allclose(triton_neuron.q, torch_neuron.q, atol=1e-3, rtol=1e-3)
-    assert torch.equal(triton_neuron.acc_q, torch_neuron.acc_q)
+    assert torch.allclose(cuda_seq, torch_seq, atol=1e-3, rtol=1e-3)
+    assert torch.allclose(cuda_neuron.q, torch_neuron.q, atol=1e-3, rtol=1e-3)
+    assert torch.equal(cuda_neuron.acc_q, torch_neuron.acc_q)
     assert torch.allclose(
-        triton_neuron.cur_output,
+        cuda_neuron.cur_output,
         torch_neuron.cur_output,
         atol=1e-3,
         rtol=1e-3,
     )
 
 
-@pytest.mark.skipif(
-    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
-    reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
-)
-def test_spikezip_stbif_triton_avoids_device_scalar_read():
-    neuron = STBIFNode(0.25, level=8, sym=True, step_mode="m", backend="triton").cuda()
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_spikezip_stbif_cuda_avoids_device_scalar_read():
+    from spikingjelly.activation_based.functional import neuron_implementation
+
+    if (
+        neuron_implementation("stbif", torch.device("cuda"))["implementation"]
+        != "triton"
+    ):
+        pytest.skip("selected CUDA implementation is not Triton")
+    neuron = STBIFNode(0.25, level=8, sym=True, step_mode="m").cuda()
     x_seq = torch.randn(8, 7, 13, device="cuda")
 
     neuron(x_seq)
@@ -901,12 +887,9 @@ def test_spikezip_stbif_triton_avoids_device_scalar_read():
     assert "aten::_local_scalar_dense" not in operation_names
 
 
-@pytest.mark.skipif(
-    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
-    reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
-)
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-def test_spikezip_stbif_single_step_triton_matches_torch(dtype):
+def test_spikezip_stbif_single_step_cuda_matches_torch(dtype):
     if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
         pytest.skip("CUDA device does not support bfloat16")
     quantizer = _TinySpikeZIPQuantizer(level=8, sym=True, scale=0.25)
@@ -918,35 +901,29 @@ def test_spikezip_stbif_single_step_triton_matches_torch(dtype):
     level_indices = torch.arange(8 * 7 * 13, device="cuda").reshape(8, 7, 13)
     x_seq = normalized_levels[level_indices % normalized_levels.numel()] * 0.25
     torch_neuron = STBIFNode.from_quantizer(quantizer).cuda()
-    triton_neuron = STBIFNode.from_quantizer(quantizer).cuda()
-    triton_neuron.backend = "triton"
+    cuda_neuron = STBIFNode.from_quantizer(quantizer).cuda()
 
     torch_out = torch.stack([torch_neuron(x) for x in x_seq])
-    triton_out = torch.stack([triton_neuron(x) for x in x_seq])
+    cuda_out = torch.stack([cuda_neuron(x) for x in x_seq])
 
-    assert torch.allclose(triton_out, torch_out, atol=1e-3, rtol=1e-3)
+    assert torch.allclose(cuda_out, torch_out, atol=1e-3, rtol=1e-3)
     state_tol = {
         torch.float32: 1e-6,
         torch.float16: 5e-3,
         torch.bfloat16: 2e-2,
     }[dtype]
+    assert torch.allclose(cuda_neuron.q, torch_neuron.q, atol=state_tol, rtol=state_tol)
+    assert torch.equal(cuda_neuron.acc_q, torch_neuron.acc_q)
     assert torch.allclose(
-        triton_neuron.q, torch_neuron.q, atol=state_tol, rtol=state_tol
-    )
-    assert torch.equal(triton_neuron.acc_q, torch_neuron.acc_q)
-    assert torch.allclose(
-        triton_neuron.cur_output,
+        cuda_neuron.cur_output,
         torch_neuron.cur_output,
         atol=1e-3,
         rtol=1e-3,
     )
 
 
-@pytest.mark.skipif(
-    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
-    reason="CUDA and Triton are required",
-)
-def test_spikezip_stbif_triton_rounds_half_to_even():
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_spikezip_stbif_cuda_rounds_half_to_even():
     dtype = torch.float32
     if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
         pytest.skip("CUDA device does not support bfloat16")
@@ -965,15 +942,7 @@ def test_spikezip_stbif_triton_rounds_half_to_even():
         pos_max,
         neg_min,
     )
-    actual_single = functional.stbif_single_step_triton(
-        x,
-        q,
-        acc_q,
-        q_threshold,
-        pos_max,
-        neg_min,
-    )
-    actual_multi = stbif.multi_step_stbif(
+    actual_multi = functional.stbif_multi_step(
         x.unsqueeze(0),
         q,
         acc_q,
@@ -982,17 +951,12 @@ def test_spikezip_stbif_triton_rounds_half_to_even():
         neg_min,
     )
 
-    for actual, reference in zip(actual_single[:4], expected):
-        torch.testing.assert_close(actual, reference)
     torch.testing.assert_close(actual_multi[0][0], expected[0])
     for actual, reference in zip(actual_multi[1:4], expected[1:]):
         torch.testing.assert_close(actual, reference)
 
 
-@pytest.mark.skipif(
-    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
-    reason="CUDA and Triton are required",
-)
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_multi_step_stbif_rejects_non_scalar_parameters():
     for parameter in ("q_threshold", "pos_max", "neg_min"):
         inputs = {
@@ -1003,7 +967,7 @@ def test_multi_step_stbif_rejects_non_scalar_parameters():
         inputs[parameter] = torch.ones(2, device="cuda")
 
         with pytest.raises(ValueError, match="must be scalar tensors"):
-            stbif.multi_step_stbif(
+            functional.stbif_multi_step(
                 torch.zeros(1, 2, device="cuda"),
                 torch.zeros(2, device="cuda"),
                 torch.zeros(2, device="cuda"),
@@ -1011,10 +975,7 @@ def test_multi_step_stbif_rejects_non_scalar_parameters():
             )
 
 
-@pytest.mark.skipif(
-    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
-    reason="CUDA and Triton are required",
-)
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_multi_step_stbif_rejects_mismatched_state():
     for state_name in ("q", "acc_q"):
         for invalid_state in (
@@ -1028,7 +989,7 @@ def test_multi_step_stbif_rejects_mismatched_state():
             states[state_name] = invalid_state
 
             with pytest.raises(ValueError, match="shape, dtype, and device"):
-                stbif.multi_step_stbif(
+                functional.stbif_multi_step(
                     torch.zeros(1, 2, device="cuda"),
                     **states,
                     q_threshold=torch.tensor(0.1, device="cuda"),
@@ -1044,7 +1005,7 @@ def test_multi_step_stbif_rejects_mismatched_state_device():
         states[state_name] = states[state_name].cuda()
 
         with pytest.raises(ValueError, match="shape, dtype, and device"):
-            stbif.multi_step_stbif(
+            functional.stbif_multi_step(
                 torch.zeros(1, 2),
                 **states,
                 q_threshold=torch.tensor(0.1),
@@ -1217,6 +1178,7 @@ def test_spikezip_softmax_layernorm_single_step_matches_multi_step_td():
     )
 
 
+@torch.inference_mode()
 def test_spikezip_roberta_attention_matches_qann_accumulated_output():
     torch.manual_seed(271)
     qann = _TinyQRobertaSelfAttention().eval()
@@ -1234,6 +1196,7 @@ def test_spikezip_roberta_attention_matches_qann_accumulated_output():
     assert torch.allclose(accumulated, qann_out, atol=1e-5, rtol=1e-5)
 
 
+@torch.inference_mode()
 def test_spikezip_roberta_attention_single_step_matches_multi_step():
     torch.manual_seed(279)
     qann = _TinyQRobertaSelfAttention().eval()
@@ -1253,6 +1216,7 @@ def test_spikezip_roberta_attention_single_step_matches_multi_step():
     assert torch.allclose(multi_seq, loop_seq, atol=1e-6, rtol=1e-6)
 
 
+@torch.inference_mode()
 def test_spikezip_roberta_attention_matches_qann_with_finite_mask():
     torch.manual_seed(273)
     qann = _TinyQRobertaSelfAttention().eval()
@@ -1279,6 +1243,7 @@ def test_spikezip_roberta_attention_rejects_head_mask():
         snn(x, head_mask=torch.ones(1, 2, 1, 1))
 
 
+@torch.inference_mode()
 def test_spikezip_vit_attention_matches_qann_accumulated_output():
     torch.manual_seed(274)
     qann = _TinyQViTSelfAttention().eval()
@@ -1295,6 +1260,7 @@ def test_spikezip_vit_attention_matches_qann_accumulated_output():
     assert torch.allclose(accumulated, qann_out, atol=1e-5, rtol=1e-5)
 
 
+@torch.inference_mode()
 def test_spikezip_vit_attention_single_step_matches_multi_step():
     torch.manual_seed(280)
     qann = _TinyQViTSelfAttention().eval()
@@ -1310,6 +1276,7 @@ def test_spikezip_vit_attention_single_step_matches_multi_step():
     assert torch.allclose(multi_seq, loop_seq, atol=1e-6, rtol=1e-6)
 
 
+@torch.inference_mode()
 def test_spikezip_qann_recipe_converts_tiny_roberta_classifier():
     torch.manual_seed(272)
     qann = _TinySpikeZIPQANNClassifier().eval()
@@ -1358,6 +1325,7 @@ def test_spikezip_qann_recipe_does_not_reuse_level_between_conversions():
     assert unquantized[0].bias_steps == 32
 
 
+@torch.inference_mode()
 def test_spikezip_qann_recipe_converts_tiny_vit_classifier():
     torch.manual_seed(275)
     qann = _TinySpikeZIPViTQANNClassifier().eval()
@@ -1381,6 +1349,7 @@ def test_spikezip_qann_recipe_converts_tiny_vit_classifier():
     assert torch.allclose(actual, expected, atol=1e-5, rtol=1e-5)
 
 
+@torch.inference_mode()
 def test_spikezip_qann_vit_single_step_matches_multi_step():
     torch.manual_seed(282)
     qann = _TinySpikeZIPViTQANNClassifier().eval()
@@ -1405,6 +1374,7 @@ def test_spikezip_qann_vit_single_step_matches_multi_step():
     assert torch.allclose(sequence.sum(dim=0), loop, atol=1e-6, rtol=1e-6)
 
 
+@torch.inference_mode()
 def test_spikezip_qann_vit_preserves_patch_embed_norm():
     torch.manual_seed(285)
     qann = _TinySpikeZIPViTBlocksQANNClassifier().eval()
@@ -1422,6 +1392,7 @@ def test_spikezip_qann_vit_preserves_patch_embed_norm():
     assert torch.allclose(actual, expected, atol=1e-5, rtol=1e-5)
 
 
+@torch.inference_mode()
 def test_spikezip_qann_vit_blocks_single_step_matches_multi_step():
     torch.manual_seed(283)
     qann = _TinySpikeZIPViTBlocksQANNClassifier().eval()
@@ -1448,11 +1419,8 @@ def test_spikezip_qann_vit_blocks_single_step_matches_multi_step():
     assert torch.allclose(sequence.sum(dim=0), loop, atol=1e-6, rtol=1e-6)
 
 
-@pytest.mark.skipif(
-    not torch.cuda.is_available() or not _TRITON_AVAILABLE,
-    reason="CUDA and Triton are required for SpikeZIP ST-BIF Triton backend.",
-)
-def test_spikezip_qann_vit_multistep_triton_matches_torch():
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_spikezip_qann_vit_multistep_cuda_matches_torch():
     torch.manual_seed(284)
     qann = _TinySpikeZIPViTQANNClassifier().eval().cuda()
     images = (torch.randn(2, 3, 4, 4, device="cuda") * 0.2).contiguous()
@@ -1460,19 +1428,19 @@ def test_spikezip_qann_vit_multistep_triton_matches_torch():
         recipe=SpikeZIPTFQANNRecipe(time_steps=32, model_family="vit"),
         device="cuda",
     ).convert(qann)
-    triton_converted = ModuleConverter(
+    cuda_converted = ModuleConverter(
         recipe=SpikeZIPTFQANNRecipe(time_steps=32, model_family="vit"),
         device="cuda",
     ).convert(qann)
     functional.set_step_mode(torch_converted, "m")
-    functional.set_step_mode(triton_converted, "m")
-    functional.set_backend(triton_converted, "triton", instance=STBIFNode)
+    functional.set_step_mode(cuda_converted, "m")
 
     x_seq = _first_real_then_zero_sequence(images, torch_converted.time_steps)
-    torch_logits = torch_converted(x_seq).sum(dim=0)
-    triton_logits = triton_converted(x_seq).sum(dim=0)
+    with torch.inference_mode():
+        torch_logits = torch_converted(x_seq).sum(dim=0)
+        cuda_logits = cuda_converted(x_seq).sum(dim=0)
 
-    assert torch.allclose(triton_logits, torch_logits, atol=1e-5, rtol=1e-5)
+    assert torch.allclose(cuda_logits, torch_logits, atol=1e-5, rtol=1e-5)
 
 
 def test_spikezip_qann_vit_rejects_incomplete_top_level_contract():

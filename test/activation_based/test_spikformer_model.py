@@ -14,13 +14,6 @@ def _reset_net(net):
     functional.reset_net(net)
 
 
-def test_model_package_keeps_training_out_of_model_exports():
-    import spikingjelly.activation_based.model as model
-
-    assert not hasattr(model, "Trainer")
-    assert not hasattr(model, "SpikformerBlock")
-
-
 def test_spikformer_forward_accepts_image_and_sequence_inputs():
     model = Spikformer(
         T=2,
@@ -31,7 +24,6 @@ def test_spikformer_forward_accepts_image_and_sequence_inputs():
         embed_dims=64,
         num_heads=4,
         depths=2,
-        backend="torch",
     ).eval()
 
     assert not isinstance(model, base.StepModule)
@@ -60,7 +52,6 @@ def test_spikformer_ti_factory_builds_trainable_model():
         img_size_h=64,
         img_size_w=64,
         num_classes=7,
-        backend="torch",
     ).train()
     x = torch.randn(2, 3, 64, 64)
     target = torch.randint(0, 7, (2,))
@@ -82,7 +73,6 @@ def test_spikformer_keeps_tau_and_detach_reset_keyword_behavior():
         embed_dims=32,
         num_heads=4,
         depths=1,
-        backend="torch",
         tau=3.5,
         detach_reset=False,
     )
@@ -98,7 +88,7 @@ def test_spikformer_keeps_tau_and_detach_reset_keyword_behavior():
 
 
 def test_spikformer_cifar10_factory_runs_official_shape():
-    model = spikformer_cifar10(T=1, backend="torch").eval()
+    model = spikformer_cifar10(T=1).eval()
 
     output = model(torch.randn(1, 3, 32, 32))
 

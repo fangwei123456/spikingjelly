@@ -11,4 +11,4 @@ These functions help users set **configurations for each submodule** in a networ
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr, jit_*
+   :exclude-members: extra_repr, jit_*

@@ -8,7 +8,7 @@ from typing import Literal, Optional
 class PrecisionConfig:
     mode: Literal["fp32", "fp16", "bf16", "fp8"] = "fp32"
     fp8_recipe: Literal["auto", "delayed", "current", "block", "mxfp8"] = "auto"
-    triton_storage: Optional[
+    neuron_storage: Optional[
         Literal[
             "fp32",
             "fp16",
@@ -17,8 +17,8 @@ class PrecisionConfig:
             "float8_e5m2",
         ]
     ] = None
-    triton_fwd: Literal["fp8", "fp16", "bf16", "fp32"] = "fp32"
-    triton_bwd: Literal["fp8", "fp16", "bf16", "fp32"] = "fp32"
+    neuron_fwd: Literal["fp8", "fp16", "bf16", "fp32"] = "fp32"
+    neuron_bwd: Literal["fp8", "fp16", "bf16", "fp32"] = "fp32"
     fp8_fallback_dtype: Literal["fp32", "fp16", "bf16"] = "bf16"
 
     def __post_init__(self) -> None:
@@ -27,14 +27,14 @@ class PrecisionConfig:
         object.__setattr__(
             self, "fp8_fallback_dtype", str(self.fp8_fallback_dtype).lower()
         )
-        if self.triton_storage is not None:
+        if self.neuron_storage is not None:
             object.__setattr__(
                 self,
-                "triton_storage",
-                str(self.triton_storage).lower().removeprefix("torch."),
+                "neuron_storage",
+                str(self.neuron_storage).lower().removeprefix("torch."),
             )
-        object.__setattr__(self, "triton_fwd", str(self.triton_fwd).lower())
-        object.__setattr__(self, "triton_bwd", str(self.triton_bwd).lower())
+        object.__setattr__(self, "neuron_fwd", str(self.neuron_fwd).lower())
+        object.__setattr__(self, "neuron_bwd", str(self.neuron_bwd).lower())
         if self.mode not in {"fp32", "fp16", "bf16", "fp8"}:
             raise ValueError("mode must be 'fp32', 'fp16', 'bf16', or 'fp8'.")
         if self.fp8_recipe not in {"auto", "delayed", "current", "block", "mxfp8"}:
@@ -45,28 +45,28 @@ class PrecisionConfig:
             raise ValueError("Unsupported fp8_fallback_dtype.")
         if self.mode != "fp8" and self.fp8_fallback_dtype != "bf16":
             raise ValueError("fp8_fallback_dtype is only valid when mode='fp8'.")
-        if self.triton_storage is None and (
-            self.triton_fwd != "fp32" or self.triton_bwd != "fp32"
+        if self.neuron_storage is None and (
+            self.neuron_fwd != "fp32" or self.neuron_bwd != "fp32"
         ):
             raise ValueError(
-                "triton_fwd and triton_bwd require triton_storage to be set."
+                "neuron_fwd and neuron_bwd require neuron_storage to be set."
             )
-        if self.triton_storage is not None and self.triton_storage not in {
+        if self.neuron_storage is not None and self.neuron_storage not in {
             "fp32",
             "fp16",
             "bf16",
             "float8_e4m3fn",
             "float8_e5m2",
         }:
-            raise ValueError("Unsupported triton_storage.")
-        if self.triton_fwd not in {"fp8", "fp16", "bf16", "fp32"}:
-            raise ValueError("Unsupported triton_fwd.")
-        if self.triton_bwd not in {"fp8", "fp16", "bf16", "fp32"}:
-            raise ValueError("Unsupported triton_bwd.")
+            raise ValueError("Unsupported neuron_storage.")
+        if self.neuron_fwd not in {"fp8", "fp16", "bf16", "fp32"}:
+            raise ValueError("Unsupported neuron_fwd.")
+        if self.neuron_bwd not in {"fp8", "fp16", "bf16", "fp32"}:
+            raise ValueError("Unsupported neuron_bwd.")
         if (
-            self.triton_storage is not None
-            and "fp8" in {self.triton_fwd, self.triton_bwd}
-            and not self.triton_storage.startswith("float8_")
+            self.neuron_storage is not None
+            and "fp8" in {self.neuron_fwd, self.neuron_bwd}
+            and not self.neuron_storage.startswith("float8_")
         ):
             raise ValueError("FP8 Triton compute requires FP8 Triton storage.")
 
@@ -136,21 +136,21 @@ PrecisionConfig.__init__.__doc__ = r"""Configure model and Triton-neuron precisi
 * **中文**
 
 ``mode`` 控制普通模型算子的精度；``fp8`` 使用 Transformer Engine。
-``triton_storage`` 独立启用已有 multi-step Triton IF/LIF/PLIF 节点的 mixed-precision
-路径，``triton_fwd`` 和 ``triton_bwd`` 分别控制其前向与反向算术。配置不自动切换
-神经元 backend，也不会静默降级。
+``neuron_storage`` 为 multi-step IF/LIF/PLIF 节点启用显式混合精度路径，
+``neuron_fwd`` 和 ``neuron_bwd`` 分别控制前向与反向算术。该精度路径要求 CUDA
+Triton；普通神经元执行仍按设备自动选择。
 
 :param mode: 模型精度模式。
 :type mode: Literal["fp32", "fp16", "bf16", "fp8"]
 :param fp8_recipe: Transformer Engine FP8 recipe；仅 ``mode="fp8"`` 有效。
 :type fp8_recipe: Literal["auto", "delayed", "current", "block", "mxfp8"]
-:param triton_storage: Triton 神经元状态 storage dtype；``None`` 禁用 mixed path。
-:type triton_storage: Optional[Literal["fp32", "fp16", "bf16",
+:param neuron_storage: 神经元状态 storage dtype；``None`` 禁用 mixed path。显式精度要求 CUDA Triton。
+:type neuron_storage: Optional[Literal["fp32", "fp16", "bf16",
     "float8_e4m3fn", "float8_e5m2"]]
-:param triton_fwd: Triton 神经元前向算术 dtype。
-:type triton_fwd: Literal["fp8", "fp16", "bf16", "fp32"]
-:param triton_bwd: Triton 神经元反向算术 dtype。
-:type triton_bwd: Literal["fp8", "fp16", "bf16", "fp32"]
+:param neuron_fwd: 神经元前向算术 dtype。
+:type neuron_fwd: Literal["fp8", "fp16", "bf16", "fp32"]
+:param neuron_bwd: 神经元反向算术 dtype。
+:type neuron_bwd: Literal["fp8", "fp16", "bf16", "fp32"]
 :param fp8_fallback_dtype: 未由 Transformer Engine 转换的普通 CUDA 算子使用的
     fallback autocast dtype，默认为 ``bf16``；``fp32`` 表示不启用外层 autocast。
 :type fp8_fallback_dtype: Literal["fp32", "fp16", "bf16"]
@@ -163,23 +163,23 @@ PrecisionConfig.__init__.__doc__ = r"""Configure model and Triton-neuron precisi
 * **English**
 
 ``mode`` controls regular model-operation precision; ``fp8`` uses Transformer
-Engine. ``triton_storage`` independently enables the mixed-precision path for
-existing multi-step Triton IF/LIF/PLIF nodes, while ``triton_fwd`` and
-``triton_bwd`` select forward and backward arithmetic. The configuration neither
-changes neuron backends nor silently falls back.
+Engine. ``neuron_storage`` enables an explicit mixed-precision path for
+multi-step IF/LIF/PLIF nodes, while ``neuron_fwd`` and ``neuron_bwd`` select
+forward and backward arithmetic. This precision path requires CUDA Triton;
+ordinary neuron execution remains automatically selected from the device.
 
 :param mode: Model precision mode.
 :type mode: Literal["fp32", "fp16", "bf16", "fp8"]
 :param fp8_recipe: Transformer Engine FP8 recipe, valid only for ``mode="fp8"``.
 :type fp8_recipe: Literal["auto", "delayed", "current", "block", "mxfp8"]
-:param triton_storage: Triton neuron-state storage dtype; ``None`` disables the
-    mixed path.
-:type triton_storage: Optional[Literal["fp32", "fp16", "bf16",
+:param neuron_storage: Neuron-state storage dtype; ``None`` disables the mixed path. Explicit
+    precision requires CUDA Triton.
+:type neuron_storage: Optional[Literal["fp32", "fp16", "bf16",
     "float8_e4m3fn", "float8_e5m2"]]
-:param triton_fwd: Triton-neuron forward arithmetic dtype.
-:type triton_fwd: Literal["fp8", "fp16", "bf16", "fp32"]
-:param triton_bwd: Triton-neuron backward arithmetic dtype.
-:type triton_bwd: Literal["fp8", "fp16", "bf16", "fp32"]
+:param neuron_fwd: Neuron forward arithmetic dtype.
+:type neuron_fwd: Literal["fp8", "fp16", "bf16", "fp32"]
+:param neuron_bwd: Neuron backward arithmetic dtype.
+:type neuron_bwd: Literal["fp8", "fp16", "bf16", "fp32"]
 :param fp8_fallback_dtype: Fallback autocast dtype for ordinary CUDA operations
     not converted by Transformer Engine. The default is ``bf16``; ``fp32``
     disables the outer autocast.

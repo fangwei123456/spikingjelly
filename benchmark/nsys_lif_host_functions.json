@@ -2,7 +2,7 @@
   {
     "domain": "SpikingJelly LIF host",
     "color": "0xE67E22",
-    "module": "spikingjelly.activation_based.triton_kernel.neuron_kernel.lif",
+    "module": "spikingjelly._ops.lif.triton_precision",
     "functions": [
       "multistep_lif_forward",
       "_launch_lif_forward_kernel",

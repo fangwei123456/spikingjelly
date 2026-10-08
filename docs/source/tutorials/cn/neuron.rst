@@ -223,79 +223,74 @@ Soft方式重置方程为：
 .. image:: ../../_static/tutorials/neuron/2.*
     :width: 100%
 
-步进模式和后端
--------------------------------------------
-在 :doc:`./basic_concept` 中我们已经介绍过单步和多步模式，在本教程前面的内容中，我们使用的都是\
-单步模式。切换成多步模式非常简单，只需要设置 ``step_mode`` 即可：
+训练 IF、LIF 和 PLIF
+----------------------------
+
+``step_mode`` 控制单步或多步执行；输入决定运行设备。将模块和输入移到同一设备
+即可。PLIF 对应 ``ParametricLIFNode``，含可学习参数。下面用随机输入运行前后向，
+并检查 PLIF 的参数更新：
 
 .. code-block:: python
 
     import torch
-    from spikingjelly.activation_based import neuron, functional
-    if_layer = neuron.IFNode(step_mode='s')
-    T = 8
-    N = 2
-    x_seq = torch.rand([T, N])
-    y_seq = functional.multi_step_forward(x_seq, if_layer)
-    if_layer.reset()
+    from spikingjelly.activation_based import functional, neuron, surrogate
 
-    if_layer.step_mode = 'm'
-    y_seq = if_layer(x_seq)
-    if_layer.reset()
+    torch.manual_seed(1)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    for node_type in (neuron.IFNode, neuron.LIFNode, neuron.ParametricLIFNode):
+        node = node_type(
+            step_mode="m", surrogate_function=surrogate.ATan()
+        ).to(device)
+        x = torch.rand(4, 2, 8, device=device, requires_grad=True)  # [T, N, C]
+        parameters = list(node.parameters())
+        optimizer = torch.optim.SGD(parameters, lr=0.01) if parameters else None
+        before = [p.detach().clone() for p in parameters]
+        spikes = node(x)
+        loss = spikes.sum() + node.v.sum()
+        loss.backward()
+        assert spikes.shape == x.shape and torch.isfinite(x.grad).all()
+        if optimizer is not None:
+            assert all(p.grad is not None for p in parameters)
+            optimizer.step()
+            assert any(not torch.equal(old, p) for old, p in zip(before, parameters))
+        functional.reset_net(node)  # Reset after backward/update.
 
-此外，部分神经元在单步和多步模式下都支持 ``cupy`` 后端； ``IFNode`` , ``LIFNode`` 和 ``ParametricLIFNode`` 等神经元在多步模式下还支持 ``triton`` 后端。设置 ``backend`` 之后，前反向传播会使用对应后端进行加速。
+模块调用会推进 ``node.v`` 等状态。独立样本或 batch 在反向和参数更新后调用
+``functional.reset_net``；连续序列可以保留状态。截断 BPTT 时用
+``functional.detach_net`` 切断上一段的梯度，不将电位重置为初值。
+完整执行、编译与诊断见 :doc:`./triton_backend`，精度见 :doc:`./precision`。
+
+显式初态、最终状态和轨迹
+----------------------------
+
+调用 ``functional.if_multi_step``、``lif_multi_step`` 或 ``plif_multi_step`` 时，
+由调用者提供初态、保存最终状态，并决定在序列段之间是否 detach；这些函数不管理
+模块 memory。``store_v_seq=True`` 返回监控轨迹。默认 ``False`` 时，第三个返回值
+为 ``None``，第二个始终是最终状态。
 
 .. code-block:: python
 
     import torch
-    from spikingjelly.activation_based import neuron
+    from spikingjelly.activation_based import functional, surrogate
 
-    if_layer = neuron.IFNode()
-    print(f'if_layer.backend={if_layer.backend}')
-    # if_layer.backend=torch
-
-    print(f'step_mode={if_layer.step_mode}, supported_backends={if_layer.supported_backends}')
-    # step_mode=s, supported_backends=('torch', 'cupy')
-
-    if_layer.step_mode = 'm'
-    print(f'step_mode={if_layer.step_mode}, supported_backends={if_layer.supported_backends}')
-    # step_mode=m, supported_backends=('torch', 'cupy', 'triton')
-
-    device = 'cuda:0'
-    if_layer.to(device)
-    if_layer.backend = 'cupy'  # switch to the cupy backend
-    print(f'if_layer.backend={if_layer.backend}')
-    # if_layer.backend=cupy
-
-    x_seq = torch.rand([8, 4], device=device)
-    y_seq = if_layer(x_seq)
-    if_layer.reset()
-
-    if_layer.backend = 'triton'  # switch to the triton backend
-    print(f'if_layer.backend={if_layer.backend}')
-    # if_layer.backend=triton
-
-    y_seq = if_layer(x_seq)
-    if_layer.reset()
-
-若要一次性配置整个网络，可使用 :func:`set_step_mode <spikingjelly.activation_based.functional.net_config.set_step_mode>` 和 :func:`set_backend <spikingjelly.activation_based.functional.net_config.set_backend>`。\
-由于 ``supported_backends`` 取决于 ``step_mode``，请 **先** 调用 ``set_step_mode`` 再调用 ``set_backend``；否则仅在另一种步进模式下可用的后端\
-（例如 ``ParametricLIFNode`` 的 ``cupy``，或 ``IFNode``、``LIFNode`` 与 ``ParametricLIFNode`` 的 ``triton``）会被拒绝并记录告警，原有后端保持不变：
-
-.. code-block:: python
-
-    import torch.nn as nn
-    from spikingjelly.activation_based import neuron, functional, layer
-
-    net = nn.Sequential(layer.Linear(8, 4), neuron.ParametricLIFNode())
-    functional.set_step_mode(net, 'm')  # 先调用：supported_backends 取决于 step_mode
-    functional.set_backend(net, 'cupy', instance=neuron.ParametricLIFNode)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    x = torch.rand(4, 2, 8, device=device, requires_grad=True)
+    v0 = torch.zeros(2, 8, device=device, requires_grad=True)
+    spikes, v_final, v_seq = functional.lif_multi_step(
+        x, v0, tau=2.0, surrogate_function=surrogate.ATan(), store_v_seq=True
+    )
+    assert v_final.shape == v0.shape and v_seq.shape == x.shape
+    assert torch.equal(v_final, v_seq[-1])
+    (spikes.sum() + v_final.sum()).backward()
+    assert v0.grad is not None and torch.isfinite(v0.grad).all()
+    assert torch.equal(v0.detach(), torch.zeros_like(v0))
+    # Pass v_final to the next segment; detach it to truncate BPTT.
 
 自定义神经元
 -------------------------------------------
-SpikingJelly 为修改神经元动力学和高性能执行提供了两类接口。``SimpleBaseNode`` 中的
-``Simple`` 描述的是接口定位，而不是一种神经元数学模型。该接口使用纯 PyTorch 直接
-展示充电、放电和重置职责，便于理解神经元在 SNN 中承担的工作和自定义动力学。
+自定义神经元有两类接口。``SimpleBaseNode`` 的 ``Simple`` 指接口简易，具体方程
+由子类定义。它用纯 PyTorch 按顺序执行充电、放电和重置，适合学习神经元行为或
+尝试新的动力学。
 
 .. list-table:: 神经元扩展接口
     :header-rows: 1
@@ -310,9 +305,9 @@ SpikingJelly 为修改神经元动力学和高性能执行提供了两类接口�
       - 通用状态替换路径
       - 教学、动力学实验和快速原型
     * - :class:`BaseNode <spikingjelly.activation_based.neuron.BaseNode>`
-      - 原生 functional 状态转移，可使用专用多步 kernel
+      - 原生 functional 状态转移
       - 直接调用 functional forward
-      - 生产级神经元和后端实现
+      - 生产级神经元实现
 
 若只需要修改神经元方程，应继承 ``SimpleBaseNode``。其单步前向固定按照充电、放电、
 重置的顺序执行，多步前向则逐时间步调用完整的单步前向。因而通常只需要实现
@@ -395,8 +390,8 @@ SpikingJelly 为修改神经元动力学和高性能执行提供了两类接口�
             [0.],
             [0.]])
 
-若要实现与 ``LIFNode`` 一样可直接转换并可接入 CuPy 或 Triton kernel 的生产级
-神经元，应继承 ``BaseNode`` 并实现 ``single_step_functional_forward``。该方法的接口为
+若要实现使用显式 functional 状态转移的生产级神经元，应继承 ``BaseNode`` 并实现
+``single_step_functional_forward``。该方法的接口为
 ``(self, inputs, states, **kwargs) -> (outputs, updated_states)``，且不得修改模块中注册的
 memory 或传入的 ``states``。只有存在独立序列实现或专用 kernel 时，才需要重写
 ``multi_step_functional_forward``。
@@ -405,5 +400,5 @@ memory 或传入的 ``states``。只有存在独立序列实现或专用 kernel 
 
     ``BaseNode`` 的常规前向已改为 functional-backed，并已移除 ``neuronal_charge``、
     ``neuronal_fire`` 和 ``neuronal_reset``。旧代码若通过这些方法修改 Python 神经元方程，
-    请将基类改为 ``SimpleBaseNode``；原有方程无需重写。生产级神经元或自定义后端应迁移为
-    上述 functional 接口。
+    请将基类改为 ``SimpleBaseNode``；原有方程无需重写。生产级神经元应使用上述
+    functional 接口。

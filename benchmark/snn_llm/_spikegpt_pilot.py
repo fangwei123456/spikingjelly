@@ -1,6 +1,5 @@
 import argparse
 import hashlib
-import logging
 import math
 import sys
 import time
@@ -112,7 +111,6 @@ def _variable_length_batch(
 def _training_config() -> dict:
     return {
         "kind": "spikegpt-enwik8-context1024-pilot-v1",
-        "backend": "cupy",
         "batch_size": BATCH_SIZE,
         "betas": smoke.BETAS,
         "context_length": CONTEXT_LENGTH,
@@ -184,8 +182,8 @@ def _make_model(author_model, vocabulary_size: int, device: torch.device):
     )
     model = author_model.GPT(config)
     for block in model.blocks:
-        block.lif1 = smoke.make_current_lif("cupy")
-        block.lif2 = smoke.make_current_lif("cupy")
+        block.lif1 = smoke.make_current_lif()
+        block.lif2 = smoke.make_current_lif()
     model = model.to(device)
     parameter_count = sum(parameter.numel() for parameter in model.parameters())
     if parameter_count != FULL_ENWIK8_PARAMETER_COUNT:
@@ -301,12 +299,6 @@ def run(
 ) -> None:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the SpikeGPT training pilot.")
-    try:
-        import cupy  # noqa: F401
-    except ImportError as exc:
-        logging.info("SpikeGPT training pilot requires CuPy: %s", exc)
-        raise ImportError("CuPy is required for the SpikeGPT training pilot.") from exc
-
     root = spikegpt_root.resolve()
     revision = smoke._verify_source(root, declared_revision)
     checkpoint_path = smoke._prepare_checkpoint_path(output_dir.resolve())
@@ -393,7 +385,7 @@ def run(
     print(
         f"model=SpikeGPT parameter_count={FULL_ENWIK8_PARAMETER_COUNT} "
         f"layers={N_LAYER} hidden={N_EMBD} context={CONTEXT_LENGTH} "
-        f"backend=current-cupy precision=float32 "
+        f"neuron_implementation=automatic precision=float32 "
         f"tokenizer=utf8-character-sorted-full-enwik8-v1 vocab_size={len(vocabulary)}"
     )
     print(

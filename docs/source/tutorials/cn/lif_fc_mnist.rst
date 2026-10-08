@@ -111,29 +111,7 @@ English version: :doc:`../en/lif_fc_mnist`
 
 .. code-block:: shell
 
-    $ python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
-    usage: lif_fc_mnist.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N]
-                        [-data-dir DATA_DIR] [-out-dir OUT_DIR]
-                        [-resume RESUME] [-amp] [-opt {sgd,adam}]
-                        [-momentum MOMENTUM] [-lr LR] [-tau TAU]
-
-    LIF MNIST Training
-
-    optional arguments:
-    -h, --help          show this help message and exit
-    -T T                simulating time-steps
-    -device DEVICE      device
-    -b B                batch size
-    -epochs N           number of total epochs to run
-    -j N                number of data loading workers (default: 4)
-    -data-dir DATA_DIR  root dir of MNIST dataset
-    -out-dir OUT_DIR    root dir for saving logs and checkpoint
-    -resume RESUME      resume from the checkpoint path
-    -amp                automatic mixed precision training
-    -opt {sgd,adam}     use which optimizer. SGD or Adam
-    -momentum MOMENTUM  momentum for SGD
-    -lr LR              learning rate
-    -tau TAU            parameter tau of LIF neuron
+    uv run --no-sync python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
 
 需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 相当于使用更小的仿真步长，训练更为“精细”，但训练效果不一定更好。\ ``T``
 太大时，SNN在时间上展开后会变成一个非常深的网络，这将导致BPTT计算梯度时容易衰减或爆炸。
@@ -173,3 +151,13 @@ English version: :doc:`../en/lif_fc_mnist`
     :width: 100%
 
 可以看到除了正确类别对应的神经元外，其它神经元均未发放任何脉冲。完整的训练代码可见 `activation_based/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/lif_fc_mnist.py>`_ 。
+
+运行与实验记录
+----------------------------
+
+模型按输入设备自动运行。处理独立 batch 时，在反向和参数更新后调用
+``functional.reset_net``；连续序列的状态管理见 :doc:`./neuron`。AMP 与神经元的
+融合执行是不同配置，状态精度见 :doc:`./precision`，编译和诊断见 :doc:`./triton_backend`。
+
+本页准确率、曲线和日志沿用历史实验，部分运行未记录精确版本。本轮未在当前 V2
+上重新训练或验证这些结果，不能用它们评估当前实现的速度或准确率。

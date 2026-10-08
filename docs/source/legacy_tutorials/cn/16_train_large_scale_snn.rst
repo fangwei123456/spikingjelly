@@ -192,7 +192,7 @@ ResNet-18的预训练模型参数。运行结果为：
 
 .. code:: python
 
-    net_ms = spiking_resnet.multi_step_spiking_resnet18(pretrained=False, progress=True, multi_step_neuron=neuron.MultiStepIFNode, v_threshold=1., surrogate_function=surrogate.ATan(), backend='torch')
+    net_ms = spiking_resnet.multi_step_spiking_resnet18(pretrained=False, progress=True, multi_step_neuron=neuron.MultiStepIFNode, v_threshold=1., surrogate_function=surrogate.ATan())
     print(net_ms)
 
 运行结果为：
@@ -203,7 +203,7 @@ ResNet-18的预训练模型参数。运行结果为：
       (conv1): Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
       (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
       (sn1): MultiStepIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+        v_threshold=1.0, v_reset=0.0, detach_reset=False
         (surrogate_function): ATan(alpha=2.0, spiking=True)
       )
       (maxpool): MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
@@ -212,13 +212,13 @@ ResNet-18的预训练模型参数。运行结果为：
           (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
           (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn1): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
           (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
           (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn2): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
         )
@@ -226,13 +226,13 @@ ResNet-18的预训练模型参数。运行结果为：
           (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
           (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn1): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
           (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
           (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn2): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
         )
@@ -242,13 +242,13 @@ ResNet-18的预训练模型参数。运行结果为：
           (conv1): Conv2d(64, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
           (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn1): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
           (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
           (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn2): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
           (downsample): Sequential(
@@ -260,13 +260,13 @@ ResNet-18的预训练模型参数。运行结果为：
           (conv1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
           (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn1): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
           (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
           (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn2): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
         )
@@ -276,13 +276,13 @@ ResNet-18的预训练模型参数。运行结果为：
           (conv1): Conv2d(128, 256, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
           (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn1): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
           (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
           (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn2): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
           (downsample): Sequential(
@@ -294,13 +294,13 @@ ResNet-18的预训练模型参数。运行结果为：
           (conv1): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
           (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn1): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
           (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
           (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn2): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
         )
@@ -310,13 +310,13 @@ ResNet-18的预训练模型参数。运行结果为：
           (conv1): Conv2d(256, 512, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
           (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn1): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
           (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
           (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn2): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
           (downsample): Sequential(
@@ -328,13 +328,13 @@ ResNet-18的预训练模型参数。运行结果为：
           (conv1): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
           (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn1): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
           (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
           (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
           (sn2): MultiStepIFNode(
-            v_threshold=1.0, v_reset=0.0, detach_reset=False, backend=cupy
+            v_threshold=1.0, v_reset=0.0, detach_reset=False
             (surrogate_function): ATan(alpha=2.0, spiking=True)
           )
         )
@@ -358,7 +358,7 @@ ResNet-18的预训练模型参数。运行结果为：
             fr += net(x[t])
         fr /= T
 
-    net_ms = spiking_resnet.multi_step_spiking_resnet18(pretrained=False, progress=True, multi_step_neuron=neuron.MultiStepIFNode, v_threshold=1., surrogate_function=surrogate.ATan(), backend='torch')
+    net_ms = spiking_resnet.multi_step_spiking_resnet18(pretrained=False, progress=True, multi_step_neuron=neuron.MultiStepIFNode, v_threshold=1., surrogate_function=surrogate.ATan())
 
     net_ms.load_state_dict(net.state_dict())
     with torch.no_grad():
@@ -370,20 +370,20 @@ ResNet-18的预训练模型参数。运行结果为：
 
 .. code:: python
 
-    net_ms = spiking_resnet.multi_step_spiking_resnet18(pretrained=False, progress=True, T=4, multi_step_neuron=neuron.MultiStepIFNode, v_threshold=1., surrogate_function=surrogate.ATan(), backend='torch')
+    net_ms = spiking_resnet.multi_step_spiking_resnet18(pretrained=False, progress=True, T=4, multi_step_neuron=neuron.MultiStepIFNode, v_threshold=1., surrogate_function=surrogate.ATan())
 
 或者在构造后指定 ``T``：
 
 .. code:: python
 
-    net_ms = spiking_resnet.multi_step_spiking_resnet18(pretrained=False, progress=True, multi_step_neuron=neuron.MultiStepIFNode, v_threshold=1., surrogate_function=surrogate.ATan(), backend='torch')
+    net_ms = spiking_resnet.multi_step_spiking_resnet18(pretrained=False, progress=True, multi_step_neuron=neuron.MultiStepIFNode, v_threshold=1., surrogate_function=surrogate.ATan())
     net_ms.T = 4
 
 网络在 `forward` 时会将输入自动复制 ``T`` 次，和我们把输入复制是一样的：
 
 .. code:: python
 
-    net_ms = spiking_resnet.multi_step_spiking_resnet18(pretrained=False, progress=True, multi_step_neuron=neuron.MultiStepIFNode, v_threshold=1., surrogate_function=surrogate.ATan(), backend='torch')
+    net_ms = spiking_resnet.multi_step_spiking_resnet18(pretrained=False, progress=True, multi_step_neuron=neuron.MultiStepIFNode, v_threshold=1., surrogate_function=surrogate.ATan())
     T = 4
     N = 2
 

@@ -30,7 +30,6 @@ class GatedLIFNode(base.MemoryModule):
         init_conduct: float = 0.5,
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         step_mode="m",
-        backend="torch",
     ):
         r"""
         **API Language** - :ref:`中文 <GatedLIFNode.__init__-cn>` | :ref:`English <GatedLIFNode.__init__-en>`
@@ -75,10 +74,6 @@ class GatedLIFNode(base.MemoryModule):
         :param step_mode: 步进模式，仅支持 ``'m'`` （多步）
         :type step_mode: str
 
-        :param backend: 使用的后端。不同 ``step_mode`` 支持的后端可能不同。
-            可通过 ``self.supported_backends`` 查看当前步进模式支持的后端。
-            Gated LIF 仅支持 ``'torch'`` 后端
-        :type backend: str
 
         ----
 
@@ -121,10 +116,6 @@ class GatedLIFNode(base.MemoryModule):
         :param step_mode: step mode, only `'m'` (multi-step) is supported
         :type step_mode: str
 
-        :param backend: backend of this neuron layer. Supported backends depend on ``step_mode``.
-            Users can print ``self.supported_backends`` to check availability.
-            Gated LIF only supports the ``'torch'`` backend
-        :type backend: str
         """
         assert isinstance(init_tau, float) and init_tau < 1.0
         assert isinstance(T, int) and T is not None
@@ -139,7 +130,6 @@ class GatedLIFNode(base.MemoryModule):
         assert step_mode == "m"
         super().__init__()
         self.surrogate_function = surrogate_function
-        self.backend = backend
         self.step_mode = step_mode
         self.T = T
         self.register_memory("v", 0.0)
@@ -193,10 +183,6 @@ class GatedLIFNode(base.MemoryModule):
                 dtype=torch.float,
             )
         )
-
-    @property
-    def supported_backends(self):
-        return ("torch",)
 
     def extra_repr(self):
         return (
@@ -266,7 +252,6 @@ class KLIFNode(BaseNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
-        backend="torch",
         store_v_seq: bool = False,
     ):
         r"""
@@ -351,10 +336,6 @@ class KLIFNode(BaseNode):
         :param step_mode: 步进模式，可选 ``'s'`` （单步）或 ``'m'`` （多步）
         :type step_mode: str
 
-        :param backend: 计算后端。不同 ``step_mode`` 支持的后端可能不同，
-            可通过 ``self.supported_backends`` 查看当前步进模式支持的后端。
-            在支持的情况下，``'cupy'`` 或 ``'triton'`` 后端通常具有最高的执行效率
-        :type backend: str
 
         :param store_v_seq: 当 ``step_mode = 'm'`` 且输入形状为 ``[T, N, *]`` 时，
             是否保存所有时间步的膜电位序列 ``self.v_seq``（形状为 ``[T, N, *]``）。
@@ -443,11 +424,6 @@ class KLIFNode(BaseNode):
         :param step_mode: step mode, either ``'s'`` (single-step) or ``'m'`` (multi-step)
         :type step_mode: str
 
-        :param backend: backend for this neuron. Different ``step_mode`` may support different backends.
-            Supported backends can be queried via ``self.supported_backends``.
-            If available, ``'cupy'`` or ``'triton'`` usually provides the fastest execution
-        :type backend: str
-
         :param store_v_seq: when ``step_mode = 'm'`` and input shape is ``[T, N, *]``,
             whether to store the membrane potential at all time steps in ``self.v_seq``.
             If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage.
@@ -462,9 +438,8 @@ class KLIFNode(BaseNode):
             v_reset,
             surrogate_function,
             detach_reset,
-            step_mode,
-            backend,
-            store_v_seq,
+            step_mode=step_mode,
+            store_v_seq=store_v_seq,
         )
 
         self.scale_reset = scale_reset
@@ -472,10 +447,6 @@ class KLIFNode(BaseNode):
         self.decay_input = decay_input
 
         self.k = nn.Parameter(torch.as_tensor(1.0))
-
-    @property
-    def supported_backends(self):
-        return ("torch",)
 
     def single_step_functional_forward(
         self,
@@ -507,7 +478,6 @@ class ComplementaryLIFNode(BaseNode):
         v_threshold: float = 1.0,
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(alpha=1.0),
         step_mode: str = "s",
-        backend: str = "torch",
         store_state_seqs: bool = False,
     ) -> None:
         r"""
@@ -551,8 +521,6 @@ class ComplementaryLIFNode(BaseNode):
         :type surrogate_function: surrogate.SurrogateFunctionBase
         :param step_mode: 步进模式，``"s"`` 表示单步，``"m"`` 表示多步
         :type step_mode: str
-        :param backend: 计算后端，仅支持 ``"torch"``
-        :type backend: str
         :param store_state_seqs: 在多步模式下是否保存完整状态轨迹。若为 ``True``，
             ``state_seqs`` 按 ``[v_seq, m_seq]`` 保存两个形状为 ``[T, N, *]`` 的张量；
             functional forward 不写入该缓存。本类在单步和多步模式下均不使用父类的
@@ -560,7 +528,6 @@ class ComplementaryLIFNode(BaseNode):
         :type store_state_seqs: bool
         :raises AssertionError: ``tau`` 不是大于 ``1.0`` 的浮点数时抛出
         :raises ValueError: ``step_mode`` 不是 ``"s"`` 或 ``"m"`` 时抛出
-        :raises NotImplementedError: ``backend`` 不是 ``"torch"`` 时抛出
 
         ----
 
@@ -603,8 +570,6 @@ class ComplementaryLIFNode(BaseNode):
         :type surrogate_function: surrogate.SurrogateFunctionBase
         :param step_mode: Step mode, ``"s"`` for single-step or ``"m"`` for multi-step
         :type step_mode: str
-        :param backend: Execution backend; only ``"torch"`` is supported
-        :type backend: str
         :param store_state_seqs: Whether to store complete state trajectories in
             multi-step mode. If ``True``, ``state_seqs`` contains two tensors in
             ``[v_seq, m_seq]`` order, each with shape ``[T, N, *]``. Functional
@@ -614,7 +579,6 @@ class ComplementaryLIFNode(BaseNode):
         :type store_state_seqs: bool
         :raises AssertionError: If ``tau`` is not a float greater than ``1.0``
         :raises ValueError: If ``step_mode`` is neither ``"s"`` nor ``"m"``
-        :raises NotImplementedError: If ``backend`` is not ``"torch"``
         """
         assert isinstance(tau, float) and tau > 1.0
         super().__init__(
@@ -622,17 +586,12 @@ class ComplementaryLIFNode(BaseNode):
             None,
             surrogate_function,
             False,
-            step_mode,
-            backend,
-            False,
+            step_mode=step_mode,
+            store_v_seq=False,
         )
         self.tau = tau
         self.register_memory("m", 0.0)
         self.store_state_seqs = store_state_seqs
-
-    @property
-    def supported_backends(self) -> tuple[str, ...]:
-        return ("torch",)
 
     @property
     def store_state_seqs(self) -> bool:
@@ -873,12 +832,6 @@ class LIAFNode(LIFNode):
         super().__init__(*args, **kwargs)
         self.act = act
         self.threshold_related = threshold_related
-
-        assert self.backend == "torch", "LIAFNode only supports for backend='torch'!"
-
-    @property
-    def supported_backends(self):
-        return ("torch",)
 
     def single_step_functional_forward(
         self,

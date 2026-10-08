@@ -127,7 +127,6 @@ class SpikformerConv2dBNLIF(nn.Module):
         stride: int = 1,
         padding: int = 0,
         pool: bool = False,
-        backend: str = "torch",
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         **kwargs: Any,
     ) -> None:
@@ -159,9 +158,6 @@ class SpikformerConv2dBNLIF(nn.Module):
 
         :param pool: 若为 ``True``，则在 ``SpikformerConv2dBN`` 中添加最大池化层。默认为 ``False``
         :type pool: bool
-
-        :param backend: 神经元后端。默认为 ``"torch"``
-        :type backend: str
 
         :param spiking_neuron: 自定义神经元类；``None`` 使用默认 LIF 参数
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
@@ -195,9 +191,6 @@ class SpikformerConv2dBNLIF(nn.Module):
         :param pool: If ``True``, adds max-pooling inside ``SpikformerConv2dBN``. Default: ``False``
         :type pool: bool
 
-        :param backend: Backend for the LIF neuron. Default: ``"torch"``
-        :type backend: str
-
         :param spiking_neuron: Custom neuron class; ``None`` uses the default LIF parameters
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
@@ -215,7 +208,6 @@ class SpikformerConv2dBNLIF(nn.Module):
             pool=pool,
         )
         self.neuron = _make_multi_step_neuron(
-            backend,
             spiking_neuron,
             kwargs,
             {"tau": 2.0, "detach_reset": True},
@@ -233,7 +225,6 @@ class SpikformerPatchStem(nn.Module):
         patch_size: int = 16,
         in_channels: int = 3,
         embed_dims: int = 256,
-        backend: str = "torch",
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         **kwargs: Any,
     ) -> None:
@@ -264,9 +255,6 @@ class SpikformerPatchStem(nn.Module):
 
         :param embed_dims: 最终的嵌入维度。默认为 256
         :type embed_dims: int
-
-        :param backend: 神经元后端。默认为 ``"torch"``
-        :type backend: str
 
         :param spiking_neuron: 自定义神经元类；``None`` 使用各位置默认 LIF 参数
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
@@ -302,9 +290,6 @@ class SpikformerPatchStem(nn.Module):
         :param embed_dims: Final embedding dimension. Default: 256
         :type embed_dims: int
 
-        :param backend: Backend for the LIF neuron. Default: ``"torch"``
-        :type backend: str
-
         :param spiking_neuron: Custom neuron class; ``None`` uses each position's default LIF parameters
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
@@ -337,7 +322,6 @@ class SpikformerPatchStem(nn.Module):
                     stride=1,
                     padding=1,
                     pool=index >= pool_from,
-                    backend=backend,
                     spiking_neuron=spiking_neuron,
                     **kwargs,
                 )
@@ -351,7 +335,6 @@ class SpikformerPatchStem(nn.Module):
             stride=1,
             padding=1,
             pool=False,
-            backend=backend,
             spiking_neuron=spiking_neuron,
             **kwargs,
         )
@@ -371,7 +354,6 @@ class SpikformerMLP(nn.Module):
         in_features: int,
         hidden_features: int,
         out_features: int,
-        backend: str = "torch",
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         **kwargs: Any,
     ) -> None:
@@ -394,9 +376,6 @@ class SpikformerMLP(nn.Module):
 
         :param out_features: 输出特征维度
         :type out_features: int
-
-        :param backend: 神经元后端。默认为 ``"torch"``
-        :type backend: str
 
         :param spiking_neuron: 自定义神经元类；``None`` 使用各位置默认 LIF 参数
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
@@ -421,9 +400,6 @@ class SpikformerMLP(nn.Module):
         :param out_features: Output feature dimension
         :type out_features: int
 
-        :param backend: Backend for the LIF neuron. Default: ``"torch"``
-        :type backend: str
-
         :param spiking_neuron: Custom neuron class; ``None`` uses each position's default LIF parameters
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
@@ -437,7 +413,6 @@ class SpikformerMLP(nn.Module):
             nn.BatchNorm1d(hidden_features),
         )
         self.neuron1 = _make_multi_step_neuron(
-            backend,
             spiking_neuron,
             kwargs,
             {"tau": 2.0, "detach_reset": True},
@@ -447,7 +422,6 @@ class SpikformerMLP(nn.Module):
             nn.BatchNorm1d(out_features),
         )
         self.neuron2 = _make_multi_step_neuron(
-            backend,
             spiking_neuron,
             kwargs,
             {"tau": 2.0, "detach_reset": True},
@@ -465,7 +439,6 @@ class SpikformerBlock(nn.Module):
         dim: int,
         num_heads: int,
         mlp_ratio: float = 4.0,
-        backend: str = "torch",
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         **kwargs: Any,
     ) -> None:
@@ -488,9 +461,6 @@ class SpikformerBlock(nn.Module):
 
         :param mlp_ratio: MLP 隐藏层维度相对于 ``dim`` 的倍数。默认为 4.0
         :type mlp_ratio: float
-
-        :param backend: 神经元后端。默认为 ``"torch"``
-        :type backend: str
 
         :param spiking_neuron: 自定义神经元类；``None`` 使用论文默认 LIF 参数
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
@@ -517,9 +487,6 @@ class SpikformerBlock(nn.Module):
         :param mlp_ratio: Ratio of MLP hidden dimension to ``dim``. Default: 4.0
         :type mlp_ratio: float
 
-        :param backend: Backend for the LIF neuron. Default: ``"torch"``
-        :type backend: str
-
         :param spiking_neuron: Custom neuron class; ``None`` uses the paper-default LIF parameters
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
@@ -540,7 +507,6 @@ class SpikformerBlock(nn.Module):
         self.attn = SpikingSelfAttention(
             dim=dim,
             num_heads=num_heads,
-            backend=backend,
             spiking_neuron=spiking_neuron,
             **attention_kwargs,
         )
@@ -549,7 +515,6 @@ class SpikformerBlock(nn.Module):
             in_features=dim,
             hidden_features=hidden_features,
             out_features=dim,
-            backend=backend,
             spiking_neuron=spiking_neuron,
             **kwargs,
         )
@@ -579,7 +544,6 @@ class Spikformer(nn.Module):
         num_heads: int = 8,
         mlp_ratio: float = 4.0,
         depths: int = 4,
-        backend: str = "torch",
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         **kwargs: Any,
     ) -> None:
@@ -624,9 +588,6 @@ class Spikformer(nn.Module):
 
         :param depths: Transformer 块的数量。默认为 4
         :type depths: int
-
-        :param backend: 神经元后端。默认为 ``"torch"``
-        :type backend: str
 
         :param spiking_neuron: 自定义神经元类；``None`` 使用论文默认 LIF 参数
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
@@ -673,9 +634,6 @@ class Spikformer(nn.Module):
         :param depths: Number of Transformer blocks. Default: 4
         :type depths: int
 
-        :param backend: Backend for the LIF neuron. Default: ``"torch"``
-        :type backend: str
-
         :param spiking_neuron: Custom neuron class; ``None`` uses the paper-default LIF parameters
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
 
@@ -695,7 +653,6 @@ class Spikformer(nn.Module):
             patch_size=patch_size,
             in_channels=in_channels,
             embed_dims=embed_dims,
-            backend=backend,
             spiking_neuron=spiking_neuron,
             **kwargs,
         )
@@ -705,7 +662,6 @@ class Spikformer(nn.Module):
                     dim=embed_dims,
                     num_heads=num_heads,
                     mlp_ratio=mlp_ratio,
-                    backend=backend,
                     spiking_neuron=spiking_neuron,
                     **kwargs,
                 )
@@ -753,7 +709,6 @@ def spikformer_ti(
     img_size_h: int = 224,
     img_size_w: int = 224,
     num_classes: int = 1000,
-    backend: str = "torch",
     spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
     **kwargs: Any,
 ) -> Spikformer:
@@ -778,8 +733,6 @@ def spikformer_ti(
     :type img_size_w: int
     :param num_classes: 分类类别数。默认为 1000
     :type num_classes: int
-    :param backend: 神经元后端。默认为 ``\"torch\"``
-    :type backend: str
     :param spiking_neuron: 自定义神经元类；``None`` 使用论文默认值
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: 传给所有内部神经元的参数
@@ -805,8 +758,6 @@ def spikformer_ti(
     :type img_size_w: int
     :param num_classes: Number of classes. Default: 1000
     :type num_classes: int
-    :param backend: Backend for neurons. Default: ``\"torch\"``
-    :type backend: str
     :param spiking_neuron: Custom neuron class; ``None`` keeps the paper defaults
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: Arguments passed to internal neurons
@@ -824,7 +775,6 @@ def spikformer_ti(
         num_heads=8,
         mlp_ratio=4.0,
         depths=4,
-        backend=backend,
         spiking_neuron=spiking_neuron,
         **kwargs,
     )
@@ -836,7 +786,6 @@ def spikformer_s(
     img_size_h: int = 224,
     img_size_w: int = 224,
     num_classes: int = 1000,
-    backend: str = "torch",
     spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
     **kwargs: Any,
 ) -> Spikformer:
@@ -861,8 +810,6 @@ def spikformer_s(
     :type img_size_w: int
     :param num_classes: 分类类别数。默认为 1000
     :type num_classes: int
-    :param backend: 神经元后端。默认为 ``\"torch\"``
-    :type backend: str
     :param spiking_neuron: 自定义神经元类；``None`` 使用论文默认值
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: 传给所有内部神经元的参数
@@ -888,8 +835,6 @@ def spikformer_s(
     :type img_size_w: int
     :param num_classes: Number of classes. Default: 1000
     :type num_classes: int
-    :param backend: Backend for neurons. Default: ``\"torch\"``
-    :type backend: str
     :param spiking_neuron: Custom neuron class; ``None`` keeps the paper defaults
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: Arguments passed to internal neurons
@@ -907,7 +852,6 @@ def spikformer_s(
         num_heads=12,
         mlp_ratio=4.0,
         depths=6,
-        backend=backend,
         spiking_neuron=spiking_neuron,
         **kwargs,
     )
@@ -916,7 +860,6 @@ def spikformer_s(
 def spikformer_cifar10(
     T: int = 4,
     num_classes: int = 10,
-    backend: str = "torch",
     spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
     **kwargs: Any,
 ) -> Spikformer:
@@ -937,8 +880,6 @@ def spikformer_cifar10(
     :type T: int
     :param num_classes: 分类类别数。
     :type num_classes: int
-    :param backend: 内部神经元的后端。
-    :type backend: str
     :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认神经元。
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: 传给所有内部神经元的参数；指定自定义类时统一生效。
@@ -960,8 +901,6 @@ def spikformer_cifar10(
     :type T: int
     :param num_classes: Number of classification classes.
     :type num_classes: int
-    :param backend: Backend used by the internal neurons.
-    :type backend: str
     :param spiking_neuron: Custom neuron class; ``None`` keeps the paper defaults.
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: Arguments passed to every internal neuron; with a custom class,
@@ -981,7 +920,6 @@ def spikformer_cifar10(
         num_heads=12,
         mlp_ratio=4.0,
         depths=4,
-        backend=backend,
         spiking_neuron=spiking_neuron,
         **kwargs,
     )
@@ -1132,7 +1070,6 @@ class SpikformerConfig(ModelConfig):
     image_height: int = 224
     image_width: int = 224
     in_channels: int = 3
-    neuron_backend: str = "torch"
     neuron_config: Optional[NeuronConfig] = None
 
     def __post_init__(self) -> None:
@@ -1167,8 +1104,6 @@ SpikformerConfig.__init__.__doc__ = r"""Configure Spikformer-S distributed execu
 :type image_width: int
 :param in_channels: 输入通道数，默认 ``3``，须为正数。
 :type in_channels: int
-:param neuron_backend: 神经元后端，默认 ``"torch"``。
-:type neuron_backend: str
 :param neuron_config: 可序列化的自定义神经元；默认 ``None`` 保留论文参数。
 :type neuron_config: Optional[NeuronConfig]
 :raises ValueError: 时间步、类别数、图像尺寸或通道数非正数，或步进模式不是 ``"m"``。
@@ -1194,8 +1129,6 @@ reconstructs local Q, K, and V heads.
 :type image_width: int
 :param in_channels: Input channels, positive; default ``3``.
 :type in_channels: int
-:param neuron_backend: Neuron backend; default ``"torch"``.
-:type neuron_backend: str
 :param neuron_config: Serializable custom neuron; ``None`` (default) keeps
     the paper parameters.
 :type neuron_config: Optional[NeuronConfig]
@@ -1210,7 +1143,6 @@ class SpikformerCIFAR10Config(ModelConfig):
         "spikingjelly.activation_based.model.spikformer.SpikformerBuilder"
     )
     num_classes: int = 10
-    neuron_backend: str = "torch"
     neuron_config: Optional[NeuronConfig] = None
 
     def __post_init__(self) -> None:
@@ -1238,8 +1170,6 @@ CIFAR-10 Spikformer。TP 按 attention head 分片；PP 支持一或两个 stage
 :type num_classes: int
 :param step_mode: 固定为 ``"m"``，也是默认值。
 :type step_mode: str
-:param neuron_backend: 神经元后端，默认 ``"torch"``。
-:type neuron_backend: str
 :param neuron_config: 可序列化的自定义神经元；默认 ``None`` 保留论文参数。
 :type neuron_config: Optional[NeuronConfig]
 :raises ValueError: 时间步或类别数非正数，或步进模式不是 ``"m"``。
@@ -1260,8 +1190,6 @@ pipeline parallelism supports one or two stages.
 :type num_classes: int
 :param step_mode: Must be ``"m"`` (the default).
 :type step_mode: str
-:param neuron_backend: Neuron backend; default ``"torch"``.
-:type neuron_backend: str
 :param neuron_config: Serializable custom neuron; ``None`` (default) keeps
     the paper parameters.
 :type neuron_config: Optional[NeuronConfig]
@@ -1302,7 +1230,6 @@ class SpikformerBuilder(ModelBuilder):
             model = spikformer_cifar10(
                 T=config.time_steps,
                 num_classes=config.num_classes,
-                backend="torch",
                 spiking_neuron=spiking_neuron,
                 **neuron_kwargs,
             )
@@ -1313,13 +1240,11 @@ class SpikformerBuilder(ModelBuilder):
                 img_size_h=config.image_height,
                 img_size_w=config.image_width,
                 num_classes=config.num_classes,
-                backend="torch",
                 spiking_neuron=spiking_neuron,
                 **neuron_kwargs,
             )
         _convert_batch_norms(model)
         functional.set_step_mode(model, config.step_mode)
-        functional.set_backend(model, config.neuron_backend, instance=neuron.BaseNode)
         return model
 
     def _pipeline_stage(self, model: nn.Module, rank: int, size: int) -> nn.Module:

@@ -263,7 +263,7 @@ class NeuronConfig:
             raise TypeError("neuron kwargs must be dictionaries.")
         if {"backend", "step_mode", "surrogate_function"} & self.kwargs.keys():
             raise ValueError(
-                "backend, step_mode, and surrogate_function are configured separately."
+                "backend selection is automatic; step_mode and surrogate_function are configured separately."
             )
         if self.surrogate is None and self.surrogate_kwargs:
             raise ValueError("surrogate_kwargs requires a surrogate class.")
@@ -284,8 +284,8 @@ NeuronConfig.__init__.__doc__ = r"""Configure one serializable neuron declaratio
 保存神经元类、构造参数和可选替代梯度类的数据描述。内置类按完整路径解析；外部类须由调用方
 先导入并调用 :func:`register_neuron_class` 或 :func:`register_surrogate_class` 注册。配置解析不会
 从路径自动导入模块。``kwargs`` 与 ``surrogate_kwargs`` 只接受标准 JSON 数据，不接受 tuple、
-张量、类、callable、非字符串字典键或非有限数；``backend``、``step_mode`` 由模型配置决定，
-替代梯度通过 ``surrogate`` 字段单独指定。
+张量、类、callable、非字符串字典键或非有限数。神经元实现按设备自动选择，
+``step_mode`` 由模型配置决定，替代梯度通过 ``surrogate`` 字段单独指定。
 
 :param class_path: ``BaseNode`` 子类的完整类路径。
 :type class_path: str
@@ -310,8 +310,9 @@ register external classes with :func:`register_neuron_class` or
 :func:`register_surrogate_class` first. Decoding never imports a module from a
 path in the config. ``kwargs`` and ``surrogate_kwargs`` accept only standard JSON
 values, not tuples, tensors, classes, callables, non-string dictionary keys, or
-non-finite numbers. The model config owns ``backend`` and ``step_mode``; the
-surrogate is specified separately through ``surrogate``.
+non-finite numbers. Neuron implementation is selected automatically from the
+input device; the model config owns ``step_mode``. The surrogate is specified
+through ``surrogate``.
 
 :param class_path: Full path of a ``BaseNode`` subclass.
 :type class_path: str
@@ -778,10 +779,10 @@ class PredictionConfig:
         precision configuration.
     :type precision: spikingjelly.activation_based.precision.PrecisionConfig
     :param execution_mode: ``"eager"``、``"compile"`` 或 ``"cuda_graph"``。
-        ``"cuda_graph"`` 仅支持 single-rank replicated execution、非 CuPy 神经元、
-        ``store_v_seq=False`` 和非实验精度。 / ``"eager"``, ``"compile"``, or
+        ``"cuda_graph"`` 仅支持 single-rank replicated execution 和
+        ``store_v_seq=False``；FP8 和显式神经元精度暂不支持。 / ``"eager"``, ``"compile"``, or
         ``"cuda_graph"``. CUDA Graph requires single-rank replicated execution,
-        non-CuPy neurons, ``store_v_seq=False``, and non-experimental precision.
+        ``store_v_seq=False``; FP8 and explicit neuron precision are unsupported.
     :type execution_mode: str
     :param cuda_graph_warmup_steps: CUDA Graph 捕获前的 eager warmup batch 数。 /
         Eager warmup batches before CUDA Graph capture.
@@ -838,7 +839,7 @@ class PredictionConfig:
         if self.pipeline_parallel_size > 1 and self.precision.mode == "fp16":
             raise ValueError("Vision PP currently supports fp32 and bf16.")
         if (
-            self.precision.mode == "fp8" or self.precision.triton_storage is not None
+            self.precision.mode == "fp8" or self.precision.neuron_storage is not None
         ) and (
             self.data_parallel != "replicate"
             or self.tensor_parallel_size != 1
@@ -846,7 +847,7 @@ class PredictionConfig:
             or self.execution_mode != "eager"
         ):
             raise ValueError(
-                "Vision experimental precision inference requires replicated "
+                "Vision FP8 or explicit neuron precision inference requires replicated "
                 "eager execution with TP=1 and PP=1."
             )
         if self.execution_mode == "compile" and (
@@ -919,7 +920,7 @@ loss, accuracy, and performance metrics.
 :type precision: spikingjelly.activation_based.precision.PrecisionConfig
 :param execution_mode: ``"eager"``、``"compile"`` 或 ``"cuda_graph"``。 /
     ``"eager"``, ``"compile"``, or ``"cuda_graph"``. CUDA Graph inherits the
-    single-rank, backend, state-storage, and precision restrictions from
+    single-rank, state-storage, and precision restrictions from
     :class:`PredictionConfig`.
 :type execution_mode: str
 :param cuda_graph_warmup_steps: CUDA Graph 捕获前的 eager warmup batch 数。 /
@@ -1009,14 +1010,14 @@ class TrainingConfig:
         if self.pipeline_parallel_size > 1 and self.precision.mode == "fp16":
             raise ValueError("Vision PP currently supports fp32 and bf16.")
         if (
-            self.precision.mode == "fp8" or self.precision.triton_storage is not None
+            self.precision.mode == "fp8" or self.precision.neuron_storage is not None
         ) and (
             self.data_parallel != "ddp"
             or self.tensor_parallel_size != 1
             or self.pipeline_parallel_size != 1
         ):
             raise ValueError(
-                "Vision experimental precision requires DDP with TP=1 and PP=1."
+                "Vision FP8 or explicit neuron precision requires DDP with TP=1 and PP=1."
             )
         if self.model.step_mode == "s" and self.pipeline_parallel_size > 1:
             raise ValueError("Vision PP currently requires step_mode='m'.")
@@ -1033,10 +1034,10 @@ class TrainingConfig:
                 raise ValueError("CUDA Graph does not support Vision memopt training.")
             if (
                 self.precision.mode == "fp8"
-                or self.precision.triton_storage is not None
+                or self.precision.neuron_storage is not None
             ):
                 raise ValueError(
-                    "CUDA Graph does not support Vision experimental precision."
+                    "CUDA Graph does not support Vision FP8 or explicit neuron precision."
                 )
         if self.memopt_checkpoint_budget not in {"speed", "balanced", "memory"}:
             raise ValueError(
@@ -1186,7 +1187,7 @@ receives ``dataset_kwargs`` and returns train and validation datasets.
 :param execution_mode: ``"eager"``、``"compile"`` 或 ``"cuda_graph"``。 /
     ``"eager"``, ``"compile"``, or ``"cuda_graph"``. CUDA Graph requires one
     rank, DDP configuration without distributed replicas, ``memopt_level=0``,
-    non-CuPy neurons, ``store_v_seq=False``, and non-experimental precision.
+    ``store_v_seq=False``; FP8 and explicit neuron precision are unsupported.
 :type execution_mode: str
 :param cuda_graph_warmup_steps: CUDA Graph 捕获前的真实训练 step 数。 / Real
     training steps before CUDA Graph capture.

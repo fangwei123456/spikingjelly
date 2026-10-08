@@ -359,7 +359,7 @@ ANN 训练完成。选择 rate-coding recipe，传入确定性校准 dataloader�
         (spiking_0): Module(
           (scaler0): VoltageScaler(0.193247)
           (if_node): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
             (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
           )
           (scaler1): VoltageScaler(5.174733)
@@ -367,7 +367,7 @@ ANN 训练完成。选择 rate-coding recipe，传入确定性校准 dataloader�
         (spiking_1): Module(
           (scaler0): VoltageScaler(0.325697)
           (if_node): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
             (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
           )
           (scaler1): VoltageScaler(3.070336)
@@ -375,7 +375,7 @@ ANN 训练完成。选择 rate-coding recipe，传入确定性校准 dataloader�
         (spiking_2): Module(
           (scaler0): VoltageScaler(0.121967)
           (if_node): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
             (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
           )
           (scaler1): VoltageScaler(8.198915)

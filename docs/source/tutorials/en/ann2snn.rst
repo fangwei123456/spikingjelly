@@ -360,7 +360,7 @@ The ANN is trained and validated. Select the rate-coding recipe, pass the determ
         (spiking_0): Module(
           (scaler0): VoltageScaler(0.193247)
           (if_node): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
             (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
           )
           (scaler1): VoltageScaler(5.174733)
@@ -368,7 +368,7 @@ The ANN is trained and validated. Select the rate-coding recipe, pass the determ
         (spiking_1): Module(
           (scaler0): VoltageScaler(0.325697)
           (if_node): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
             (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
           )
           (scaler1): VoltageScaler(3.070336)
@@ -376,7 +376,7 @@ The ANN is trained and validated. Select the rate-coding recipe, pass the determ
         (spiking_2): Module(
           (scaler0): VoltageScaler(0.121967)
           (if_node): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
             (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
           )
           (scaler1): VoltageScaler(8.198915)

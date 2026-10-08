@@ -9,7 +9,139 @@ and the archived documentation linked from the project README.
 
 ## Unreleased
 
+### Fixes
+
+- Binary neuron projection benchmarks use the correct IF surrogate argument and
+  reference method key; layout and SpikeZIP benchmark artifacts report the
+  reference implementation used with low-precision membrane state.
+- ActivationAwareIF avoids allocating unused channel indices for scalar
+  threshold/offset parameters on the Torch path.
+
+- Multi-step IF/LIF/PLIF modules record voltage trajectories through the same
+  sequence operator used without trajectories, preserving initial-state and
+  parameter gradients.
+- SpikeGPT benchmark startup no longer requires CuPy or records a CuPy backend
+  in checkpoint configuration. Checkpoints retaining the old configuration are
+  rejected on resume.
+- Operator registration no longer hashes source files or modifies the compiler
+  cache tag at import time; fingerprints are computed for compilation bindings.
+- Explicit IF/LIF/PLIF precision preserves the input dtype for spikes while
+  keeping membrane storage in the configured dtype.
+- FlexSN CUDA execution uses its reference scan when a valid core has no
+  differentiable output and cannot produce a Triton backward graph.
+
 ### Features
+
+#### Backend-transparent Neuron Execution
+
+Modules: ``spikingjelly.activation_based.functional.neuron``,
+``spikingjelly.activation_based.neuron``, and ``ops/``.
+
+- Accelerated neuron families use registered CPU/CUDA operator dispatch.
+  CPU runs the Torch reference; CUDA selects a compatible implementation once
+  per device from native CUDA, Triton, then Torch. No neuron constructor,
+  module property, model config, or ``functional.set_backend`` exposes provider
+  choice. ``functional.neuron_implementation`` reports the actual selection.
+- IF/LIF/PLIF Torch reference execution with low-precision state can now be
+  captured with fullgraph compilation. Fallback diagnostics do not acquire
+  locks during capture or on steady-state cache hits; strict provider errors
+  remain unchanged. Initialized explicit precision plans also support fullgraph
+  model compilation without repeating device checks during capture.
+- Single-step IF/LIF/PLIF functional calls and supported FP16/BF16 inputs with
+  explicit FP32 state enter the same registered operator as FP32 multi-step calls.
+  Ordinary modules keep membrane state in the input dtype; FP16/BF16 state uses
+  Torch reference equations. Reference-only execution obeys strict provider
+  diagnostics. Retired experimental entry wrappers, duplicate legacy Triton
+  modules, and the old backend-based compile probe.
+  `SJ_USE_TRITON_OP` is retired: installed Triton uses `triton_op`/`wrap_triton`;
+  missing optional dependencies still report a clear error when requested.
+  NSYS capture manifests record `implementation_environment` diagnostic overrides
+  instead of the retired `sj_use_triton_op` field.
+- Unified ``*_step`` and ``*_multi_step`` entry points preserve module state,
+  reset, trajectory, surrogate, and gradient behavior. IF, LIF, PLIF, QIF, EIF,
+  Izhikevich, I-LIF, ActivationAwareIF, and STBIF each have a separate ``ops/``
+  subpackage, registered namespace, and implementation selection.
+- CUDA provider selection is lazy and cached by device. SpikingJelly's logger
+  records each bound implementation once; steady-state calls do not log.
+  ``SJ_<NEURON>_CUDA_IMPLEMENTATION`` remains an advanced strict diagnostic
+  control and defaults to ``auto``.
+- Ordinary eager and Inductor expansion now cache separate CUDA implementations:
+  eager prefers native CUDA, while expansion prefers Triton. Forward
+  and backward use the same path's binding; eager adds no per-call compile check.
+  CUDA Graphs retain the implementation chosen before capture. Query the
+  compiler binding with ``functional.neuron_implementation(..., execution="compile")``;
+  strict diagnostic overrides apply to both paths.
+- QIF native CUDA recurrences now match Torch's FP32 reciprocal rounding
+  for scalar time constants, preserving spikes at a low-precision threshold edge.
+- Ordinary CUDA backward uses the selected fused implementation. When a
+  higher-order gradient graph is requested, the Torch reference equations are
+  recomputed on CPU or CUDA so double backward remains available.
+- Operator sources are installed in the same SpikingJelly package as
+  ``spikingjelly._ops``. Default PyPI wheels remain pure Python; optional native
+  CUDA builds use the local PyTorch/CUDA toolchain, while Triton retains
+  JIT compilation.
+- Removed the legacy ``activation_based/cuda_kernel`` and
+  ``activation_based/triton_kernel`` packages and the experimental neuron module.
+  Custom production neurons use the explicit-state functional interface.
+
+#### Neuron Precision
+
+Module: ``spikingjelly.activation_based.precision``.
+
+- Precision settings are named ``neuron_storage``, ``neuron_fwd``, and
+  ``neuron_bwd``. Explicit multi-step IF/LIF/PLIF precision uses CUDA Triton;
+  ordinary neuron execution remains selected automatically from the device.
+  Existing FP16, BF16, FP8, surrogate, and state contracts remain available.
+
+#### FlexSN Execution
+
+Module: ``spikingjelly.activation_based.neuron.flexsn``.
+
+- FlexSN executes with automatic device-based selection: Torch on CPU, fused
+  Triton on supported CUDA cores, and Torch/HOP for known unsupported cores.
+  State handling and static-parameter gradients are preserved; the public
+  constructor no longer exposes a backend selector.
+- FlexSN kernel handles remain alive until their autograd context is released,
+  allowing repeated backward through a retained graph after its node is deleted.
+
+#### Binary Spike Operators
+
+Modules: `spikingjelly.activation_based.functional` and
+`spikingjelly.activation_based.layer`.
+
+- Added fused IF/LIF-Linear, sparse/prepacked
+  Linear, and spike packing interfaces backed by `ops`. Existing operator
+  implementations retain their device/dtype constraints; Torch-to-Triton support
+  also resides in `ops`.
+- Fused IF/LIF-Linear supports fullgraph compiled forward and backward with
+  the seven built-in surrogates. Their IDs and alpha values are passed directly
+  to the operator; custom surrogates retain the eager Python-derivative path.
+- Removed legacy `layer.SpikeLinear`/`SpikeConv*`, functional `spike_linear`/
+  `spike_conv*`, their dense operator implementations and `save_bool_spike_level`
+  (`SJ_SAVE_BOOL_SPIKE_LEVEL`). Use ordinary Torch layers with `memopt`.
+- Removed all production CuPy providers, loaders, diagnostics choices and
+  `cupy11`/`cupy12` installation extras. Fused IF/LIF-Linear and packed/sparse
+  projection now use optional native CUDA extensions; without them, CUDA tensors
+  execute Torch reference equations. Native fused forward avoids materializing
+  intermediate spikes; reference execution does not promise this memory behavior.
+- Registered flat spike packing supports CPU plus optional Triton CUDA
+  implementations, fake tensors and compilation. Decompression accepts an output
+  dtype and defaults to uint8; row-packed and flat-packed layouts remain distinct.
+- Removed Auto CUDA's source translator, kernel-building DSL, generated-neuron
+  wrappers, and `surrogate.cuda_codes()` API. Fixed neurons use explicit CUDA
+  sources; custom multi-step neurons use FlexSN. Fused IF/LIF-Linear backward
+  rematerializes spikes with the same explicit charge/reset code as forward,
+  including threshold-boundary cases; custom surrogates use PyTorch derivatives.
+- Removed the unused Auto CUDA settings `cuda_threads`, `cuda_compiler_options`,
+  `cuda_compiler_backend`, and `save_spike_as_bool_in_neuron_kernel`, together
+  with their `SJ_*` environment variables. Operator sources own their launch and
+  compilation settings; `memopt` owns configurable activation compression.
+- Precision Triton kernels tune separately for physical layouts with CUDA Graph
+  timing and reuse upstream 64-bit addressing fixes. SlidingPSN's gemm dtype
+  regression and TD chunked-gradient rounding tolerances are synchronized with
+  master; PLIF uses explicit initial state in its parameter-gradient calculation.
+- Migrated Triton stride handling supports constexpr tuple indexing on Triton
+  3.3, including noncontiguous mixed-precision neuron inputs and gradients.
 
 #### SNN Performance Profiling
 
@@ -44,8 +176,18 @@ Module: `spikingjelly.nsys`.
   ranges for projection onto CUDA Graph replay nodes in a diagnostic report;
   analysis emits a GPU stage timeline without implying CPU forward/backward
   execution on replay.
-- `benchmark.benchmark_snn_single_gpu` now accepts the CuPy neuron backend for
-  single-GPU case and matrix profiling when the optional CuPy dependency is installed.
+- `benchmark.benchmark_snn_single_gpu` uses device-based neuron dispatch and
+  records the automatically selected implementation in case and matrix reports.
+- Retired the `benchmark/native_lif` migration runners, the obsolete FlexSN
+  bucket probe, and fixed ConvNet/handwritten-LIF timing scripts. Use
+  `benchmark.benchmark_snn_single_gpu` and `benchmark/nsys_snn.sh` for full-model
+  training comparisons and profiling; current entry points are listed in
+  `benchmark/README.md`.
+- Added `benchmark.check_triton_lif_performance` for paired FP32 LIF backward
+  checks against production Triton, using captured Spikformer inputs, shared
+  output buffers, numerical validation and independent process rounds. Reports
+  retain raw timings and distinguish passes, regressions and inconsistent rounds;
+  CUDA/CuPy performance is not part of this gate.
 - `benchmark.benchmark_snn_single_gpu` now supports Spikformer-S ImageNet-size
   workloads alongside Spikformer-Ti for launch-overhead and batch-size studies.
 - Added `benchmark/nsys_lif_host_functions.json` as an opt-in NSYS preset for
@@ -53,30 +195,16 @@ Module: `spikingjelly.nsys`.
 
 #### Spiking Neurons
 
-Module: `spikingjelly.activation_based.neuron`.
+Module: ``spikingjelly.activation_based.neuron``.
 
-- Point-neuron Triton and CuPy kernels directly access compact, nonoverlapping
-  inputs, states and gradients in any dimension order, including channels-last,
-  and broadcast views obtained from them with `expand`. Other valid strided views
-  remain numerically supported but may be converted. Multi-step inputs retain
-  time as logical dimension zero, including zero time strides. Outputs and returned
-  gradients have independent, nonoverlapping storage; PyTorch reduces gradients
-  back to the sources of broadcast views. Existing backend and dtype restrictions
-  still apply. Benchmark Inductor's default layout policy before disabling
-  layout optimization. Recompile models with a
-  fresh Inductor cache when upgrading: cached CuPy graphs may assume contiguous
-  outputs from the previous implementation.
-- CuPy FP16 PLIF kernels read the shared decay parameter as one scalar and
-  broadcast it to both half2 lanes, avoiding a packed read past the scalar.
-- FlexSN's Triton kernels use masked pointer loads and stores instead of the
-  deprecated block-pointer API.
-
-- Added the torch-only `RAFNode` resonate-and-fire neuron with fixed oscillator
-  parameters, real-valued states, and single-step and multi-step execution.
-- Added `functional.clif_step()` for an explicit two-state ComplementaryLIF
-  transition; `ComplementaryLIFNode` now uses it without changing its outputs.
-- `STBIFNode` now accepts `backend="torch"` or `backend="triton"` in its
-  constructor for both step modes.
+- Triton and CuPy neuron implementations handle compact nonoverlapping inputs,
+  states and gradients in varied layouts, including channels-last and broadcast
+  views. Outputs retain independent storage, and PyTorch reduces gradients back
+  to broadcast sources.
+- Corrected CuPy FP16 PLIF scalar decay loading and adopted masked Triton pointer
+  loads/stores in FlexSN instead of deprecated block pointers.
+- Added ``RAFNode`` for resonate-and-fire dynamics and
+  ``functional.clif_step`` for the explicit two-state ComplementaryLIF update.
 
 #### Spiking Model Families
 
@@ -107,66 +235,11 @@ Modules: `spikingjelly.activation_based.distributed.vision`,
   JSON-native constructor arguments in distributed Vision configs. Built-in
   classes resolve directly; external classes must be imported and explicitly
   registered in every process before model construction.
-- Added `spiking_neuron` and neuron keyword arguments to the backend-configured
-  model families and their shared attention layers. Default neuron parameters
-  remain unchanged; a supplied neuron and its arguments apply to every neuron
-  site in the model.
+- Added `spiking_neuron` and neuron keyword arguments to model families and
+  shared attention layers. Default neuron parameters remain unchanged; a supplied
+  neuron and its arguments apply to every neuron site in the model.
 
 ### Improvements
-
-#### Point-Neuron Execution
-
-Module: `spikingjelly.activation_based.neuron`.
-
-- Reduced CuPy point-neuron addressing overhead for mixed tensor layouts;
-  storage offsets remain 64-bit, including unaligned FP16 views.
-- Isolated Triton point-neuron autotuning by tensor layout and reduced host
-  launch noise with CUDA Graph timing.
-
-#### Triton LIF Backward
-
-Module: `spikingjelly.activation_based.triton_kernel.neuron_kernel.lif`.
-
-- Register the shared standard and mixed-precision LIF backward kernel launch
-  as a Triton operator. Eager execution uses PyTorch's direct launch path;
-  AOT backward tracing retains compiler-visible Triton kernel calls.
-
-#### Triton Operator Registration
-
-Module: `spikingjelly.activation_based.triton_kernel`.
-
-- Select the `triton_op` or CUDA `custom_op` registration mode once at import,
-  and use the matching Triton kernel wrapper throughout the process.
-- Surface operator-registration failures instead of treating them as optional
-  Triton import failures.
-- Direct CUDA calls to registered Triton operators now report missing or broken
-  Triton initialization as an `ImportError` with the original cause.
-- FlexSN now checks the Triton dependency when its Triton backend is selected.
-- Restore FlexSN Triton operator registration on PyTorch 2.6 without changing
-  its operator schemas.
-- Remove `SJ_USE_WRAP_TRITON`. Set `SJ_USE_TRITON_OP=0` before import to retain
-  the opaque CUDA fallback formerly selected by disabling wrapping.
-- Allow the Triton 3.2.0 version required by PyTorch 2.6.0 in the optional
-  Triton dependency.
-
-#### CuPy Neuron Kernel Cache
-
-Module: `spikingjelly.activation_based.cuda_kernel.neuron_kernel`.
-
-- Bounded the IF/LIF/PLIF kernel builders and removed the process-wide surrogate
-  source registry. Single-step IF/LIF compiled graphs no longer depend on
-  temporary Python kernel-object IDs. Previously saved graphs containing the old
-  internal `sj::cupy_*` operator schemas must be recompiled or re-exported.
-
-#### FlexSN Code Generation
-
-Module: `spikingjelly.activation_based.triton_kernel.torch2triton`.
-
-- Generate Triton JIT functions in memory without writing new SpikingJelly
-  codegen `.py` files or retaining generated modules in `sys.modules`.
-  `compile_triton_code_str()` keeps its call and namespace behavior but no longer
-  promises persistent source files or cross-process generated-module reuse.
-  Existing source files are left untouched.
 
 #### Contributor Guidance
 
@@ -238,15 +311,12 @@ Module: `spikingjelly.activation_based.distributed.vision`.
 
 #### Functional Network Configuration
 
-Module: `spikingjelly.activation_based.functional`.
+Module: ``spikingjelly.activation_based.functional``.
 
-- `set_step_mode` and `set_backend` warnings now state the remedy. A module
-  that only carries a `step_mode` attribute is told to inherit from
-  `StepModule`; a rejected backend is reported together with the current
-  `step_mode` and `supported_backends`, because `supported_backends` can depend
-  on `step_mode`, so `set_step_mode` must be called before `set_backend`
-  (issue #632).
-- `fuse_conv_bn_eval_modules` now treats `StepModule` implementations as FX
+- ``set_step_mode`` warns when a module should inherit from ``StepModule``.
+  Network-wide neuron provider selection was removed; the input device selects
+  neuron execution automatically.
+- ``fuse_conv_bn_eval_modules`` treats ``StepModule`` implementations as FX
   leaves, allowing evaluation-time Conv-BatchNorm fusion in networks containing
   multi-step pooling, linear, and other atomic step modules such as SpikingVGG.
 
@@ -271,13 +341,13 @@ Module: `spikingjelly.activation_based.precision`.
 
 Module: `spikingjelly.activation_based.neuron`.
 
-- Fixed non-contiguous and broadcast point-neuron layouts failing to compile
-  with Triton 3.3 because of constexpr tuple indexing.
-- Fixed missing decay-parameter gradients in compiled CuPy `ParametricLIFNode`
-  by explicitly saving initial voltage and the visible voltage sequence.
-- Fixed CuPy PLIF backward with an initial voltage dtype different from the
-  input. The voltage conversion is now visible to autograd in eager and compiled
-  execution, so gradients propagate through the same cast used by forward.
+- Fixed Triton 3.6 LIF backward compilation with final-state-only output in
+  eager and fullgraph execution. The default `store_v_seq=False` no longer
+  requires retaining the full voltage trajectory as a compiler workaround;
+  input and initial-state gradients remain supported.
+- Corrected detached hard-reset gradients in the CPU, CUDA, CuPy, and Triton
+  Izhikevich implementations; when `detach_reset=True`, gradients no longer flow
+  through the reset spike.
 - Restored `MaskedPSN`'s single-step queue update before an overflow error when
   more than `T` steps are called; the explicit-state function leaves its input
   queue unchanged on error.
@@ -301,23 +371,8 @@ Module: `spikingjelly.activation_based.neuron`.
 - `GatedLIFNode` now materialises its previous-spike state with the input dtype,
   so its multi-step output and membrane state keep the module dtype under half
   precision instead of being promoted to `float32`.
-- `SlidingPSN` now builds its multi-step gemm weight matrix with the parameter
-  dtype, so a `bfloat16` or `float16` module runs the gemm backend instead of
-  failing with `mat1 and mat2 must have the same dtype`.
 
 ### Breaking Changes and Notices
-
-#### Point-Neuron Compilation
-
-Module: `spikingjelly.activation_based.neuron`.
-
-- Regenerate previously compiled or exported CuPy PLIF forward and backward
-  graphs after upgrading. The internal forward operator is now
-  `sj::cupy_multistep_plif_forward_v2`; the backward schema takes `v_init` and
-  the visible `v_seq` instead of a combined voltage buffer. Directly loaded old
-  backward graphs are incompatible. Python neuron call signatures are unchanged.
-- Triton point-neuron autotuning now includes layout metadata in its cache key.
-  Previously unseen layouts can incur additional first-call tuning latency.
 
 #### License Migration
 
@@ -326,13 +381,23 @@ Module: `spikingjelly.activation_based.neuron`.
   license links. Existing tags and published distributions retain their
   original licensing records.
 
-#### Distributed Vision Neuron Configurations
+#### Neuron Backend Removal
 
-Module: `spikingjelly.activation_based.distributed.vision`.
+Modules: ``spikingjelly.activation_based.neuron``,
+``spikingjelly.activation_based.functional``, and ``ops/``.
 
-- Inference artifact schema is now version 2. Version 1 artifacts are rejected
-  and must be re-exported. Existing SEW-ResNet34 and Spikformer training
-  checkpoints do not match the updated recipe and must be replaced by new runs.
+- **Breaking change:** removed neuron ``backend`` arguments and properties,
+  ``supported_backends``, ``functional.set_backend``, and duplicate
+  ``*_cupy``, ``*_triton``, and ``*_registered`` functional APIs. CPU/CUDA
+  dispatch now follows tensor device placement. Use
+  ``functional.neuron_implementation`` for diagnostics; the strict
+  ``SJ_<NEURON>_CUDA_IMPLEMENTATION`` setting is an advanced provider control.
+- **Breaking change:** removed ``activation_based/cuda_kernel`` and
+  ``activation_based/triton_kernel``. Maintained implementations now live in
+  per-neuron ``ops/`` packages installed as ``spikingjelly._ops``. Custom neuron
+  equations continue through the explicit-state functional interface.
+- Inference artifacts use schema version 2. Version 1 artifacts are rejected and
+  must be re-exported. Neuron configuration no longer serializes a backend.
 
 #### Spikformer Neuron Arguments
 

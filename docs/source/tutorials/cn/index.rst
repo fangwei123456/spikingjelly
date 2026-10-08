@@ -1,6 +1,10 @@
 中文教程 | Chinese Tutorials
 ===============================================
 
+新用户先阅读 :doc:`./basic_concept` 和 :doc:`./neuron`；GPU 使用与编译见
+:doc:`./triton_backend`，数值策略见 :doc:`./precision`。自定义动力学见
+:doc:`./flexsn`，旧代码迁移见 :doc:`./migrate_from_legacy`。
+
 .. toctree::
     :maxdepth: 1
     :caption: 基础
@@ -28,7 +32,6 @@
     :maxdepth: 1
     :caption: 高级
 
-    /tutorials/cn/cupy_neuron
     /tutorials/cn/triton_backend
     /tutorials/cn/flexsn
     /tutorials/cn/memopt

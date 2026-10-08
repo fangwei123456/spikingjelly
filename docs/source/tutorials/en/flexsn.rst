@@ -7,8 +7,19 @@ Authors: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_ and `Wei Fang
 
 ``FlexSN`` turns a pure-PyTorch single-step neuron function into a stateful
 SpikingJelly neuron and can generate a Triton kernel for multi-step CUDA
-execution. See :doc:`./triton_backend` for the predefined IF, LIF, and PLIF
-Triton backends.
+execution. See :doc:`./triton_backend` for device-based neuron execution.
+
+Use FlexSN for custom multi-step neurons and public neuron/functional interfaces
+for fixed neurons. The old Auto CUDA translator and neuron code-generation
+templates have been removed.
+
+.. note::
+
+    The ``torch.sigmoid`` examples produce continuous outputs to demonstrate
+    composition and gradients. Built-in LIF uses a step forward and surrogate
+    backward, so these outputs are not equivalent. Construction runs the core
+    on unit tensors. Keep it pure, without captured tensors or modules, and pass
+    parameters through ``static_inputs``.
 
 Describing neuron dynamics with a function
 ------------------------------------------
@@ -81,9 +92,9 @@ The first two returns are outputs; the last two update ``v`` and ``rho``:
 .. image:: ../../_static/tutorials/flexsn/neuron.png
     :width: 100%
 
-The constructor takes the state count. FlexSN infers input and output arities
-from the signature and one construction-time call with unit tensors, so example
-inputs are not needed:
+Pass the state count to the constructor. FlexSN infers the input and output
+counts from the signature and one call with unit tensors, without example
+inputs:
 
 .. code-block:: python
 
@@ -93,7 +104,6 @@ inputs are not needed:
         core=complicated_lif_core_generator(beta=0.5, gamma=0.9),
         num_states=2,
         step_mode="m",
-        backend="triton",
         store_state_seqs=True,
     ).cuda()
 
@@ -123,7 +133,6 @@ not modify the module's ``states``:
     f_torch = neuron.FlexSN(
         core=complicated_lif_core_generator(beta=0.5, gamma=0.9),
         num_states=2,
-        backend="torch",
     )
     initial_states = (
         torch.zeros_like(x[0]),
@@ -166,7 +175,6 @@ membrane-decay parameter:
         plif_core,
         num_states=1,
         static_inputs=(w,),
-        backend="torch",
     )
 
 A functional call supplies static values explicitly, so it can use another
@@ -183,102 +191,76 @@ value without replacing the module parameter:
 A static tensor must be a scalar or have the same number of elements as one
 input step. Arbitrary broadcasting is not supported.
 
-Checking forward and backward
------------------------------
+Automatic execution and ``torch.compile``
+-----------------------------------------
 
-``backend="torch"`` is the reference implementation. For a new dynamics
-function, compare Torch and Triton outputs, final states, state trajectories,
-and input gradients:
-
-.. code-block:: python
-
-    core = complicated_lif_core_generator(beta=0.5, gamma=0.9)
-    n_torch = neuron.FlexSN(
-        core, 2, backend="torch", store_state_seqs=True
-    ).cuda()
-    n_triton = neuron.FlexSN(
-        core, 2, backend="triton", store_state_seqs=True
-    ).cuda()
-
-    x = torch.randn([16, 3, 32, 32], device="cuda")
-    y = torch.randn([16, 3, 32, 32], device="cuda")
-    x_torch = x.clone().requires_grad_(True)
-    y_torch = y.clone().requires_grad_(True)
-    x_triton = x.clone().requires_grad_(True)
-    y_triton = y.clone().requires_grad_(True)
-
-    s1_torch, s2_torch = n_torch(x_torch, y_torch)
-    s1_triton, s2_triton = n_triton(x_triton, y_triton)
-    grad = torch.randn_like(s1_torch)
-    s1_torch.backward(grad)
-    s1_triton.backward(grad)
-
-    torch.testing.assert_close(s1_triton, s1_torch)
-    torch.testing.assert_close(s2_triton, s2_torch)
-    torch.testing.assert_close(n_triton.states, n_torch.states)
-    torch.testing.assert_close(n_triton.state_seqs, n_torch.state_seqs)
-    torch.testing.assert_close(x_triton.grad, x_torch.grad)
-    torch.testing.assert_close(y_triton.grad, y_torch.grad)
-
-Backends and ``torch.compile``
-------------------------------
-
-``FlexSN`` provides three backends:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 18 18 64
-
-   * - Backend
-     - Device
-     - Use
-   * - ``"torch"``
-     - CPU / CUDA
-     - Reference implementation; supports single- and multi-step execution
-   * - ``"hop"``
-     - CPU / CUDA
-     - Compiler-visible scan for multi-step execution and whole-model compilation
-   * - ``"triton"``
-     - CUDA
-     - Generated multi-step forward and backward kernels
-
-The HOP path can be passed directly to ``torch.compile``:
-
-.. code-block:: python
-
-    model = neuron.FlexSN(lif_core, 1, backend="hop")
-    compiled_model = torch.compile(model, fullgraph=True)
-    output = compiled_model(torch.randn(8, 64, 512))
-
-The Triton path builds its runtime from the dtype and device of the first real
-CUDA input. No example tensor is required at construction. The enclosing model
-may still be compiled:
+FlexSN selects its execution automatically. CPU uses the Torch implementation.
+On CUDA, supported cores use the generated Triton kernels; known unsupported
+compositions use the Torch/HOP path. The constructor has no backend argument.
 
 .. code-block:: python
 
     import torch.nn as nn
+    from spikingjelly.activation_based import neuron
 
-    flex = neuron.FlexSN(lif_core, 1, backend="triton").cuda()
-    model = nn.Sequential(
-        nn.Linear(512, 512),
-        flex,
-        nn.Linear(512, 512),
-    ).cuda()
-    model = torch.compile(model, fullgraph=True)
-    output = model(torch.randn(8, 64, 512, device="cuda"))
+    flex = neuron.FlexSN(lif_core, 1).cuda()
+    model = nn.Sequential(nn.Linear(512, 512), flex, nn.Linear(512, 512)).cuda()
+    compiled = torch.compile(model, fullgraph=True)
+    output = compiled(torch.randn(8, 64, 512, device="cuda"))
 
-An unsupported ``core`` operation or a Triton build failure raises an error. It
-does not silently switch to HOP or Torch, so selecting the accelerated backend
-cannot unknowingly execute another path.
+A supported CUDA core compiles when it first receives a real CUDA input. An
+unsupported operation or a kernel error after selection is reported directly.
 
 Limits and migration
 --------------------
 
 * The leading dimension of a multi-step input is time ``T``; ``T == 0`` is rejected.
-* ``hop`` and ``triton`` require ``step_mode="m"``.
-* Changing backend or step mode preserves final states and clears derived
-  ``state_seqs``.
+* Single-step mode executes the core directly; automatic CUDA fusion targets multi-step mode.
+* Changing step mode preserves final states and clears derived ``state_seqs``.
 * The old ``num_inputs``, ``num_outputs``, ``example_inputs``,
   ``example_outputs``, and ``requires_grad`` constructor arguments are removed.
 * ``FlexSNKernel`` and ``FlexSN.kernel`` are removed. Use
   ``functional_forward`` for explicit-state execution.
+
+Training and state management
+-----------------------------
+
+This training example uses trainable static inputs and stores full state traces.
+Reset independent batches after backward and parameter updates; retain state
+for continuous sequences. The final explicit-state call leaves module memory
+unchanged:
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import neuron
+
+
+    def smooth_core(x, v, w):
+        h = v + w.sigmoid() * (x - v)
+        output = torch.sigmoid(h - 1.0)
+        return output, h * (1.0 - output)
+
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    node = neuron.FlexSN(
+        smooth_core,
+        1,
+        static_inputs=(torch.nn.Parameter(torch.tensor(0.0)),),
+        store_state_seqs=True,
+    ).to(device)
+    optimizer = torch.optim.SGD(node.parameters(), lr=0.01)
+    x = torch.rand(4, 2, 8, device=device, requires_grad=True)
+    output = node(x)
+    assert node.state_seqs[0].shape == x.shape
+    (output.sum() + node.states[0].sum()).backward()
+    assert node.static_inputs[0].grad is not None
+    optimizer.step()
+    node.reset()
+    assert node.states == (None,)
+    # Explicit-state calls return output/state tuples without changing managed state.
+    outputs, states = node.functional_forward(
+        (x.detach(),), (torch.zeros_like(x[0]),), static_inputs=node.static_inputs
+    )
+    assert outputs[0].shape == x.shape and states[0].shape == x.shape[1:]
+    assert node.states == (None,)

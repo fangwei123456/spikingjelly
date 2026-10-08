@@ -22,8 +22,7 @@ class SResNetTrainer(train_classify.Trainer):
 
     - 数据预处理：将 ``[N, C, H, W]`` 形状的输入扩展为 ``[T, N, C, H, W]`` ，其中 ``T`` 为总时间步数。
     - 模型输出处理：将 ``T`` 个时间步的输出沿时间维取均值，作为最终的预测结果（发放率）。
-    - 模型加载：支持从 :mod:`spiking_resnet` 加载多种脉冲 ResNet 模型，并可选择 CuPy 后端加速。
-    - 额外命令行参数：添加了 ``--T`` （时间步数）和 ``--cupy`` （是否使用 CuPy 后端）参数。
+    - 模型加载：支持从 :mod:`spiking_resnet` 加载多种脉冲 ResNet 模型，并自动选择兼容的 GPU 实现。
 
     ----
 
@@ -41,10 +40,8 @@ class SResNetTrainer(train_classify.Trainer):
       is the total number of time-steps.
     - Model output processing: averages outputs over ``T`` time-steps along the time dimension as
       the final prediction (firing rate).
-    - Model loading: supports loading various spiking ResNet models from :mod:`spiking_resnet` with
-      an optional CuPy backend for acceleration.
-    - Extra CLI arguments: adds ``--T`` (number of time-steps) and ``--cupy`` (enable CuPy backend)
-      arguments.
+    - Model loading: supports loading various spiking ResNet models from :mod:`spiking_resnet`.
+    - Extra CLI arguments: adds ``--T`` (number of time-steps).
     """
 
     def preprocess_train_sample(self, args, x: torch.Tensor):
@@ -65,9 +62,6 @@ class SResNetTrainer(train_classify.Trainer):
     def get_args_parser(self, add_help=True):
         parser = super().get_args_parser(add_help=add_help)
         parser.add_argument("--T", type=int, help="total time-steps")
-        parser.add_argument(
-            "--cupy", action="store_true", help="set the neurons to use cupy backend"
-        )
         return parser
 
     def get_tb_logdir_name(self, args):
@@ -82,9 +76,6 @@ class SResNetTrainer(train_classify.Trainer):
                 detach_reset=True,
             )
             functional.set_step_mode(model, step_mode="m")
-            if args.cupy:
-                functional.set_backend(model, "cupy", neuron.IFNode)
-
             return model
         else:
             raise ValueError(f"args.model should be one of {spiking_resnet.__all__}")

@@ -106,7 +106,7 @@ FlexSN
 .. list-table::
 
    * - :class:`FlexSN <spikingjelly.activation_based.neuron.flexsn.FlexSN>`
-     - Stateful and functional neuron interface with Torch, HOP, and Triton backends.
+     - Stateful neuron interface with automatic CPU and CUDA execution.
 
 Research-specific Neuron Modules
 ++++++++++++++++++++++++++++++++++++++++

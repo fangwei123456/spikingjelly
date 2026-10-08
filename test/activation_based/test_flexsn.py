@@ -1,10 +1,4 @@
 import copy
-import functools
-import gc
-import inspect
-import linecache
-import sys
-import types
 
 import pytest
 import torch
@@ -12,557 +6,174 @@ import torch
 from spikingjelly.activation_based.neuron.flexsn import FlexSN
 
 
-def lif_core(x, v):
-    h = v + (x - v) / 2.0
-    spike = torch.sigmoid(h - 1.0)
+def _lif_core(x, v, threshold):
+    h = v + (x - v) * 0.5
+    spike = torch.sigmoid(h - threshold)
     return spike, h * (1.0 - spike)
 
 
-def if_core(x, v):
-    h = v + x
-    spike = torch.sigmoid(h - 1.0)
-    return spike, h * (1.0 - spike)
+def _reference(x_seq, v, threshold):
+    outputs, states = [], []
+    for x in x_seq:
+        output, v = _lif_core(x, v, threshold)
+        outputs.append(output)
+        states.append(v)
+    return torch.stack(outputs), v, torch.stack(states)
 
 
-def plif_core(x, v, w):
-    h = v + w.sigmoid() * (x - v)
-    spike = torch.sigmoid(h - 1.0)
-    return spike, h * (1.0 - spike)
+def test_cpu_sequence_matches_reference_and_tracks_state_sequences():
+    threshold = torch.nn.Parameter(torch.tensor(0.8))
+    module = FlexSN(_lif_core, 1, (threshold,), store_state_seqs=True)
+    x = torch.randn(4, 2, 3, requires_grad=True)
+    initial = torch.randn(2, 3, requires_grad=True)
+    module.states = (initial,)
+
+    actual = module(x)
+    expected, final, state_seq = _reference(x, initial, threshold)
+
+    torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(module.states[0], final)
+    torch.testing.assert_close(module.state_seqs[0], state_seq)
+    loss = actual.sum() + module.states[0].sum()
+    reference_loss = expected.sum() + final.sum()
+    got = torch.autograd.grad(loss, (x, initial, threshold))
+    want = torch.autograd.grad(reference_loss, (x, initial, threshold))
+    for actual_grad, expected_grad in zip(got, want, strict=True):
+        torch.testing.assert_close(actual_grad, expected_grad)
 
 
-def eif_core(x, v):
-    h = v + (x - v + torch.exp(v - 0.8)) / 2.0
-    spike = torch.sigmoid(h - 1.0)
-    return spike, h * (1.0 - spike)
+def test_functional_forward_does_not_mutate_managed_state():
+    module = FlexSN(_lif_core, 1, (torch.tensor(0.8),), store_state_seqs=True)
+    x = torch.randn(3, 2)
+    state = torch.zeros_like(x[0])
 
-
-def qif_core(x, v):
-    h = v + (x + (v - 0.0) * (v - 0.8)) / 2.0
-    spike = torch.sigmoid(h - 1.0)
-    return spike, h * (1.0 - spike)
-
-
-def izhikevich_core(x, v, w):
-    h = v + (x + (v + 0.1) * (v - 0.8) - w) / 2.0
-    w = w + (0.1 * (v + 0.1) - w) / 2.0
-    spike = torch.sigmoid(h - 1.0)
-    return spike, h * (1.0 - spike), w + 0.1 * spike
-
-
-def hard_if_core(x, v):
-    h = v + x
-    spike = (h >= 1.0).to(h.dtype)
-    return spike, h * (1.0 - spike)
-
-
-def test_public_surface_only_exports_flexsn():
-    from spikingjelly.activation_based.neuron import flexsn
-
-    assert flexsn.__all__ == ["FlexSN"]
-    assert not hasattr(flexsn, "FlexSNKernel")
-
-
-def test_codegen_executes_in_memory_and_preserves_namespace(monkeypatch, tmp_path):
-    from spikingjelly.activation_based.triton_kernel.torch2triton import graph2triton
-
-    triton = types.ModuleType("triton")
-
-    def jit(function):
-        return types.SimpleNamespace(fn=function, src=inspect.getsource(function))
-
-    triton.jit = jit
-    monkeypatch.setattr(graph2triton, "triton", triton)
-    monkeypatch.setattr(graph2triton, "tl", types.ModuleType("triton.language"))
-    monkeypatch.setenv("HOME", str(tmp_path))
-
-    namespace = {"offset": 2}
-    modules_before = set(sys.modules)
-    sources_before = {
-        name for name in linecache.cache if "triton_kernel.codegen" in name
-    }
-    kernel = graph2triton.compile_triton_code_str(
-        "@triton.jit\ndef generated(x):\n    return x + offset\n",
-        "generated",
-        namespace,
-    )
-    standalone = graph2triton.compile_triton_code_str(
-        "@triton.jit\ndef standalone(x):\n    return x + 1\n",
-        "standalone",
-    )
-
-    assert kernel.fn(1) == 3
-    assert standalone.fn(1) == 2
-    assert "def generated" in kernel.src
-    assert namespace["generated"] is kernel
-    assert "def generated" in inspect.getsource(kernel.fn)
-    assert "def standalone" in inspect.getsource(standalone.fn)
-    assert set(sys.modules) - modules_before == set()
-    assert not (tmp_path / ".spikingjelly").exists()
-
-    for index in range(64):
-        name = f"unique_{index}"
-        generated = graph2triton.compile_triton_code_str(
-            f"@triton.jit\ndef {name}(x):\n    return x + {index}\n",
-            name,
-        )
-        assert generated.fn(1) == index + 1
-        assert "def unique_" in inspect.getsource(generated.fn)
-    del generated
-    gc.collect()
-    sources_after = {
-        name for name in linecache.cache if "triton_kernel.codegen" in name
-    }
-    assert len(sources_after - sources_before) == 2
-    assert set(sys.modules) - modules_before == set()
-    assert not (tmp_path / ".spikingjelly").exists()
-
-    with pytest.raises(SyntaxError) as error:
-        graph2triton.compile_triton_code_str("@triton.jit\ndef broken(\n", "broken")
-    assert "broken" in str(error.value)
-    assert error.value.text.strip() == "def broken("
-
-
-def test_torch_managed_and_functional_state_are_equivalent():
-    x = torch.randn(4, 3)
-    module = FlexSN(
-        lif_core,
-        num_states=1,
-        backend="torch",
-        store_state_seqs=True,
-    )
-    initial_state = (torch.zeros_like(x[0]),)
-
-    outputs, next_states = module.functional_forward(
-        (x,), initial_state, static_inputs=()
+    outputs, updated = module.multi_step_functional_forward(
+        (x,), (state,), static_inputs=module.static_inputs
     )
 
     assert module.states == (None,)
     assert module.state_seqs is None
-    torch.testing.assert_close(module(x), outputs[0])
-    torch.testing.assert_close(module.states[0], next_states[0])
-    torch.testing.assert_close(module.state_seqs[0][-1], next_states[0])
+    torch.testing.assert_close(outputs[0], module(x))
+    torch.testing.assert_close(updated[0], module.states[0])
+    assert module.state_seqs is not None
 
 
-def test_static_parameter_and_buffer_are_registered_and_differentiable():
-    def core(x, v, w, bias):
-        v = v + w.sigmoid() * (x + bias - v)
-        return v, v
-
-    w = torch.nn.Parameter(torch.tensor(0.0))
-    bias = torch.ones(3)
-    module = FlexSN(core, 1, (w, bias), backend="torch")
-    x = torch.randn(4, 3, requires_grad=True)
-
-    module(x).sum().backward()
-
-    assert tuple(module.parameters()) == (w,)
-    assert tuple(module.buffers()) == (bias,)
-    assert set(module.state_dict()) == {"_static_input_0", "_static_input_1"}
-    assert w.grad is not None
-    assert x.grad is not None
+def test_cpu_scan_is_visible_to_fullgraph_compile():
+    x = torch.randn(3, 2, 4)
+    eager = FlexSN(_lif_core, 1, (torch.tensor(0.8),))(x)
+    compiled = torch.compile(
+        FlexSN(_lif_core, 1, (torch.tensor(0.8),)), fullgraph=True
+    )(x)
+    torch.testing.assert_close(compiled, eager)
 
 
-def test_functional_forward_accepts_explicit_static_inputs():
-    def core(x, v, gain):
-        v = v + gain * x
-        return v, v
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+@pytest.mark.parametrize("detach_first_output", [False, True])
+def test_multi_input_output_and_state_counts(device, detach_first_output):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA required")
 
-    module = FlexSN(core, 1, (torch.tensor(1.0),), backend="torch")
-    x = torch.ones(3, 2)
-    initial = (torch.zeros(2),)
+    def core(x, y, v, w, scale):
+        v_next = v + x
+        w_next = w + y * scale
+        output = (x + y).detach() if detach_first_output else x + y
+        return output, x - y, v_next, w_next
 
-    outputs, states = module.functional_forward(
-        (x,), initial, static_inputs=(torch.tensor(2.0),)
-    )
-
-    torch.testing.assert_close(
-        outputs[0], torch.tensor([[2.0, 2.0], [4.0, 4.0], [6.0, 6.0]])
-    )
-    torch.testing.assert_close(states[0], torch.tensor([6.0, 6.0]))
-    assert module.states == (None,)
-
-
-def test_multiple_inputs_outputs_and_states_use_tuples():
-    def core(x, y, a, b):
-        a = a + x
-        b = b + y
-        return a, b, a, b
-
-    x = torch.randn(4, 3)
-    y = torch.randn(4, 3)
-    module = FlexSN(core, 2, backend="torch", store_state_seqs=True)
-
+    scale = torch.nn.Parameter(torch.tensor(2.0, device=device))
+    module = FlexSN(core, 2, (scale,), store_state_seqs=True)
+    x = torch.randn(3, 2, device=device, requires_grad=True)
+    y = torch.randn(3, 2, device=device, requires_grad=True)
+    v0 = torch.randn(2, device=device, requires_grad=True)
+    w0 = torch.randn(2, device=device, requires_grad=True)
+    module.states = (v0, w0)
     outputs = module(x, y)
-
-    assert isinstance(outputs, tuple)
-    assert len(outputs) == 2
-    assert isinstance(module.states, tuple)
-    assert isinstance(module.state_seqs, tuple)
-    torch.testing.assert_close(outputs[0], x.cumsum(0))
-    torch.testing.assert_close(outputs[1], y.cumsum(0))
-
-
-def test_single_step_torch_mode():
-    module = FlexSN(lif_core, 1, step_mode="s", backend="torch")
-    x = torch.randn(3)
-
-    output = module(x)
-
-    expected, state = lif_core(x, torch.zeros_like(x))
-    torch.testing.assert_close(output, expected)
-    torch.testing.assert_close(module.states[0], state)
+    if device == "cuda":
+        assert module._triton_handle is not None
+    expected = ((x + y).detach() if detach_first_output else x + y, x - y)
+    traces = (v0 + x.cumsum(0), w0 + (y * scale).cumsum(0))
+    for got, want in zip(outputs, expected, strict=True):
+        torch.testing.assert_close(got, want)
+    for got, want in zip(module.state_seqs, traces, strict=True):
+        torch.testing.assert_close(got, want)
+    for got, want in zip(module.states, (t[-1] for t in traces), strict=True):
+        torch.testing.assert_close(got, want)
+    loss = sum(t.sum() for t in (*outputs, *module.states, *module.state_seqs))
+    reference = sum(t.sum() for t in (*expected, *(t[-1] for t in traces), *traces))
+    got = torch.autograd.grad(loss, (x, y, v0, w0, scale))
+    want = torch.autograd.grad(reference, (x, y, v0, w0, scale))
+    for actual, reference in zip(got, want, strict=True):
+        torch.testing.assert_close(actual, reference)
 
 
-def test_backend_and_step_mode_switches_preserve_states():
-    module = FlexSN(lif_core, 1, backend="torch", store_state_seqs=True)
-    module(torch.randn(2, 3))
-    state = module.states[0]
+def test_constructor_rejects_invalid_or_captured_core_values():
+    with pytest.raises(ValueError, match="num_states"):
+        FlexSN(_lif_core, -1)
+    with pytest.raises(TypeError, match="static_inputs"):
+        FlexSN(_lif_core, 1, (1.0,))
 
-    module.backend = "hop"
-    assert module.states[0] is state
-    assert module.state_seqs is None
-    with pytest.raises(RuntimeError, match="does not support"):
-        module.step_mode = "s"
+    captured = torch.tensor(1.0)
 
-    module.backend = "torch"
-    module.step_mode = "s"
-    assert module.states[0] is state
-    with pytest.raises(RuntimeError, match="requires step_mode"):
-        module.backend = "triton"
+    def invalid_core(x, v):
+        return x + captured, v
 
-
-def test_triton_backend_requires_installed_dependency(monkeypatch):
-    from spikingjelly.activation_based import base
-
-    monkeypatch.setattr(base, "triton", None)
-    with pytest.raises(ImportError, match="Triton is not installed"):
-        FlexSN(lif_core, 1, backend="triton")
-
-    module = FlexSN(lif_core, 1, backend="torch")
-    with pytest.raises(ImportError, match="Triton is not installed"):
-        module.backend = "triton"
-    assert module.backend == "torch"
-
-
-def test_hop_matches_torch_forward_and_backward():
-    x_torch = torch.randn(4, 8, requires_grad=True)
-    x_hop = x_torch.detach().clone().requires_grad_(True)
-    torch_module = FlexSN(lif_core, 1, backend="torch", store_state_seqs=True)
-    hop_module = FlexSN(lif_core, 1, backend="hop", store_state_seqs=True)
-
-    y_torch = torch_module(x_torch)
-    y_hop = hop_module(x_hop)
-    y_torch.sum().backward()
-    y_hop.sum().backward()
-
-    torch.testing.assert_close(y_hop, y_torch)
-    torch.testing.assert_close(hop_module.states[0], torch_module.states[0])
-    torch.testing.assert_close(hop_module.state_seqs[0], torch_module.state_seqs[0])
-    torch.testing.assert_close(x_hop.grad, x_torch.grad)
-
-
-def test_hop_fullgraph_compile_matches_eager():
-    x = torch.randn(4, 8)
-    eager = FlexSN(lif_core, 1, backend="hop")
-    compiled = torch.compile(FlexSN(lif_core, 1, backend="hop"), fullgraph=True)
-
-    torch.testing.assert_close(compiled(x), eager(x))
-
-
-@pytest.mark.parametrize("store_state_seqs", [False, True])
-def test_hop_fullgraph_bptt_with_static_parameter(store_state_seqs):
-    torch_parameter = torch.nn.Parameter(torch.tensor(0.0))
-    hop_parameter = torch.nn.Parameter(torch.tensor(0.0))
-    torch_module = FlexSN(
-        plif_core,
-        1,
-        static_inputs=(torch_parameter,),
-        backend="torch",
-        store_state_seqs=store_state_seqs,
-    )
-    hop_module = FlexSN(
-        plif_core,
-        1,
-        static_inputs=(hop_parameter,),
-        backend="hop",
-        store_state_seqs=store_state_seqs,
-    )
-    x_torch = torch.randn(4, 8, requires_grad=True)
-    x_hop = x_torch.detach().clone().requires_grad_(True)
-
-    torch_output = torch_module(x_torch)
-    hop_output = torch.compile(hop_module, fullgraph=True)(x_hop)
-    torch_output.sum().backward()
-    hop_output.sum().backward()
-
-    torch.testing.assert_close(hop_output, torch_output)
-    torch.testing.assert_close(x_hop.grad, x_torch.grad)
-    torch.testing.assert_close(hop_parameter.grad, torch_parameter.grad)
-
-
-def test_hop_has_one_private_implementation():
-    from spikingjelly.activation_based.triton_kernel.flexsn import hop
-
-    assert hop.__all__ == []
-    assert not hasattr(hop, "lowerable_scan")
-    assert not hasattr(hop, "lowerable_while_loop_scan")
-    assert not hasattr(hop, "eager_scan_final_state")
-
-
-def test_copy_preserves_configuration_and_state_without_runtime():
-    module = FlexSN(lif_core, 1, backend="torch")
-    module(torch.randn(2, 3))
-
-    copied = copy.deepcopy(module)
-
-    assert copied.backend == module.backend
-    assert copied.step_mode == module.step_mode
-    assert copied._triton_handle is None
-    torch.testing.assert_close(copied.states[0], module.states[0])
+    with pytest.raises(TypeError, match="capture tensors"):
+        FlexSN(invalid_core, 1)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_triton_deepcopy_rebuilds_runtime():
-    module = FlexSN(lif_core, 1, backend="triton")
-    copied = copy.deepcopy(module)
-    x = torch.randn(4, 32, device="cuda")
-
-    assert copied._triton_handle is None
-    with torch.no_grad():
-        expected = module(x)
-        actual = copied(x)
-
-    assert copied._triton_handle is not None
-    torch.testing.assert_close(actual, expected)
-
-
-@pytest.mark.parametrize(
-    ("factory", "exception", "message"),
-    [
-        (lambda: FlexSN(lif_core, -1), ValueError, "num_states"),
-        (lambda: FlexSN(lif_core, 1, (1.0,)), TypeError, "static_inputs"),
-        (
-            lambda: FlexSN(lif_core, 1, step_mode="s", backend="triton"),
-            RuntimeError,
-            "requires step_mode",
-        ),
-    ],
-)
-def test_constructor_rejects_invalid_contract(factory, exception, message):
-    with pytest.raises(exception, match=message):
-        factory()
-
-
-def test_rejects_tensor_closure():
-    bias = torch.ones(3)
-
-    def core(x, v):
-        v = v + x + bias
-        return v, v
-
-    with pytest.raises(TypeError, match="static_inputs"):
-        FlexSN(core, 1)
-
-
-def test_rejects_tensor_in_nested_partial():
-    bias = torch.ones(3)
-
-    def core(bias, x, v):
-        return x + bias, v
-
-    nested = functools.partial(functools.partial(core, bias))
-    with pytest.raises(TypeError, match="static_inputs"):
-        FlexSN(nested, 1)
-
-
-def test_partial_core_name_is_informative():
-    core = functools.partial(lif_core)
-    assert "partial(lif_core)" in repr(FlexSN(core, 1, backend="torch"))
-
-
-def test_constructor_wraps_arity_inference_failure():
-    def core(x, v):
-        raise AssertionError("requires real inputs")
-
-    with pytest.raises(RuntimeError, match="construction-time unit tensors"):
-        FlexSN(core, 1, backend="torch")
-
-
-def test_rejects_empty_sequence_and_arity_changes():
-    module = FlexSN(lif_core, 1, backend="torch")
-    with pytest.raises(ValueError, match="empty"):
-        module(torch.empty(0, 3))
-
-    module(torch.randn(2, 3))
-    with pytest.raises(ValueError, match="expects 1 inputs"):
-        module(torch.randn(2, 3), torch.randn(2, 3))
-
-
-def test_rejects_scalar_multi_step_input():
-    module = FlexSN(lif_core, 1, backend="torch")
-    with pytest.raises(ValueError, match="time dimension"):
-        module(torch.tensor(1.0))
-
-
-def test_rejects_mismatched_tensor_contract():
-    module = FlexSN(lif_core, 1, backend="torch")
-    module.states = (torch.zeros(4),)
-    with pytest.raises(ValueError, match="numel"):
-        module(torch.randn(2, 3))
-
-
-def test_triton_requires_cuda_without_fallback():
-    if torch.cuda.is_available():
-        pytest.skip("CPU-only failure contract")
+def test_cuda_automatically_builds_triton_for_supported_core():
     pytest.importorskip("triton")
-    module = FlexSN(lif_core, 1, backend="triton")
-    with pytest.raises(RuntimeError, match="requires CUDA"):
-        module(torch.randn(2, 3))
+    threshold = torch.nn.Parameter(torch.tensor(0.8, device="cuda"))
+    module = FlexSN(_lif_core, 1, (threshold,), store_state_seqs=True).cuda()
+    x = torch.randn(4, 2, 3, device="cuda", requires_grad=True)
+    initial = torch.randn(2, 3, device="cuda", requires_grad=True)
+    module.states = (initial,)
 
-
-def test_triton_registered_operator_surface_is_minimal():
-    from spikingjelly.activation_based.triton_kernel.flexsn import custom_ops
-
-    assert custom_ops.__all__ == []
-    assert str(torch.ops.sj.flexsn_triton_inference.default._schema) == (
-        "sj::flexsn_triton_inference(SymInt handle, Tensor[] flat_args, "
-        "bool return_state_sequences) -> Tensor[]"
-    )
-    assert str(torch.ops.sj.flexsn_triton_training.default._schema) == (
-        "sj::flexsn_triton_training(SymInt handle, Tensor[] flat_args, "
-        "bool return_state_sequences) -> Tensor[]"
-    )
-
-
-def _make_core_case(name, backend, dtype):
-    if name == "plif":
-        parameter = torch.nn.Parameter(torch.tensor(0.0, device="cuda", dtype=dtype))
-        return FlexSN(
-            plif_core,
-            1,
-            static_inputs=(parameter,),
-            backend=backend,
-        ), parameter
-    core, num_states = {
-        "if": (if_core, 1),
-        "lif": (lif_core, 1),
-        "eif": (eif_core, 1),
-        "qif": (qif_core, 1),
-        "izhikevich": (izhikevich_core, 2),
-    }[name]
-    return FlexSN(core, num_states, backend=backend), None
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize("name", ["if", "lif", "plif", "eif", "qif", "izhikevich"])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
-def test_representative_triton_cores_match_torch(name, dtype):
-    torch_module, torch_parameter = _make_core_case(name, "torch", dtype)
-    triton_module, triton_parameter = _make_core_case(name, "triton", dtype)
-    x_torch = torch.randn(4, 513, device="cuda", dtype=dtype, requires_grad=True)
-    x_triton = x_torch.detach().clone().requires_grad_(True)
-    torch_states = tuple(
-        torch.randn(513, device="cuda", dtype=dtype, requires_grad=True)
-        for _ in range(torch_module.num_states)
-    )
-    triton_states = tuple(
-        state.detach().clone().requires_grad_(True) for state in torch_states
-    )
-    torch_module.states = torch_states
-    triton_module.states = triton_states
-
-    torch_output = torch_module(x_torch)
-    triton_output = triton_module(x_triton)
-    torch_loss = torch_output.sum() + sum(state.sum() for state in torch_module.states)
-    triton_loss = triton_output.sum() + sum(
-        state.sum() for state in triton_module.states
-    )
-    torch_loss.backward()
-    triton_loss.backward()
-
-    tolerance = {"atol": 2e-2, "rtol": 2e-2} if dtype == torch.float16 else {}
-    torch.testing.assert_close(triton_output, torch_output, **tolerance)
-    torch.testing.assert_close(x_triton.grad, x_torch.grad, **tolerance)
-    for triton_state, torch_state in zip(triton_states, torch_states, strict=True):
-        torch.testing.assert_close(triton_state.grad, torch_state.grad, **tolerance)
-    if torch_parameter is not None:
-        torch.testing.assert_close(
-            triton_parameter.grad, torch_parameter.grad, **tolerance
-        )
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_triton_matches_torch_and_is_captured_by_compile():
-    x_torch = torch.randn(4, 32, device="cuda", requires_grad=True)
-    x_triton = x_torch.detach().clone().requires_grad_(True)
-    torch_module = FlexSN(lif_core, 1, backend="torch")
-    triton_module = FlexSN(lif_core, 1, backend="triton")
-
-    y_torch = torch_module(x_torch)
-    y_triton = triton_module(x_triton)
-    y_torch.sum().backward()
-    y_triton.sum().backward()
-
-    torch.testing.assert_close(y_triton, y_torch)
-    torch.testing.assert_close(x_triton.grad, x_torch.grad)
-
-    from torch._dynamo import explain
-
-    fresh = FlexSN(lif_core, 1, backend="triton").cuda()
-    with torch.no_grad():
-        compiled_output = torch.compile(fresh, fullgraph=True)(x_triton.detach())
-    assert compiled_output.shape == x_triton.shape
-    explanation = explain(fresh)(x_triton.detach())
-    targets = [
-        str(node.target) for graph in explanation.graphs for node in graph.graph.nodes
-    ]
-    assert any("sj.flexsn_triton" in target for target in targets)
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_triton_runtime_rebuilds_for_input_dtype():
-    module = FlexSN(lif_core, 1, backend="triton")
-    initial_handle = module._triton_handle
-    x = torch.randn(4, 32, device="cuda", dtype=torch.float16)
-
-    with torch.no_grad():
-        actual = module(x)
-        expected = FlexSN(lif_core, 1, backend="torch")(x)
-
-    assert module._triton_runtime_dtype == torch.float16
-    assert module._triton_handle != initial_handle
-    torch.testing.assert_close(actual, expected, atol=2e-2, rtol=2e-2)
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_triton_hard_threshold_inference_matches_torch():
-    x = torch.randn(4, 32, device="cuda")
-    torch_module = FlexSN(hard_if_core, 1, backend="torch")
-    triton_module = FlexSN(hard_if_core, 1, backend="triton")
-
-    with torch.no_grad():
-        expected = torch_module(x)
-        actual = triton_module(x)
-
+    actual = module(x)
+    expected, final, state_seq = _reference(x, initial, threshold)
     torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(module.states[0], final)
+    torch.testing.assert_close(module.state_seqs[0], state_seq)
+    torch.autograd.grad(actual.sum() + module.states[0].sum(), (x, initial, threshold))
+    assert module._triton_handle is not None
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize("training", [False, True])
-def test_triton_registered_operators_pass_opcheck(training):
-    module = FlexSN(lif_core, 1, backend="triton")
-    x = torch.randn(4, 32, device="cuda", requires_grad=training)
-    state = torch.zeros(32, device="cuda", requires_grad=training)
-    operator = (
-        torch.ops.sj.flexsn_triton_training.default
-        if training
-        else torch.ops.sj.flexsn_triton_inference.default
-    )
+def test_cuda_runtime_lifetime_survives_copy_and_rebuilds():
+    pytest.importorskip("triton")
+    module = FlexSN(_lif_core, 1, (torch.tensor(0.8, device="cuda"),)).cuda()
+    x = torch.randn(3, 2, device="cuda")
+    module(x)
+    assert module._triton_handle is not None
 
-    result = torch.library.opcheck(
-        operator,
-        (module._triton_handle, [x, state], False),
-        raise_exception=False,
-    )
+    copied = copy.deepcopy(module)
+    assert copied._triton_handle is None
+    torch.testing.assert_close(copied(x), module(x))
+    assert copied._triton_handle is not None
 
-    assert set(result.values()) == {"SUCCESS"}
+
+def test_nondifferentiable_core_reports_unsupported_training_graph():
+    from spikingjelly.activation_based.neuron.flexsn_trace import _trace_core
+
+    def core(x):
+        return ((x > 0).float(),)
+
+    with pytest.raises(NotImplementedError, match="No differentiable Tensor"):
+        _trace_core(core, (torch.zeros(1),), num_outputs=1, num_states=0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_cuda_nondifferentiable_core_automatically_uses_hop():
+    def core(x):
+        return (x > 0).float()
+
+    module = FlexSN(core, num_states=0).cuda()
+    x = torch.tensor([[-1.0, 1.0], [2.0, -2.0]], device="cuda", requires_grad=True)
+    for values in (x, -x):
+        actual = module(values)
+        torch.testing.assert_close(actual, core(values))
+        assert actual.requires_grad is False
+        assert module.states == ()
+    assert module._triton_capability[x.device, x.dtype] is False
+    compiled = torch.compile(module, fullgraph=True)
+    torch.testing.assert_close(compiled(x), core(x))

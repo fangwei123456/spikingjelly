@@ -40,13 +40,6 @@ spikingjelly.activation\_based package
 
 .. toctree::
    :maxdepth: 1
-   :caption: Backend Acceleration
-
-   cuda_kernel <spikingjelly.activation_based.cuda_kernel>
-   triton_kernel <spikingjelly.activation_based.triton_kernel>
-
-.. toctree::
-   :maxdepth: 1
    :caption: Framework Exchange and Hardware Deployment
 
    nir_exchange <spikingjelly.activation_based.nir_exchange>

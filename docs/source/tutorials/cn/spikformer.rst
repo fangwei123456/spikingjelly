@@ -201,3 +201,18 @@ SpikingJelly ``0.0.0.1.0`` 提供了 SSA 的高效实现 :class:`SpikingSelfAtte
 
 .. [#spikformer] Zhou Zhaokun, Zhu Yuesheng, He Chao, Wang Yaowei, Yan Shuicheng, Tian Yonghong, Yuan Li. Spikformer: When Spiking Neural Network Meets Transformer [C]. Proceedings of International Conference on Learning Representations, 2023.
 .. [#spikingresformer] Shi Xinyu, Hao Zecheng, Yu Zhaofei. SpikingResformer: Bridging ResNet and Vision Transformer in Spiking Neural Networks [C]. Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2024: 5610-5619.
+
+运行与实验记录
+----------------------------
+
+模型按输入设备自动运行。处理独立 batch 时，在反向和参数更新后调用
+``functional.reset_net``；连续序列的状态管理见 :doc:`./neuron`。AMP 与神经元的
+融合执行是不同配置，状态精度见 :doc:`./precision`，编译和诊断见 :doc:`./triton_backend`。
+
+本页准确率、曲线和日志沿用历史实验，部分运行未记录精确版本。本轮未在当前 V2
+上重新训练或验证这些结果，不能用它们评估当前实现的速度或准确率。
+
+模型结构教学片段保留原有表达；测速请使用仓库 ``benchmark/README.md`` 中的
+标准 Spikformer 流程。使用 ``benchmark.benchmark_snn_single_gpu case`` 做未 profile
+测量；使用 ``benchmark/nsys_snn.sh`` 捕获，再用 ``benchmark/analyze_nsys_snn.py``
+分析归因。具体参数以 ``--help`` 和 benchmark 文档为准，不将 profile 耗时当作稳定延迟。

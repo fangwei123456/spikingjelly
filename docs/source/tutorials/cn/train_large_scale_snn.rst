@@ -38,7 +38,7 @@ English version: :doc:`../en/train_large_scale_snn`
     (conv1): Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False, step_mode=s)
     (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
     (sn1): IFNode(
-      v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+      v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
       (surrogate_function): ATan(alpha=2.0, spiking=True)
     )
     (maxpool): MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False, step_mode=s)
@@ -47,13 +47,13 @@ English version: :doc:`../en/train_large_scale_snn`
         (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
       )
@@ -61,13 +61,13 @@ English version: :doc:`../en/train_large_scale_snn`
         (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
       )
@@ -77,13 +77,13 @@ English version: :doc:`../en/train_large_scale_snn`
         (conv1): Conv2d(64, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (downsample): Sequential(
@@ -95,13 +95,13 @@ English version: :doc:`../en/train_large_scale_snn`
         (conv1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
       )
@@ -111,13 +111,13 @@ English version: :doc:`../en/train_large_scale_snn`
         (conv1): Conv2d(128, 256, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (downsample): Sequential(
@@ -129,13 +129,13 @@ English version: :doc:`../en/train_large_scale_snn`
         (conv1): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
       )
@@ -145,13 +145,13 @@ English version: :doc:`../en/train_large_scale_snn`
         (conv1): Conv2d(256, 512, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (downsample): Sequential(
@@ -163,13 +163,13 @@ English version: :doc:`../en/train_large_scale_snn`
         (conv1): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
       )
@@ -298,7 +298,6 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
       def get_args_parser(self, add_help=True):
           parser = super().get_args_parser()
           parser.add_argument('--T', type=int, help="total time-steps")
-          parser.add_argument('--cupy', action="store_true", help="set the neurons to use cupy backend")
           return parser
 
       def get_tb_logdir_name(self, args):
@@ -309,9 +308,6 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
               model = spiking_resnet.__dict__[args.model](pretrained=args.pretrained, spiking_neuron=neuron.IFNode,
                                                           surrogate_function=surrogate.ATan(), detach_reset=True)
               functional.set_step_mode(model, step_mode='m')
-              if args.cupy:
-                  functional.set_backend(model, 'cupy', neuron.IFNode)
-
               return model
           else:
               raise ValueError(f"args.model should be one of {spiking_resnet.__all__}")
@@ -338,3 +334,13 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
 .. [#ResNet] He, Kaiming, et al. "Deep residual learning for image recognition." Proceedings of the IEEE conference on computer vision and pattern recognition. 2016.
 
 .. [#ImageNet] Deng, Jia, et al. "Imagenet: A large-scale hierarchical image database." 2009 IEEE conference on computer vision and pattern recognition. IEEE, 2009.
+
+运行与实验记录
+----------------------------
+
+模型按输入设备自动运行。处理独立 batch 时，在反向和参数更新后调用
+``functional.reset_net``；连续序列的状态管理见 :doc:`./neuron`。AMP 与神经元的
+融合执行是不同配置，状态精度见 :doc:`./precision`，编译和诊断见 :doc:`./triton_backend`。
+
+本页准确率、曲线和日志沿用历史实验，部分运行未记录精确版本。本轮未在当前 V2
+上重新训练或验证这些结果，不能用它们评估当前实现的速度或准确率。

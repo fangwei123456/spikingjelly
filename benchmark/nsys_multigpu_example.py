@@ -146,7 +146,7 @@ def main() -> None:
     else:
         from spikingjelly.activation_based.model.spikformer import spikformer_s
 
-        model = spikformer_s(backend="torch")
+        model = spikformer_s()
         whole = nn.Sequential(_ImageStage(model, 0), _ImageStage(model, 1)).to(device)
         input_shape, activation_shape, classes = (3, 224, 224), (4, 384, 14, 14), 1000
     training = args.phase == "training" and args.parallel != "graph"

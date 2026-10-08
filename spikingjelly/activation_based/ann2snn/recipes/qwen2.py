@@ -42,7 +42,6 @@ class Qwen2SNNConfig:
     calibration_quantile: float = 1.0
     calibration_reservoir_size: int = 4096
     calibration_seed: int = 20260719
-    neuron_backend: str = "torch"
 
     def __post_init__(self) -> None:
         if not isinstance(self.time_steps, int) or isinstance(self.time_steps, bool):
@@ -67,8 +66,6 @@ class Qwen2SNNConfig:
             self.calibration_seed, bool
         ):
             raise TypeError("calibration_seed must be an integer.")
-        if self.neuron_backend not in ("torch", "triton"):
-            raise ValueError("neuron_backend must be 'torch' or 'triton'.")
 
 
 Qwen2SNNConfig.__init__.__doc__ = r"""
@@ -93,11 +90,9 @@ Qwen2 后训练 SNN 转换配置。``calibration_levels`` 决定逐通道 QCFS �
 :type calibration_reservoir_size: int
 :param calibration_seed: reservoir priority sampling 的随机种子。
 :type calibration_seed: int
-:param neuron_backend: ``"torch"`` 或 ``"triton"``。
-:type neuron_backend: str
 :raises TypeError: ``time_steps``、``calibration_levels``、reservoir size 或 seed
     不是非布尔整数。
-:raises ValueError: 数值范围无效，或 neuron backend 不受支持。
+:raises ValueError: 数值范围无效。
 
 ----
 
@@ -122,12 +117,9 @@ temporal length and representable spike-count range.
 :type calibration_reservoir_size: int
 :param calibration_seed: Random seed for reservoir priority sampling.
 :type calibration_seed: int
-:param neuron_backend: ``"torch"`` or ``"triton"``.
-:type neuron_backend: str
 :raises TypeError: If a time-step, level, reservoir-size, or seed argument is not
     a non-boolean integer.
-:raises ValueError: If a numeric range is invalid or the neuron backend is not
-    supported.
+:raises ValueError: If a numeric range is invalid.
 """
 
 
@@ -516,7 +508,6 @@ class _Qwen2Decoder(nn.Module):
         source: nn.Module,
         scales: Mapping[str, torch.Tensor],
         time_steps: int,
-        neuron_backend: str,
         index: int,
     ) -> None:
         super().__init__()
@@ -545,7 +536,6 @@ class _Qwen2Decoder(nn.Module):
                 name: SignedQCFSSequenceEncoder(
                     scales[name],
                     time_steps,
-                    neuron_backend=neuron_backend,
                     name=f"layer.{index}.{name}",
                 )
                 for name in _QWEN2_SCALE_NAMES
@@ -730,7 +720,6 @@ class Qwen2SNNModel(nn.Module):
                     layer,
                     calibration.layer_scales[index],
                     conversion.time_steps,
-                    conversion.neuron_backend,
                     index,
                 )
                 for index, layer in enumerate(inner.layers)
@@ -743,7 +732,6 @@ class Qwen2SNNModel(nn.Module):
         self.input_encoder = SignedQCFSSequenceEncoder(
             calibration.input_scale,
             conversion.time_steps,
-            neuron_backend=conversion.neuron_backend,
             name="model.input",
         )
 
@@ -833,9 +821,6 @@ class Qwen2SNNModel(nn.Module):
             ),
             "signed_if_encoder_count": len(encoders),
             "activation_aware_if_node_count": 2 * len(encoders),
-            "activation_aware_if_backends": sorted(
-                {encoder.positive_neuron.backend for encoder in encoders}
-            ),
             "activation_aware_if_step_modes": sorted(
                 {encoder.positive_neuron.step_mode for encoder in encoders}
             ),

@@ -62,7 +62,7 @@ class FeedBackNet(nn.Module):
 
 
 def main():
-    # python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt adam -lr 0.001 -j 8 -model plain
+    # python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt adam -lr 0.001 -j 8 -model plain
     parser = argparse.ArgumentParser(description="Classify Sequential Fashion-MNIST")
     parser.add_argument(
         "-model",
@@ -97,7 +97,6 @@ def main():
     parser.add_argument(
         "-amp", action="store_true", help="automatic mixed precision training"
     )
-    parser.add_argument("-cupy", action="store_true", help="use cupy backend")
     parser.add_argument("-opt", type=str, help="use which optimizer. SDG or Adam")
     parser.add_argument("-momentum", default=0.9, type=float, help="momentum for SGD")
     parser.add_argument("-lr", default=0.1, type=float, help="learning rate")
@@ -116,10 +115,6 @@ def main():
 
     # `functional.set_step_mode` will not set neurons in LinearRecurrentContainer to use step_mode = 'm'
     functional.set_step_mode(net, step_mode="m")
-
-    if args.cupy:
-        # neurons in LinearRecurrentContainer still use step_mode = 's', so, they will still use backend = 'torch'
-        functional.set_backend(net, backend="cupy")
 
     print(net)
 
@@ -188,9 +183,6 @@ def main():
 
     if args.amp:
         out_dir += "_amp"
-
-    if args.cupy:
-        out_dir += "_cupy"
 
     os.makedirs(out_dir, exist_ok=True)
 
