@@ -319,3 +319,23 @@ def test_checkpoint_rejects_nonmapping_extra_state(tmp_path):
         spikegpt_train_smoke._load_checkpoint(
             checkpoint, model, optimizer, torch.device("cpu")
         )
+
+
+@pytest.mark.parametrize("pilot", [False, True])
+def test_spikegpt_startup_does_not_require_cupy(pilot, monkeypatch, tmp_path):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setitem(sys.modules, "cupy", None)
+    module = spikegpt_train_pilot if pilot else spikegpt_train_smoke
+    kwargs = dict(
+        spikegpt_root=tmp_path / "missing-source",
+        data_path=tmp_path / "data",
+        output_dir=tmp_path / "output",
+        declared_revision=None,
+        resume_checkpoint=None,
+    )
+    if pilot:
+        kwargs.update(max_steps=1, max_minutes=1.0, checkpoint_every=1)
+    with pytest.raises(RuntimeError, match="model source not found"):
+        module.run(**kwargs)
+    config = module._training_config() if pilot else module._checkpoint_config()
+    assert "backend" not in config

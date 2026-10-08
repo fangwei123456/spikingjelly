@@ -11,7 +11,6 @@ from spikingjelly.logger import logger
 from .native_loader import _check_native_device
 
 
-# Offline complete-call rankings; see benchmark/benchmark_neuron_implementations.py.
 _NEURON_NAMESPACES = (
     "sj_activation_aware_if",
     "sj_eif",
@@ -24,10 +23,6 @@ _NEURON_NAMESPACES = (
     "sj_stbif",
 )
 _DEFAULT_CUDA_PRIORITY = ("cuda", "triton", "torch")
-_CUDA_PRIORITIES = {
-    capability: dict.fromkeys(_NEURON_NAMESPACES, _DEFAULT_CUDA_PRIORITY)
-    for capability in ((8, 0), (8, 6), (12, 0))
-}
 _COMPILE_CUDA_PRIORITIES = dict.fromkeys(
     _NEURON_NAMESPACES, ("triton", "cuda", "torch")
 )
@@ -122,9 +117,7 @@ class _CudaSelection:
                 "SpikingJelly neuron CUDA implementations require NVIDIA CUDA"
             )
         capability = torch.cuda.get_device_capability(index)
-        priority = _CUDA_PRIORITIES.get(capability, {}).get(
-            self._namespace, _DEFAULT_CUDA_PRIORITY
-        )
+        priority = _DEFAULT_CUDA_PRIORITY
         if execution == "compile":
             priority = _COMPILE_CUDA_PRIORITIES.get(self._namespace, priority)
         unavailable = {}

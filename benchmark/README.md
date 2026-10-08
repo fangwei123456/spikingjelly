@@ -7,7 +7,7 @@ Use an otherwise idle GPU and warm up before measuring.
 | --- | --- |
 | Full-model SNN training and inference | `benchmark_snn_single_gpu.py` |
 | Neuron dispatch and provider overhead | `check_neuron_dispatch.py` |
-| Offline neuron implementation priorities | `benchmark_neuron_implementations.py` |
+| Neuron implementation comparison | `benchmark_neuron_implementations.py` |
 | Triton LIF regression check | `check_triton_lif_performance.py` |
 | Nsight Systems capture | `nsys_snn.sh`, `nsys_lif_example.py`, `nsys_multigpu_example.py` |
 | Neuron layouts and final-state execution | `benchmark_neuron_layout.py` |
@@ -17,10 +17,10 @@ Use an otherwise idle GPU and warm up before measuring.
 
 Neuron modules select execution from the tensor device. CPU uses the Torch
 reference; CUDA uses the registered operator and caches a compatible
-implementation per device and execution path. Known GPU architectures use offline
-priorities per neuron family; unknown architectures retain native CUDA → Triton →
-Torch. Runtime selection never profiles candidates. Normal model construction
-has no backend argument.
+implementation per device and execution path. Eager checks native CUDA → Triton →
+Torch on every architecture, skipping incompatible or missing implementations.
+Runtime selection never profiles candidates. Normal model construction has no
+backend argument.
 Inductor expansion has a separate cache and prefers Triton → native CUDA
 → Torch. The existing eager and expansion entries choose the cache; ordinary
 calls do not check `is_compiling()`. Raw CUDA Graphs retain the warmed eager

@@ -45,12 +45,15 @@ def test_import_registers_all_families_without_loading_cuda_providers():
     code = textwrap.dedent(f"""
         import importlib
         import sys
+        from pathlib import Path
         import torch
 
         def forbidden(*args, **kwargs):
             raise AssertionError("operator registration must not initialize CUDA")
 
         torch.cuda._lazy_init = forbidden
+        Path.read_bytes = forbidden
+        original_cache_tag = torch.compiler.config.cache_key_tag
         for family in {FAMILIES!r}:
             package = "spikingjelly._ops." + family
             module = importlib.import_module(package)
@@ -63,6 +66,7 @@ def test_import_registers_all_families_without_loading_cuda_providers():
                 for provider in ("native", "triton")
             )
         assert not torch.cuda.is_initialized()
+        assert torch.compiler.config.cache_key_tag == original_cache_tag
     """)
     subprocess.run([sys.executable, "-c", code], check=True, timeout=60)
 
@@ -214,11 +218,12 @@ def test_compiler_cache_distinguishes_cuda_implementations(tmp_path):
         bound_tag = torch.compiler.config.cache_key_tag
         lif(*args)
         assert torch.compiler.config.cache_key_tag == bound_tag
-        assert "sj-ops:sj_lif" in bound_tag
+        assert bound_tag == "caller-tag"
         # User-provided compile scopes must keep the provider fingerprint too.
         torch.compiler.config.cache_key_tag = "caller-tag"
         compiled = torch.compile(lif, fullgraph=True)
         compiled(*args)
+        assert "sj-ops:sj_lif" in torch.compiler.config.cache_key_tag
         calls = []
         original_call = torch._ops.OpOverload.__call__
         def observe(op, *args, **kwargs):
@@ -375,7 +380,7 @@ def test_explicit_precision_node_fullgraph(family):
     assert model.v.dtype == torch.float32
 
 
-def test_offline_priorities_bind_per_device_and_strict_override(monkeypatch):
+def test_availability_priority_is_cached_per_device_and_strict_override(monkeypatch):
     from contextlib import nullcontext
     from types import SimpleNamespace
     from spikingjelly._ops import selection
@@ -392,14 +397,7 @@ def test_offline_priorities_bind_per_device_and_strict_override(monkeypatch):
 
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda index: (8, index))
     monkeypatch.setattr(torch.cuda, "device", lambda index: nullcontext())
-    monkeypatch.setattr(
-        selection,
-        "_CUDA_PRIORITIES",
-        {
-            (8, 0): {"sj_lif": ("triton", "torch")},
-            (8, 1): {"sj_lif": ("torch", "triton")},
-        },
-    )
+    monkeypatch.setattr(selection, "_DEFAULT_CUDA_PRIORITY", ("triton", "torch"))
     module = SimpleNamespace(
         _forward_impl=lambda *args: None, _backward_impl=lambda *args: None
     )
@@ -409,7 +407,7 @@ def test_offline_priorities_bind_per_device_and_strict_override(monkeypatch):
         "test", "sj_lif", "SJ_LIF_CUDA_IMPLEMENTATION", module._forward_impl
     )
     assert selector.diagnostics(torch.device("cuda", 0))["implementation"] == "triton"
-    assert selector.diagnostics(torch.device("cuda", 1))["implementation"] == "torch"
+    assert selector.diagnostics(torch.device("cuda", 1))["implementation"] == "triton"
     assert (
         selector.diagnostics(torch.device("cuda", 1), execution="compile")[
             "implementation"
@@ -424,8 +422,8 @@ def test_offline_priorities_bind_per_device_and_strict_override(monkeypatch):
         is module._backward_impl
     )
     assert selector.get_cuda_backward(torch.device("cuda", 1)) is module._backward_impl
-    # Changing the table cannot silently rebind a device after first use.
-    selection._CUDA_PRIORITIES[(8, 0)]["sj_lif"] = ("torch", "triton")
+    # Configuration changes require a new process, not rebinding a warmed device.
+    monkeypatch.setattr(selection, "_DEFAULT_CUDA_PRIORITY", ("torch", "triton"))
     assert selector.diagnostics(torch.device("cuda", 0))["implementation"] == "triton"
     monkeypatch.setenv("SJ_LIF_CUDA_IMPLEMENTATION", "torch")
     forced = selection._CudaSelection(
@@ -443,29 +441,47 @@ def test_offline_priorities_bind_per_device_and_strict_override(monkeypatch):
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("compiled", [False, True])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-def test_lif_final_state_triton_backward_matches_reference(
-    monkeypatch, compiled, dtype
+@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+def test_final_state_triton_backward_matches_reference(
+    monkeypatch, compiled, dtype, kind
 ):
     from spikingjelly.activation_based import functional, surrogate
-    from spikingjelly._ops import lif
+
+    package = importlib.import_module(
+        "spikingjelly._ops." + ("if_" if kind == "if" else kind)
+    )
 
     torch.compiler.reset()
-    monkeypatch.setattr(lif._selection, "_requested", "triton")
-    monkeypatch.setattr(lif._selection, "_selections", {})
-    monkeypatch.setattr(lif._selection, "_compiled_selections", {})
+    monkeypatch.setattr(package._selection, "_requested", "triton")
+    monkeypatch.setattr(package._selection, "_selections", {})
+    monkeypatch.setattr(package._selection, "_compiled_selections", {})
     torch.manual_seed(31)
     x = torch.rand(4, 2, 8, device="cuda", dtype=dtype, requires_grad=True)
     v = torch.zeros(2, 8, device="cuda", requires_grad=True)
     sg = surrogate.ATan()
+    w = torch.tensor(0.0, device="cuda", requires_grad=True)
 
     def forward(x, v):
-        return functional.lif_multi_step(x, v, surrogate_function=sg)
+        if kind == "if":
+            return functional.if_multi_step(x, v, surrogate_function=sg)
+        if kind == "lif":
+            return functional.lif_multi_step(x, v, surrogate_function=sg)
+        return functional.plif_multi_step(x, v, w, surrogate_function=sg)
 
     run = torch.compile(forward, fullgraph=True) if compiled else forward
     actual = run(x, v)
-    spike, final, _ = lif.reference.multi_step(
-        x.float(), v, 2.0, True, 1.0, 0.0, sg, False
-    )
+    if kind == "if":
+        spike, final, _ = package.reference.multi_step(
+            x.float(), v, 1.0, 0.0, sg, False
+        )
+    elif kind == "lif":
+        spike, final, _ = package.reference.multi_step(
+            x.float(), v, 2.0, True, 1.0, 0.0, sg, False
+        )
+    else:
+        spike, final, _ = package.reference.multi_step(
+            x.float(), v, w, True, 1.0, 0.0, sg, False
+        )
     expected = (spike.to(dtype), final)
     assert actual[2] is None
     for got, want in zip(actual[:2], expected):
@@ -475,8 +491,9 @@ def test_lif_final_state_triton_backward_matches_reference(
         sum((value * weight).sum() for value, weight in zip(outputs, weights))
         for outputs in (actual[:2], expected)
     ]
-    got = torch.autograd.grad(losses[0], (x, v))
-    want = torch.autograd.grad(losses[1], (x, v))
+    inputs = (x, v, w) if kind == "plif" else (x, v)
+    got = torch.autograd.grad(losses[0], inputs)
+    want = torch.autograd.grad(losses[1], inputs)
     for actual_grad, expected_grad in zip(got, want):
         tolerance = (
             0.015
@@ -488,3 +505,28 @@ def test_lif_final_state_triton_backward_matches_reference(
         torch.testing.assert_close(
             actual_grad, expected_grad, rtol=tolerance, atol=tolerance
         )
+
+
+@pytest.mark.parametrize(
+    ("capability", "target", "compatible"),
+    [
+        ((8, 6), "sm_80", True),
+        ((8, 9), "sm_86", True),
+        ((8, 0), "sm_86", False),
+        ((9, 0), "sm_80", False),
+        ((12, 0), "compute_80", True),
+        ((8, 0), "compute_90", False),
+    ],
+)
+def test_native_binary_and_ptx_compatibility(
+    capability, target, compatible, monkeypatch
+):
+    from spikingjelly._ops.native_loader import _check_native_device
+
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda index: capability)
+    info = {"cuda_arch_flags": [f"-gencode=arch=compute_80,code={target}"]}
+    if compatible:
+        _check_native_device(info, 0)
+    else:
+        with pytest.raises(ImportError, match="no supported binary/PTX"):
+            _check_native_device(info, 0)

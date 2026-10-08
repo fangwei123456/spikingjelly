@@ -1,6 +1,5 @@
 import argparse
 import hashlib
-import logging
 import math
 import os
 import random
@@ -102,7 +101,6 @@ def _make_config(author_model, vocab_size: int):
 
 def _checkpoint_config() -> dict:
     return {
-        "backend": "cupy",
         "batch_size": BATCH_SIZE,
         "betas": BETAS,
         "context_length": CONTEXT_LENGTH,
@@ -492,12 +490,6 @@ def run(
 ) -> None:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the SpikeGPT training smoke.")
-    try:
-        import cupy  # noqa: F401
-    except ImportError as exc:
-        logging.info("SpikeGPT training smoke requires CuPy: %s", exc)
-        raise ImportError("CuPy is required for the SpikeGPT training smoke.") from exc
-
     revision = _verify_source(spikegpt_root.resolve(), declared_revision)
     checkpoint_path = _prepare_checkpoint_path(output_dir.resolve())
     training_text, vocabulary = _read_training_text(data_path.resolve())

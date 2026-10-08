@@ -43,16 +43,18 @@ backend 选项。下面的 IF、LIF 和 PLIF 训练代码可在 CPU 或 NVIDIA C
 CPU 使用 Torch 参考实现。CUDA 在每个设备首次使用某条执行路径时检查兼容性，
 随后复用已选实现。这个过程不进行在线测速，导入 SpikingJelly 也不会初始化 CUDA。
 eager 按原生 CUDA、Triton、Torch 的顺序检查；Inductor 编译展开按 Triton、原生
-CUDA、Torch 的顺序检查。已验证 GPU 的优先级来自离线测试，具体 workload 的
-速度仍需实测。
+CUDA、Torch 的顺序检查。各 GPU 架构使用相同的顺序，兼容性会影响可用实现，
+具体 workload 的速度仍需实测。
 
 自动分发覆盖 IF、LIF、PLIF、QIF、EIF、Izhikevich、I-LIF、ActivationAwareIF 和
 STBIF。各类支持的训练模式、dtype 和替代梯度不同，详见对应 API。其他神经元
 沿用各自的执行方式，其中一些没有独立 CUDA 内核。
 
 普通融合路径接受 FP32/FP16/BF16 输入，要求状态为 FP32，替代梯度为受支持的内置
-类型。低精度状态和自定义替代梯度可使用 Torch 参考公式。存储与计算精度的显式
-配置见 :doc:`./precision`；自定义 FlexSN core 见 :doc:`./flexsn`。
+类型。低精度状态和自定义替代梯度可使用 Torch 参考公式。未显式配置精度时，
+模块的膜电位跟随输入 dtype，已有 FP32 状态也会转换。因此普通 FP16/BF16
+模块调用使用参考递推。functional 接口可以直接传入低精度输入和 FP32 初态；
+模块存储精度的覆盖方式见 :doc:`./precision`。自定义 FlexSN core 见 :doc:`./flexsn`。
 
 编译与 CUDA Graph
 ----------------------------

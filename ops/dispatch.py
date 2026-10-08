@@ -3,7 +3,7 @@
 import hashlib
 import importlib
 import threading
-from functools import wraps
+from functools import cache, wraps
 from pathlib import Path
 
 import torch
@@ -23,6 +23,7 @@ def _include_cache_tag(tag):
             config.cache_key_tag += tag
 
 
+@cache
 def _source_cache_tag(namespace, scope, module, trainable):
     owner = Path(module.__file__)
     sources = [
@@ -47,13 +48,15 @@ def _source_cache_tag(namespace, scope, module, trainable):
 def _update_cache_tag(
     namespace, index, module, selected, *, capability, priority, execution
 ):
-    tag = _source_cache_tag(
-        namespace,
-        f"{index}:{execution}:{selected.name}",
-        module,
-        selected.trace_backward is not None,
-    )
-    _include_cache_tag(tag)
+    if execution == "compile":
+        tag = _source_cache_tag(
+            namespace,
+            f"{index}:{execution}:{selected.name}",
+            module,
+            selected.trace_backward is not None,
+        )
+        _include_cache_tag(tag)
+        selected = selected._replace(cache_tag=tag)
     logger.info(
         "ops selection operator={} device=cuda:{} ({}) execution={} capability={} priority={} implementation={} forward={} backward={} unavailable={}",
         namespace,
@@ -75,7 +78,7 @@ def _update_cache_tag(
         ),
         selected.unavailable,
     )
-    return selected._replace(cache_tag=tag)
+    return selected
 
 
 def _register_dispatch(namespace, cpu, selection):
@@ -83,8 +86,6 @@ def _register_dispatch(namespace, cpu, selection):
     definitions = []
     trainable = selection._cpu_backward is not None
     cpu_forward = selection._cpu_forward
-    cpu_tag = _source_cache_tag(namespace, "cpu", cpu, trainable)
-    _include_cache_tag(cpu_tag)
     validation = importlib.import_module(
         f"{cpu.__package__}.{'autograd' if trainable else 'validation'}"
     )
@@ -128,12 +129,12 @@ def _register_dispatch(namespace, cpu, selection):
         def fake_impl(reference_fake):
             def call(*args, **kwargs):
                 device = args[0].device
-                if device.type == "cpu":
-                    _include_cache_tag(cpu_tag)
-                elif (
-                    device.type == "cuda"
-                    and torch._guards.TracingContext.try_get() is not None
-                ):
+                tracing = torch._guards.TracingContext.try_get() is not None
+                if device.type == "cpu" and tracing:
+                    _include_cache_tag(
+                        _source_cache_tag(namespace, "cpu", cpu, trainable)
+                    )
+                elif device.type == "cuda" and tracing:
                     with unset_fake_temporarily():
                         selection.get_trace_forward(device)
                     _include_cache_tag(

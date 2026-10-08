@@ -1102,3 +1102,53 @@ def test_functional_neuron_public_api_documentation():
         doc = inspect.getdoc(function)
         assert f".. _{name}-cn:" in doc, name
         assert f".. _{name}-en:" in doc, name
+
+
+@pytest.mark.parametrize(
+    "node_type", [neuron.IFNode, neuron.LIFNode, neuron.ParametricLIFNode]
+)
+def test_multistep_trajectory_uses_sequence_operator_and_preserves_gradients(
+    node_type, monkeypatch
+):
+    import copy
+
+    torch.manual_seed(73)
+    node = node_type(step_mode="m", store_v_seq=True)
+    reference = copy.deepcopy(node)
+    reference.step_mode = "s"
+    x = torch.rand(4, 2, 3, requires_grad=True)
+    xr = x.detach().clone().requires_grad_()
+    v = torch.rand(2, 3, requires_grad=True)
+    vr = v.detach().clone().requires_grad_()
+    node.v, reference.v = v, vr
+    spikes = torch.stack([reference(step) for step in xr])
+
+    name = {
+        neuron.IFNode: "if_multi_step",
+        neuron.LIFNode: "lif_multi_step",
+        neuron.ParametricLIFNode: "plif_multi_step",
+    }[node_type]
+    entry = getattr(functional, name)
+    shapes = []
+
+    def observe(sequence, *args, **kwargs):
+        shapes.append(sequence.shape)
+        return entry(sequence, *args, **kwargs)
+
+    monkeypatch.setattr(functional, name, observe)
+    actual = node(x)
+    assert shapes == [x.shape]
+    for got, want in (
+        (actual, spikes),
+        (node.v, reference.v),
+        (node.v_seq, reference.v_seq),
+    ):
+        torch.testing.assert_close(got, want)
+    inputs = (x, v, node.w) if node_type is neuron.ParametricLIFNode else (x, v)
+    refs = (xr, vr, reference.w) if node_type is neuron.ParametricLIFNode else (xr, vr)
+    got = torch.autograd.grad(actual.sum() + node.v.sum() + node.v_seq.sum(), inputs)
+    want = torch.autograd.grad(
+        spikes.sum() + reference.v.sum() + reference.v_seq.sum(), refs
+    )
+    for g, r in zip(got, want, strict=True):
+        torch.testing.assert_close(g, r)

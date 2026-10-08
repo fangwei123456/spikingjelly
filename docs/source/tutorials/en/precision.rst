@@ -152,11 +152,11 @@ API for other neurons.
     * - Ordinary FP32 inputs/state
       - Automatic device/execution-path selection
     * - Ordinary FP16/BF16 inputs
-      - Initial state follows inputs unless configured; this does not imply fused kernels
+      - Membrane state follows inputs unless configured; existing FP32 state is also converted
     * - FP16/BF16 state
       - Ordinary calls use Torch reference recurrence, including fullgraph compilation
     * - Explicit FP32 state with low-precision inputs
-      - Applicable precision kernels; different numerics from low-precision state
+      - Functional calls can supply FP32 state directly; modules require explicit storage configuration. Numerics differ from low-precision state
     * - Explicit storage/forward/backward precision
       - CUDA Triton feature requiring supported built-in surrogates and dtype combinations
     * - FP8 state/computation

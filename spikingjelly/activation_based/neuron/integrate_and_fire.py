@@ -242,7 +242,9 @@ class IFNode(BaseNode):
         )
         return (spikes,), (v,)
 
-    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
+    def multi_step_forward(
+        self, x_seq: torch.Tensor, *args: torch.Tensor, **kwargs: object
+    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
         if (
             type(self).single_step_functional_forward
             is not IFNode.single_step_functional_forward
@@ -250,35 +252,24 @@ class IFNode(BaseNode):
             is not IFNode.multi_step_functional_forward
         ):
             return super().multi_step_forward(x_seq, *args, **kwargs)
-        if self._neuron_precision is not None:
-            inputs = (x_seq, *args)
-            states = self.materialize_states(
-                inputs, tuple(self._memories.values()), "m"
-            )
-            spikes, v, v_seq = functional.if_multi_step(
-                x_seq,
-                states[0],
-                self.v_threshold,
-                self.v_reset,
-                self.surrogate_function,
-                self.detach_reset,
-                self.store_v_seq,
-                neuron_storage=self._neuron_precision[0],
-                neuron_fwd=self._neuron_precision[1],
-                neuron_bwd=self._neuron_precision[2],
-            )
-            self._memories["v"] = v
-            self.v_seq = v_seq
-            return spikes
-        if self.store_v_seq:
-            return super().multi_step_forward(x_seq, *args, **kwargs)
         inputs = (x_seq, *args)
         states = self.materialize_states(inputs, tuple(self._memories.values()), "m")
-        outputs, states = self.multi_step_functional_forward(inputs, states, **kwargs)
-        for name, value in zip(self._memories, states, strict=True):
-            self._memories[name] = value
-        self.v_seq = None
-        return outputs[0] if len(outputs) == 1 else outputs
+        precision = self._neuron_precision
+        spikes, v, v_seq = functional.if_multi_step(
+            x_seq,
+            states[0],
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+            self.store_v_seq,
+            neuron_storage=None if precision is None else precision[0],
+            neuron_fwd="fp32" if precision is None else precision[1],
+            neuron_bwd="fp32" if precision is None else precision[2],
+        )
+        self._memories["v"] = v
+        self.v_seq = v_seq
+        return spikes
 
 
 class HalfThresholdIFNode(BaseNode):

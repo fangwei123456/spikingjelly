@@ -1,6 +1,5 @@
 import argparse
 import hashlib
-import logging
 import math
 import sys
 import time
@@ -112,7 +111,6 @@ def _variable_length_batch(
 def _training_config() -> dict:
     return {
         "kind": "spikegpt-enwik8-context1024-pilot-v1",
-        "backend": "cupy",
         "batch_size": BATCH_SIZE,
         "betas": smoke.BETAS,
         "context_length": CONTEXT_LENGTH,
@@ -301,12 +299,6 @@ def run(
 ) -> None:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the SpikeGPT training pilot.")
-    try:
-        import cupy  # noqa: F401
-    except ImportError as exc:
-        logging.info("SpikeGPT training pilot requires CuPy: %s", exc)
-        raise ImportError("CuPy is required for the SpikeGPT training pilot.") from exc
-
     root = spikegpt_root.resolve()
     revision = smoke._verify_source(root, declared_revision)
     checkpoint_path = smoke._prepare_checkpoint_path(output_dir.resolve())

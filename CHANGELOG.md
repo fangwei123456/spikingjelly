@@ -11,6 +11,14 @@ and the archived documentation linked from the project README.
 
 ### Fixes
 
+- Multi-step IF/LIF/PLIF modules record voltage trajectories through the same
+  sequence operator used without trajectories, preserving initial-state and
+  parameter gradients.
+- SpikeGPT benchmark startup no longer requires CuPy or records a CuPy backend
+  in checkpoint configuration. Checkpoints retaining the old configuration are
+  rejected on resume.
+- Operator registration no longer hashes source files or modifies the compiler
+  cache tag at import time; fingerprints are computed for compilation bindings.
 - Explicit IF/LIF/PLIF precision preserves the input dtype for spikes while
   keeping membrane storage in the configured dtype.
 - FlexSN CUDA execution uses its reference scan when a valid core has no
@@ -23,7 +31,7 @@ and the archived documentation linked from the project README.
 Modules: ``spikingjelly.activation_based.functional.neuron``,
 ``spikingjelly.activation_based.neuron``, and ``ops/``.
 
-- All production neuron families now use registered CPU/CUDA operator dispatch.
+- Accelerated neuron families use registered CPU/CUDA operator dispatch.
   CPU runs the Torch reference; CUDA selects a compatible implementation once
   per device from native CUDA, Triton, then Torch. No neuron constructor,
   module property, model config, or ``functional.set_backend`` exposes provider
@@ -33,10 +41,12 @@ Modules: ``spikingjelly.activation_based.functional.neuron``,
   locks during capture or on steady-state cache hits; strict provider errors
   remain unchanged. Initialized explicit precision plans also support fullgraph
   model compilation without repeating device checks during capture.
-- Single-step IF/LIF/PLIF and supported FP16/BF16 inputs with FP32 state now
-  enter the same registered operator as FP32 multi-step calls; reference-only
-  execution obeys strict provider diagnostics. Retired experimental entry wrappers,
-  duplicate legacy Triton modules, and the old backend-based compile probe.
+- Single-step IF/LIF/PLIF functional calls and supported FP16/BF16 inputs with
+  explicit FP32 state enter the same registered operator as FP32 multi-step calls.
+  Ordinary modules keep membrane state in the input dtype; FP16/BF16 state uses
+  Torch reference equations. Reference-only execution obeys strict provider
+  diagnostics. Retired experimental entry wrappers, duplicate legacy Triton
+  modules, and the old backend-based compile probe.
   `SJ_USE_TRITON_OP` is retired: installed Triton uses `triton_op`/`wrap_triton`;
   missing optional dependencies still report a clear error when requested.
   NSYS capture manifests record `implementation_environment` diagnostic overrides
@@ -49,12 +59,8 @@ Modules: ``spikingjelly.activation_based.functional.neuron``,
   records each bound implementation once; steady-state calls do not log.
   ``SJ_<NEURON>_CUDA_IMPLEMENTATION`` remains an advanced strict diagnostic
   control and defaults to ``auto``.
-- Ordinary neuron CUDA selection uses offline measured priorities per neuron
-  family and GPU compute capability, without runtime profiling. Unknown devices
-  retain the existing availability order. The calibration benchmark compares
-  complete eager inference/training calls and rejects inconsistent rankings.
 - Ordinary eager and Inductor expansion now cache separate CUDA implementations:
-  eager retains its offline priority, while expansion prefers Triton. Forward
+  eager prefers native CUDA, while expansion prefers Triton. Forward
   and backward use the same path's binding; eager adds no per-call compile check.
   CUDA Graphs retain the implementation chosen before capture. Query the
   compiler binding with ``functional.neuron_implementation(..., execution="compile")``;

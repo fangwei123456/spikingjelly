@@ -52,6 +52,10 @@ We highly suggest contributors to use [uv](https://docs.astral.sh/uv/) for envir
 5. Install SpikingJelly according to our `pyproject.toml`: `uv pip install --editable . --group dev` .
 
     - This will install SpikingJelly in **editable mode**, which means you can make changes to the code and they will be reflected in your environment immediately.
+    - The root `ops/` directory is installed as `spikingjelly._ops`. Install this
+      checkout in editable mode before running source scripts; `PYTHONPATH` alone
+      does not install that mapping. Use an environment bound to this checkout
+      when switching worktrees.
     - All dependencies will be installed automatically.
     - The argument `--group dev` installs all development and doc tools (e.g. sphinx).
     - To install optional dependencies, use the syntax `uv pip install --editable ".[triton]"`. See the `project.optional-dependencies` table in `pyproject.toml` for a list of optional dependencies.

@@ -45,8 +45,9 @@ CPU uses the Torch reference implementation. On CUDA, each execution path checks
 compatibility on first use of a device and reuses its selection afterward. This
 check performs no online profiling; importing SpikingJelly does not initialize
 CUDA either. Eager checks native CUDA, Triton and Torch in that order. Inductor
-expansion checks Triton, native CUDA and Torch. Verified GPU priorities come
-from offline tests; measure the workload you intend to run.
+expansion checks Triton, native CUDA and Torch. These orders are the same across
+GPU architectures; compatibility can change which implementation is available.
+Measure the workload you intend to run.
 
 Automatic dispatch covers IF, LIF, PLIF, QIF, EIF, Izhikevich, I-LIF,
 ActivationAwareIF and STBIF. Training modes, dtypes and surrogate support vary
@@ -55,8 +56,11 @@ execution paths, some without dedicated CUDA kernels.
 
 Ordinary fused paths accept FP32/FP16/BF16 inputs with FP32 state and supported
 built-in surrogates. Low-precision state and custom surrogates can use Torch
-reference equations. See :doc:`./precision` for explicit storage and compute
-precision, and :doc:`./flexsn` for custom cores.
+reference equations. Without explicit precision configuration, modules keep
+membrane state in the input dtype, including when an existing state is FP32.
+An ordinary FP16/BF16 module call therefore uses the reference recurrence.
+Functional calls can supply FP32 state with low-precision input directly;
+module storage overrides use :doc:`./precision`. See :doc:`./flexsn` for custom cores.
 
 Compilation and CUDA Graphs
 ----------------------------
