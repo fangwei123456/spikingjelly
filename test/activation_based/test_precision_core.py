@@ -174,8 +174,12 @@ def test_explicit_if_plif_precision_uses_triton_profiles(monkeypatch):
     seen.clear()
     monkeypatch.setattr(plif_precision, "_multistep_plif_mp", fake_forward)
     spikes, final, trace = functional.plif_multi_step(
-        x, v, torch.zeros(()), store_v_seq=False,
-        neuron_storage=torch.bfloat16, neuron_bwd="bf16",
+        x,
+        v,
+        torch.zeros(()),
+        store_v_seq=False,
+        neuron_storage=torch.bfloat16,
+        neuron_bwd="bf16",
     )
     assert spikes.shape == x.shape
     assert final.shape == v.shape

@@ -132,9 +132,7 @@ def _capture_workload(args, kernel_module):
     )
 
     model = (
-        _build_model(
-            "spikformer_s", args.T, 1000, "lif", args.surrogate
-        )
+        _build_model("spikformer_s", args.T, 1000, "lif", args.surrogate)
         .to(device=args.device, dtype=torch.float32)
         .train()
     )

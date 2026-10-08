@@ -226,9 +226,9 @@ Soft方式重置方程为：
 训练 IF、LIF 和 PLIF
 ----------------------------
 
-``step_mode`` 选择单步或多步；设备由输入决定。把模块和输入移动到同一设备即可，
-不需要指定执行实现。PLIF 的公开类名是 ``ParametricLIFNode``，它包含可学习参数。
-下面的独立示例不需要数据集，运行前后向，并检查 PLIF 参数更新：
+``step_mode`` 控制单步或多步执行；输入决定运行设备。将模块和输入移到同一设备
+即可。PLIF 对应 ``ParametricLIFNode``，含可学习参数。下面用随机输入运行前后向，
+并检查 PLIF 的参数更新：
 
 .. code-block:: python
 
@@ -263,10 +263,10 @@ Soft方式重置方程为：
 显式初态、最终状态和轨迹
 ----------------------------
 
-本节的 ``functional.if_multi_step``、``lif_multi_step`` 和 ``plif_multi_step``
-不管理模块 memory。调用者提供初态，保存返回的最终
-状态，并决定是否在段落之间 detach。``store_v_seq=True`` 返回监控轨迹；默认
-``False`` 时第三个返回值为 ``None``，第二个返回值始终是最终状态。
+调用 ``functional.if_multi_step``、``lif_multi_step`` 或 ``plif_multi_step`` 时，
+由调用者提供初态、保存最终状态，并决定在序列段之间是否 detach；这些函数不管理
+模块 memory。``store_v_seq=True`` 返回监控轨迹。默认 ``False`` 时，第三个返回值
+为 ``None``，第二个始终是最终状态。
 
 .. code-block:: python
 
@@ -288,9 +288,9 @@ Soft方式重置方程为：
 
 自定义神经元
 -------------------------------------------
-SpikingJelly 为修改神经元动力学和高性能执行提供了两类接口。``SimpleBaseNode`` 中的
-``Simple`` 描述的是接口定位，而不是一种神经元数学模型。该接口使用纯 PyTorch 直接
-展示充电、放电和重置职责，便于理解神经元在 SNN 中承担的工作和自定义动力学。
+自定义神经元有两类接口。``SimpleBaseNode`` 的 ``Simple`` 指接口简易，具体方程
+由子类定义。它用纯 PyTorch 按顺序执行充电、放电和重置，适合学习神经元行为或
+尝试新的动力学。
 
 .. list-table:: 神经元扩展接口
     :header-rows: 1

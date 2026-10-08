@@ -165,13 +165,9 @@ def _methods(x, v, weight, bias, sg, mode, neuron, thread_counts):
 
     def automatic_dense():
         if neuron == "if":
-            spike, v_out, _ = functional.if_multi_step(
-                x, v, 1.0, 0.0, False, sg
-            )
+            spike, v_out, _ = functional.if_multi_step(x, v, 1.0, 0.0, False, sg)
         else:
-            spike, v_out, _ = functional.lif_multi_step(
-                x, v, 2.0, True, 1.0, 0.0, sg
-            )
+            spike, v_out, _ = functional.lif_multi_step(x, v, 2.0, True, 1.0, 0.0, sg)
         return F.linear(spike, weight, bias), v_out
 
     methods = {"torch_reference": torch_dense, "automatic_dense": automatic_dense}

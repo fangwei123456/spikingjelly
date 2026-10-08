@@ -138,9 +138,10 @@ checkpoint; do not enable it for unknown checkpoints.
 Input, state and computation precision
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Layer autocast, neuron input dtype, temporal state storage dtype and forward/backward
-compute dtype are separate dimensions. The table applies to multi-step IFNode,
-LIFNode and ParametricLIFNode, not every neuron family.
+Layer autocast controls operations within ordinary layers. Neurons also have
+an input dtype, temporal state storage dtype and forward/backward compute dtype.
+The table covers multi-step IFNode, LIFNode and ParametricLIFNode; consult the
+API for other neurons.
 
 .. list-table:: Neuron precision policies
     :header-rows: 1
@@ -161,9 +162,9 @@ LIFNode and ParametricLIFNode, not every neuron family.
     * - FP8 state/computation
       - Experimental, hardware/format/combination dependent; not universal neuron support
 
-For ordinary BF16 layers with FP32 neuron state, move the model before preparing
-precision, then create the optimizer. This standalone CUDA training example needs
-no dataset:
+For BF16 layers with FP32 neuron state, move the model to its device, prepare
+precision, then create the optimizer. This CUDA training example uses random
+inputs:
 
 .. code-block:: python
 
@@ -192,8 +193,8 @@ no dataset:
     precision.backward(loss, optimizer)
     functional.reset_net(precision.model)
 
-Storage, forward and backward compute precision can also be selected explicitly.
-This configuration fragment replaces the config in the example:
+To set storage, forward and backward precision separately, replace the config
+in the example with:
 
 .. code-block:: python
 
@@ -208,13 +209,15 @@ not every combination is valid. FP8 arithmetic requires ``float8_e4m3fn`` or
 use FP32 inside kernels. See :doc:`./surrogate` for the seven supported surrogates.
 Unsupported explicit policies fail rather than silently changing numerics.
 
-Ordinary execution queries do not replace precision capability checks. Prepare
-precision before compilation; warm the identical combination when using direct
-functional precision interfaces, before graph capture/device checks.
+An execution query reports the ordinary path's selection. Check support for
+the precision policy you intend to use. Prepare precision before compilation;
+with direct functional precision calls, warm up the same combination so device
+checks finish before graph capture.
 
-State/recurrence precision changes can alter spikes, final state and gradients;
-validate model accuracy. Inductor may also change low-precision fusion/rounding,
-so bitwise equality with eager is not promised. Benchmark with the same state
+Changing state or recurrence precision can alter spikes, final state and
+gradients; validate model accuracy before adopting a new policy. Inductor can
+also change low-precision fusion and rounding, producing bitwise differences
+from eager. Benchmark with the same state
 policy, for example ``--precision bf16 --neuron-storage fp32``.
 See :doc:`./triton_backend` for automatic execution and compilation.
 

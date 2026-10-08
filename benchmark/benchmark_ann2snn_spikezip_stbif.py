@@ -149,13 +149,9 @@ def main() -> None:
                 else "torch"
             ),
             "automatic_seconds": automatic_seconds,
-            "automatic_speedup_vs_loop": _safe_speedup(
-                loop_seconds, automatic_seconds
-            ),
+            "automatic_speedup_vs_loop": _safe_speedup(loop_seconds, automatic_seconds),
             "automatic_max_abs_diff": _max_abs_diff(loop_out, automatic_out),
-            "automatic_state_max_abs_diff": _compare_state(
-                loop_state, automatic_state
-            ),
+            "automatic_state_max_abs_diff": _compare_state(loop_state, automatic_state),
         }
 
     output = Path(args.output)

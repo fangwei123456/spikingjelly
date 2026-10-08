@@ -371,8 +371,7 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
             "automatic_vs_dense": {
                 "prefill_speed_ratio": dense_prefill["median_ms"]
                 / prefill["median_ms"],
-                "decode_speed_ratio": dense_decode["median_ms"]
-                / decode["median_ms"],
+                "decode_speed_ratio": dense_decode["median_ms"] / decode["median_ms"],
             },
         },
         "correctness": {

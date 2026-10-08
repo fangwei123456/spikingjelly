@@ -886,3 +886,43 @@ was returned before destruction; no paid instance remained. Posted charges were
 $0.246 for this fix, bringing the session total to $2.821 within the $5 cap.
 Raw red/green logs, probes, CUDA Graph samples, billing and commands are in
 `.agents/artifacts/lif-final-backward-20261008` in the primary checkout.
+
+## Final Ponytail audit and tutorial editing (2026-10-08)
+
+Merged `origin/master` through `c7de8326` without changing the implementation
+snapshot: those fixes had already been ported. The merge records the common
+ancestry and resolves rename/deletion conflicts without restoring retired kernels.
+
+Removed FlexSN's optional input/state-template inference. Its sole production
+caller always supplies both template tuples; required counts, zero-length handling
+and gradient shape/dtype checks remain. Allocations now follow those templates
+directly. Also removed an unused FlexSN metadata field, an unreachable optional
+Triton branch, and unused eager-entry override probing. The selector's cached
+methods are unchanged. No additional modules, wrappers or dependencies were added.
+
+Expanded the existing multi-input/multi-state test to compare outputs, traces,
+final states and input/initial-state/static-parameter gradients on CPU and CUDA.
+RTX 5090 checks passed 120 cases, with one native-cache check skipped. Broad local
+checks passed 1,899 cases with 572 CUDA/optional-dependency skips. Whole-tree Ruff
+and formatting passed; ten formatting repairs were verified to preserve ASTs.
+Pure wheel/sdist builds and outside-checkout wheel gradients/FlexSN execution passed.
+
+A paired FlexSN complete forward/backward check measured T=4/N=64 and
+T=16/N=32768. Unpinned timings varied across rounds. With CPU affinity fixed to
+core 0, before/after medians were 1054.55/1033.85 us and 1069.13/1051.75 us;
+round changes were -5.25%, +0.47%, +0.12% and +2.80%, -4.76%, -3.96% respectively.
+The changing signs do not establish a speedup or a consistent regression.
+Outputs and all gradients matched the unchanged launch implementation.
+
+Humanizer editing covered 26 Chinese/English tutorial pages. Code blocks, inline
+literals and link targets were checked against the preceding snapshot and remain
+unchanged. The edits shorten repeated cautions and method narration while retaining
+precision constraints, migration instructions and historical-result boundaries.
+Sphinx HTML succeeded without warnings; Changelog generation remained current.
+
+The audit instance was destroyed after evidence retrieval. Posted audit charges
+were $0.142, bringing this session to $2.963 within the $5 cap; no paid instance
+remained. Raw logs, paired samples, preservation checks and billing are in
+`.agents/artifacts/final-audit-humanizer-20261008` in the primary checkout.
+The separately recorded QIF/Torch 2.11 boundary issue remains outside this audit;
+the PR must not claim an entirely green CUDA compatibility matrix.

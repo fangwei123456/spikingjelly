@@ -1,13 +1,13 @@
-Migrate From Old Versions
+Migrate from old versions
 =======================================
 
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 中文版： :doc:`../cn/migrate_from_legacy`
 
-This page separates V2 interface migration from the historical namespace
-migration for ``<=0.0.0.0.12``. V2 includes breaking changes; update configuration
-explicitly rather than expecting implicit compatibility.
+This page starts with V2 interface changes, followed by historical namespace
+migration for ``<=0.0.0.0.12``. V2 has breaking changes; update old configuration
+using the table below.
 
 V2: automatic execution and interface migration
 -----------------------------------------------
@@ -67,8 +67,8 @@ final state and an optional trace. For example:
     )
 
 Single-step ``lif_step`` returns ``(spike, v_next)``; ``lif_multi_step`` returns
-three values. Removing a function-name suffix mechanically is insufficient;
-check the signature in :doc:`./neuron` and the public API.
+three values. Check arguments and return values in :doc:`./neuron` and the
+public API when migrating a function name.
 
 Normal usage needs no implementation choice. See :doc:`./triton_backend` for
 installation/diagnostics, :doc:`./precision` for policies, :doc:`./flexsn` for

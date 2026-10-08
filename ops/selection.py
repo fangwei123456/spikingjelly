@@ -172,8 +172,7 @@ class _CudaSelection:
                     trace_backward = (
                         trace_backward.default if trace_backward is not None else None
                     )
-                    forward_impl = getattr(module, "_forward_impl", trace_forward)
-                    backward_impl = getattr(module, "_backward_impl", trace_backward)
+                    forward_impl, backward_impl = trace_forward, trace_backward
                 selected = _CudaImplementation(
                     name,
                     trace_forward,

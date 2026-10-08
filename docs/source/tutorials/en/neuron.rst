@@ -232,10 +232,10 @@ The results are:
 Training IF, LIF and PLIF
 ----------------------------
 
-``step_mode`` selects single- or multi-step execution; the input selects the
-device. Move the module and inputs to the same device without choosing an
-implementation. PLIF's public class is ``ParametricLIFNode`` and has trainable
-parameters. This standalone example needs no dataset and checks parameter updates:
+``step_mode`` controls single- or multi-step execution, and the input selects
+the device. Move the module and inputs to the same device. PLIF's public class,
+``ParametricLIFNode``, has trainable parameters. This example uses random inputs
+to run forward/backward and check PLIF parameter updates:
 
 .. code-block:: python
 
@@ -271,11 +271,11 @@ and :doc:`./precision` for precision policies.
 Explicit initial state, final state and traces
 ----------------------------------------------
 
-The IF/LIF/PLIF functions ``functional.if_multi_step``, ``lif_multi_step`` and
-``plif_multi_step`` do not manage module memory. Supply initial state,
-retain returned final state and decide whether to detach between segments.
-``store_v_seq=True`` returns a monitoring trace. With the default ``False``, the
-third result is ``None``; the second result always contains the final state.
+With ``functional.if_multi_step``, ``lif_multi_step`` or ``plif_multi_step``,
+the caller supplies initial state, keeps final state and decides whether to
+detach between sequence segments. These functions do not manage module memory.
+``store_v_seq=True`` returns a monitoring trace. With the default ``False``,
+the third result is ``None``; the second always contains final state.
 
 .. code-block:: python
 
@@ -297,11 +297,10 @@ third result is ``None``; the second result always contains the final state.
 
 Custom Spiking Neurons
 -------------------------------------------
-SpikingJelly provides separate interfaces for modifying neuron dynamics and for
-high-performance execution. ``Simple`` in ``SimpleBaseNode`` describes the role
-of the interface, not a neuron mathematical model. This pure-PyTorch interface
-exposes charge, fire, and reset directly so that users can understand the role of
-a neuron in an SNN and customize its dynamics.
+SpikingJelly has two interfaces for custom neurons. ``Simple`` describes the
+interface of ``SimpleBaseNode``; subclasses define the equations. It uses pure
+PyTorch to run charge, fire and reset in order, making it suitable for learning
+neuron behavior or trying new dynamics.
 
 .. list-table:: Neuron extension interfaces
     :header-rows: 1

@@ -1,4 +1,4 @@
-Automatic Neuron Execution
+Automatic neuron execution
 ==========================
 
 中文版： :doc:`../cn/triton_backend`
@@ -6,9 +6,9 @@ Automatic Neuron Execution
 From CPU to CUDA
 ----------------------------
 
-Ordinary neurons have no backend argument or mutable backend property. Create a
-neuron and move the module and inputs to the target device. The same training
-workflow works on CPU and NVIDIA CUDA:
+Create a neuron, then move it and its inputs to the target device. Neuron
+constructors and properties no longer expose backend selection. The following
+IF, LIF and PLIF training code runs on CPU or NVIDIA CUDA:
 
 .. code-block:: python
 
@@ -41,29 +41,29 @@ for continuous state and detach, and :doc:`/index` for installation/local CUDA b
 Automatic execution and limits
 ------------------------------
 
-CPU uses Torch reference execution. CUDA checks compatible implementations on
-first use of a device/execution path and reuses the selection, without online
-profiling. Importing SpikingJelly does not initialize CUDA. Eager currently prefers
-compatible native CUDA, then Triton and Torch; Inductor expansion prefers Triton,
-then native CUDA and Torch. Verified GPU priorities come from offline tests, not a
-promise that one implementation wins every workload.
+CPU uses the Torch reference implementation. On CUDA, each execution path checks
+compatibility on first use of a device and reuses its selection afterward. This
+check performs no online profiling; importing SpikingJelly does not initialize
+CUDA either. Eager checks native CUDA, Triton and Torch in that order. Inductor
+expansion checks Triton, native CUDA and Torch. Verified GPU priorities come
+from offline tests; measure the workload you intend to run.
 
-The unified execution interface covers IF, LIF, PLIF, QIF, EIF, Izhikevich, I-LIF,
-ActivationAwareIF and STBIF. This does not imply that every family supports training,
-all dtypes or arbitrary surrogates; consult each API. Other neurons retain their
-public contracts and do not necessarily have dedicated CUDA kernels.
+Automatic dispatch covers IF, LIF, PLIF, QIF, EIF, Izhikevich, I-LIF,
+ActivationAwareIF and STBIF. Training modes, dtypes and surrogate support vary
+by family; consult the corresponding API. Other neurons retain their own
+execution paths, some without dedicated CUDA kernels.
 
-Ordinary fused paths support FP32/FP16/BF16 inputs with FP32 state and supported
+Ordinary fused paths accept FP32/FP16/BF16 inputs with FP32 state and supported
 built-in surrogates. Low-precision state and custom surrogates can use Torch
-reference equations. Explicit neuron precision is a separate policy; see
-:doc:`./precision`. For custom cores, see :doc:`./flexsn`.
+reference equations. See :doc:`./precision` for explicit storage and compute
+precision, and :doc:`./flexsn` for custom cores.
 
 Compilation and CUDA Graphs
 ----------------------------
 
 Eager and Inductor expansion select separately. This example uses default FP32
-state and initializes the device through an eager forward/backward before
-compilation, resetting the state produced by warmup:
+state, runs an eager forward/backward to initialize the device and warm up,
+then resets state before compiling the model:
 
 .. code-block:: python
 
@@ -100,10 +100,10 @@ The example targets PyTorch Inductor; other compiler backends require separate
 validation. Initialize/warm explicit precision combinations as described in
 :doc:`./precision` before graph capture.
 
-First calls include loading, compilation or JIT and are not steady-state latency.
-CUDA Graphs retain the warmed choice of the captured function: capturing eager
-execution does not automatically switch to Triton; compiled capture retains its
-compiled path. Follow PyTorch CUDA Graph memory and forward/backward warmup rules.
+First calls include loading, compilation or JIT; measure after warmup. CUDA
+Graphs retain the captured function's selection, so eager capture uses the eager
+implementation and compiled capture uses the compiled implementation. Prepare
+memory and warm forward/backward calls as required by PyTorch CUDA Graphs.
 
 Compilation may alter fusion and rounding; bitwise equality with eager is not
 promised. Keep model, inputs, state precision, reset and synchronization identical
@@ -123,10 +123,11 @@ Ordinary training needs no implementation query. To diagnose CUDA execution:
     print(functional.neuron_implementation("lif", device))
     print(functional.neuron_implementation("lif", device, execution="compile"))
 
-Queries initialize/cache the selected path without neuron computation or module
-state changes. The result contains ``implementation`` and ``unavailable`` reasons
-for earlier candidates. It is not a per-call profiler: low-precision state,
-custom surrogates and explicit precision policies can follow separate paths.
+A query initializes and caches the selected path without computing neuron
+outputs or changing module state. The result contains the bound
+``implementation`` and ``unavailable`` reasons for earlier candidates.
+Low-precision state, custom surrogates and explicit precision policies can
+follow other paths; profile the individual call when that distinction matters.
 
 Package logging is disabled by default; selections are logged once. Applications
 can enable INFO at their entry point; earlier records are not replayed.
@@ -154,26 +155,27 @@ See :doc:`/APIs/spikingjelly.logger` for logging configuration.
 Final state and full voltage traces
 -----------------------------------
 
-The default ``store_v_seq=False`` retains only final voltage. Enable ``True``
-when monitoring the full temporal trace; it adds voltage-trace memory proportional
-to time steps. Both policies support input and initial-state gradients. Final-state
-execution was verified on RTX 5090, Torch 2.11.0+cu128 and Triton 3.6.0 with
-FP32/FP16/BF16 inputs in eager and fullgraph forward/backward. A full trace is
-not required to avoid a compiler error.
+The default ``store_v_seq=False`` retains only final voltage. Set it to ``True``
+to monitor the temporal trace; the extra trace memory grows with time steps.
+Both policies support input and initial-state gradients. Final-state execution
+passed eager and fullgraph forward/backward checks on RTX 5090, Torch
+2.11.0+cu128 and Triton 3.6.0 with FP32/FP16/BF16 inputs. Compilation can use
+the default configuration.
 
 Troubleshooting
 ----------------------------
 
 * Missing extensions/dependencies or known incompatible devices allow auto mode
   to check the next candidate. No available candidate produces an error.
-* Unknown kernel, JIT, OOM or gradient failures are reported without silent fallback.
+* Kernel, JIT, OOM or gradient failures raise errors; automatic selection does
+  not hide execution failures.
 * For native loading incompatibility, check build/runtime Torch/CUDA versions and
   target GPU support, rebuilding if needed.
 * Advanced diagnostics may set ``SJ_LIF_CUDA_IMPLEMENTATION=triton`` or the matching
   ``SJ_<NEURON>_CUDA_IMPLEMENTATION`` before Python starts. The default is ``auto``;
   strict alternatives are ``cuda``, ``triton`` and ``torch``. Unsupported profiles fail.
 * Restart after changing these variables, dependencies or installed extensions.
-  They are not model constructor parameters or required training steps.
+  Ordinary training needs no diagnostic overrides.
 * For state/input shape, device or precision mismatches, check for retained state
   from an independent previous batch.
 

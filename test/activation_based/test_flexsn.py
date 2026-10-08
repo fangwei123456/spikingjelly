@@ -67,20 +67,38 @@ def test_cpu_scan_is_visible_to_fullgraph_compile():
     torch.testing.assert_close(compiled, eager)
 
 
-def test_multi_input_output_and_state_counts():
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_multi_input_output_and_state_counts(device):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA required")
+
     def core(x, y, v, w, scale):
         v_next = v + x
         w_next = w + y * scale
         return x + y, x - y, v_next, w_next
 
-    module = FlexSN(core, 2, (torch.tensor(2.0),), store_state_seqs=True)
-    x = torch.randn(3, 2)
-    y = torch.randn(3, 2)
+    scale = torch.nn.Parameter(torch.tensor(2.0, device=device))
+    module = FlexSN(core, 2, (scale,), store_state_seqs=True)
+    x = torch.randn(3, 2, device=device, requires_grad=True)
+    y = torch.randn(3, 2, device=device, requires_grad=True)
+    v0 = torch.randn(2, device=device, requires_grad=True)
+    w0 = torch.randn(2, device=device, requires_grad=True)
+    module.states = (v0, w0)
     outputs = module(x, y)
-    assert len(outputs) == 2
-    assert all(output.shape == x.shape for output in outputs)
-    assert len(module.states) == 2
-    assert len(module.state_seqs) == 2
+    expected = (x + y, x - y)
+    traces = (v0 + x.cumsum(0), w0 + (y * scale).cumsum(0))
+    for got, want in zip(outputs, expected, strict=True):
+        torch.testing.assert_close(got, want)
+    for got, want in zip(module.state_seqs, traces, strict=True):
+        torch.testing.assert_close(got, want)
+    for got, want in zip(module.states, (t[-1] for t in traces), strict=True):
+        torch.testing.assert_close(got, want)
+    loss = sum(t.sum() for t in (*outputs, *module.states, *module.state_seqs))
+    reference = sum(t.sum() for t in (*expected, *(t[-1] for t in traces), *traces))
+    got = torch.autograd.grad(loss, (x, y, v0, w0, scale))
+    want = torch.autograd.grad(reference, (x, y, v0, w0, scale))
+    for actual, reference in zip(got, want, strict=True):
+        torch.testing.assert_close(actual, reference)
 
 
 def test_constructor_rejects_invalid_or_captured_core_values():

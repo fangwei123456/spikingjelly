@@ -134,11 +134,11 @@ SoftSign、SuperSpike 和 Erf；替代梯度对象仍通过 ``surrogate_function
     assert torch.isfinite(x.grad).all()
     node.reset()
 
-普通 IF/LIF/PLIF 等神经元允许符合公开契约的其他替代梯度或 Python callable，
-相关调用可使用 Torch 参考公式。``spiking=False`` 表示连续原函数，不属于融合的
-阶跃发放配置。自定义或带可训练参数的替代梯度不应被当作七种固定内置配置。
+普通 IF/LIF/PLIF 也接受符合其 API 要求的其他替代梯度或 Python callable，可通过
+Torch 参考公式执行。``spiking=False`` 使用连续原函数，融合阶跃发放路径只接受
+固定的内置配置；自定义或带可训练参数的替代梯度需使用对应的参考路径。
 
 显式神经元精度要求受支持的内置替代梯度，见 :doc:`./precision`。
 融合 ``if_linear``/``lif_linear`` 支持一阶梯度，七种内置替代梯度可编译训练；
-自定义替代梯度仅支持 eager 训练，见 :doc:`./memopt`。普通路径和这些专门路径
-不能混为同一兼容承诺。
+自定义替代梯度仅支持 eager 训练，见 :doc:`./memopt`。使用显式精度或融合投影时，
+需按该接口检查替代梯度支持范围。

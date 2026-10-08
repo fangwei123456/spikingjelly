@@ -452,7 +452,9 @@ def test_ilif_supports_custom_gradient_window():
         (False, True, 4.0, torch.float32),
     ],
 )
-def test_ilif_cuda_auto_matches_training_reference(store_v_seq, detach_reset, tau, dtype):
+def test_ilif_cuda_auto_matches_training_reference(
+    store_v_seq, detach_reset, tau, dtype
+):
     if dtype == torch.bfloat16 and torch.cuda.get_device_capability()[0] < 8:
         pytest.skip("BF16 requires compute capability >= 8.")
     torch_node = neuron.ILIFNode(

@@ -335,13 +335,12 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
 
 .. [#ImageNet] Deng, Jia, et al. "Imagenet: A large-scale hierarchical image database." 2009 IEEE conference on computer vision and pattern recognition. IEEE, 2009.
 
-当前版本的执行与复现
+运行与实验记录
 ----------------------------
 
-本页模型使用设备自动执行，无需 backend 配置。独立 batch 在反向与参数更新后
-调用 ``functional.reset_net``；连续序列按 :doc:`./neuron` 管理状态。
-AMP 不保证采用融合神经元 kernel，状态精度配置见 :doc:`./precision`。
-编译和执行诊断见 :doc:`./triton_backend`。
+模型按输入设备自动运行。处理独立 batch 时，在反向和参数更新后调用
+``functional.reset_net``；连续序列的状态管理见 :doc:`./neuron`。AMP 与神经元的
+融合执行是不同配置，状态精度见 :doc:`./precision`，编译和诊断见 :doc:`./triton_backend`。
 
-本页保留的准确率、曲线和实验输出是历史记录，部分原始运行未注明精确版本。
-它们没有在当前 V2 上重新训练验证，也不是当前实现速度或准确率的验收结果。
+本页准确率、曲线和日志沿用历史实验，部分运行未记录精确版本。本轮未在当前 V2
+上重新训练或验证这些结果，不能用它们评估当前实现的速度或准确率。

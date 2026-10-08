@@ -127,8 +127,9 @@ checkpoint 开启该选项。
 输入、状态和计算精度
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-普通层的 autocast、神经元输入 dtype、跨时间步状态存储 dtype 和前后向计算 dtype
-是不同维度。下面针对多步 IFNode、LIFNode、ParametricLIFNode 说明，不推广到所有神经元。
+普通层的 autocast 控制层内运算；神经元还区分输入 dtype、跨时间步的状态存储
+dtype，以及前后向计算 dtype。下表说明多步 IFNode、LIFNode 和 ParametricLIFNode
+的配置，其他神经元需查对应 API。
 
 .. list-table:: 神经元精度配置
     :header-rows: 1
@@ -149,8 +150,8 @@ checkpoint 开启该选项。
     * - FP8 状态和计算
       - 实验性功能，受设备、格式和组合限制；不是所有神经元通用能力
 
-希望普通层使用 BF16、神经元保留 FP32 状态时，先移动模型，再准备精度，最后创建
-optimizer。以下是无需数据集的完整 CUDA 训练示例：
+普通层使用 BF16、神经元状态保留 FP32 时，先将模型移到目标设备，再准备精度，
+然后创建 optimizer。下面的 CUDA 训练示例使用随机输入：
 
 .. code-block:: python
 
@@ -179,7 +180,7 @@ optimizer。以下是无需数据集的完整 CUDA 训练示例：
     precision.backward(loss, optimizer)
     functional.reset_net(precision.model)
 
-另外可以显式指定存储、前向和反向计算精度；以下是配置片段，替换上例的 config：
+要分别设置存储、前向和反向精度，可将上例的 config 换成：
 
 .. code-block:: python
 
@@ -193,11 +194,12 @@ FP8 算术要求状态存储为 ``float8_e4m3fn`` 或 ``float8_e5m2``。指数�
 计算在 kernel 内使用 FP32。七种受支持的替代梯度见 :doc:`./surrogate`。
 不支持的显式配置报错，不以另一种数值策略替代。
 
-普通自动执行查询不能代替具体精度配置的能力检查。准备精度后再编译模型；直接使用
-functional 显式精度接口时，先预热相同组合，避免在图捕获中做设备检查。
+执行查询只报告普通路径的选择，具体精度配置仍需检查其支持范围。先准备精度，再
+编译模型；直接调用 functional 显式精度接口时，先预热相同组合，让设备检查在
+图捕获前完成。
 
-改变状态或递推精度可能改变脉冲、最终状态及梯度，需要验证模型精度。Inductor
-也可能改变低精度中间运算的融合与舍入，不能保证与 eager 逐位相同。
+改变状态或递推精度可能影响脉冲、最终状态和梯度，采用新配置前应验证模型精度。
+Inductor 还可能改变低精度运算的融合与舍入，因此结果可能与 eager 有逐位差异。
 测速应保持相同状态策略，例如 ``--precision bf16 --neuron-storage fp32``。
 自动执行和编译流程见 :doc:`./triton_backend`。
 

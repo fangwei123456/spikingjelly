@@ -131,14 +131,14 @@ without selecting a backend. Standalone forward/backward example:
     assert torch.isfinite(x.grad).all()
     node.reset()
 
-Ordinary neurons such as IF/LIF/PLIF accept other surrogates/Python callables
-that satisfy their public contracts and can use Torch reference equations.
-``spiking=False`` selects a continuous primitive, outside fused step-function
-firing. Custom surrogates or trainable surrogate parameters are not the seven
-fixed built-in configurations.
+Ordinary IF/LIF/PLIF neurons also accept other surrogates or Python callables
+that satisfy their APIs and can run through Torch reference equations.
+``spiking=False`` selects a continuous primitive. Fused step-function firing
+accepts fixed built-in configurations; custom surrogates and trainable surrogate
+parameters use the corresponding reference path.
 
 Explicit neuron precision requires supported built-in surrogates; see
 :doc:`./precision`. Fused ``if_linear``/``lif_linear`` support first gradients;
 the seven built-ins support compiled training, while custom surrogates support
-eager training only. See :doc:`./memopt`. These specialized paths do not share
-an unrestricted compatibility promise with ordinary execution.
+eager training only. See :doc:`./memopt`. Check the surrogate support of the
+specific interface when using explicit precision or fused projections.

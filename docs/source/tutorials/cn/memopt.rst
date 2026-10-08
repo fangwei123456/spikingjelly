@@ -247,8 +247,8 @@ Boolean 压缩和 bit 压缩路径支持 ``torch.compile(..., fullgraph=True)``�
 二值投影与融合投影
 ----------------------------
 
-普通 Linear/Conv 的省显存训练推荐本页的 memopt；旧 ``SpikeLinear``、``SpikeConv*``
-及对应 ``spike_linear/spike_conv*`` 已删除。以下接口保留不同算法，不能互作替代：
+普通 Linear/Conv 的省显存训练使用本页的 memopt。旧 ``SpikeLinear``、``SpikeConv*``
+和对应的 ``spike_linear/spike_conv*`` 已删除。下面保留的接口各有用途：
 
 * ``if_linear``／``lif_linear`` 在 CUDA FP32 上融合神经元和 Linear，返回投影输出
   与最终电位，支持输入、初态、权重和偏置的一阶梯度。反向重新计算脉冲。
@@ -257,9 +257,9 @@ Boolean 压缩和 bit 压缩路径支持 ``torch.compile(..., fullgraph=True)``�
 * ``sparse_linear(strategy="sparse")`` 使用未打包的二维二值 CUDA 输入，支持
   FP32/FP16/BF16 及输入、权重和偏置梯度。``strategy`` 是算法选择，不是 backend。
 
-扩展可用时采用原生 CUDA，否则使用 Torch 参考公式。融合前向不物化中间脉冲的
-性能特性要求原生扩展；参考路径不保证这项特性。七种内置替代梯度支持融合投影的
-fullgraph 编译训练，自定义替代梯度只支持 eager。下面是独立 CUDA 示例：
+扩展可用时运行原生 CUDA，否则运行 Torch 参考公式。原生融合前向省去中间脉冲的
+物化；参考路径可能仍分配它们。七种内置替代梯度支持融合投影的 fullgraph 训练，
+自定义替代梯度只支持 eager。下面是 CUDA 示例：
 
 .. code-block:: python
 

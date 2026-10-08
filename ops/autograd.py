@@ -12,9 +12,7 @@ def _save_for_higher_order(ctx, inputs, intermediates):
     )
     ctx.tensor_positions = positions
     ctx.intermediate_count = len(intermediates)
-    ctx.save_for_backward(
-        *intermediates, *(inputs[index] for index in positions)
-    )
+    ctx.save_for_backward(*intermediates, *(inputs[index] for index in positions))
 
 
 def _higher_order_grad(ctx, forward, output_grads):
@@ -31,7 +29,9 @@ def _higher_order_grad(ctx, forward, output_grads):
             for output, grad in zip(outputs, output_grads, strict=True)
             if grad is not None
         )
-        differentiable_inputs = tuple(tensor for tensor in tensors if tensor.requires_grad)
+        differentiable_inputs = tuple(
+            tensor for tensor in tensors if tensor.requires_grad
+        )
         if not active or not differentiable_inputs:
             return (None,) * len(inputs)
         gradients = torch.autograd.grad(

@@ -270,7 +270,7 @@ Binary and fused projections
 
 Use memopt for memory-efficient ordinary Linear/Conv training. Legacy
 ``SpikeLinear``/``SpikeConv*`` and ``spike_linear/spike_conv*`` were removed.
-The retained interfaces implement distinct algorithms:
+The retained interfaces serve different workloads:
 
 * ``if_linear``/``lif_linear`` fuse neuron and Linear on CUDA FP32, returning
   projection output and final voltage. Input, initial state, weight and bias
@@ -282,10 +282,9 @@ The retained interfaces implement distinct algorithms:
   chooses an algorithm, not a neuron backend.
 
 Built extensions use native CUDA; otherwise Torch reference equations run.
-Avoiding intermediate spikes in fused forward requires the native extension;
-reference execution does not promise that property. The seven built-in surrogates
-support fused fullgraph training; custom surrogates support eager only.
-Standalone CUDA example:
+Native fused forward avoids materializing intermediate spikes, while the
+reference path may still allocate them. The seven built-in surrogates support
+fused fullgraph training; custom surrogates support eager only. CUDA example:
 
 .. code-block:: python
 

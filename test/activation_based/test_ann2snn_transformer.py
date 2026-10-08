@@ -867,7 +867,10 @@ def test_spikezip_stbif_cuda_matches_torch(dtype, time_steps):
 def test_spikezip_stbif_cuda_avoids_device_scalar_read():
     from spikingjelly.activation_based.functional import neuron_implementation
 
-    if neuron_implementation("stbif", torch.device("cuda"))["implementation"] != "triton":
+    if (
+        neuron_implementation("stbif", torch.device("cuda"))["implementation"]
+        != "triton"
+    ):
         pytest.skip("selected CUDA implementation is not Triton")
     neuron = STBIFNode(0.25, level=8, sym=True, step_mode="m").cuda()
     x_seq = torch.randn(8, 7, 13, device="cuda")
@@ -909,9 +912,7 @@ def test_spikezip_stbif_single_step_cuda_matches_torch(dtype):
         torch.float16: 5e-3,
         torch.bfloat16: 2e-2,
     }[dtype]
-    assert torch.allclose(
-        cuda_neuron.q, torch_neuron.q, atol=state_tol, rtol=state_tol
-    )
+    assert torch.allclose(cuda_neuron.q, torch_neuron.q, atol=state_tol, rtol=state_tol)
     assert torch.equal(cuda_neuron.acc_q, torch_neuron.acc_q)
     assert torch.allclose(
         cuda_neuron.cur_output,

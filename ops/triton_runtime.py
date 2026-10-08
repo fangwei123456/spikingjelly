@@ -373,8 +373,6 @@ def register_op(opname: str, mutates_args=()):
     custom_op = torch.library.custom_op(
         opname, mutates_args=mutates_args, device_types="cuda"
     )
-    if _TRITON_IMPORT_ERROR is None:
-        return custom_op
 
     def register_missing_triton(f):
         @functools.wraps(f)

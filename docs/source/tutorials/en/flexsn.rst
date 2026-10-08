@@ -9,16 +9,17 @@ Authors: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_ and `Wei Fang
 SpikingJelly neuron and can generate a Triton kernel for multi-step CUDA
 execution. See :doc:`./triton_backend` for device-based neuron execution.
 
-FlexSN is the path for custom multi-step neurons. The old Auto CUDA translator
-and neuron code-generation templates have been removed; use public neuron/functional interfaces for fixed neurons.
+Use FlexSN for custom multi-step neurons and public neuron/functional interfaces
+for fixed neurons. The old Auto CUDA translator and neuron code-generation
+templates have been removed.
 
 .. note::
 
     The ``torch.sigmoid`` examples produce continuous outputs to demonstrate
-    composition/gradients. They are not hard binary spikes or equivalent to a
-    built-in LIF's step forward plus surrogate backward. Construction must run
-    the core on unit tensors; do not capture tensors/modules. Pass parameters
-    through ``static_inputs``.
+    composition and gradients. Built-in LIF uses a step forward and surrogate
+    backward, so these outputs are not equivalent. Construction runs the core
+    on unit tensors. Keep it pure, without captured tensors or modules, and pass
+    parameters through ``static_inputs``.
 
 Describing neuron dynamics with a function
 ------------------------------------------
@@ -91,9 +92,9 @@ The first two returns are outputs; the last two update ``v`` and ``rho``:
 .. image:: ../../_static/tutorials/flexsn/neuron.png
     :width: 100%
 
-The constructor takes the state count. FlexSN infers input and output arities
-from the signature and one construction-time call with unit tensors, so example
-inputs are not needed:
+Pass the state count to the constructor. FlexSN infers the input and output
+counts from the signature and one call with unit tensors, without example
+inputs:
 
 .. code-block:: python
 
@@ -224,9 +225,10 @@ Limits and migration
 Training and state management
 -----------------------------
 
-This standalone example demonstrates trainable static inputs, full state traces,
-reset and explicit-state calls without memory mutation. Reset independent batches
-after backward/parameter updates; retain state for continuous sequences:
+This training example uses trainable static inputs and stores full state traces.
+Reset independent batches after backward and parameter updates; retain state
+for continuous sequences. The final explicit-state call leaves module memory
+unchanged:
 
 .. code-block:: python
 

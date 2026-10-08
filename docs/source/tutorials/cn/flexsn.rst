@@ -9,14 +9,14 @@ English version: :doc:`../en/flexsn`
 SpikingJelly 神经元，并为多步 CUDA 计算生成 Triton 内核。预定义 IF、LIF、PLIF
 神经元的设备分发用法见 :doc:`./triton_backend`。
 
-自定义多步神经元统一使用 FlexSN。旧 Auto CUDA 转译器及神经元代码生成模板已删除；
-固定神经元直接使用公开 neuron/functional 接口。
+自定义多步神经元使用 FlexSN；固定神经元使用公开的 neuron/functional 接口。
+旧 Auto CUDA 转译器和神经元代码生成模板已删除。
 
 .. note::
 
-    本页 ``torch.sigmoid`` 示例输出连续值，用于展示函数组合与梯度；它不是硬二值脉冲，
-    也不等价于内置 LIF 的阶跃前向＋替代梯度。core 构造期需能在单位 Tensor 上执行；
-    不应捕获 Tensor 或模块，参数通过 ``static_inputs`` 传入。
+    本页的 ``torch.sigmoid`` 输出连续值，用来展示函数组合和梯度。内置 LIF 则采用
+    阶跃前向和替代梯度，两者不等价。构造时会用单位 Tensor 执行 core，因此 core
+    应保持纯函数，不捕获 Tensor 或模块；参数通过 ``static_inputs`` 传入。
 
 用函数描述神经元动力学
 ----------------------
@@ -87,8 +87,8 @@ SpikingJelly 神经元，并为多步 CUDA 计算生成 Triton 内核。预定�
 .. image:: ../../_static/tutorials/flexsn/neuron.png
     :width: 100%
 
-构造 ``FlexSN`` 时指定状态数量。输入和输出数量由函数签名以及构造时的一次单位
-Tensor 调用推导，不需要示例输入：
+构造 ``FlexSN`` 时传入状态数量。输入和输出数量由函数签名及一次单位 Tensor
+调用推导，构造函数无需示例输入：
 
 .. code-block:: python
 
@@ -204,7 +204,7 @@ kernel 错误时会直接报告。
 --------------
 
 * 多步输入的首维是时间维 ``T``；``T == 0`` 会被拒绝。
-* ``hop`` 和 ``triton`` 只支持 ``step_mode="m"``。
+* 自动选择的 ``hop`` 和 ``triton`` 路径用于 ``step_mode="m"``；单步模式直接执行 core。
 * 修改 step mode 会保留最终状态，但清除派生的 ``state_seqs``。
 * 旧构造参数 ``num_inputs``、``num_outputs``、``example_inputs``、
   ``example_outputs`` 和 ``requires_grad`` 已删除。
@@ -214,8 +214,8 @@ kernel 错误时会直接报告。
 训练与状态管理
 ----------------------------
 
-下面的独立示例展示可训练静态输入、完整状态轨迹、reset 和不修改 memory 的显式
-状态调用。独立 batch 在反向和参数更新之后重置，连续序列可保留状态：
+下面的训练示例使用可训练静态输入并保存完整轨迹。反向和参数更新后重置独立
+batch；连续序列可保留状态。最后一次显式状态调用保留模块 memory：
 
 .. code-block:: python
 

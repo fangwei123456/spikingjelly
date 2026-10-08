@@ -24,7 +24,10 @@ def _check_reference(x, q, acc_q, q_threshold, pos_max, neg_min):
         raise ValueError("state shape, dtype, and device must match")
     if any(parameter.numel() != 1 for parameter in (q_threshold, pos_max, neg_min)):
         raise ValueError("parameters must be scalar tensors")
-    if any(not parameter.is_floating_point() for parameter in (q_threshold, pos_max, neg_min)):
+    if any(
+        not parameter.is_floating_point()
+        for parameter in (q_threshold, pos_max, neg_min)
+    ):
         raise ValueError("STBIF parameters must be floating-point tensors")
 
 

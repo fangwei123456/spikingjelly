@@ -6,8 +6,8 @@ English version: :doc:`../en/triton_backend`
 从 CPU 到 CUDA
 ----------------------------
 
-普通神经元不需要 backend 参数或可修改的 backend 属性。只需创建神经元、将模块
-和输入移动到目标设备。以下代码在 CPU 或 NVIDIA CUDA 上采用相同的训练流程：
+创建神经元后，将模块和输入移动到目标设备即可。神经元构造函数和属性不再提供
+backend 选项。下面的 IF、LIF 和 PLIF 训练代码可在 CPU 或 NVIDIA CUDA 上运行：
 
 .. code-block:: python
 
@@ -40,24 +40,25 @@ English version: :doc:`../en/triton_backend`
 自动执行与能力边界
 ----------------------------
 
-CPU 使用 Torch 参考实现。CUDA 在设备和执行路径首次使用时检查兼容实现，之后
-复用选择，不在线测速。导入 SpikingJelly 不初始化 CUDA。eager 当前优先兼容的原生
-CUDA，再检查 Triton 和 Torch；Inductor 展开优先 Triton，再检查原生 CUDA 和 Torch。
-已验证 GPU 的优先级来自离线测试，不能保证某种实现对所有 workload 都最快。
+CPU 使用 Torch 参考实现。CUDA 在每个设备首次使用某条执行路径时检查兼容性，
+随后复用已选实现。这个过程不进行在线测速，导入 SpikingJelly 也不会初始化 CUDA。
+eager 按原生 CUDA、Triton、Torch 的顺序检查；Inductor 编译展开按 Triton、原生
+CUDA、Torch 的顺序检查。已验证 GPU 的优先级来自离线测试，具体 workload 的
+速度仍需实测。
 
-统一执行接口覆盖 IF、LIF、PLIF、QIF、EIF、Izhikevich、I-LIF、ActivationAwareIF 和
-STBIF。这不表示每类都支持训练、任意 dtype 或任意替代梯度；具体限制见各类 API。
-其他神经元仍按其公开契约执行，不能据此推断它们都有独立 CUDA 内核。
+自动分发覆盖 IF、LIF、PLIF、QIF、EIF、Izhikevich、I-LIF、ActivationAwareIF 和
+STBIF。各类支持的训练模式、dtype 和替代梯度不同，详见对应 API。其他神经元
+沿用各自的执行方式，其中一些没有独立 CUDA 内核。
 
-普通融合路径支持的输入 dtype 为 FP32/FP16/BF16，并要求 FP32 状态和受支持的内置
-替代梯度。低精度状态、自定义替代梯度等情况可以使用 Torch 参考公式。显式神经元
-精度是另一种配置，见 :doc:`./precision`。FlexSN 的自定义 core 见 :doc:`./flexsn`。
+普通融合路径接受 FP32/FP16/BF16 输入，要求状态为 FP32，替代梯度为受支持的内置
+类型。低精度状态和自定义替代梯度可使用 Torch 参考公式。存储与计算精度的显式
+配置见 :doc:`./precision`；自定义 FlexSN core 见 :doc:`./flexsn`。
 
 编译与 CUDA Graph
 ----------------------------
 
-eager 和 Inductor 展开有独立的自动选择。下面使用默认 FP32 状态，在编译前完成
-一次设备初始化及 eager 前后向，并重置预热产生的状态：
+eager 和 Inductor 编译展开分别选择实现。下面使用默认 FP32 状态，先运行一次
+eager 前后向来初始化设备并预热，再重置状态并编译模型：
 
 .. code-block:: python
 
@@ -93,9 +94,9 @@ eager 和 Inductor 展开有独立的自动选择。下面使用默认 FP32 状�
 示例面向 PyTorch Inductor。其他编译后端需要单独验证。显式精度组合应先按
 :doc:`./precision` 初始化或预热，再进行图捕获。
 
-首次调用包含加载、编译或 JIT 成本，不应当作稳定运行耗时。CUDA Graph 沿用被捕获
-函数预热时的选择：捕获 eager 函数不会自动切换到 Triton，捕获 compiled 函数则
-沿用编译路径。捕获前还需按 PyTorch CUDA Graph 规则完成内存和前后向预热。
+首次调用的耗时包含加载、编译或 JIT；测速应在预热后进行。CUDA Graph 保留被捕获
+函数的选择，因此 eager 捕获仍使用 eager 实现，compiled 捕获使用编译路径的实现。
+捕获前还需按 PyTorch CUDA Graph 要求准备内存并预热前后向。
 
 编译可能改变融合与舍入，不能承诺与 eager 逐位一致。比较性能时保持模型、输入、
 状态精度、reset 和同步方法一致；标准流程见仓库 ``benchmark/README.md``。
@@ -114,10 +115,10 @@ eager 和 Inductor 展开有独立的自动选择。下面使用默认 FP32 状�
     print(functional.neuron_implementation("lif", device))
     print(functional.neuron_implementation("lif", device, execution="compile"))
 
-查询会初始化并缓存对应选择，不执行神经元计算，也不修改模块状态。返回字典含
-``implementation`` 和 ``unavailable``，后者记录更早候选不可用的原因。
-它不是单次调用的 profiler：低精度状态、自定义 surrogate 和显式精度配置仍遵循各自
-路径，不能仅凭查询结果判断某次调用的实现。
+查询会初始化并缓存对应路径的选择，保留模块状态且不执行神经元计算。返回字典中，
+``implementation`` 是绑定实现，``unavailable`` 记录此前候选不可用的原因。
+低精度状态、自定义 surrogate 和显式精度配置可能采用其他路径，查询结果不能
+代替对某次调用的 profiling。
 
 包日志默认禁用，首次选择后不重复记录。应用可以在入口启用 INFO；启用前的日志
 不会补发。``logger.remove()`` 影响全局 Loguru sinks，应仅由应用决定是否执行：
@@ -144,21 +145,21 @@ eager 和 Inductor 展开有独立的自动选择。下面使用默认 FP32 状�
 最终状态与完整轨迹
 ----------------------------
 
-``store_v_seq=False`` 是默认配置，只保留最终电位。需要监控完整时间轨迹时再设为
-``True``，它会增加与时间步数成比例的电位轨迹显存。两种配置均支持输入与初态
-梯度；最终状态路径已在 RTX 5090、Torch 2.11.0+cu128、Triton 3.6.0 上验证
-FP32/FP16/BF16 输入的 eager 与 fullgraph 前后向，无需用完整轨迹规避编译错误。
+默认的 ``store_v_seq=False`` 只保留最终电位。监控时间轨迹时可设为 ``True``，
+额外的轨迹显存随时间步数增长。两种配置均支持输入与初态梯度。最终状态路径已在
+RTX 5090、Torch 2.11.0+cu128、Triton 3.6.0 上通过 FP32/FP16/BF16 输入的 eager
+和 fullgraph 前后向验证，编译时可以直接使用默认配置。
 
 故障排查
 ----------------------------
 
 * 缺少扩展或依赖、已知设备不兼容时，自动模式继续检查候选；没有可用候选会报错。
-* 未知 kernel、JIT、OOM 或梯度错误直接报告，不用静默回退隐藏错误。
+* kernel、JIT、OOM 或梯度错误会直接报错，自动选择不会掩盖这些执行失败。
 * 原生扩展加载不兼容时核对构建与运行的 Torch/CUDA 版本及目标 GPU，必要时重建。
 * 高级诊断可以在启动 Python 前设置 ``SJ_LIF_CUDA_IMPLEMENTATION=triton``，
   或对应的 ``SJ_<NEURON>_CUDA_IMPLEMENTATION``。默认 ``auto``；可强制
   ``cuda``、``triton`` 或 ``torch``。不支持当前配置时严格报错。
-* 环境变量、依赖或扩展安装改变后重启进程。这些变量不是模型构造参数或训练必要步骤。
+* 修改环境变量、依赖或扩展安装后，需要重启进程。普通训练无需设置这些诊断变量。
 * 模块状态与输入的形状、设备或精度不匹配时，先检查是否跨独立 batch 保留了旧状态。
 
 SpikingJelly 当前包不依赖 CuPy，旧安装和接口迁移见 :doc:`./migrate_from_legacy`。

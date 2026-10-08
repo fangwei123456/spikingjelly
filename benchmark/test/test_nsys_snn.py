@@ -91,7 +91,9 @@ def test_shell_capture_trace_mode(tmp_path, mode, graph_trace, options, trace, c
     manifest = json.loads(Path(f"{output}.manifest.json").read_text())
     assert manifest["trace"] == trace
     assert manifest["cuda_graph_trace"] == graph_trace
-    assert manifest["implementation_environment"]["SJ_LIF_CUDA_IMPLEMENTATION"] == "triton"
+    assert (
+        manifest["implementation_environment"]["SJ_LIF_CUDA_IMPLEMENTATION"] == "triton"
+    )
     assert manifest["pytorch_trace"] == "none"
     assert manifest["python_sampling"] is False
     assert manifest["command"] == command

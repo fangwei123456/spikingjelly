@@ -155,15 +155,15 @@ Voltages and spikes are as follows, which are gotten by the visualization functi
 
 Obviously, except for the corresponding neuron in the correct category, no other neurons are firing. The complete training code is in `activation_based/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/lif_fc_mnist.py>`_ .
 
-Execution and reproduction in the current version
+Running the examples and interpreting results
 -------------------------------------------------
 
-The model uses device-based execution without backend configuration. Reset
-independent batches with ``functional.reset_net`` after backward/parameter updates;
-see :doc:`./neuron` for continuous state. AMP does not guarantee fused neuron
-kernels; see :doc:`./precision` for state policies and :doc:`./triton_backend`
-for compilation/diagnostics.
+The model runs on its input device automatically. Reset independent batches
+with ``functional.reset_net`` after backward and parameter updates; see
+:doc:`./neuron` for continuous state. AMP and fused neuron execution are separate
+policies. See :doc:`./precision` for state precision and :doc:`./triton_backend`
+for compilation and diagnostics.
 
-Retained accuracy, curves and experiment outputs are historical; some original
-runs do not identify the exact version. They were not retrained on current V2
-and are not acceptance results for current speed or accuracy.
+The accuracy, curves and logs on this page come from historical experiments;
+some runs lack an exact version. They have not been retrained or verified on
+current V2, so they cannot establish its speed or accuracy.

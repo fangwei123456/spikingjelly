@@ -5,8 +5,8 @@
 
 English version: :doc:`../en/migrate_from_legacy`
 
-本页分为 V2 接口迁移和 ``<=0.0.0.0.12`` 的历史子包迁移。
-V2 包含 breaking changes；旧配置应按下表修改，而不是依赖隐式兼容。
+本页先介绍 V2 的接口迁移，再保留 ``<=0.0.0.0.12`` 的历史子包迁移说明。
+V2 有 breaking changes，旧配置需按下表修改。
 
 V2：自动执行与接口迁移
 -------------------------------------------
@@ -65,7 +65,7 @@ IF/LIF/PLIF 序列 functional 接口显式接收初态，返回脉冲、最终�
     )
 
 单步 ``lif_step`` 返回 ``(spike, v_next)``；多步 ``lif_multi_step`` 返回三个值。
-不能只机械删除旧函数名后缀；按 :doc:`./neuron` 与公开 API 核对签名。
+迁移时按 :doc:`./neuron` 与公开 API 核对参数和返回值，避免只改函数名后缀。
 
 正常使用无需选择实现。安装与诊断见 :doc:`./triton_backend`，精度配置见
 :doc:`./precision`，自定义动力学见 :doc:`./flexsn`，省显存与投影见 :doc:`./memopt`。

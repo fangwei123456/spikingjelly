@@ -1,5 +1,3 @@
-from typing import Optional, Tuple
-
 import torch
 
 from spikingjelly.logger import logger
@@ -37,35 +35,6 @@ def _first_non_none_tensor(tensors):
         if tensor is not None:
             return tensor
     return None
-
-
-def _allocate_state_grad(
-    i: int,
-    T: int,
-    state_templates: Optional[Tuple[torch.Tensor, ...]],
-    grad_state_seq_examples,
-    grad_example: torch.Tensor,
-) -> torch.Tensor:
-    if state_templates is not None:
-        return (
-            torch.zeros_like(state_templates[i])
-            if T == 0
-            else torch.empty_like(state_templates[i])
-        )
-
-    if i < len(grad_state_seq_examples) and grad_state_seq_examples[i] is not None:
-        example = grad_state_seq_examples[i]
-        return (
-            example.new_zeros(example.shape[1:])
-            if T == 0
-            else example.new_empty(example.shape[1:])
-        )
-
-    return (
-        grad_example.new_zeros(grad_example.shape[1:])
-        if T == 0
-        else grad_example.new_empty(grad_example.shape[1:])
-    )
 
 
 def _inference(f, info: _FlexSNInfo, *args) -> tuple:
@@ -150,82 +119,28 @@ def _backward(
     f,
     info: _FlexSNInfo,
     *args,
-    input_templates: Optional[Tuple[torch.Tensor, ...]] = None,
-    state_templates: Optional[Tuple[torch.Tensor, ...]] = None,
+    input_templates: tuple[torch.Tensor, ...],
+    state_templates: tuple[torch.Tensor, ...],
 ) -> tuple:
     required_grad_count = info.num_outputs + info.num_states
     grad_output_args = args[:required_grad_count]
-    grad_output_example = _first_non_none_tensor(grad_output_args[: info.num_outputs])
-    grad_example = _first_non_none_tensor(grad_output_args)
-    if input_templates is None:
-        if grad_example is None:
-            raise ValueError(
-                "input_templates are required when all incoming FlexSN gradients are None"
-            )
-        if info.num_inputs != 1:
-            raise ValueError(
-                "input_templates are required when FlexSN has multiple input sequences"
-            )
-        if grad_output_example is None:
-            raise ValueError(
-                "input_templates are required when FlexSN output-sequence gradients "
-                "are all None"
-            )
-        input_templates = tuple(grad_output_example for _ in range(info.num_inputs))
     if len(input_templates) != info.num_inputs:
-        raise ValueError(
-            "input_templates must provide one template per FlexSN input sequence"
-        )
-    if state_templates is not None and len(state_templates) != info.num_states:
-        raise ValueError(
-            "state_templates must provide one template per FlexSN initial state"
-        )
+        raise ValueError("input_templates must match the FlexSN input count")
+    if len(state_templates) != info.num_states:
+        raise ValueError("state_templates must match the FlexSN state count")
+    grad_example = _first_non_none_tensor(grad_output_args)
+    templates = (*input_templates, *state_templates)
     if grad_example is None:
-        if state_templates is None and info.num_states > 0:
-            raise ValueError(
-                "state_templates are required when all incoming FlexSN gradients are None"
-            )
-        grad_inputs = [torch.zeros_like(template) for template in input_templates]
-        if state_templates is not None:
-            grad_inputs.extend(
-                torch.zeros_like(template) for template in state_templates
-            )
-        return tuple(grad_inputs)
+        return tuple(torch.zeros_like(template) for template in templates)
     T = grad_example.shape[0]
     NCL = _num_elements_per_step(grad_example)
     grad_inputs = [
-        (
-            torch.zeros_like(input_templates[i])
-            if T == 0
-            else torch.empty_like(input_templates[i])
-        )
-        for i in range(info.num_inputs)
+        torch.zeros_like(template) if T == 0 else torch.empty_like(template)
+        for template in templates
     ]
-    grad_state_seq_examples = grad_output_args[
-        info.num_outputs : info.num_outputs + info.num_states
-    ]
-    if state_templates is None and any(
-        grad is None for grad in grad_state_seq_examples
-    ):
-        raise ValueError(
-            "state_templates are required when any incoming FlexSN "
-            "state-sequence gradient is None"
-        )
     grad_kernel_args = [
         grad if grad is not None else torch.zeros_like(grad_example)
         for grad in grad_output_args
-    ]
-    # State-sequence gradients include the leading time dimension. The wrapper
-    # returns gradients for the initial states, so their templates are shape[1:].
-    grad_inputs += [
-        _allocate_state_grad(
-            i,
-            T,
-            state_templates,
-            grad_state_seq_examples,
-            grad_example,
-        )
-        for i in range(info.num_states)
     ]
     dtype = grad_example.dtype
     if T == 0:
