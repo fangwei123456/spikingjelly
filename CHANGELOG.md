@@ -9,6 +9,13 @@ and the archived documentation linked from the project README.
 
 ## Unreleased
 
+### Fixes
+
+- Explicit IF/LIF/PLIF precision preserves the input dtype for spikes while
+  keeping membrane storage in the configured dtype.
+- FlexSN CUDA execution uses its reference scan when a valid core has no
+  differentiable output and cannot produce a Triton backward graph.
+
 ### Features
 
 #### Backend-transparent Neuron Execution

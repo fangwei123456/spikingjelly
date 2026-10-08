@@ -41,8 +41,7 @@ def generate_forward_and_backward_graph(
     example_inputs: tuple,
     requires_grad: Optional[Sequence[bool]] = None,
 ) -> Tuple[fx.Graph, fx.Graph]:
-    """Generate optimized forward/backward FX graphs.
-
+    r"""
     **API Language** - :ref:`中文 <generate_forward_and_backward_graph-cn>` | :ref:`English <generate_forward_and_backward_graph-en>`
 
     ----
@@ -51,22 +50,20 @@ def generate_forward_and_backward_graph(
 
     * **中文**
 
-    生成前向和反向计算图
+    为 PyTorch 函数生成优化后的前向与反向 FX 图。示例输入的求导设置只应用于
+    局部张量，不修改调用者的张量。
 
-    :param fn: EN: Callable to trace. Chinese: 待追踪的可调用对象。
-    :type fn: ``Callable``
-    :param example_inputs: EN: Example inputs used for tracing. Chinese: 用于追踪的示例输入。
+    :param fn: 待追踪的可调用对象，返回张量或张量列表/元组。
+    :type fn: Callable
+    :param example_inputs: 用于追踪的示例输入。
     :type example_inputs: tuple
-    :param requires_grad: EN: Optional gradient-requirement flags for each example input. Chinese: 每个示例输入对应的可选求导标志。
+    :param requires_grad: 每个示例输入的求导标志；默认 ``None`` 时对所有张量输入求导。
     :type requires_grad: Optional[Sequence[bool]]
-    :return: EN: Optimized forward and backward FX graphs. Chinese: 优化后的前向与反向 FX 图。
+    :return: 优化后的前向与反向 FX 图。
     :rtype: Tuple[torch.fx.Graph, torch.fx.Graph]
-    :raises ValueError: EN: Raised when ``requires_grad`` length mismatches ``example_inputs``, when the callable does not return a tensor/list/tuple, or when no differentiable output exists. Chinese: 当 ``requires_grad`` 长度与 ``example_inputs`` 不匹配、函数返回值不是张量/列表/元组、或不存在可求导输出时抛出。
-
-    Chinese:
-        为给定的 PyTorch 函数生成优化后的前向与反向 FX 图。
-    English:
-        Generate optimized forward and backward FX graphs for a PyTorch callable.
+    :raises ValueError: 求导标志数量与输入数量不匹配、返回值不是张量/列表/元组，
+        或未能捕获前向与反向图。
+    :raises NotImplementedError: 没有可求导的输出，无法生成反向图。
 
     ----
 
@@ -74,13 +71,22 @@ def generate_forward_and_backward_graph(
 
     * **English**
 
-    Generate forward and backward graphs
+    Generate optimized forward and backward FX graphs for a PyTorch callable.
+    Gradient flags apply to local tensors without modifying the caller's tensors.
 
-    :type fn: ``Callable``
+    :param fn: Callable to trace, returning a tensor or a list/tuple of tensors.
+    :type fn: Callable
+    :param example_inputs: Example inputs used for tracing.
     :type example_inputs: tuple
+    :param requires_grad: Per-input gradient flags. With ``None`` (the default),
+        all tensor inputs require gradients.
     :type requires_grad: Optional[Sequence[bool]]
-    :raises ValueError: EN: Raised when ``requires_grad`` length mismatches ``example_inputs``, when the callable does not return a tensor/list/tuple, or when no differentiable output exists. Chinese: 当 ``requires_grad`` 长度与 ``example_inputs`` 不匹配、函数返回值不是张量/列表/元组、或不存在可求导输出时抛出。
+    :return: Optimized forward and backward FX graphs.
     :rtype: Tuple[torch.fx.Graph, torch.fx.Graph]
+    :raises ValueError: Gradient flags and inputs differ in count, the return
+        value is not a tensor/list/tuple, or both graphs could not be captured.
+    :raises NotImplementedError: No output is differentiable, so a backward
+        graph cannot be generated.
     """
     collector = _GraphCollector()
     f = aot_function(
@@ -128,7 +134,7 @@ def generate_forward_and_backward_graph(
         if isinstance(y, torch.Tensor) and (y.requires_grad or y.grad_fn is not None)
     ]
     if not diff_outputs:
-        raise ValueError(
+        raise NotImplementedError(
             f"No differentiable Tensor found in the output of the function {fn}"
         )
     torch.autograd.backward(diff_outputs, [torch.randn_like(y) for y in diff_outputs])

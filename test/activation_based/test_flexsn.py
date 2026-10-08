@@ -135,23 +135,6 @@ def test_cuda_automatically_builds_triton_for_supported_core():
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_cuda_known_unsupported_lowering_falls_back_to_hop(monkeypatch):
-    def unsupported(*args, **kwargs):
-        raise NotImplementedError("core contains an unsupported Triton operator")
-
-    module = FlexSN(_lif_core, 1, (torch.tensor(0.8, device="cuda"),)).cuda()
-    monkeypatch.setattr(module, "_ensure_triton_runtime", unsupported)
-    x = torch.randn(3, 2, device="cuda")
-
-    actual = module(x)
-    expected, _, _ = _reference(x, torch.zeros_like(x[0]), module.static_inputs[0])
-
-    torch.testing.assert_close(actual, expected)
-    assert module._triton_capability[x.device, x.dtype] is False
-    assert module._triton_handle is None
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_cuda_runtime_lifetime_survives_copy_and_rebuilds():
     pytest.importorskip("triton")
     module = FlexSN(_lif_core, 1, (torch.tensor(0.8, device="cuda"),)).cuda()
@@ -163,3 +146,30 @@ def test_cuda_runtime_lifetime_survives_copy_and_rebuilds():
     assert copied._triton_handle is None
     torch.testing.assert_close(copied(x), module(x))
     assert copied._triton_handle is not None
+
+
+def test_nondifferentiable_core_reports_unsupported_training_graph():
+    from spikingjelly.activation_based.neuron.flexsn_trace import _trace_core
+
+    def core(x):
+        return ((x > 0).float(),)
+
+    with pytest.raises(NotImplementedError, match="No differentiable Tensor"):
+        _trace_core(core, (torch.zeros(1),), num_outputs=1, num_states=0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_cuda_nondifferentiable_core_automatically_uses_hop():
+    def core(x):
+        return (x > 0).float()
+
+    module = FlexSN(core, num_states=0).cuda()
+    x = torch.tensor([[-1.0, 1.0], [2.0, -2.0]], device="cuda", requires_grad=True)
+    for values in (x, -x):
+        actual = module(values)
+        torch.testing.assert_close(actual, core(values))
+        assert actual.requires_grad is False
+        assert module.states == ()
+    assert module._triton_capability[x.device, x.dtype] is False
+    compiled = torch.compile(module, fullgraph=True)
+    torch.testing.assert_close(compiled(x), core(x))

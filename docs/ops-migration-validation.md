@@ -926,3 +926,40 @@ remained. Raw logs, paired samples, preservation checks and billing are in
 `.agents/artifacts/final-audit-humanizer-20261008` in the primary checkout.
 The separately recorded QIF/Torch 2.11 boundary issue remains outside this audit;
 the PR must not claim an entirely green CUDA compatibility matrix.
+
+
+## PR #770 review fixes (2026-10-08)
+
+Both Codex P2 findings were reproduced and accepted. Explicit IF/LIF/PLIF
+precision now passes the input dtype as the spike dtype. Graph capture reports
+no differentiable output as `NotImplementedError`, allowing FlexSN's existing
+CUDA reference scan to handle valid nondifferentiable cores. Parameter errors
+still raise `ValueError`; no broader exception catch or new fallback was added.
+The mocked unsupported-lowering test was replaced by a real stateless CUDA core.
+
+- Before the fix, all six FP16/BF16-input precision cases failed their spike-dtype
+  assertion on RTX 5090. The CPU graph-capture regression also failed with the
+  wrong exception type.
+- Final targeted CUDA checks passed 11 cases, including BF16 membrane storage,
+  optional voltage traces, input/initial-state/PLIF-parameter gradients, repeated
+  nondifferentiable FlexSN calls and fullgraph execution.
+- Related Triton, FlexSN and dispatch suites passed 151 cases with seven
+  capability/native-extension skips. This run preceded the three added BF16
+  storage cases, which passed in the final targeted check.
+- Final local `pytest -q test benchmark/test`: 1,900 passed, 580 skipped and
+  29 existing warnings. Ruff, formatting, Changelog generation/check and
+  Sphinx HTML passed with no document warnings. The whole-tree logging checker
+  reports three pre-existing violations in distributed vision training and NIR
+  imports; none are in the changed code.
+
+Ponytail review found no further changes needed in the connected call paths.
+No native code, selection cache or dependency changed; native extensions were
+not rebuilt and performance was not remeasured. The separately recorded QIF
+boundary discrepancy remains unresolved and outside these fixes. CodeRabbit
+skipped this PR because its 408 changed files exceed the 300-file review limit.
+
+Evidence was returned and the RTX 5090 on-demand instance was destroyed.
+Posted charges were $0.123, bringing this session to $3.086
+within the authorized $5 cap. No paid instance remained. Red/green logs,
+commands, triage and review notes are in `.agents/artifacts/pr770-review-20261008`
+in the primary checkout.

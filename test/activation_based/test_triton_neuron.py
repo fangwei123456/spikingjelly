@@ -244,29 +244,52 @@ def _mixed_precision_reference(
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
-def test_mixed_precision_lif_skips_unrequested_voltage_sequence():
+@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+@pytest.mark.parametrize(
+    ("dtype", "storage_dtype", "compute_dtype"),
+    [
+        (torch.float16, torch.float32, "fp32"),
+        (torch.bfloat16, torch.float32, "fp32"),
+        (torch.bfloat16, torch.bfloat16, "bf16"),
+    ],
+)
+def test_explicit_precision_preserves_spike_dtype_and_optional_trace(
+    kind, dtype, storage_dtype, compute_dtype
+):
     torch.manual_seed(7)
-    x = torch.randn(4, 2, 3, device="cuda", dtype=torch.bfloat16)
-    v = torch.randn(2, 3, device="cuda", dtype=torch.bfloat16)
+    x = torch.randn(4, 2, 3, device="cuda", dtype=dtype)
+    v = torch.randn(2, 3, device="cuda", dtype=storage_dtype)
 
     def run(store_v_seq):
+        weight = torch.tensor(0.0, device="cuda", requires_grad=True)
         x_leaf = x.detach().clone().requires_grad_()
         v_leaf = v.detach().clone().requires_grad_()
-        spike, final_voltage, trace = functional_neuron.lif_multi_step(
-            x_leaf,
-            v_leaf,
-            tau=2.0,
-            decay_input=True,
+        kwargs = dict(
             v_threshold=1.0,
             v_reset=0.0,
-            neuron_storage=torch.bfloat16,
-            neuron_fwd="bf16",
-            neuron_bwd="bf16",
+            neuron_storage=storage_dtype,
+            neuron_fwd=compute_dtype,
+            neuron_bwd=compute_dtype,
             store_v_seq=store_v_seq,
         )
+        if kind == "if":
+            spike, final_voltage, trace = functional_neuron.if_multi_step(
+                x_leaf, v_leaf, **kwargs
+            )
+        elif kind == "lif":
+            spike, final_voltage, trace = functional_neuron.lif_multi_step(
+                x_leaf, v_leaf, tau=2.0, **kwargs
+            )
+        else:
+            spike, final_voltage, trace = functional_neuron.plif_multi_step(
+                x_leaf, v_leaf, weight, **kwargs
+            )
+        assert spike.dtype == x.dtype
+        assert final_voltage.dtype == v.dtype
         voltage = trace if store_v_seq else final_voltage
         (spike.sum() + final_voltage.sum()).backward()
-        return spike, final_voltage, x_leaf.grad, v_leaf.grad, voltage
+        parameter_grad = weight.grad if kind == "plif" else None
+        return spike, final_voltage, x_leaf.grad, v_leaf.grad, parameter_grad, voltage
 
     full = run(True)
     final_only = run(False)

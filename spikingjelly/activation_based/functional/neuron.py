@@ -2042,6 +2042,7 @@ def lif_multi_step(
     :param neuron_bwd: 显式配置的反向计算 dtype。
     :type neuron_bwd: str
     :return: ``(spike_seq, v_final, v_seq_or_none)``；可选轨迹与输入时间维一致。
+        显式精度配置下，脉冲 dtype 与 ``x_seq`` 相同。
     :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
 
     ----
@@ -2077,6 +2078,7 @@ def lif_multi_step(
     :param neuron_bwd: Explicit backward computation dtype.
     :type neuron_bwd: str
     :return: ``(spike_seq, v_final, v_seq_or_none)``; the optional trace includes the time dimension.
+        With explicit precision, spikes have the same dtype as ``x_seq``.
     :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
     """
     spec = _surrogate_spec(surrogate_function)
@@ -2103,6 +2105,7 @@ def lif_multi_step(
             tau=tau,
             v_threshold=v_threshold,
             v_reset=v_reset,
+            spike_dtype=x_seq.dtype,
             storage_dtype=neuron_storage,
             compute_dtype=neuron_fwd,
             backward_compute_dtype=neuron_bwd,
@@ -2209,6 +2212,7 @@ def if_multi_step(
     :param neuron_bwd: 反向计算 dtype；默认 fp32。
     :type neuron_bwd: str
     :return: (spike_seq, v_final, v_seq_or_none)；脉冲与输入同形状，最终状态与初态同形状；轨迹受 store_v_seq 控制，均与输入同设备。
+        显式精度配置下，脉冲 dtype 与 ``x_seq`` 相同。
     :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
     :raises ValueError: 标量参数无效，或状态形状、dtype、device 不匹配。
     :raises RuntimeError: 输入、状态或参数需要梯度，或设备没有可用实现。
@@ -2244,6 +2248,7 @@ def if_multi_step(
     :param neuron_bwd: Backward computation dtype; default fp32.
     :type neuron_bwd: str
     :return: (spike_seq, v_final, v_seq_or_none); spikes match input shape, final state matches the initial state, and store_v_seq controls traces; all on the input device.
+        With explicit precision, spikes have the same dtype as ``x_seq``.
     :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
     :raises ValueError: Invalid scalar parameters, or mismatched state shape, dtype, or device.
     :raises RuntimeError: Inputs, states, or parameters require gradients, or no implementation is available.
@@ -2270,6 +2275,7 @@ def if_multi_step(
             v,
             v_threshold=v_threshold,
             v_reset=v_reset,
+            spike_dtype=x_seq.dtype,
             storage_dtype=neuron_storage,
             compute_dtype=neuron_fwd,
             backward_compute_dtype=neuron_bwd,
@@ -2363,6 +2369,7 @@ def plif_multi_step(
     :param neuron_bwd: 反向计算 dtype；默认 fp32。
     :type neuron_bwd: str
     :return: (spike_seq, v_final, v_seq_or_none)；脉冲与输入同形状，最终状态与初态同形状；轨迹受 store_v_seq 控制，均与输入同设备。
+        显式精度配置下，脉冲 dtype 与 ``x_seq`` 相同。
     :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
     :raises ValueError: 标量参数或实现配置无效。
     :raises RuntimeError: 张量约束不满足或没有可用设备实现。
@@ -2402,6 +2409,7 @@ def plif_multi_step(
     :param neuron_bwd: Backward computation dtype; default fp32.
     :type neuron_bwd: str
     :return: (spike_seq, v_final, v_seq_or_none); spikes match input shape, final state matches the initial state, and store_v_seq controls traces; all on the input device.
+        With explicit precision, spikes have the same dtype as ``x_seq``.
     :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
     :raises ValueError: Invalid scalar parameters or implementation configuration.
     :raises RuntimeError: Tensor constraints violated or no available device implementation.
@@ -2430,6 +2438,7 @@ def plif_multi_step(
             decay_input=decay_input,
             v_threshold=v_threshold,
             v_reset=v_reset,
+            spike_dtype=x_seq.dtype,
             storage_dtype=neuron_storage,
             compute_dtype=neuron_fwd,
             backward_compute_dtype=neuron_bwd,
