@@ -168,7 +168,7 @@ def _assert_gradients(actual, expected, inputs):
         torch.testing.assert_close(a, b, rtol=rtol, atol=atol)
 
 
-@pytest.mark.parametrize("kind", ["qif", "eif", "izhikevich"])
+@pytest.mark.parametrize("kind", ["lif", "qif", "eif", "izhikevich"])
 @pytest.mark.parametrize(
     "dtype,surrogate_name,trace,reset,detach",
     [

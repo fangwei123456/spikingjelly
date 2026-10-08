@@ -239,7 +239,7 @@ Soft方式重置方程为：
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     for node_type in (neuron.IFNode, neuron.LIFNode, neuron.ParametricLIFNode):
         node = node_type(
-            step_mode="m", surrogate_function=surrogate.ATan(), store_v_seq=True
+            step_mode="m", surrogate_function=surrogate.ATan()
         ).to(device)
         x = torch.rand(4, 2, 8, device=device, requires_grad=True)  # [T, N, C]
         parameters = list(node.parameters())
@@ -259,10 +259,6 @@ Soft方式重置方程为：
 ``functional.reset_net``；连续序列可以保留状态。截断 BPTT 时用
 ``functional.detach_net`` 切断上一段的梯度，不将电位重置为初值。
 完整执行、编译与诊断见 :doc:`./triton_backend`，精度见 :doc:`./precision`。
-
-本例保存电位轨迹。当前 RTX 5090、Torch 2.11.0、Triton 3.6.0 的验证发现：
-LIF 多步训练在 ``store_v_seq=False`` 的 Triton 反向编译中可能报错，完整轨迹路径通过。
-此配置消耗额外轨迹显存；限制与执行路径说明见 :doc:`./triton_backend`。
 
 显式初态、最终状态和轨迹
 ----------------------------

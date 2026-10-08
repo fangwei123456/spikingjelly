@@ -72,7 +72,6 @@ def _backward_kernel(
     DETACH_RESET: tl.constexpr,
     SURROGATE: tl.constexpr,
     STORE_V_SEQ: tl.constexpr,
-    PRELOAD_LAST_GRAD: tl.constexpr,
     UNROLL: tl.constexpr,
     BLOCK: tl.constexpr,
 ):
@@ -83,10 +82,12 @@ def _backward_kernel(
     r_tau = 1.0 / tau
     n = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
     mask = n < N
-    if PRELOAD_LAST_GRAD:
-        carry = tl.load(gv_ptr + n, mask=mask, other=0.0)
-    else:
+    if STORE_V_SEQ:
         carry = tl.full((BLOCK,), 0.0, tl.float32)
+    else:
+        # Seed the recurrence before the loop; its first-step load breaks
+        # Triton 3.6 coalescing when lowered inside the temporal branch.
+        carry = tl.load(gv_ptr + n, mask=mask, other=0.0)
     for step in tl.range(T, loop_unroll_factor=UNROLL):
         offset = (T - 1 - step).to(tl.int64) * N + n
         h = tl.load(h_ptr + offset, mask=mask, other=0.0)
@@ -95,10 +96,6 @@ def _backward_kernel(
         if STORE_V_SEQ:
             gv = tl.load(gv_ptr + offset, mask=mask, other=0.0)
             grad_v = gv + carry
-        elif PRELOAD_LAST_GRAD:
-            grad_v = carry
-        elif step == 0:
-            grad_v = tl.load(gv_ptr + n, mask=mask, other=0.0)
         else:
             grad_v = carry
         if SOFT_RESET:
@@ -187,18 +184,17 @@ def _backward_impl(
     gs, gv, h = gs.contiguous(), gv.contiguous(), h.contiguous()
     gx = torch.empty_like(h, dtype=gs.dtype)
     gv_init = torch.empty_like(h[0])
-    preload_last_grad = (
-        surrogate_id == 1
-        and h.shape[0] > 1
-        and gv_init.numel() >= 2097152
-        and not store_v_seq
+    block = (
+        512
+        if (
+            surrogate_id == 1
+            and h.shape[0] > 1
+            and gv_init.numel() >= 2097152
+            and not store_v_seq
+        )
+        else 256
     )
-    block = 512 if preload_last_grad else 256
-    unroll = (
-        h.shape[0]
-        if use_static_range_for_triton_neuron_kernel(h.shape[0])
-        else 1
-    )
+    unroll = h.shape[0] if use_static_range_for_triton_neuron_kernel(h.shape[0]) else 1
     with torch.cuda.device(h.device):
         (
             _backward_kernel
@@ -221,7 +217,6 @@ def _backward_impl(
             detach_reset,
             surrogate_id,
             store_v_seq,
-            preload_last_grad,
             unroll,
             block,
             enable_fp_fusion=False,

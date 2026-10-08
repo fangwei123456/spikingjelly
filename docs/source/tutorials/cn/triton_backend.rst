@@ -18,7 +18,7 @@ English version: :doc:`../en/triton_backend`
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     for node_type in (neuron.IFNode, neuron.LIFNode, neuron.ParametricLIFNode):
         node = node_type(
-            step_mode="m", surrogate_function=surrogate.ATan(), store_v_seq=True
+            step_mode="m", surrogate_function=surrogate.ATan()
         ).to(device)
         x = torch.rand(4, 2, 8, device=device, requires_grad=True)  # [T, N, C]
         parameters = list(node.parameters())
@@ -70,7 +70,7 @@ eager 和 Inductor 展开有独立的自动选择。下面使用默认 FP32 状�
         nn.Sequential(
             nn.Linear(16, 16),
             neuron.LIFNode(
-                step_mode="m", surrogate_function=surrogate.ATan(), store_v_seq=True
+                step_mode="m", surrogate_function=surrogate.ATan()
             ),
             nn.Linear(16, 4),
         )
@@ -141,17 +141,13 @@ eager 和 Inductor 展开有独立的自动选择。下面使用默认 FP32 状�
 
 详细日志配置见 :doc:`/APIs/spikingjelly.logger`。
 
-已验证环境的已知限制
+最终状态与完整轨迹
 ----------------------------
 
-RTX 5090、Torch 2.11.0+cu128、Triton 3.6.0 的 LIF 多步反向在
-``store_v_seq=False`` 时触发 ``TritonGPUCoalesce``／``PassManager::run failed``。
-改变尺寸或将 ATan 换成 Sigmoid 没有消除错误；完整轨迹路径以及单步反向通过。
-原生 CUDA eager 的默认最终状态路径通过，Inductor 自动使用 Triton 时仍受此问题影响。
-
-上述训练和编译示例显式设置 ``store_v_seq=True``，作为临时规避方式；它会增加与
-时间步数成比例的电位轨迹显存。不能把它理解为 backend 参数，也不能声称默认最终
-状态配置已通过该环境验收。本轮只更新教程，生产内核修复需要单独处理。
+``store_v_seq=False`` 是默认配置，只保留最终电位。需要监控完整时间轨迹时再设为
+``True``，它会增加与时间步数成比例的电位轨迹显存。两种配置均支持输入与初态
+梯度；最终状态路径已在 RTX 5090、Torch 2.11.0+cu128、Triton 3.6.0 上验证
+FP32/FP16/BF16 输入的 eager 与 fullgraph 前后向，无需用完整轨迹规避编译错误。
 
 故障排查
 ----------------------------

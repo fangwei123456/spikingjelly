@@ -123,7 +123,7 @@ without selecting a backend. Standalone forward/backward example:
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     node = neuron.LIFNode(
-        step_mode="m", surrogate_function=surrogate.ATan(alpha=2.0), store_v_seq=True
+        step_mode="m", surrogate_function=surrogate.ATan(alpha=2.0)
     ).to(device)
     x = torch.rand(4, 2, 8, device=device, requires_grad=True)
     spikes = node(x)
@@ -142,7 +142,3 @@ Explicit neuron precision requires supported built-in surrogates; see
 the seven built-ins support compiled training, while custom surrogates support
 eager training only. See :doc:`./memopt`. These specialized paths do not share
 an unrestricted compatibility promise with ordinary execution.
-
-The example retains voltage traces to avoid the LIF final-state Triton backward
-compilation issue in the verified environment; see :doc:`./triton_backend` for
-limits and extra memory cost.

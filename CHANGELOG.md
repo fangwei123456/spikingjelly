@@ -322,6 +322,10 @@ Module: `spikingjelly.activation_based.precision`.
 
 Module: `spikingjelly.activation_based.neuron`.
 
+- Fixed Triton 3.6 LIF backward compilation with final-state-only output in
+  eager and fullgraph execution. The default `store_v_seq=False` no longer
+  requires retaining the full voltage trajectory as a compiler workaround;
+  input and initial-state gradients remain supported.
 - Corrected detached hard-reset gradients in the CPU, CUDA, CuPy, and Triton
   Izhikevich implementations; when `detach_reset=True`, gradients no longer flow
   through the reset spike.

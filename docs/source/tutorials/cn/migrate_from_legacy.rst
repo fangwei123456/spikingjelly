@@ -51,7 +51,7 @@ V2：自动执行与接口迁移
     from spikingjelly.activation_based import neuron, functional
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    node = neuron.LIFNode(step_mode="m", store_v_seq=True).to(device)
+    node = neuron.LIFNode(step_mode="m").to(device)
     x = torch.rand(4, 2, 8, device=device, requires_grad=True)
     node(x).sum().backward()
     functional.reset_net(node)
@@ -204,6 +204,3 @@ event_driven     timing_based
         y_seq = net(x_seq)
         # y_seq.shape = [T, N, C, H, W]
         functional.reset_net(net)
-
-当前示例的完整轨迹配置用于规避已验证环境的 Triton LIF 最终状态反向编译问题；
-限制与额外显存开销见 :doc:`./triton_backend`。

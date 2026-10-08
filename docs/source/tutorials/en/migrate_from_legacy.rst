@@ -52,7 +52,7 @@ Current standalone example:
     from spikingjelly.activation_based import neuron, functional
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    node = neuron.LIFNode(step_mode="m", store_v_seq=True).to(device)
+    node = neuron.LIFNode(step_mode="m").to(device)
     x = torch.rand(4, 2, 8, device=device, requires_grad=True)
     node(x).sum().backward()
     functional.reset_net(node)
@@ -210,7 +210,3 @@ If all modules use single-step, the network can use a step-by-step propagation p
         y_seq = net(x_seq)
         # y_seq.shape = [T, N, C, H, W]
         functional.reset_net(net)
-
-The full-trace configuration in the current example avoids the verified
-Triton LIF final-state backward compilation issue. See :doc:`./triton_backend`
-for limits and additional memory cost.

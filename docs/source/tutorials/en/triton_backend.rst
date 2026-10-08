@@ -19,7 +19,7 @@ workflow works on CPU and NVIDIA CUDA:
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     for node_type in (neuron.IFNode, neuron.LIFNode, neuron.ParametricLIFNode):
         node = node_type(
-            step_mode="m", surrogate_function=surrogate.ATan(), store_v_seq=True
+            step_mode="m", surrogate_function=surrogate.ATan()
         ).to(device)
         x = torch.rand(4, 2, 8, device=device, requires_grad=True)  # [T, N, C]
         parameters = list(node.parameters())
@@ -76,7 +76,7 @@ compilation, resetting the state produced by warmup:
         nn.Sequential(
             nn.Linear(16, 16),
             neuron.LIFNode(
-                step_mode="m", surrogate_function=surrogate.ATan(), store_v_seq=True
+                step_mode="m", surrogate_function=surrogate.ATan()
             ),
             nn.Linear(16, 4),
         )
@@ -151,20 +151,15 @@ can enable INFO at their entry point; earlier records are not replayed.
 
 See :doc:`/APIs/spikingjelly.logger` for logging configuration.
 
-Known limitation in the verified environment
---------------------------------------------
+Final state and full voltage traces
+-----------------------------------
 
-On RTX 5090 with Torch 2.11.0+cu128 and Triton 3.6.0, LIF multi-step backward
-with ``store_v_seq=False`` triggers ``TritonGPUCoalesce``/``PassManager::run failed``.
-Changing dimensions or replacing ATan with Sigmoid did not remove the error;
-full-trace execution and single-step backward passed. Native CUDA eager passed
-with final-state-only output; automatic Inductor Triton execution is still affected.
-
-The training/compilation examples above explicitly use ``store_v_seq=True`` as
-a temporary workaround, consuming additional voltage-trace memory proportional
-to time steps. It is not a backend parameter or evidence that the default
-final-state profile passed on this environment. This update changes tutorials
-only; the production kernel requires a separate fix.
+The default ``store_v_seq=False`` retains only final voltage. Enable ``True``
+when monitoring the full temporal trace; it adds voltage-trace memory proportional
+to time steps. Both policies support input and initial-state gradients. Final-state
+execution was verified on RTX 5090, Torch 2.11.0+cu128 and Triton 3.6.0 with
+FP32/FP16/BF16 inputs in eager and fullgraph forward/backward. A full trace is
+not required to avoid a compiler error.
 
 Troubleshooting
 ----------------------------

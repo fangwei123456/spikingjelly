@@ -438,3 +438,53 @@ def test_offline_priorities_bind_per_device_and_strict_override(monkeypatch):
         ]
         == "torch"
     )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("compiled", [False, True])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+def test_lif_final_state_triton_backward_matches_reference(
+    monkeypatch, compiled, dtype
+):
+    from spikingjelly.activation_based import functional, surrogate
+    from spikingjelly._ops import lif
+
+    torch.compiler.reset()
+    monkeypatch.setattr(lif._selection, "_requested", "triton")
+    monkeypatch.setattr(lif._selection, "_selections", {})
+    monkeypatch.setattr(lif._selection, "_compiled_selections", {})
+    torch.manual_seed(31)
+    x = torch.rand(4, 2, 8, device="cuda", dtype=dtype, requires_grad=True)
+    v = torch.zeros(2, 8, device="cuda", requires_grad=True)
+    sg = surrogate.ATan()
+
+    def forward(x, v):
+        return functional.lif_multi_step(x, v, surrogate_function=sg)
+
+    run = torch.compile(forward, fullgraph=True) if compiled else forward
+    actual = run(x, v)
+    spike, final, _ = lif.reference.multi_step(
+        x.float(), v, 2.0, True, 1.0, 0.0, sg, False
+    )
+    expected = (spike.to(dtype), final)
+    assert actual[2] is None
+    for got, want in zip(actual[:2], expected):
+        torch.testing.assert_close(got, want)
+    weights = tuple(torch.randn_like(tensor) for tensor in actual[:2])
+    losses = [
+        sum((value * weight).sum() for value, weight in zip(outputs, weights))
+        for outputs in (actual[:2], expected)
+    ]
+    got = torch.autograd.grad(losses[0], (x, v))
+    want = torch.autograd.grad(losses[1], (x, v))
+    for actual_grad, expected_grad in zip(got, want):
+        tolerance = (
+            0.015
+            if actual_grad.dtype == torch.bfloat16
+            else 0.002
+            if actual_grad.dtype == torch.float16
+            else 2e-5
+        )
+        torch.testing.assert_close(
+            actual_grad, expected_grad, rtol=tolerance, atol=tolerance
+        )

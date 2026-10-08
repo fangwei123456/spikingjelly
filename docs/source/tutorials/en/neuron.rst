@@ -246,7 +246,7 @@ parameters. This standalone example needs no dataset and checks parameter update
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     for node_type in (neuron.IFNode, neuron.LIFNode, neuron.ParametricLIFNode):
         node = node_type(
-            step_mode="m", surrogate_function=surrogate.ATan(), store_v_seq=True
+            step_mode="m", surrogate_function=surrogate.ATan()
         ).to(device)
         x = torch.rand(4, 2, 8, device=device, requires_grad=True)  # [T, N, C]
         parameters = list(node.parameters())
@@ -267,11 +267,6 @@ call ``functional.reset_net`` after backward and parameter updates. Retain state
 for a continuous sequence; use ``functional.detach_net`` to truncate BPTT without
 resetting voltage. See :doc:`./triton_backend` for execution/compilation/diagnostics
 and :doc:`./precision` for precision policies.
-
-This example retains voltage traces. Validation on RTX 5090 with Torch 2.11.0
-and Triton 3.6.0 found a LIF multi-step backward compilation failure with
-``store_v_seq=False``; the full-trace path passed. This configuration consumes
-extra trace memory. See :doc:`./triton_backend` for the limitation/execution paths.
 
 Explicit initial state, final state and traces
 ----------------------------------------------

@@ -817,3 +817,72 @@ Raw final logs, the temporary pytest example harness, build/selection environmen
 commands and billing summaries are in `.agents/artifacts/user-tutorials-20261007`
 in the primary checkout. Tutorials use only public APIs; the kernel bug is
 explicitly documented rather than hidden by a fallback or a production change.
+
+## LIF final-state backward compiler fix (2026-10-08)
+
+The final-state-only LIF limitation from the preceding tutorial acceptance is now
+resolved. Six public-interface regression cases reproduced the original failure
+on RTX 5090, Torch 2.11.0+cu128, Triton 3.6.0: eager/fullgraph execution with
+FP32, FP16 and BF16 inputs and FP32 initial state. A direct kernel probe changed
+only the existing preload flag: the in-loop first-step gradient load failed in
+`TritonGPUCoalesce`, while preloading the same final-state gradient compiled and
+matched Torch input/initial-state gradients.
+
+The recurrence now seeds its carry before the reverse-time loop when only final
+state is returned. Full-trace execution still starts with zero carry and adds
+each timestep's state gradient. The redundant preload specialization and temporal
+first-step branch were removed. Existing unrolling and the measured 256/512 block
+policy remain unchanged. No compiler-version branch, fallback, extra operator or
+trajectory allocation was added. Ordinary tutorial modules again use default
+`store_v_seq=False`; explicit monitoring examples retain their requested traces.
+
+Validation:
+
+- The six failing public LIF eager/fullgraph cases now pass, including a strict
+  FP32 assertion on initial-state gradients even with low-precision inputs.
+- Default-configuration tutorial acceptance passed all 11 checks, including
+  compiled model training, both explicit BF16 precision policies and projections.
+- CUDA/CPU device registration, neuron dynamics and functional suites passed
+  498 cases; one native-extension compiler-cache test was skipped because this
+  Triton-only environment did not build native extensions. One unrelated QIF
+  scalar-threshold boundary test was explicitly deselected after recording its
+  failure; its source and assertions were not weakened or changed.
+- Broad local `pytest -q test benchmark/test` passed 1,899 cases, with 571 CUDA/
+  optional-dependency skips and 29 existing warnings. Scoped Ruff, formatting,
+  operator logging policy, Changelog generation/check and Sphinx HTML passed.
+
+The wider CUDA run exposed an existing QIF/Torch 2.11 boundary discrepancy:
+PyTorch's Python-scalar reciprocal of 2.3 rounds to 0.43478259444236755, whereas
+an FP32-tensor reciprocal rounds to 0.43478262424468994. On the recorded input,
+the Torch reference emits zero at its last step, while the existing test pins
+that reference spike to one and the Triton output differs. An experimental QIF
+change was reverted; this independent numerical-contract issue is not a LIF
+regression and needs a separate resolution. The initial wider run had 496 passes
+and three failures; the other two failures were test-environment omissions
+(`test/__init__.py` and h5py), resolved without production changes.
+
+Same-device paired CUDA Graph checks reused seeded FP32 backward tensors,
+16 calls per graph, 30 replays per timed sample, ten alternating pairs per round
+and three rounds. Outputs and gradients matched the unchanged baseline in every
+measured configuration:
+
+| T / state elements / trajectory | Before (us) | After (us) | Round median changes (%) |
+| --- | ---: | ---: | --- |
+| 1 / 512 / full | 0.7723 | 0.7723 | -0.0043, 0, 0 |
+| 4 / 512 / full | 1.2800 | 1.2800 | 0, 0, 0 |
+| 16 / 32768 / full | 3.5863 | 3.5864 | 0.0028, 0, 0.0028 |
+| 4 / 2097152 / final only | 57.5936 | 57.6043 | 0.0296, 0.0148, 0 |
+
+No measurable regression was found in these kernel workloads. The old large
+final-state ATan path already preloaded its gradient, so it remains a valid
+same-workload baseline. The broken small final-state path cannot provide a
+Triton 3.6 timing baseline; these numbers do not establish a speedup for it or
+an end-to-end training speedup.
+
+Shared g2 GPUs remained occupied. This task used one Vast.ai RTX 5090 on-demand
+instance with the existing devel template, preserving Torch/CUDA/Triton and
+installing only missing test dependencies in an isolated environment. Evidence
+was returned before destruction; no paid instance remained. Posted charges were
+$0.246 for this fix, bringing the session total to $2.821 within the $5 cap.
+Raw red/green logs, probes, CUDA Graph samples, billing and commands are in
+`.agents/artifacts/lif-final-backward-20261008` in the primary checkout.

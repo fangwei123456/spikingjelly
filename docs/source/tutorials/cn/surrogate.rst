@@ -126,7 +126,7 @@ SoftSign、SuperSpike 和 Erf；替代梯度对象仍通过 ``surrogate_function
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     node = neuron.LIFNode(
-        step_mode="m", surrogate_function=surrogate.ATan(alpha=2.0), store_v_seq=True
+        step_mode="m", surrogate_function=surrogate.ATan(alpha=2.0)
     ).to(device)
     x = torch.rand(4, 2, 8, device=device, requires_grad=True)
     spikes = node(x)
@@ -142,6 +142,3 @@ SoftSign、SuperSpike 和 Erf；替代梯度对象仍通过 ``surrogate_function
 融合 ``if_linear``/``lif_linear`` 支持一阶梯度，七种内置替代梯度可编译训练；
 自定义替代梯度仅支持 eager 训练，见 :doc:`./memopt`。普通路径和这些专门路径
 不能混为同一兼容承诺。
-
-本例保存电位轨迹以规避当前验证环境的 LIF 最终状态 Triton 反向编译问题；
-限制与额外显存开销见 :doc:`./triton_backend`。
