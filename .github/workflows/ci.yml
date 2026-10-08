@@ -54,7 +54,7 @@ jobs:
         run: uvx ruff==0.15.22 check .
 
       - name: Run CPU tests
-        run: uv run --no-sync pytest test/ -q
+        run: uv run --no-sync pytest test/ -v -o faulthandler_timeout=60
 
       - name: Build documentation without warnings
         run: uv run --no-sync sphinx-build -M html docs/source docs/build -W --keep-going
