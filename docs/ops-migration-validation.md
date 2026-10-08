@@ -857,8 +857,9 @@ an FP32-tensor reciprocal rounds to 0.43478262424468994. On the recorded input,
 the Torch reference emits zero at its last step, while the existing test pins
 that reference spike to one and the Triton output differs. An experimental QIF
 change was reverted; this independent numerical-contract issue is not a LIF
-regression and needs a separate resolution. The initial wider run had 496 passes
-and three failures; the other two failures were test-environment omissions
+regression. It was reported as unresolved under the exact-spike test; the
+subsequently accepted tolerance policy is recorded below. The initial wider run
+had 496 passes and three failures; the other two failures were test-environment omissions
 (`test/__init__.py` and h5py), resolved without production changes.
 
 Same-device paired CUDA Graph checks reused seeded FP32 backward tensors,
@@ -924,8 +925,8 @@ The audit instance was destroyed after evidence retrieval. Posted audit charges
 were $0.142, bringing this session to $2.963 within the $5 cap; no paid instance
 remained. Raw logs, paired samples, preservation checks and billing are in
 `.agents/artifacts/final-audit-humanizer-20261008` in the primary checkout.
-The separately recorded QIF/Torch 2.11 boundary issue remains outside this audit;
-the PR must not claim an entirely green CUDA compatibility matrix.
+The QIF/Torch 2.11 boundary case was not changed in this audit. See the later
+QIF numerical-tolerance validation below for the accepted rounding policy.
 
 
 ## PR #770 review fixes (2026-10-08)
@@ -955,7 +956,8 @@ The mocked unsupported-lowering test was replaced by a real stateless CUDA core.
 Ponytail review found no further changes needed in the connected call paths.
 No native code, selection cache or dependency changed; native extensions were
 not rebuilt and performance was not remeasured. The separately recorded QIF
-boundary discrepancy remains unresolved and outside these fixes. CodeRabbit
+boundary discrepancy was still unresolved under the exact-spike contract during
+this run; the later QIF tolerance validation supersedes that contract. CodeRabbit
 skipped this PR because its 408 changed files exceed the 300-file review limit.
 
 Evidence was returned and the RTX 5090 on-demand instance was destroyed.
@@ -963,3 +965,31 @@ Posted charges were $0.123, bringing this session to $3.086
 within the authorized $5 cap. No paid instance remained. Red/green logs,
 commands, triage and review notes are in `.agents/artifacts/pr770-review-20261008`
 in the primary checkout.
+
+
+## QIF numerical-tolerance validation (2026-10-08)
+
+The user accepted implementation-dependent FP32 rounding at firing thresholds.
+The QIF equations are unchanged. The boundary test now compares charged voltages
+within four FP32 epsilon values (about 4.77e-7 for this unit-threshold case).
+Different spikes are allowed only when both charged voltages are within that
+threshold neighborhood. Each implementation must still produce the spike and
+hard-reset state dictated by its own charged voltage. Thresholds shifted by
+±1e-4 retain exact spike comparisons and close state/gradient comparisons.
+The obsolete assertion that the Torch reference must emit one was removed.
+
+On RTX 5090 with Torch 2.11.0+cu128 and Triton 3.6, the unchanged original test
+failed its exact-spike comparison. All six updated CPU/CUDA boundary and shifted
+threshold cases passed. The complete registered-neuron test file then passed
+398 cases with no deselection or skips. Local CPU validation passed 198 cases,
+with 200 CUDA cases skipped. Scoped Ruff, formatting and diff checks passed.
+No production kernel, optional dependency or selection behavior changed.
+This supersedes the earlier unresolved-QIF qualification under the exact-spike
+contract; it does not promise identical trajectories across implementations
+when rounding changes a firing decision.
+
+The RTX 5090 on-demand instance was destroyed after evidence retrieval.
+Posted charges were $0.039, bringing the session total to $3.125
+within the $5 cap. No paid instance remained. Commands, red/green logs and billing
+are in `.agents/artifacts/qif-tolerance-20261008` in the primary checkout.
+Native extensions were not rebuilt and performance was not remeasured.
