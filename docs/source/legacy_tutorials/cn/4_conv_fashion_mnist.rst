@@ -2,6 +2,13 @@
 
 时间驱动：使用卷积SNN识别Fashion-MNIST
 =======================================
+
+.. warning::
+
+    本页为旧版 SpikingJelly 的历史归档，停止维护，不是当前 V2 使用说明。
+    含 CuPy 或旧 backend 的代码和命令不能直接用于当前包。当前用法见
+    :doc:`/tutorials/cn/neuron` 与 :doc:`/tutorials/cn/migrate_from_legacy`。
+
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 在本节教程中，我们将搭建一个卷积脉冲神经网络，对 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`__ 数据集进行

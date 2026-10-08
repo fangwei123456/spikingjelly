@@ -1,48 +1,186 @@
 Automatic Neuron Execution
 ==========================
 
-Neuron modules select execution from the input tensor's device. CPU uses the
-Torch reference implementation. CUDA calls a registered PyTorch operator, which
-selects and caches compatible implementations per device and execution path.
-Eager uses offline priorities per neuron family and GPU compute capability;
-unknown devices retain native CUDA, Triton, then Torch. Inductor expansion
-prefers Triton, native CUDA, then Torch in a separate cache. Eager calls do
-not check compilation mode. CUDA Graphs retain the warmed choice of the function
-being captured. Selection never runs online profiling.
+中文版： :doc:`../cn/triton_backend`
 
-The neuron API has no backend constructor argument or mutable backend property.
-This applies to IF, LIF, PLIF, QIF, EIF, Izhikevich, I-LIF, ActivationAwareIF,
-and STBIF. Existing state, reset, surrogate, and step-mode settings remain on the
-neuron module.
+From CPU to CUDA
+----------------------------
 
-Inspect the selected implementation when diagnosing a CUDA run:
+Ordinary neurons have no backend argument or mutable backend property. Create a
+neuron and move the module and inputs to the target device. The same training
+workflow works on CPU and NVIDIA CUDA:
 
 .. code-block:: python
 
     import torch
-    from spikingjelly.activation_based import functional, neuron
+    from spikingjelly.activation_based import functional, neuron, surrogate
+
+    torch.manual_seed(1)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    for node_type in (neuron.IFNode, neuron.LIFNode, neuron.ParametricLIFNode):
+        node = node_type(
+            step_mode="m", surrogate_function=surrogate.ATan(), store_v_seq=True
+        ).to(device)
+        x = torch.rand(4, 2, 8, device=device, requires_grad=True)  # [T, N, C]
+        parameters = list(node.parameters())
+        optimizer = torch.optim.SGD(parameters, lr=0.01) if parameters else None
+        before = [p.detach().clone() for p in parameters]
+        spikes = node(x)
+        loss = spikes.sum() + node.v.sum()
+        loss.backward()
+        assert spikes.shape == x.shape and torch.isfinite(x.grad).all()
+        if optimizer is not None:
+            assert all(p.grad is not None for p in parameters)
+            optimizer.step()
+            assert any(not torch.equal(old, p) for old, p in zip(before, parameters))
+        functional.reset_net(node)  # Reset after backward/update.
+
+Reset independent batches after backward and parameter updates. See :doc:`./neuron`
+for continuous state and detach, and :doc:`/index` for installation/local CUDA builds.
+
+Automatic execution and limits
+------------------------------
+
+CPU uses Torch reference execution. CUDA checks compatible implementations on
+first use of a device/execution path and reuses the selection, without online
+profiling. Importing SpikingJelly does not initialize CUDA. Eager currently prefers
+compatible native CUDA, then Triton and Torch; Inductor expansion prefers Triton,
+then native CUDA and Torch. Verified GPU priorities come from offline tests, not a
+promise that one implementation wins every workload.
+
+The unified execution interface covers IF, LIF, PLIF, QIF, EIF, Izhikevich, I-LIF,
+ActivationAwareIF and STBIF. This does not imply that every family supports training,
+all dtypes or arbitrary surrogates; consult each API. Other neurons retain their
+public contracts and do not necessarily have dedicated CUDA kernels.
+
+Ordinary fused paths support FP32/FP16/BF16 inputs with FP32 state and supported
+built-in surrogates. Low-precision state and custom surrogates can use Torch
+reference equations. Explicit neuron precision is a separate policy; see
+:doc:`./precision`. For custom cores, see :doc:`./flexsn`.
+
+Compilation and CUDA Graphs
+----------------------------
+
+Eager and Inductor expansion select separately. This example uses default FP32
+state and initializes the device through an eager forward/backward before
+compilation, resetting the state produced by warmup:
+
+.. code-block:: python
+
+    import torch
+    from torch import nn
+    from spikingjelly.activation_based import functional, neuron, surrogate
 
     device = torch.device("cuda:0")
-    lif = neuron.LIFNode(step_mode="m").to(device)
-    output = lif(torch.rand(4, 128, device=device))
+    model = (
+        nn.Sequential(
+            nn.Linear(16, 16),
+            neuron.LIFNode(
+                step_mode="m", surrogate_function=surrogate.ATan(), store_v_seq=True
+            ),
+            nn.Linear(16, 4),
+        )
+        .to(device)
+        .train()
+    )
+    x = torch.rand(4, 2, 16, device=device)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+    # Initialize device/state and warm up an eager forward/backward.
+    model(x).square().mean().backward()
+    optimizer.zero_grad(set_to_none=True)
+    functional.reset_net(model)
+    compiled = torch.compile(model, fullgraph=True)
+    output = compiled(x)
+    output.square().mean().backward()
+    optimizer.step()
+    functional.reset_net(model)
+    assert output.shape == (4, 2, 4)
+
+The example targets PyTorch Inductor; other compiler backends require separate
+validation. Initialize/warm explicit precision combinations as described in
+:doc:`./precision` before graph capture.
+
+First calls include loading, compilation or JIT and are not steady-state latency.
+CUDA Graphs retain the warmed choice of the captured function: capturing eager
+execution does not automatically switch to Triton; compiled capture retains its
+compiled path. Follow PyTorch CUDA Graph memory and forward/backward warmup rules.
+
+Compilation may alter fusion and rounding; bitwise equality with eager is not
+promised. Keep model, inputs, state precision, reset and synchronization identical
+when comparing performance. Standard workflows are in ``benchmark/README.md``.
+
+Queries and logging
+----------------------------
+
+Ordinary training needs no implementation query. To diagnose CUDA execution:
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import functional
+
+    device = torch.device("cuda:0")
     print(functional.neuron_implementation("lif", device))
     print(functional.neuron_implementation("lif", device, execution="compile"))
 
-The query reports the selected provider and why earlier candidates were
-unavailable. Importing SpikingJelly does not initialize CUDA; selection happens
-on first use of each path (or an explicit diagnostic query). SpikingJelly logs
-each path's selection once through its logger. Compiled selection targets the
-Inductor expansion; arbitrary compiler backends need separate evaluation.
+Queries initialize/cache the selected path without neuron computation or module
+state changes. The result contains ``implementation`` and ``unavailable`` reasons
+for earlier candidates. It is not a per-call profiler: low-precision state,
+custom surrogates and explicit precision policies can follow separate paths.
 
-Advanced diagnostics may set ``SJ_<NEURON>_CUDA_IMPLEMENTATION`` before Python
-starts, for example ``SJ_LIF_CUDA_IMPLEMENTATION=triton``. The default is
-``auto``. A forced provider is strict: if it is unavailable for the requested
-profile, the operator raises an error. Unknown kernel and execution failures are
-also raised rather than hidden by fallback. Restart the process after changing
-these variables.
+Package logging is disabled by default; selections are logged once. Applications
+can enable INFO at their entry point; earlier records are not replayed.
+``logger.remove()`` affects global Loguru sinks and is an application decision:
 
-Operator sources are kept in the repository-root ``ops/`` tree and installed
-inside the SpikingJelly package as ``spikingjelly._ops``. Triton retains
-its JIT compilation and caches. The optional native CUDA implementation is
-built locally when the matching PyTorch/CUDA toolchain is available; regular
-PyPI wheels remain pure Python.
+.. code-block:: python
+
+    import sys
+    from spikingjelly.logger import logger
+
+    # Configure sinks at the application entry point, before feature imports.
+    logger.remove()
+    logger.add(sys.stderr, level="INFO")
+    logger.enable("spikingjelly")
+
+    import torch
+    from spikingjelly.activation_based import neuron
+
+    node = neuron.LIFNode(step_mode="m").cuda()
+    node(torch.rand(4, 2, 8, device="cuda"))
+    node.reset()
+
+See :doc:`/APIs/spikingjelly.logger` for logging configuration.
+
+Known limitation in the verified environment
+--------------------------------------------
+
+On RTX 5090 with Torch 2.11.0+cu128 and Triton 3.6.0, LIF multi-step backward
+with ``store_v_seq=False`` triggers ``TritonGPUCoalesce``/``PassManager::run failed``.
+Changing dimensions or replacing ATan with Sigmoid did not remove the error;
+full-trace execution and single-step backward passed. Native CUDA eager passed
+with final-state-only output; automatic Inductor Triton execution is still affected.
+
+The training/compilation examples above explicitly use ``store_v_seq=True`` as
+a temporary workaround, consuming additional voltage-trace memory proportional
+to time steps. It is not a backend parameter or evidence that the default
+final-state profile passed on this environment. This update changes tutorials
+only; the production kernel requires a separate fix.
+
+Troubleshooting
+----------------------------
+
+* Missing extensions/dependencies or known incompatible devices allow auto mode
+  to check the next candidate. No available candidate produces an error.
+* Unknown kernel, JIT, OOM or gradient failures are reported without silent fallback.
+* For native loading incompatibility, check build/runtime Torch/CUDA versions and
+  target GPU support, rebuilding if needed.
+* Advanced diagnostics may set ``SJ_LIF_CUDA_IMPLEMENTATION=triton`` or the matching
+  ``SJ_<NEURON>_CUDA_IMPLEMENTATION`` before Python starts. The default is ``auto``;
+  strict alternatives are ``cuda``, ``triton`` and ``torch``. Unsupported profiles fail.
+* Restart after changing these variables, dependencies or installed extensions.
+  They are not model constructor parameters or required training steps.
+* For state/input shape, device or precision mismatches, check for retained state
+  from an independent previous batch.
+
+The current package has no CuPy dependency. See :doc:`./migrate_from_legacy`
+for retired installation options and interfaces.

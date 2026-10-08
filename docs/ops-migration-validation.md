@@ -763,3 +763,57 @@ Commands, raw timing/correctness JSON and logs are preserved in
 remote candidate is `/home/allenyolk/CodeRepo/sj-ops-cleanup-g2-20261007`.
 No paid instance was rented. The operator-registration and CuPy-removal work can
 be checkpointed; tutorial migration remains a separate follow-up.
+
+## User tutorial refresh (2026-10-08)
+
+Chinese/English user tutorials now explain installation, automatic CPU/CUDA
+execution, IF/LIF/PLIF training, explicit initial/final state, surrogate and state
+precision, compilation, diagnostics, FlexSN, and retained binary projections.
+Migration tables replace retired provider APIs and CuPy installation instructions.
+Historical tutorials/results are explicitly archived; URLs and attribution remain.
+No production implementation was modified in this documentation update.
+
+Local checks passed 91 tests, with ten CUDA cases skipped. The compiled training
+example also ran on CPU. Outside-checkout pure-wheel examples passed five checks,
+with six CUDA cases skipped. Ten paired Chinese/English runnable examples match;
+the uploaded examples and final source have identical ASTs. Four training CLI
+help commands were checked. Final Sphinx HTML builds succeeded without warnings;
+the previous four source-format warnings were removed. One earlier fresh build
+hit an external NumPy inventory SSL error; the successful final build did not.
+
+RTX 5090, Torch 2.11.0+cu128, Triton 3.6.0 exposed an existing LIF backward compiler
+failure with final-state-only output (`store_v_seq=False`). Changing channel count
+8/16/32/64/128, using Sigmoid instead of ATan, and changing T=3/4/16 did not remove
+the failure; T=1 and full-state-trace execution passed. The reported pass is
+`TritonGPUCoalesce` with `PassManager::run failed`. Initial default examples passed
+eight checks and failed three; with built native extensions, 94 checks passed and
+one Inductor example failed. Those counts were observed before the automatic
+rental cutoff; full raw logs from that earlier instance were not recovered.
+
+Tutorial examples explicitly retain voltage traces as a temporary workaround,
+and describe the extra memory cost. This is not a production fix or a claim that
+the default final-state Triton training profile passed. The final pure Python /
+Triton tutorial acceptance run passed all 11 checks under a CuPy import guard.
+Production repair remains separate from this documentation-only scope.
+
+The final RTX 5090 acceptance run rebuilt all 12 native extensions for `sm_120`
+on the rented machine. The same tutorial examples plus fused projection checks
+passed 95 cases, including native and missing-extension reference execution.
+Together with the 11-case pure Python/Triton run, the documented full-trace
+workaround was verified in eager and fullgraph training, with FP32 state/BF16
+inputs and an explicit BF16-state/FP32-backward precision policy. This does not
+extend the claim to the failing final-state-only Triton profile or FP8.
+
+The shared g2 GPUs stayed busy, so its queue was cancelled and paid validation
+used single-GPU Vast.ai on-demand instances within the user's increased $5 cap.
+Two hosts failed image startup; an earlier acceptance instance reached the
+cost-protection cutoff, and a subsequent setup failed before tests. All were
+destroyed. The final controller retrieved raw evidence and destroyed the last
+instance automatically after success. The account instance list was empty.
+Posted charges totalled $2.575: $0.001, $0.054, $2.313, $0.049 and $0.158 across
+this task's five instances; no new instance remains to accrue storage charges.
+
+Raw final logs, the temporary pytest example harness, build/selection environment,
+commands and billing summaries are in `.agents/artifacts/user-tutorials-20261007`
+in the primary checkout. Tutorials use only public APIs; the kernel bug is
+explicitly documented rather than hidden by a fallback or a production change.

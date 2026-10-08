@@ -186,27 +186,9 @@ The following figure shows the network structure of three networks:
 
 The complete codes are saved in `spikingjelly.activation_based.examples.rsnn_sequential_fmnist <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/rsnn_sequential_fmnist.py>`_. We can run by the following commands:
 
-.. code:: shell
+.. code-block:: shell
 
-    usage: rsnn_sequential_fmnist.py [-h] [-model MODEL] [-device DEVICE] [-b B] [-epochs N] [-j N] [-data-dir DATA_DIR] [-out-dir OUT_DIR] [-resume RESUME] [-amp] [-opt OPT] [-momentum MOMENTUM] [-lr LR]
-
-    Classify Sequential Fashion-MNIST
-
-    optional arguments:
-    -h, --help          show this help message and exit
-    -model MODEL        use which model, "plain", "ss" (StatefulSynapseNet) or "fb" (FeedBackNet)
-    -device DEVICE      device
-    -b B                batch size
-    -epochs N           number of total epochs to run
-    -j N                number of data loading workers (default: 4)
-    -data-dir DATA_DIR  root dir of Fashion-MNIST dataset
-    -out-dir OUT_DIR    root dir for saving logs and checkpoint
-    -resume RESUME      resume from the checkpoint path
-    -amp                automatic mixed precision training
-    -opt OPT            use which optimizer. SDG or Adam
-    -momentum MOMENTUM  momentum for SGD
-    -lr LR              learning rate
-
+    uv run --no-sync python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --help
 
 Train three networks:
 
@@ -235,3 +217,16 @@ We can find that both ``StatefulSynapseNet`` and ``FeedBackNet`` have higher acc
 .. [#Unsupervised] Diehl P U, Cook M. Unsupervised learning of digit recognition using spike-timing-dependent plasticity[J]. Frontiers in computational neuroscience, 2015, 9: 99.
 
 .. [#Exploiting] Fang H, Shrestha A, Zhao Z, et al. Exploiting Neuron and Synapse Filter Dynamics in Spatial Temporal Learning of Deep Spiking Neural Network[J].
+
+Execution and reproduction in the current version
+-------------------------------------------------
+
+The model uses device-based execution without backend configuration. Reset
+independent batches with ``functional.reset_net`` after backward/parameter updates;
+see :doc:`./neuron` for continuous state. AMP does not guarantee fused neuron
+kernels; see :doc:`./precision` for state policies and :doc:`./triton_backend`
+for compilation/diagnostics.
+
+Retained accuracy, curves and experiment outputs are historical; some original
+runs do not identify the exact version. They were not retrained on current V2
+and are not acceptance results for current speed or accuracy.

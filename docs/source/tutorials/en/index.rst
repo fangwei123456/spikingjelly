@@ -1,6 +1,10 @@
 英文教程 | English Tutorials
 ========================================
 
+Start with :doc:`./basic_concept` and :doc:`./neuron`; see :doc:`./triton_backend`
+for GPU execution/compilation and :doc:`./precision` for numerical policies.
+Use :doc:`./flexsn` for custom dynamics and :doc:`./migrate_from_legacy` for old code.
+
 .. toctree::
     :maxdepth: 1
     :caption: Basics

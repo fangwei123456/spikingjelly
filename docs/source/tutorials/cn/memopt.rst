@@ -234,7 +234,7 @@ MCore 训练提供 level 和 budget 配置，但只在预先确定的 Transforme
 评测、预测、生成和模型导出不会保留训练期的检查点包装。由于
 ``checkpoint_module`` 保持 ``state_dict`` 兼容，推理时不需要转换权重。
 
-神经元后端与 ``torch.compile``
+神经元执行与 ``torch.compile``
 --------------------------------
 
 memopt 不改变神经元执行路径。神经元实现会根据设备自动选择；正式训练前，应使用
@@ -243,6 +243,56 @@ memopt 不改变神经元执行路径。神经元实现会根据设备自动选�
 ``memopt.checkpoint`` 使用 PyTorch non-reentrant checkpoint。无压缩、
 Boolean 压缩和 bit 压缩路径支持 ``torch.compile(..., fullgraph=True)``。Sparse
 压缩后的大小随输入变化，编译时可能需要动态 shape。
+
+二值投影与融合投影
+----------------------------
+
+普通 Linear/Conv 的省显存训练推荐本页的 memopt；旧 ``SpikeLinear``、``SpikeConv*``
+及对应 ``spike_linear/spike_conv*`` 已删除。以下接口保留不同算法，不能互作替代：
+
+* ``if_linear``／``lif_linear`` 在 CUDA FP32 上融合神经元和 Linear，返回投影输出
+  与最终电位，支持输入、初态、权重和偏置的一阶梯度。反向重新计算脉冲。
+* ``packed_spike_linear`` 使用逐行打包的二值输入，CUDA 权重支持 FP32/FP16/BF16；
+  仅权重和偏置可微。
+* ``sparse_linear(strategy="sparse")`` 使用未打包的二维二值 CUDA 输入，支持
+  FP32/FP16/BF16 及输入、权重和偏置梯度。``strategy`` 是算法选择，不是 backend。
+
+扩展可用时采用原生 CUDA，否则使用 Torch 参考公式。融合前向不物化中间脉冲的
+性能特性要求原生扩展；参考路径不保证这项特性。七种内置替代梯度支持融合投影的
+fullgraph 编译训练，自定义替代梯度只支持 eager。下面是独立 CUDA 示例：
+
+.. code-block:: python
+
+    import torch
+    import torch.nn.functional as F
+    from spikingjelly.activation_based import functional, surrogate
+
+    device = torch.device("cuda:0")
+    x = torch.rand(2, 2, 8, device=device, requires_grad=True)  # [T, M, K]
+    v0 = torch.zeros(2, 8, device=device, requires_grad=True)
+    weight_t = torch.nn.Parameter(torch.randn(8, 4, device=device))  # [K, N]
+    for project in (functional.if_linear, functional.lif_linear):
+        y, v_final = project(x, v0, weight_t, surrogate_function=surrogate.ATan())
+        gradients = torch.autograd.grad(y.sum() + v_final.sum(), (x, v0, weight_t))
+        assert y.shape == (2, 2, 4) and all(torch.isfinite(g).all() for g in gradients)
+    # Keep v_final for a continuous segment; reset explicitly for independent batches.
+
+    binary = torch.randint(0, 2, (2, 9), device=device).float().requires_grad_()
+    weight = torch.nn.Parameter(torch.randn(4, 9, device=device))  # [N, K]
+    packed = functional.bit_pack_spike_dense(binary.detach())
+    assert packed.shape == (2, 2)  # Each row pads independently to ceil(9/8) bytes.
+    packed_y = functional.packed_spike_linear(packed, weight)
+    sparse_y = functional.sparse_linear(binary, weight, strategy="sparse")
+    torch.testing.assert_close(packed_y, F.linear(binary.detach(), weight))
+    torch.testing.assert_close(sparse_y, F.linear(binary, weight))
+    torch.autograd.grad(packed_y.sum(), weight)  # No gradient to the packed input.
+    torch.autograd.grad(sparse_y.sum(), (binary, weight))
+
+融合接口的 ``weight_t`` 为 ``[K, N]``，packed/sparse 的 ``weight`` 为 ``[N, K]``。
+需要缓存转置权重时，注意训练参数更新和 autograd，不能长期复用已失效的图。
+全局 ``bit_spike_compress`` 是一维最低位优先格式，逐行 ``bit_pack_spike_dense``
+会逐行补零；输入宽度不整除 8 时尤其不能互换。memopt 的压缩器独立管理保存张量。
+完整形状、布局与设备约束见 :doc:`/APIs/spikingjelly.activation_based.functional.spike`。
 
 性能实测
 --------

@@ -334,3 +334,14 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
 .. [#ResNet] He, Kaiming, et al. "Deep residual learning for image recognition." Proceedings of the IEEE conference on computer vision and pattern recognition. 2016.
 
 .. [#ImageNet] Deng, Jia, et al. "Imagenet: A large-scale hierarchical image database." 2009 IEEE conference on computer vision and pattern recognition. IEEE, 2009.
+
+当前版本的执行与复现
+----------------------------
+
+本页模型使用设备自动执行，无需 backend 配置。独立 batch 在反向与参数更新后
+调用 ``functional.reset_net``；连续序列按 :doc:`./neuron` 管理状态。
+AMP 不保证采用融合神经元 kernel，状态精度配置见 :doc:`./precision`。
+编译和执行诊断见 :doc:`./triton_backend`。
+
+本页保留的准确率、曲线和实验输出是历史记录，部分原始运行未注明精确版本。
+它们没有在当前 V2 上重新训练验证，也不是当前实现速度或准确率的验收结果。

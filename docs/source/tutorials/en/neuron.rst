@@ -229,30 +229,76 @@ The results are:
 .. image:: ../../_static/tutorials/neuron/2.*
     :width: 100%
 
-Step mode and device dispatch
--------------------------------------------
+Training IF, LIF and PLIF
+----------------------------
 
-``step_mode`` selects single-step or multi-step execution. The tensor device
-selects the neuron implementation: CPU uses the Torch reference, and CUDA uses
-the registered operator with a compatible implementation selected automatically.
-Move the module and input to the intended device; neuron constructors do not take
-a backend argument.
+``step_mode`` selects single- or multi-step execution; the input selects the
+device. Move the module and inputs to the same device without choosing an
+implementation. PLIF's public class is ``ParametricLIFNode`` and has trainable
+parameters. This standalone example needs no dataset and checks parameter updates:
 
 .. code-block:: python
 
     import torch
-    from spikingjelly.activation_based import functional, neuron
+    from spikingjelly.activation_based import functional, neuron, surrogate
 
-    device = torch.device("cuda:0")
-    node = neuron.IFNode(step_mode="m").to(device)
-    x_seq = torch.rand(8, 4, device=device)
-    y_seq = node(x_seq)
-    print(functional.neuron_implementation("if", device))
+    torch.manual_seed(1)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    for node_type in (neuron.IFNode, neuron.LIFNode, neuron.ParametricLIFNode):
+        node = node_type(
+            step_mode="m", surrogate_function=surrogate.ATan(), store_v_seq=True
+        ).to(device)
+        x = torch.rand(4, 2, 8, device=device, requires_grad=True)  # [T, N, C]
+        parameters = list(node.parameters())
+        optimizer = torch.optim.SGD(parameters, lr=0.01) if parameters else None
+        before = [p.detach().clone() for p in parameters]
+        spikes = node(x)
+        loss = spikes.sum() + node.v.sum()
+        loss.backward()
+        assert spikes.shape == x.shape and torch.isfinite(x.grad).all()
+        if optimizer is not None:
+            assert all(p.grad is not None for p in parameters)
+            optimizer.step()
+            assert any(not torch.equal(old, p) for old, p in zip(before, parameters))
+        functional.reset_net(node)  # Reset after backward/update.
 
-The diagnostic query initializes and reports the selected implementation for
-that device. Most applications do not need to call it. Advanced provider
-controls are documented in the operator diagnostics; they are not part of the
-neuron module API.
+Module calls advance state such as ``node.v``. For independent samples/batches,
+call ``functional.reset_net`` after backward and parameter updates. Retain state
+for a continuous sequence; use ``functional.detach_net`` to truncate BPTT without
+resetting voltage. See :doc:`./triton_backend` for execution/compilation/diagnostics
+and :doc:`./precision` for precision policies.
+
+This example retains voltage traces. Validation on RTX 5090 with Torch 2.11.0
+and Triton 3.6.0 found a LIF multi-step backward compilation failure with
+``store_v_seq=False``; the full-trace path passed. This configuration consumes
+extra trace memory. See :doc:`./triton_backend` for the limitation/execution paths.
+
+Explicit initial state, final state and traces
+----------------------------------------------
+
+The IF/LIF/PLIF functions ``functional.if_multi_step``, ``lif_multi_step`` and
+``plif_multi_step`` do not manage module memory. Supply initial state,
+retain returned final state and decide whether to detach between segments.
+``store_v_seq=True`` returns a monitoring trace. With the default ``False``, the
+third result is ``None``; the second result always contains the final state.
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import functional, surrogate
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    x = torch.rand(4, 2, 8, device=device, requires_grad=True)
+    v0 = torch.zeros(2, 8, device=device, requires_grad=True)
+    spikes, v_final, v_seq = functional.lif_multi_step(
+        x, v0, tau=2.0, surrogate_function=surrogate.ATan(), store_v_seq=True
+    )
+    assert v_final.shape == v0.shape and v_seq.shape == x.shape
+    assert torch.equal(v_final, v_seq[-1])
+    (spikes.sum() + v_final.sum()).backward()
+    assert v0.grad is not None and torch.isfinite(v0.grad).all()
+    assert torch.equal(v0.detach(), torch.zeros_like(v0))
+    # Pass v_final to the next segment; detach it to truncate BPTT.
 
 Custom Spiking Neurons
 -------------------------------------------

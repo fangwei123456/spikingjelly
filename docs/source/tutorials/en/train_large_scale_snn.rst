@@ -329,3 +329,16 @@ Training with DDP on two GPUs:
 .. [#ResNet] He, Kaiming, et al. "Deep residual learning for image recognition." Proceedings of the IEEE conference on computer vision and pattern recognition. 2016.
 
 .. [#ImageNet] Deng, Jia, et al. "Imagenet: A large-scale hierarchical image database." 2009 IEEE conference on computer vision and pattern recognition. IEEE, 2009.
+
+Execution and reproduction in the current version
+-------------------------------------------------
+
+The model uses device-based execution without backend configuration. Reset
+independent batches with ``functional.reset_net`` after backward/parameter updates;
+see :doc:`./neuron` for continuous state. AMP does not guarantee fused neuron
+kernels; see :doc:`./precision` for state policies and :doc:`./triton_backend`
+for compilation/diagnostics.
+
+Retained accuracy, curves and experiment outputs are historical; some original
+runs do not identify the exact version. They were not retrained on current V2
+and are not acceptance results for current speed or accuracy.

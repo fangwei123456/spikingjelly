@@ -67,6 +67,7 @@ English version: :doc:`../en/conv_fashion_mnist`
         def __init__(self, T: int, channels: int):
             # ...
             functional.set_step_mode(self, step_mode='m')
+
 将图片直接输入到SNN，而不是编码后在输入，是近年来深度SNN的常见做法，我们在此教程中也使用这样的方法。在这种情况下，实际的 ``图片-脉冲`` 编码是由网络中的前三层，也就是 \
 ``{Conv2d-BatchNorm2d-IFNode}`` 完成。
 
@@ -109,30 +110,7 @@ English version: :doc:`../en/conv_fashion_mnist`
 
 .. code-block:: shell
 
-    (sj-dev) wfang@Precision-5820-Tower-X-Series:~/spikingjelly_dev$ python -m spikingjelly.activation_based.examples.conv_fashion_mnist -h
-    usage: conv_fashion_mnist.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-data-dir DATA_DIR] [-out-dir OUT_DIR]
-                                [-resume RESUME] [-amp] [-opt OPT] [-momentum MOMENTUM] [-lr LR] [-channels CHANNELS]
-
-    Classify Fashion-MNIST
-
-    optional arguments:
-    -h, --help          show this help message and exit
-    -T T                simulating time-steps
-    -device DEVICE      device
-    -b B                batch size
-    -epochs N           number of total epochs to run
-    -j N                number of data loading workers (default: 4)
-    -data-dir DATA_DIR  root dir of Fashion-MNIST dataset
-    -out-dir OUT_DIR    root dir for saving logs and checkpoint
-    -resume RESUME      resume from the checkpoint path
-    -amp                automatic mixed precision training
-    -opt OPT            use which optimizer. SDG or Adam
-    -momentum MOMENTUM  momentum for SGD
-    -lr LR              learning rate
-    -channels CHANNELS  channels of CSNN
-    -save-es SAVE_ES    dir for saving a batch spikes encoded by the first {Conv2d-BatchNorm2d-IFNode}
-
-
+    uv run --no-sync python -m spikingjelly.activation_based.examples.conv_fashion_mnist -h
 
 我们使用如下命令进行训练，其中为了加快训练速度，启用了混合精度训练：
 
@@ -303,3 +281,14 @@ English version: :doc:`../en/conv_fashion_mnist`
 
 .. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/3/s_3.*
     :width: 100%
+
+当前版本的执行与复现
+----------------------------
+
+本页模型使用设备自动执行，无需 backend 配置。独立 batch 在反向与参数更新后
+调用 ``functional.reset_net``；连续序列按 :doc:`./neuron` 管理状态。
+AMP 不保证采用融合神经元 kernel，状态精度配置见 :doc:`./precision`。
+编译和执行诊断见 :doc:`./triton_backend`。
+
+本页保留的准确率、曲线和实验输出是历史记录，部分原始运行未注明精确版本。
+它们没有在当前 V2 上重新训练验证，也不是当前实现速度或准确率的验收结果。

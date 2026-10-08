@@ -223,26 +223,72 @@ Soft方式重置方程为：
 .. image:: ../../_static/tutorials/neuron/2.*
     :width: 100%
 
-步进模式和设备分发
--------------------------------------------
+训练 IF、LIF 和 PLIF
+----------------------------
 
-``step_mode`` 选择单步或多步执行。输入张量的设备决定神经元实现：CPU 使用
-Torch 参考实现，CUDA 通过注册算子自动选择兼容实现。将模块和输入移动到目标设备
-即可；神经元构造函数不再接收 backend 参数。
+``step_mode`` 选择单步或多步；设备由输入决定。把模块和输入移动到同一设备即可，
+不需要指定执行实现。PLIF 的公开类名是 ``ParametricLIFNode``，它包含可学习参数。
+下面的独立示例不需要数据集，运行前后向，并检查 PLIF 参数更新：
 
 .. code-block:: python
 
     import torch
-    from spikingjelly.activation_based import functional, neuron
+    from spikingjelly.activation_based import functional, neuron, surrogate
 
-    device = torch.device("cuda:0")
-    node = neuron.IFNode(step_mode="m").to(device)
-    x_seq = torch.rand(8, 4, device=device)
-    y_seq = node(x_seq)
-    print(functional.neuron_implementation("if", device))
+    torch.manual_seed(1)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    for node_type in (neuron.IFNode, neuron.LIFNode, neuron.ParametricLIFNode):
+        node = node_type(
+            step_mode="m", surrogate_function=surrogate.ATan(), store_v_seq=True
+        ).to(device)
+        x = torch.rand(4, 2, 8, device=device, requires_grad=True)  # [T, N, C]
+        parameters = list(node.parameters())
+        optimizer = torch.optim.SGD(parameters, lr=0.01) if parameters else None
+        before = [p.detach().clone() for p in parameters]
+        spikes = node(x)
+        loss = spikes.sum() + node.v.sum()
+        loss.backward()
+        assert spikes.shape == x.shape and torch.isfinite(x.grad).all()
+        if optimizer is not None:
+            assert all(p.grad is not None for p in parameters)
+            optimizer.step()
+            assert any(not torch.equal(old, p) for old, p in zip(before, parameters))
+        functional.reset_net(node)  # Reset after backward/update.
 
-诊断查询会为该设备初始化并返回实际选择的实现。普通使用通常不需要调用它。
-高级实现控制见算子诊断接口；这些控制不属于神经元模块 API。
+模块调用会推进 ``node.v`` 等状态。独立样本或 batch 在反向和参数更新后调用
+``functional.reset_net``；连续序列可以保留状态。截断 BPTT 时用
+``functional.detach_net`` 切断上一段的梯度，不将电位重置为初值。
+完整执行、编译与诊断见 :doc:`./triton_backend`，精度见 :doc:`./precision`。
+
+本例保存电位轨迹。当前 RTX 5090、Torch 2.11.0、Triton 3.6.0 的验证发现：
+LIF 多步训练在 ``store_v_seq=False`` 的 Triton 反向编译中可能报错，完整轨迹路径通过。
+此配置消耗额外轨迹显存；限制与执行路径说明见 :doc:`./triton_backend`。
+
+显式初态、最终状态和轨迹
+----------------------------
+
+本节的 ``functional.if_multi_step``、``lif_multi_step`` 和 ``plif_multi_step``
+不管理模块 memory。调用者提供初态，保存返回的最终
+状态，并决定是否在段落之间 detach。``store_v_seq=True`` 返回监控轨迹；默认
+``False`` 时第三个返回值为 ``None``，第二个返回值始终是最终状态。
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import functional, surrogate
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    x = torch.rand(4, 2, 8, device=device, requires_grad=True)
+    v0 = torch.zeros(2, 8, device=device, requires_grad=True)
+    spikes, v_final, v_seq = functional.lif_multi_step(
+        x, v0, tau=2.0, surrogate_function=surrogate.ATan(), store_v_seq=True
+    )
+    assert v_final.shape == v0.shape and v_seq.shape == x.shape
+    assert torch.equal(v_final, v_seq[-1])
+    (spikes.sum() + v_final.sum()).backward()
+    assert v0.grad is not None and torch.isfinite(v0.grad).all()
+    assert torch.equal(v0.detach(), torch.zeros_like(v0))
+    # Pass v_final to the next segment; detach it to truncate BPTT.
 
 自定义神经元
 -------------------------------------------

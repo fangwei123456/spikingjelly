@@ -67,6 +67,7 @@ For faster training speed, we use the multi-step mode and rely on automatic devi
         def __init__(self, T: int, channels: int):
             # ...
             functional.set_step_mode(self, step_mode='m')
+
 Recently, sending the image to SNN directly is a popular method in deep SNNs, which we will also use in this tutorial. In this case, the ``image-spike`` encoding is implemented by the first three layers of the network, \
 which are ``{Conv2d-BatchNorm2d-IFNode}``.
 
@@ -110,29 +111,7 @@ We can use the following commands to print the training args:
 
 .. code-block:: shell
 
-    (sj-dev) wfang@Precision-5820-Tower-X-Series:~/spikingjelly_dev$ python -m spikingjelly.activation_based.examples.conv_fashion_mnist -h
-    usage: conv_fashion_mnist.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-data-dir DATA_DIR] [-out-dir OUT_DIR]
-                                [-resume RESUME] [-amp] [-opt OPT] [-momentum MOMENTUM] [-lr LR] [-channels CHANNELS]
-
-    Classify Fashion-MNIST
-
-    optional arguments:
-    -h, --help          show this help message and exit
-    -T T                simulating time-steps
-    -device DEVICE      device
-    -b B                batch size
-    -epochs N           number of total epochs to run
-    -j N                number of data loading workers (default: 4)
-    -data-dir DATA_DIR  root dir of Fashion-MNIST dataset
-    -out-dir OUT_DIR    root dir for saving logs and checkpoint
-    -resume RESUME      resume from the checkpoint path
-    -amp                automatic mixed precision training
-    -opt OPT            use which optimizer. SDG or Adam
-    -momentum MOMENTUM  momentum for SGD
-    -lr LR              learning rate
-    -channels CHANNELS  channels of CSNN
-    -save-es SAVE_ES    dir for saving a batch spikes encoded by the first {Conv2d-BatchNorm2d-IFNode}
-
+    uv run --no-sync python -m spikingjelly.activation_based.examples.conv_fashion_mnist -h
 
 We can use the following commands to train. For faster training speed, we enable automatic mixed precision:
 
@@ -302,3 +281,16 @@ Images and spikes will be saved in ``./logs/visualization``. Here are two images
 
 .. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/3/s_3.*
     :width: 100%
+
+Execution and reproduction in the current version
+-------------------------------------------------
+
+The model uses device-based execution without backend configuration. Reset
+independent batches with ``functional.reset_net`` after backward/parameter updates;
+see :doc:`./neuron` for continuous state. AMP does not guarantee fused neuron
+kernels; see :doc:`./precision` for state policies and :doc:`./triton_backend`
+for compilation/diagnostics.
+
+Retained accuracy, curves and experiment outputs are historical; some original
+runs do not identify the exact version. They were not retrained on current V2
+and are not acceptance results for current speed or accuracy.

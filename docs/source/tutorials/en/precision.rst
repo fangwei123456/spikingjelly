@@ -135,53 +135,88 @@ Some Transformer Engine recipes serialize FP8 metadata as a pickle. Set
 ``NVTE_ALLOW_UNSAFE_PICKLE_EXTRA_STATE=1`` only when restoring a trusted
 checkpoint; do not enable it for unknown checkpoints.
 
-Configuring neuron precision
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Input, state and computation precision
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Triton precision is set by ``prepare_model_for_precision`` rather than on every
-neuron constructor. Regular layers can use BF16 with BF16 neuron storage
-and forward arithmetic, and FP32 neuron backward arithmetic:
+Layer autocast, neuron input dtype, temporal state storage dtype and forward/backward
+compute dtype are separate dimensions. The table applies to multi-step IFNode,
+LIFNode and ParametricLIFNode, not every neuron family.
+
+.. list-table:: Neuron precision policies
+    :header-rows: 1
+    :widths: 40 60
+
+    * - Configuration
+      - Current behavior
+    * - Ordinary FP32 inputs/state
+      - Automatic device/execution-path selection
+    * - Ordinary FP16/BF16 inputs
+      - Initial state follows inputs unless configured; this does not imply fused kernels
+    * - FP16/BF16 state
+      - Ordinary calls use Torch reference recurrence, including fullgraph compilation
+    * - Explicit FP32 state with low-precision inputs
+      - Applicable precision kernels; different numerics from low-precision state
+    * - Explicit storage/forward/backward precision
+      - CUDA Triton feature requiring supported built-in surrogates and dtype combinations
+    * - FP8 state/computation
+      - Experimental, hardware/format/combination dependent; not universal neuron support
+
+For ordinary BF16 layers with FP32 neuron state, move the model before preparing
+precision, then create the optimizer. This standalone CUDA training example needs
+no dataset:
+
+.. code-block:: python
+
+    import torch
+    from torch import nn
+    from spikingjelly.activation_based import neuron, functional, surrogate
+    from spikingjelly.activation_based.precision import (
+        PrecisionConfig,
+        prepare_model_for_precision,
+    )
+
+    device = torch.device("cuda:0")
+    model = nn.Sequential(
+        nn.Linear(16, 16),
+        neuron.LIFNode(step_mode="m", surrogate_function=surrogate.ATan()),
+        nn.Linear(16, 4),
+    ).to(device)
+    precision = prepare_model_for_precision(
+        model, device, PrecisionConfig(mode="bf16", neuron_storage="fp32")
+    )
+    optimizer = torch.optim.SGD(precision.model.parameters(), lr=0.01)
+    optimizer.zero_grad(set_to_none=True)
+    with precision.autocast_context():
+        output = precision.model(torch.rand(4, 2, 16, device=device))
+        loss = output.float().square().mean()
+    precision.backward(loss, optimizer)
+    functional.reset_net(precision.model)
+
+Storage, forward and backward compute precision can also be selected explicitly.
+This configuration fragment replaces the config in the example:
 
 .. code-block:: python
 
     config = PrecisionConfig(
-        mode="bf16",
-        neuron_storage="bf16",
-        neuron_fwd="bf16",
-        neuron_bwd="fp32",
+        mode="bf16", neuron_storage="bf16", neuron_fwd="bf16", neuron_bwd="fp32"
     )
-    precision = prepare_model_for_precision(model, device, config)
 
-Multi-step IFNode, LIFNode, and ParametricLIFNode use Triton when explicit neuron
-precision fields are set. The neuron module API has no backend argument.
-``neuron_fwd`` and ``neuron_bwd`` independently accept ``fp8``, ``fp16``,
-``bf16``, or ``fp32``. FP8 arithmetic requires ``neuron_storage`` to be
-``float8_e4m3fn`` or ``float8_e5m2``. Exponentials and sensitive surrogate
-operations remain FP32 inside the kernels and are not user options.
+Explicit neuron precision uses Triton without module backend parameters.
+``neuron_fwd``/``neuron_bwd`` accept ``fp8``, ``fp16``, ``bf16`` or ``fp32``;
+not every combination is valid. FP8 arithmetic requires ``float8_e4m3fn`` or
+``float8_e5m2`` state storage. Exponentials and sensitive surrogate computations
+use FP32 inside kernels. See :doc:`./surrogate` for the seven supported surrogates.
+Unsupported explicit policies fail rather than silently changing numerics.
 
+Ordinary execution queries do not replace precision capability checks. Prepare
+precision before compilation; warm the identical combination when using direct
+functional precision interfaces, before graph capture/device checks.
 
-Ordinary autocast does not change the neuron state policy: without
-``neuron_storage``, initial states follow the input dtype. FP16/BF16 states use
-the Torch reference equations, which also support fullgraph compilation. To
-use fused neuron kernels while ordinary layers use autocast, choose FP32 neuron
-state explicitly:
-
-.. code-block:: python
-
-    config = PrecisionConfig(mode="bf16", neuron_storage="fp32")
-    precision = prepare_model_for_precision(model, device, config)
-
-Fullgraph Torch reference execution follows PyTorch compilation semantics.
-Inductor may fuse FP16/BF16 intermediates, so rounding can differ from eager
-execution even when the state dtype is unchanged.
-
-Initialize precision with ``prepare_model_for_precision`` on the target device
-before compiling the model. For direct functional calls, first warm up the
-requested precision profile so device checks stay outside graph capture.
-
-This changes neuron state and recurrence precision; it is not numerically
-identical to BF16 state. Check the model's accuracy before adopting it.
-The benchmark equivalent is ``--precision bf16 --neuron-storage fp32``.
+State/recurrence precision changes can alter spikes, final state and gradients;
+validate model accuracy. Inductor may also change low-precision fusion/rounding,
+so bitwise equality with eager is not promised. Benchmark with the same state
+policy, for example ``--precision bf16 --neuron-storage fp32``.
+See :doc:`./triton_backend` for automatic execution and compilation.
 
 Path 2: ``distributed.vision``
 --------------------------------

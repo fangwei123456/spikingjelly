@@ -10,8 +10,15 @@ SpikingJelly neuron and can generate a Triton kernel for multi-step CUDA
 execution. See :doc:`./triton_backend` for device-based neuron execution.
 
 FlexSN is the path for custom multi-step neurons. The old Auto CUDA translator
-and neuron code-generation templates have been removed; fixed neurons use
-explicit kernels in ``ops/``.
+and neuron code-generation templates have been removed; use public neuron/functional interfaces for fixed neurons.
+
+.. note::
+
+    The ``torch.sigmoid`` examples produce continuous outputs to demonstrate
+    composition/gradients. They are not hard binary spikes or equivalent to a
+    built-in LIF's step forward plus surrogate backward. Construction must run
+    the core on unit tensors; do not capture tensors/modules. Pass parameters
+    through ``static_inputs``.
 
 Describing neuron dynamics with a function
 ------------------------------------------
@@ -207,9 +214,51 @@ Limits and migration
 --------------------
 
 * The leading dimension of a multi-step input is time ``T``; ``T == 0`` is rejected.
-* ``hop`` and ``triton`` require ``step_mode="m"``.
+* Single-step mode executes the core directly; automatic CUDA fusion targets multi-step mode.
 * Changing step mode preserves final states and clears derived ``state_seqs``.
 * The old ``num_inputs``, ``num_outputs``, ``example_inputs``,
   ``example_outputs``, and ``requires_grad`` constructor arguments are removed.
 * ``FlexSNKernel`` and ``FlexSN.kernel`` are removed. Use
   ``functional_forward`` for explicit-state execution.
+
+Training and state management
+-----------------------------
+
+This standalone example demonstrates trainable static inputs, full state traces,
+reset and explicit-state calls without memory mutation. Reset independent batches
+after backward/parameter updates; retain state for continuous sequences:
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import neuron
+
+
+    def smooth_core(x, v, w):
+        h = v + w.sigmoid() * (x - v)
+        output = torch.sigmoid(h - 1.0)
+        return output, h * (1.0 - output)
+
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    node = neuron.FlexSN(
+        smooth_core,
+        1,
+        static_inputs=(torch.nn.Parameter(torch.tensor(0.0)),),
+        store_state_seqs=True,
+    ).to(device)
+    optimizer = torch.optim.SGD(node.parameters(), lr=0.01)
+    x = torch.rand(4, 2, 8, device=device, requires_grad=True)
+    output = node(x)
+    assert node.state_seqs[0].shape == x.shape
+    (output.sum() + node.states[0].sum()).backward()
+    assert node.static_inputs[0].grad is not None
+    optimizer.step()
+    node.reset()
+    assert node.states == (None,)
+    # Explicit-state calls return output/state tuples without changing managed state.
+    outputs, states = node.functional_forward(
+        (x.detach(),), (torch.zeros_like(x[0]),), static_inputs=node.static_inputs
+    )
+    assert outputs[0].shape == x.shape and states[0].shape == x.shape[1:]
+    assert node.states == (None,)

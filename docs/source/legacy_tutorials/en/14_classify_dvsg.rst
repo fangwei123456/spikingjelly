@@ -3,6 +3,14 @@
 Classify DVS128 Gesture
 ======================================
 
+.. warning::
+
+    This is an unmaintained archive for older SpikingJelly, not current V2
+    instructions. Code/commands using CuPy or retired backends do not run directly
+    with the current package. See :doc:`/tutorials/en/neuron` and
+    :doc:`/tutorials/en/migrate_from_legacy` for current usage.
+
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 We have learned how to use neuromorphic datasets in last tutorial :doc:`Neuromorphic Datasets Processing <./13_neuromorphic_datasets>`.

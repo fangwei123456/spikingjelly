@@ -348,3 +348,8 @@ Although the difference is only in the building order of the computation graph, 
 
 * When using the surrogate gradient method to train SNN directly, it is recommended to use the layer-by-layer propagation pattern. When the network is built correctly, the layer-by-layer propagation pattern has the advantage of parallelism and speed.
 * Using step-by-step propagation pattern when memory is limited. For example, a large ``T`` is required in the ANN2SNN task. In the layer-by-layer propagation pattern, the real batch size for stateless layers is ``TN`` rather than ``N`` (refer to the next tutorial). when ``T`` is too large, the memory consumption may be too large.
+
+Device and execution
+----------------------------
+
+Move modules and inputs to the same device. Neurons require no backend selection; see :doc:`./neuron` for CPU/CUDA usage and :doc:`./triton_backend` for compilation and diagnostics.

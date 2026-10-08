@@ -259,3 +259,16 @@ The following figure shows the accuracy curves during the training process:
 
 
 .. [#PLIF] Fang, Wei, et al. "Incorporating learnable membrane time constant to enhance learning of spiking neural networks." Proceedings of t                                                                                  
+
+Execution and reproduction in the current version
+-------------------------------------------------
+
+The model uses device-based execution without backend configuration. Reset
+independent batches with ``functional.reset_net`` after backward/parameter updates;
+see :doc:`./neuron` for continuous state. AMP does not guarantee fused neuron
+kernels; see :doc:`./precision` for state policies and :doc:`./triton_backend`
+for compilation/diagnostics.
+
+Retained accuracy, curves and experiment outputs are historical; some original
+runs do not identify the exact version. They were not retrained on current V2
+and are not acceptance results for current speed or accuracy.

@@ -17,7 +17,7 @@
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Core Capabilities](#core-capabilities)
-  - [Backend Performance](#backend-performance)
+  - [Operator Execution](#operator-execution)
   - [Large-Scale SNN Systems](#large-scale-snn-systems)
   - [Datasets](#datasets)
   - [Interchange and Deployment](#interchange-and-deployment)
@@ -48,13 +48,13 @@ SpikingJelly is built on PyTorch. Install [PyTorch, torchvision, and torchaudio]
 Install the latest stable PyPI release:
 
 ```bash
-pip install spikingjelly
+uv pip install spikingjelly
 ```
 
 Install V2 pre-releases from PyPI when they are published:
 
 ```bash
-pip install --pre spikingjelly
+uv pip install --pre spikingjelly
 ```
 
 Install the latest development version from source:
@@ -62,16 +62,29 @@ Install the latest development version from source:
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
-pip install .
+uv pip install .
 ```
 
 Optional dependencies:
 
 | Feature | Install |
 | --- | --- |
-| Triton backend | `pip install triton==3.3.1` |
-| NIR exchange | `pip install "spikingjelly[nir]"` (PyPI) or `pip install ".[nir]"` (source checkout) |
-| Lightning integration | `pip install lightning jsonargparse[signatures]` |
+| Automatic CUDA execution (Triton) | `uv pip install "spikingjelly[triton]"` or `uv pip install --editable ".[triton]"` in a source checkout |
+| NIR exchange | `uv pip install "spikingjelly[nir]"` (PyPI) or `uv pip install ".[nir]"` (source checkout) |
+| Lightning integration | `uv pip install lightning jsonargparse[signatures]` |
+
+Regular wheels do not contain precompiled native CUDA libraries. Optional local
+builds require matching CUDA Torch, a CUDA Toolkit with nvcc, a C++ compiler,
+`setuptools>=77.0.3` and ninja:
+
+```bash
+SJ_BUILD_NATIVE_CUDA=1 uv pip install --no-build-isolation .
+```
+
+Missing toolchains emit a message and skip extensions; actual compilation failures
+are errors. Runtime does not compile native CUDA. Triton uses its own JIT; not all
+platforms' CUDA Torch distributions include usable Triton. Changes to Torch/CUDA
+or target GPUs may require rebuilding.
 
 ## Quick Start
 
@@ -111,12 +124,12 @@ Next steps:
 Neuron execution is selected automatically from tensor device and execution path:
 CPU uses Torch; CUDA eager prefers compatible native CUDA, while Inductor
 expansion prefers Triton. CUDA Graph retains its pre-capture choice. No public
-neuron backend argument and no CuPy dependency are required.
+neuron backend argument and no CuPy dependency are required. Low-precision
+state profiles can use Torch reference execution.
 
-Pure Python wheels include Torch reference and optional Triton execution. Build
-native neuron, fused IF/LIF-Linear and packed/sparse projection extensions from
-source with `SJ_BUILD_NATIVE_CUDA=1 uv pip install --no-build-isolation .` after
-preparing matching Torch and CUDA tools. Missing extensions use Torch reference
+Pure Python wheels include Torch reference and optional Triton execution.
+Optional native neuron, fused IF/LIF-Linear and packed/sparse projection builds
+are described under [Installation](#installation). Missing extensions use Torch reference
 for projections; fused no-intermediate-spike performance requires the extension.
 Use ordinary Linear/Conv plus `memopt` instead of retired `SpikeLinear/SpikeConv`.
 

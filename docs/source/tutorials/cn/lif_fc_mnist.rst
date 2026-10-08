@@ -111,29 +111,7 @@ English version: :doc:`../en/lif_fc_mnist`
 
 .. code-block:: shell
 
-    $ python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
-    usage: lif_fc_mnist.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N]
-                        [-data-dir DATA_DIR] [-out-dir OUT_DIR]
-                        [-resume RESUME] [-amp] [-opt {sgd,adam}]
-                        [-momentum MOMENTUM] [-lr LR] [-tau TAU]
-
-    LIF MNIST Training
-
-    optional arguments:
-    -h, --help          show this help message and exit
-    -T T                simulating time-steps
-    -device DEVICE      device
-    -b B                batch size
-    -epochs N           number of total epochs to run
-    -j N                number of data loading workers (default: 4)
-    -data-dir DATA_DIR  root dir of MNIST dataset
-    -out-dir OUT_DIR    root dir for saving logs and checkpoint
-    -resume RESUME      resume from the checkpoint path
-    -amp                automatic mixed precision training
-    -opt {sgd,adam}     use which optimizer. SGD or Adam
-    -momentum MOMENTUM  momentum for SGD
-    -lr LR              learning rate
-    -tau TAU            parameter tau of LIF neuron
+    uv run --no-sync python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
 
 需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 相当于使用更小的仿真步长，训练更为“精细”，但训练效果不一定更好。\ ``T``
 太大时，SNN在时间上展开后会变成一个非常深的网络，这将导致BPTT计算梯度时容易衰减或爆炸。
@@ -173,3 +151,14 @@ English version: :doc:`../en/lif_fc_mnist`
     :width: 100%
 
 可以看到除了正确类别对应的神经元外，其它神经元均未发放任何脉冲。完整的训练代码可见 `activation_based/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/lif_fc_mnist.py>`_ 。
+
+当前版本的执行与复现
+----------------------------
+
+本页模型使用设备自动执行，无需 backend 配置。独立 batch 在反向与参数更新后
+调用 ``functional.reset_net``；连续序列按 :doc:`./neuron` 管理状态。
+AMP 不保证采用融合神经元 kernel，状态精度配置见 :doc:`./precision`。
+编译和执行诊断见 :doc:`./triton_backend`。
+
+本页保留的准确率、曲线和实验输出是历史记录，部分原始运行未注明精确版本。
+它们没有在当前 V2 上重新训练验证，也不是当前实现速度或准确率的验收结果。

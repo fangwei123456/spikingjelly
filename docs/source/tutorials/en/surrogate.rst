@@ -108,3 +108,41 @@ Here is an example of using the functional API:
 
 Most surrogate functions have one or many hyper-parameters to control the shape, e.g., ``alpha`` of :class:`spikingjelly.activation_based.surrogate.Sigmoid`. \
 In SpikingJelly, the default shape hyper-parameters are set to make the maximum of the surrogate function's gradient to be 1, which can relieve the gradient vanishing or exploding problem caused by the cumulative product of gradients.
+
+Surrogates and automatic execution
+----------------------------------
+
+Ordinary fused neuron paths support Sigmoid, ATan, PiecewiseQuadratic,
+PiecewiseExp, SoftSign, SuperSpike and Erf. Pass the object as ``surrogate_function``
+without selecting a backend. Standalone forward/backward example:
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import neuron, surrogate
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    node = neuron.LIFNode(
+        step_mode="m", surrogate_function=surrogate.ATan(alpha=2.0), store_v_seq=True
+    ).to(device)
+    x = torch.rand(4, 2, 8, device=device, requires_grad=True)
+    spikes = node(x)
+    (spikes.sum() + node.v.sum()).backward()
+    assert torch.isfinite(x.grad).all()
+    node.reset()
+
+Ordinary neurons such as IF/LIF/PLIF accept other surrogates/Python callables
+that satisfy their public contracts and can use Torch reference equations.
+``spiking=False`` selects a continuous primitive, outside fused step-function
+firing. Custom surrogates or trainable surrogate parameters are not the seven
+fixed built-in configurations.
+
+Explicit neuron precision requires supported built-in surrogates; see
+:doc:`./precision`. Fused ``if_linear``/``lif_linear`` support first gradients;
+the seven built-ins support compiled training, while custom surrogates support
+eager training only. See :doc:`./memopt`. These specialized paths do not share
+an unrestricted compatibility promise with ordinary execution.
+
+The example retains voltage traces to avoid the LIF final-state Triton backward
+compilation issue in the verified environment; see :doc:`./triton_backend` for
+limits and extra memory cost.

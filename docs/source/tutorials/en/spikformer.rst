@@ -205,3 +205,23 @@ As well as Spike-driven Transformer V1, V2, and V3, and QKformer, etc. See `here
 
 .. [#spikformer] Zhou Zhaokun, Zhu Yuesheng, He Chao, Wang Yaowei, Yan Shuicheng, Tian Yonghong, Yuan Li. Spikformer: When Spiking Neural Network Meets Transformer [C]. Proceedings of International Conference on Learning Representations, 2023.
 .. [#spikingresformer] Shi Xinyu, Hao Zecheng, Yu Zhaofei. SpikingResformer: Bridging ResNet and Vision Transformer in Spiking Neural Networks [C]. Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2024: 5610-5619.
+
+Execution and reproduction in the current version
+-------------------------------------------------
+
+The model uses device-based execution without backend configuration. Reset
+independent batches with ``functional.reset_net`` after backward/parameter updates;
+see :doc:`./neuron` for continuous state. AMP does not guarantee fused neuron
+kernels; see :doc:`./precision` for state policies and :doc:`./triton_backend`
+for compilation/diagnostics.
+
+Retained accuracy, curves and experiment outputs are historical; some original
+runs do not identify the exact version. They were not retrained on current V2
+and are not acceptance results for current speed or accuracy.
+
+Model-structure fragments retain their original teaching form. Use the standard
+Spikformer workflow in the repository's ``benchmark/README.md``: unprofiled
+``benchmark.benchmark_snn_single_gpu case`` measurements, captures with
+``benchmark/nsys_snn.sh`` and attribution with ``benchmark/analyze_nsys_snn.py``.
+Check ``--help``/benchmark documentation for options; profiler latency is not
+steady-state latency.

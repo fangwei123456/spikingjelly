@@ -10,7 +10,13 @@ SpikingJelly 神经元，并为多步 CUDA 计算生成 Triton 内核。预定�
 神经元的设备分发用法见 :doc:`./triton_backend`。
 
 自定义多步神经元统一使用 FlexSN。旧 Auto CUDA 转译器及神经元代码生成模板已删除；
-固定神经元使用 ``ops/`` 中的显式内核。
+固定神经元直接使用公开 neuron/functional 接口。
+
+.. note::
+
+    本页 ``torch.sigmoid`` 示例输出连续值，用于展示函数组合与梯度；它不是硬二值脉冲，
+    也不等价于内置 LIF 的阶跃前向＋替代梯度。core 构造期需能在单位 Tensor 上执行；
+    不应捕获 Tensor 或模块，参数通过 ``static_inputs`` 传入。
 
 用函数描述神经元动力学
 ----------------------
@@ -204,3 +210,44 @@ kernel 错误时会直接报告。
   ``example_outputs`` 和 ``requires_grad`` 已删除。
 * 旧 ``FlexSNKernel`` 和 ``FlexSN.kernel`` 已删除；显式状态调用统一使用
   ``functional_forward``。
+
+训练与状态管理
+----------------------------
+
+下面的独立示例展示可训练静态输入、完整状态轨迹、reset 和不修改 memory 的显式
+状态调用。独立 batch 在反向和参数更新之后重置，连续序列可保留状态：
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import neuron
+
+
+    def smooth_core(x, v, w):
+        h = v + w.sigmoid() * (x - v)
+        output = torch.sigmoid(h - 1.0)
+        return output, h * (1.0 - output)
+
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    node = neuron.FlexSN(
+        smooth_core,
+        1,
+        static_inputs=(torch.nn.Parameter(torch.tensor(0.0)),),
+        store_state_seqs=True,
+    ).to(device)
+    optimizer = torch.optim.SGD(node.parameters(), lr=0.01)
+    x = torch.rand(4, 2, 8, device=device, requires_grad=True)
+    output = node(x)
+    assert node.state_seqs[0].shape == x.shape
+    (output.sum() + node.states[0].sum()).backward()
+    assert node.static_inputs[0].grad is not None
+    optimizer.step()
+    node.reset()
+    assert node.states == (None,)
+    # Explicit-state calls return output/state tuples without changing managed state.
+    outputs, states = node.functional_forward(
+        (x.detach(),), (torch.zeros_like(x[0]),), static_inputs=node.static_inputs
+    )
+    assert outputs[0].shape == x.shape and states[0].shape == x.shape[1:]
+    assert node.states == (None,)

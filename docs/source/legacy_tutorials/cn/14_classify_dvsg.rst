@@ -3,6 +3,13 @@
 分类DVS128 Gesture
 ======================================
 
+.. warning::
+
+    本页为旧版 SpikingJelly 的历史归档，停止维护，不是当前 V2 使用说明。
+    含 CuPy 或旧 backend 的代码和命令不能直接用于当前包。当前用法见
+    :doc:`/tutorials/cn/neuron` 与 :doc:`/tutorials/cn/migrate_from_legacy`。
+
+
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 在上一个教程 :doc:`神经形态数据集处理 <../en/13_neuromorphic_datasets>` 中，我们预处理了DVS128 Gesture数据集。接下来，我们将搭建SNN

@@ -3,6 +3,14 @@
 Clock driven: Use convolutional SNN to identify Fashion-MNIST
 =============================================================================================
 
+.. warning::
+
+    This is an unmaintained archive for older SpikingJelly, not current V2
+    instructions. Code/commands using CuPy or retired backends do not run directly
+    with the current package. See :doc:`/tutorials/en/neuron` and
+    :doc:`/tutorials/en/migrate_from_legacy` for current usage.
+
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Translator: `YeYumin <https://github.com/YEYUMIN>`_

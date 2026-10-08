@@ -3,6 +3,13 @@
 自连接和有状态突触
 ======================================
 
+.. warning::
+
+    本页为旧版 SpikingJelly 的历史归档，停止维护，不是当前 V2 使用说明。
+    含 CuPy 或旧 backend 的代码和命令不能直接用于当前包。当前用法见
+    :doc:`/tutorials/cn/neuron` 与 :doc:`/tutorials/cn/migrate_from_legacy`。
+
+
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 自连接模块

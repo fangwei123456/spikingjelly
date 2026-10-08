@@ -113,29 +113,7 @@ The complete code is in ``activation_based.examples.lif_fc_mnist.py`` , where Te
 
 .. code-block:: shell
 
-    $ python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
-    usage: lif_fc_mnist.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N]
-                        [-data-dir DATA_DIR] [-out-dir OUT_DIR]
-                        [-resume RESUME] [-amp] [-opt {sgd,adam}]
-                        [-momentum MOMENTUM] [-lr LR] [-tau TAU]
-
-    LIF MNIST Training
-
-    optional arguments:
-    -h, --help          show this help message and exit
-    -T T                simulating time-steps
-    -device DEVICE      device
-    -b B                batch size
-    -epochs N           number of total epochs to run
-    -j N                number of data loading workers (default: 4)
-    -data-dir DATA_DIR  root dir of MNIST dataset
-    -out-dir OUT_DIR    root dir for saving logs and checkpoint
-    -resume RESUME      resume from the checkpoint path
-    -amp                automatic mixed precision training
-    -opt {sgd,adam}     use which optimizer. SGD or Adam
-    -momentum MOMENTUM  momentum for SGD
-    -lr LR              learning rate
-    -tau TAU            parameter tau of LIF neuron
+    uv run --no-sync python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
 
 It should be noted that the amount of memory required to train such an SNN is linearly related to the simulation time ``T``.
 A larger ``T`` is equivalent to using a smaller simulation time step, and the training is more "refined" but not necessarily better. When ``T`` is too large, the SNN unfolds in time and becomes a very deep network,
@@ -176,3 +154,16 @@ Voltages and spikes are as follows, which are gotten by the visualization functi
     :width: 100%
 
 Obviously, except for the corresponding neuron in the correct category, no other neurons are firing. The complete training code is in `activation_based/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/lif_fc_mnist.py>`_ .
+
+Execution and reproduction in the current version
+-------------------------------------------------
+
+The model uses device-based execution without backend configuration. Reset
+independent batches with ``functional.reset_net`` after backward/parameter updates;
+see :doc:`./neuron` for continuous state. AMP does not guarantee fused neuron
+kernels; see :doc:`./precision` for state policies and :doc:`./triton_backend`
+for compilation/diagnostics.
+
+Retained accuracy, curves and experiment outputs are historical; some original
+runs do not identify the exact version. They were not retrained on current V2
+and are not acceptance results for current speed or accuracy.
