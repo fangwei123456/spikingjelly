@@ -35,7 +35,7 @@ V2 版本更新记录见 :doc:`./changelog`。
 安装
 ----------------
 
-V2 要求 Python >= 3.11、Torch >= 2.6。请先安装适合设备的
+在已激活的虚拟环境中使用 uv；V2 要求 Python >= 3.11、Torch >= 2.6。请先安装适合设备的
 `PyTorch <https://pytorch.org/get-started/locally/>`__。
 
 .. list-table::
@@ -48,7 +48,7 @@ V2 要求 Python >= 3.11、Torch >= 2.6。请先安装适合设备的
       - ``uv pip install spikingjelly``
     * - PyPI 先行版
       - ``uv pip install --pre spikingjelly``
-    * - 可选 Triton
+    * - 可选 Triton（缺少时）
       - ``uv pip install "spikingjelly[triton]"``
     * - 最新源码开发版
       - ``uv pip install git+https://github.com/fangwei123456/spikingjelly.git``
@@ -162,7 +162,8 @@ Docs for different versions (`latest` is the developing version):
 Installation
 ----------------
 
-V2 requires Python >= 3.11 and Torch >= 2.6. First install the appropriate
+Use uv in an activated virtual environment. V2 requires Python >= 3.11 and
+Torch >= 2.6. First install the appropriate
 `PyTorch <https://pytorch.org/get-started/locally/>`__ for your device.
 
 .. list-table::
@@ -175,7 +176,7 @@ V2 requires Python >= 3.11 and Torch >= 2.6. First install the appropriate
       - ``uv pip install spikingjelly``
     * - PyPI pre-release
       - ``uv pip install --pre spikingjelly``
-    * - Optional Triton
+    * - Optional Triton (if missing)
       - ``uv pip install "spikingjelly[triton]"``
     * - Latest development source
       - ``uv pip install git+https://github.com/fangwei123456/spikingjelly.git``

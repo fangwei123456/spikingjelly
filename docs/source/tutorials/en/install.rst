@@ -15,6 +15,11 @@ install Torch, torchvision and torchaudio for your target device:
     uv venv --python 3.11
     source .venv/bin/activate
 
+This guide uses uv for environments and installation. Install matching Torch,
+torchvision and torchaudio with the official commands so missing companion
+packages do not cause the installer to select another Torch. After installing
+SJ, use ``uv pip check`` to check dependency consistency.
+
 This guide follows the development source. PyPI installs contain released
 changes only; use the corresponding documentation for older versions. Minimum
 requirements do not mean every version and device has been verified. Tested
@@ -31,6 +36,14 @@ Choose an installation
 CPU execution needs neither Triton nor native CUDA. NVIDIA CUDA users can
 install Triton, build native extensions manually, or prepare both. Triton stays
 optional and is not added by a regular installation.
+For ordinary GPU neurons, start with compatible Triton. Consider native builds
+for fused projections or when measurements show a benefit in eager execution.
+
+An existing Triton matching Torch and meeting SJ's minimum version needs no
+additional installation or upgrade. Check its version with
+``uv run --no-sync python -c "import triton; print(triton.__version__)"``;
+successful import does not verify every kernel or compilation profile. Install
+the extra when missing.
 
 .. figure:: /_static/tutorials/install/installation.svg
     :alt: Installation decision tree: prepare Python and Torch; CPU uses a regular installation, while NVIDIA CUDA can use reference execution, optional Triton or manually built native CUDA.
@@ -71,9 +84,9 @@ the repository for development conventions.
 Build native CUDA manually
 --------------------------
 
-Regular wheels contain no precompiled native libraries. The only recommended
-user build route currently downloads the PyPI source distribution (sdist) and
-compiles it locally, without a Git checkout. The following command requires the
+Regular wheels contain no precompiled native libraries. Manual source builds
+are currently recommended, normally downloading the PyPI sdist and compiling
+locally without a Git checkout. The following command requires the
 V2 release containing these operators to be published on PyPI; older releases
 cannot build the current operators through this command.
 
@@ -89,6 +102,19 @@ target architectures.
       --no-build-isolation --no-binary spikingjelly \
       --reinstall-package spikingjelly --no-cache "spikingjelly>=2.0.0"
 
+After a successful build, check the default eager binding in a new process on
+an available target NVIDIA GPU:
+
+.. code-block:: bash
+
+    uv run --no-sync python -c \
+      'import torch; from spikingjelly.activation_based import functional; print(functional.neuron_implementation("lif", torch.device("cuda:0")))'
+
+A compatible native extension should report ``implementation: cuda``. If it
+reports ``triton`` or ``torch``, check the native loading reason in
+``unavailable``. The query does not run a neuron; profiles such as state
+precision still affect individual calls. See the full checks below.
+
 .. list-table::
     :header-rows: 1
     :widths: 40 60
@@ -96,7 +122,7 @@ target architectures.
     * - Option
       - Effect
     * - ``SJ_BUILD_NATIVE_CUDA=1``
-      - Attempt native extension compilation for this source build; it is disabled by default.
+      - Require native extension compilation for this source build; it is disabled by default.
     * - ``--no-binary spikingjelly``
       - Download the SpikingJelly sdist; other dependencies can still use wheels.
     * - ``--no-build-isolation``
@@ -107,10 +133,28 @@ target architectures.
       - Avoid reusing a previously built wheel after build settings change.
 
 This command does not add optional Triton; install ``spikingjelly[triton]``
-separately if needed. Missing CUDA-enabled Torch or toolchains produce a
-message and skip native extensions. Actual compilation failures with a present
-toolchain fail installation. Installation success alone does not confirm a
-native build; see the checks below.
+separately if needed. An explicit build request fails immediately if CUDA-enabled
+Torch, the CUDA Toolkit, a compiler or required architecture settings are missing.
+Compilation failures also fail installation. Without the environment variable,
+builds remain pure Python. This check only runs during source builds; installing
+an existing wheel or retaining an existing installation does not run it.
+Reinstallation and disabling the cache remain necessary because ``--no-binary``
+can still reuse uv's cached wheels.
+
+If PyPI downloads are unavailable or you need development source, obtain an
+OpenI checkout and use the same manual build:
+
+.. code-block:: bash
+
+    git clone https://git.openi.org.cn/OpenI/spikingjelly.git
+    cd spikingjelly
+    uv pip install "setuptools>=77.0.3" ninja
+    SJ_BUILD_NATIVE_CUDA=1 uv pip install --no-build-isolation .
+
+A GitHub checkout works too. uv rebuilds and reinstalls local directories
+explicitly passed on the command line, so the sdist's ``--no-binary`` and related
+options are unnecessary. Changes to ``.cu`` or headers in an editable install
+require another native build; they do not take effect like Python source changes.
 
 Runtime only loads native binaries, without invoking a compiler. The current
 loader checks the operator ABI, complete Torch version, CUDA version and target

@@ -40,14 +40,14 @@ SpikingJelly 是一个 PyTorch 原生的脉冲神经网络（SNN）框架，支�
 
 ## 安装
 
-要求 Python `>=3.11`、Torch `>=2.6`。请先安装适合设备的
+在已激活的虚拟环境中使用 uv；要求 Python `>=3.11`、Torch `>=2.6`。请先安装适合设备的
 [PyTorch](https://pytorch.org/get-started/locally/)。
 
 | 安装方式 | 命令 |
 | --- | --- |
 | PyPI 发布版 | `uv pip install spikingjelly` |
 | PyPI 先行版 | `uv pip install --pre spikingjelly` |
-| 可选 Triton | `uv pip install "spikingjelly[triton]"` |
+| 可选 Triton（缺少时） | `uv pip install "spikingjelly[triton]"` |
 | 最新源码开发版 | `uv pip install git+https://github.com/fangwei123456/spikingjelly.git` |
 
 原生 CUDA（需要工具链，对应 V2 版本发布到 PyPI 后可用）：

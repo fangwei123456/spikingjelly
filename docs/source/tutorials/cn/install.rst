@@ -15,6 +15,10 @@ Torch、torchvision 和 torchaudio：
     uv venv --python 3.11
     source .venv/bin/activate
 
+本文使用 uv 管理环境和安装。Torch、torchvision、torchaudio 应按官方命令配套
+安装，避免安装器为缺失的配套包重新选择 Torch；安装 SJ 后可运行
+``uv pip check`` 检查依赖一致性。
+
 本文按当前开发源码说明。PyPI 安装只包含已发布的改动；使用旧版本时，请切换到
 对应版本的文档。最低版本要求不代表所有版本和设备都已经验收；已有验证包括
 Torch 2.7.1，以及 Torch 2.11.0+cu128 / Triton 3.6.0 的 GPU 环境。
@@ -27,6 +31,12 @@ V2 使用兼容 PEP 440 的语义化版本号。此前的 ``0.0.0.0.X`` 是历�
 
 CPU 不需要 Triton 或原生 CUDA。NVIDIA CUDA 用户可按需要安装 Triton、手动
 构建原生扩展，或同时准备两者。Triton 保持可选，不会由普通安装默认添加。
+普通 GPU 神经元可先使用匹配的 Triton；融合投影，或实测 eager 原生实现有收益时，
+再考虑编译原生扩展。
+
+已有与 Torch 匹配、满足 SJ 最低版本要求的 Triton 时，无需额外安装或升级。
+可用 ``uv run --no-sync python -c "import triton; print(triton.__version__)"``
+查看版本；导入成功不能证明所有 kernel 或编译组合都受支持。缺失时再安装 extra。
 
 .. figure:: /_static/tutorials/install/installation.svg
     :alt: 安装决策树：准备 Python 和 Torch 后，CPU 普通安装；NVIDIA CUDA 可使用参考实现、可选 Triton 或手动构建原生 CUDA。
@@ -66,8 +76,8 @@ CPU 不需要 Triton 或原生 CUDA。NVIDIA CUDA 用户可按需要安装 Trito
 手动构建原生 CUDA
 --------------------------
 
-常规 wheel 不含预编译原生动态库。当前唯一推荐的用户构建入口是下载 PyPI
-源码包 sdist 并在本机编译；无需克隆仓库。以下命令需等待包含这些算子的
+常规 wheel 不含预编译原生动态库。当前推荐手动源码构建，默认从 PyPI 下载
+sdist 并在本机编译，无需克隆仓库。以下命令需等待包含这些算子的
 V2 版本发布到 PyPI，旧发行版不能据此构建当前算子。
 
 先准备 CUDA 版 Torch、与其匹配的 CUDA Toolkit（含 ``nvcc``）和 C++ 编译器。
@@ -81,6 +91,17 @@ V2 版本发布到 PyPI，旧发行版不能据此构建当前算子。
       --no-build-isolation --no-binary spikingjelly \
       --reinstall-package spikingjelly --no-cache "spikingjelly>=2.0.0"
 
+构建成功后，在可用的目标 NVIDIA GPU 上启动新进程，检查默认 eager 绑定：
+
+.. code-block:: bash
+
+    uv run --no-sync python -c \
+      'import torch; from spikingjelly.activation_based import functional; print(functional.neuron_implementation("lif", torch.device("cuda:0")))'
+
+兼容的原生扩展预期返回 ``implementation: cuda``；若为 ``triton`` 或 ``torch``，
+检查 ``unavailable`` 中的原生加载原因。查询不运行神经元；状态精度等配置仍会影响
+实际调用路径。完整检查见下文。
+
 .. list-table::
     :header-rows: 1
     :widths: 40 60
@@ -88,7 +109,7 @@ V2 版本发布到 PyPI，旧发行版不能据此构建当前算子。
     * - 选项
       - 作用
     * - ``SJ_BUILD_NATIVE_CUDA=1``
-      - 本次源码构建尝试编译原生扩展；默认不编译。
+      - 本次源码构建要求编译原生扩展；默认不编译。
     * - ``--no-binary spikingjelly``
       - 下载 SpikingJelly sdist；其他依赖仍可使用 wheel。
     * - ``--no-build-isolation``
@@ -99,8 +120,23 @@ V2 版本发布到 PyPI，旧发行版不能据此构建当前算子。
       - 不复用先前构建的 wheel，避免构建设置变化后仍使用旧产物。
 
 该命令不会默认添加 Triton；需要时另行安装 ``spikingjelly[triton]``。
-缺少 CUDA 版 Torch 或工具链时会提示并跳过原生扩展；工具链存在但编译失败时
-安装会报错。安装成功本身不能证明扩展已构建，检查方法见下文。
+显式要求构建时，缺 CUDA 版 Torch、CUDA Toolkit、编译器或必要架构配置会立即报错；
+实际编译失败也会终止安装。未设置环境变量时仍构建纯 Python 包。
+该检查只在源码构建中生效；安装已有 wheel 或跳过已有安装不会执行构建检查。
+命令保留重安装及禁用缓存参数，因为 ``--no-binary`` 仍可能复用 uv 缓存的 wheel。
+
+PyPI 下载不可用或需要开发源码时，可从 OpenI 获取 checkout，沿用同一手动构建：
+
+.. code-block:: bash
+
+    git clone https://git.openi.org.cn/OpenI/spikingjelly.git
+    cd spikingjelly
+    uv pip install "setuptools>=77.0.3" ninja
+    SJ_BUILD_NATIVE_CUDA=1 uv pip install --no-build-isolation .
+
+也可使用 GitHub checkout。uv 对命令行明确传入的本地目录重新构建安装，因此无需
+sdist 的 ``--no-binary`` 等参数。editable 修改 ``.cu`` 或头文件后需要再次执行
+原生构建；不会像 Python 源码那样即时生效。
 
 原生扩展运行时只加载二进制，不调用编译器。当前加载器检查算子 ABI、完整 Torch
 版本、CUDA 版本及目标 GPU 支持；更换环境后可能需要重建。Triton 保留自己的

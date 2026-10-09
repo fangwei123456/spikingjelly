@@ -94,6 +94,10 @@ Modules: ```spikingjelly.activation_based.functional.neuron```,
   native source builds and execution selection with decision diagrams.
   README and documentation homepages list installation commands and link to
   these guides.
+- Explicit native CUDA builds (``SJ_BUILD_NATIVE_CUDA=1``) now fail when
+  CUDA-enabled PyTorch, the CUDA Toolkit, a C++ compiler or required GPU
+  architecture information is missing, instead of succeeding without extensions.
+  Default builds remain pure Python.
 - Removed the legacy ```activation_based/cuda_kernel``` and
   ```activation_based/triton_kernel``` packages and the experimental neuron module.
   Custom production neurons use the explicit-state functional interface.

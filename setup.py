@@ -4,7 +4,6 @@ import json
 import os
 import runpy
 import shutil
-import warnings
 from pathlib import Path
 
 from setuptools import setup
@@ -23,33 +22,33 @@ def _native_extensions():
             _get_cuda_arch_flags,
         )
     except ImportError as error:
-        warnings.warn(
-            f"Skipping SpikingJelly native CUDA extensions: {error}", stacklevel=2
-        )
-        return [], {}
+        raise RuntimeError(
+            "Native CUDA build requires PyTorch in the build environment. "
+            "Install CUDA-enabled PyTorch first and use --no-build-isolation."
+        ) from error
 
     nvcc = Path(CUDA_HOME or "") / "bin" / ("nvcc.exe" if os.name == "nt" else "nvcc")
     compiler = os.environ.get("CXX", "cl" if os.name == "nt" else "c++")
-    if torch.version.cuda is None or not CUDA_HOME or not nvcc.is_file():
-        warnings.warn(
-            "Skipping SpikingJelly native CUDA extensions: CUDA-enabled PyTorch and a CUDA "
-            "toolkit with nvcc are required; set CUDA_HOME to the toolkit.",
-            stacklevel=2,
+    if torch.version.cuda is None:
+        raise RuntimeError(
+            "Native CUDA build requires CUDA-enabled PyTorch; "
+            "install it for your target device before building."
         )
-        return [], {}
+    if not CUDA_HOME or not nvcc.is_file():
+        raise RuntimeError(
+            "Native CUDA build requires a CUDA toolkit with nvcc; "
+            "set CUDA_HOME to the toolkit matching your PyTorch installation."
+        )
     if shutil.which(compiler) is None:
-        warnings.warn(
-            f"Skipping SpikingJelly native CUDA extensions: C++ compiler {compiler!r} not found.",
-            stacklevel=2,
+        raise RuntimeError(
+            f"Native CUDA build requires a C++ compiler; {compiler!r} was not found. "
+            "Install a compiler or set CXX to its executable."
         )
-        return [], {}
     if not os.environ.get("TORCH_CUDA_ARCH_LIST") and not torch.cuda.is_available():
-        warnings.warn(
-            "Skipping SpikingJelly native CUDA extensions: set TORCH_CUDA_ARCH_LIST when "
-            "building without a visible CUDA device.",
-            stacklevel=2,
+        raise RuntimeError(
+            "Native CUDA build requires a visible GPU or TORCH_CUDA_ARCH_LIST; "
+            "set TORCH_CUDA_ARCH_LIST to your target GPU architectures."
         )
-        return [], {}
 
     arch_flags = _get_cuda_arch_flags()
     metadata = {

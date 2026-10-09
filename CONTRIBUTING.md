@@ -62,6 +62,13 @@ We highly suggest contributors to use [uv](https://docs.astral.sh/uv/) for envir
 
 6. Activate the virtual environment: `source .venv/bin/activate` .
 
+For optional native CUDA, prepare CUDA-enabled Torch, a matching Toolkit and
+C++ compiler, then run `SJ_BUILD_NATIVE_CUDA=1 uv pip install --no-build-isolation -e .`
+from this checkout. Explicit builds fail if prerequisites are missing. Editable
+installs do not recompile `.cu` or headers automatically; repeat this command after
+changing them. User installation and post-build checks are in the
+[installation guide](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/en/install.html).
+
 You may want to directly sync your virtual environment through `uv sync --extra ...` . However, we discourage this because it locks your PyTorch version.
 
 ### Coding Standards

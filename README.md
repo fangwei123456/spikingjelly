@@ -40,14 +40,14 @@ SpikingJelly is a PyTorch-native framework for spiking neural networks (SNNs), w
 
 ## Installation
 
-Requires Python `>=3.11` and Torch `>=2.6`. Install the appropriate
-[PyTorch](https://pytorch.org/get-started/locally/) first.
+Use uv in an activated virtual environment: Python `>=3.11`, Torch `>=2.6`.
+First install [PyTorch](https://pytorch.org/get-started/locally/).
 
 | Install | Command |
 | --- | --- |
 | PyPI release | `uv pip install spikingjelly` |
 | PyPI pre-release | `uv pip install --pre spikingjelly` |
-| Optional Triton | `uv pip install "spikingjelly[triton]"` |
+| Optional Triton (if missing) | `uv pip install "spikingjelly[triton]"` |
 | Latest development source | `uv pip install git+https://github.com/fangwei123456/spikingjelly.git` |
 
 Native CUDA (requires a toolchain; available after the corresponding V2 PyPI release):
