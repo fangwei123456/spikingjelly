@@ -1,7 +1,8 @@
 中文教程 | Chinese Tutorials
 ===============================================
 
-新用户先阅读 :doc:`./basic_concept` 和 :doc:`./neuron`；GPU 使用与编译见
+安装见 :doc:`./install`；新用户再阅读 :doc:`./basic_concept` 和 :doc:`./neuron`。
+GPU 使用与编译见
 :doc:`./triton_backend`，数值策略见 :doc:`./precision`。自定义动力学见
 :doc:`./flexsn`，旧代码迁移见 :doc:`./migrate_from_legacy`。
 
@@ -9,6 +10,7 @@
     :maxdepth: 1
     :caption: 基础
 
+    /tutorials/cn/install
     /tutorials/cn/basic_concept
     /tutorials/cn/container
     /tutorials/cn/neuron

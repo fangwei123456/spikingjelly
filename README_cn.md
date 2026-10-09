@@ -40,49 +40,27 @@ SpikingJelly 是一个 PyTorch 原生的脉冲神经网络（SNN）框架，支�
 
 ## 安装
 
-SpikingJelly 基于 PyTorch。请先安装 [PyTorch、torchvision 和 torchaudio](https://pytorch.org/)。
+要求 Python `>=3.11`、Torch `>=2.6`。请先安装适合设备的
+[PyTorch](https://pytorch.org/get-started/locally/)。
 
-- Python `>=3.11`
-- PyTorch `>=2.6.0`（测试使用 `2.7.1`）
-
-安装最新 PyPI 稳定版：
-
-```bash
-uv pip install spikingjelly
-```
-
-安装已发布的 V2 先行版：
-
-```bash
-uv pip install --pre spikingjelly
-```
-
-从源码安装最新开发版：
-
-```bash
-git clone https://github.com/fangwei123456/spikingjelly.git
-cd spikingjelly
-uv pip install .
-```
-
-可选依赖：
-
-| 功能 | 安装方式 |
+| 安装方式 | 命令 |
 | --- | --- |
-| CUDA 自动执行（Triton） | `uv pip install "spikingjelly[triton]"` 或源码目录 `uv pip install --editable ".[triton]"` |
-| NIR exchange | `uv pip install "spikingjelly[nir]"`（PyPI）或 `uv pip install ".[nir]"`（源码目录） |
-| Lightning 集成 | `uv pip install lightning jsonargparse[signatures]` |
+| PyPI 发布版 | `uv pip install spikingjelly` |
+| PyPI 先行版 | `uv pip install --pre spikingjelly` |
+| 可选 Triton | `uv pip install "spikingjelly[triton]"` |
+| 最新源码开发版 | `uv pip install git+https://github.com/fangwei123456/spikingjelly.git` |
 
-常规 wheel 不包含预编译原生 CUDA 动态库。可选本地构建需要先准备匹配的
-CUDA 版 Torch、CUDA Toolkit（含 nvcc）、C++ 编译器、`setuptools>=77.0.3` 和 ninja：
+原生 CUDA（需要工具链，对应 V2 版本发布到 PyPI 后可用）：
 
 ```bash
-SJ_BUILD_NATIVE_CUDA=1 uv pip install --no-build-isolation .
+SJ_BUILD_NATIVE_CUDA=1 uv pip install \
+  --no-build-isolation --no-binary spikingjelly \
+  --reinstall-package spikingjelly --no-cache "spikingjelly>=2.0.0"
 ```
 
-缺少工具链时给出提示并跳过扩展，实际编译失败会报错；运行时不编译原生 CUDA。
-Triton 自身采用 JIT。不能假定所有平台的 CUDA Torch 都自带可用 Triton。
-更换 Torch/CUDA 或目标 GPU 后可能需要重新构建原生扩展。
+前置条件、决策图、其他可选依赖及排查方法见
+[安装指南](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/install.html)。
+尚未发布的改动请安装源码开发版。
 
 ## 快速开始
 

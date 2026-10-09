@@ -40,51 +40,27 @@ SpikingJelly is a PyTorch-native framework for spiking neural networks (SNNs), w
 
 ## Installation
 
-SpikingJelly is built on PyTorch. Install [PyTorch, torchvision, and torchaudio](https://pytorch.org/) first.
+Requires Python `>=3.11` and Torch `>=2.6`. Install the appropriate
+[PyTorch](https://pytorch.org/get-started/locally/) first.
 
-- Python `>=3.11`
-- PyTorch `>=2.6.0` (tested with `2.7.1`)
-
-Install the latest stable PyPI release:
-
-```bash
-uv pip install spikingjelly
-```
-
-Install V2 pre-releases from PyPI when they are published:
-
-```bash
-uv pip install --pre spikingjelly
-```
-
-Install the latest development version from source:
-
-```bash
-git clone https://github.com/fangwei123456/spikingjelly.git
-cd spikingjelly
-uv pip install .
-```
-
-Optional dependencies:
-
-| Feature | Install |
+| Install | Command |
 | --- | --- |
-| Automatic CUDA execution (Triton) | `uv pip install "spikingjelly[triton]"` or `uv pip install --editable ".[triton]"` in a source checkout |
-| NIR exchange | `uv pip install "spikingjelly[nir]"` (PyPI) or `uv pip install ".[nir]"` (source checkout) |
-| Lightning integration | `uv pip install lightning jsonargparse[signatures]` |
+| PyPI release | `uv pip install spikingjelly` |
+| PyPI pre-release | `uv pip install --pre spikingjelly` |
+| Optional Triton | `uv pip install "spikingjelly[triton]"` |
+| Latest development source | `uv pip install git+https://github.com/fangwei123456/spikingjelly.git` |
 
-Regular wheels do not contain precompiled native CUDA libraries. Optional local
-builds require matching CUDA Torch, a CUDA Toolkit with nvcc, a C++ compiler,
-`setuptools>=77.0.3` and ninja:
+Native CUDA (requires a toolchain; available after the corresponding V2 PyPI release):
 
 ```bash
-SJ_BUILD_NATIVE_CUDA=1 uv pip install --no-build-isolation .
+SJ_BUILD_NATIVE_CUDA=1 uv pip install \
+  --no-build-isolation --no-binary spikingjelly \
+  --reinstall-package spikingjelly --no-cache "spikingjelly>=2.0.0"
 ```
 
-Missing toolchains emit a message and skip extensions; actual compilation failures
-are errors. Runtime does not compile native CUDA. Triton uses its own JIT; not all
-platforms' CUDA Torch distributions include usable Triton. Changes to Torch/CUDA
-or target GPUs may require rebuilding.
+See the [installation guide](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/en/install.html)
+for prerequisites, decision diagrams, other extras and troubleshooting.
+Unreleased changes require the development source.
 
 ## Quick Start
 

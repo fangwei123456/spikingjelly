@@ -36,7 +36,7 @@ IF, LIF and PLIF training code runs on CPU or NVIDIA CUDA:
         functional.reset_net(node)  # Reset after backward/update.
 
 Reset independent batches after backward and parameter updates. See :doc:`./neuron`
-for continuous state and detach, and :doc:`/index` for installation/local CUDA builds.
+for continuous state and detach, and :doc:`./install` for installation/local CUDA builds.
 
 Automatic execution and limits
 ------------------------------

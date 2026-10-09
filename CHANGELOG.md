@@ -78,8 +78,13 @@ Modules: ``spikingjelly.activation_based.functional.neuron``,
   recomputed on CPU or CUDA so double backward remains available.
 - Operator sources are installed in the same SpikingJelly package as
   ``spikingjelly._ops``. Default PyPI wheels remain pure Python; optional native
-  CUDA builds use the local PyTorch/CUDA toolchain, while Triton retains
-  JIT compilation.
+  CUDA builds use the local PyTorch/CUDA toolchain. The recommended installation
+  builds the PyPI sdist manually, without a Git checkout. Triton remains an
+  optional dependency and retains JIT compilation.
+- Chinese and English installation guides document optional acceleration,
+  native source builds and execution selection with decision diagrams.
+  README and documentation homepages list installation commands and link to
+  these guides.
 - Removed the legacy ``activation_based/cuda_kernel`` and
   ``activation_based/triton_kernel`` packages and the experimental neuron module.
   Custom production neurons use the explicit-state functional interface.

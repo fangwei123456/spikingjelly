@@ -35,7 +35,7 @@ backend 选项。下面的 IF、LIF 和 PLIF 训练代码可在 CPU 或 NVIDIA C
         functional.reset_net(node)  # Reset after backward/update.
 
 独立 batch 在反向和参数更新后重置；连续序列的状态保留与 detach 见 :doc:`./neuron`。
-安装与可选本地 CUDA 构建见 :doc:`/index`。
+安装与可选本地 CUDA 构建见 :doc:`./install`。
 
 自动执行与能力边界
 ----------------------------

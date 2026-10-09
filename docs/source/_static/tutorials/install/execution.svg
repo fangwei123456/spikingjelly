@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 725" role="img" aria-labelledby="title">
+  <title id="title">Ordinary neuron execution / 普通神经元执行</title>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#475569"/></marker></defs>
+  <rect width="960" height="100%" fill="#fff"/>
+  <g font-family="Arial, Noto Sans CJK SC, PingFang SC, sans-serif" text-anchor="middle" fill="#17283b">
+    <path d="M480 90 V135" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <path d="M330 170 H147 V255" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="165" y="224" font-size="14">CPU</text>
+    <path d="M630 170 H560 V255" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="640" y="224" font-size="14">NVIDIA CUDA</text>
+    <path d="M350 302 H275" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="312" y="284" font-size="14">No / 否</text>
+    <path d="M560 350 V410" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="598" y="385" font-size="14">Yes / 是</text>
+    <path d="M560 480 V515 H465 V555" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <path d="M560 515 H795 V555" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="280" y="20" width="400" height="70" rx="10" fill="#eaf2ff" stroke="#94a3b8"/>
+    <text x="480" y="49" font-size="19">Ordinary registered neuron</text>
+    <text x="480" y="73" font-size="16">普通注册神经元</text>
+    <rect x="330" y="135" width="300" height="70" rx="10" fill="#fff3d6" stroke="#94a3b8"/>
+    <text x="480" y="176" font-size="19">Device / 运行设备</text>
+    <rect x="20" y="255" width="255" height="95" rx="10" fill="#edf7ee" stroke="#94a3b8"/>
+    <text x="147.5" y="296.5" font-size="19">Torch reference</text>
+    <text x="147.5" y="320.5" font-size="16">Torch 参考递推</text>
+    <rect x="350" y="255" width="420" height="95" rx="10" fill="#fff3d6" stroke="#94a3b8"/>
+    <text x="560" y="296.5" font-size="19">Supported fused profile?</text>
+    <text x="560" y="320.5" font-size="15">输入、FP32 状态、surrogate 满足条件？</text>
+    <rect x="350" y="410" width="420" height="70" rx="10" fill="#fff3d6" stroke="#94a3b8"/>
+    <text x="560" y="451" font-size="19">Execution path / 执行路径</text>
+    <rect x="310" y="555" width="310" height="105" rx="10" fill="#eaf2ff" stroke="#94a3b8"/>
+    <text x="465" y="589.5" font-size="20">eager</text>
+    <text x="465" y="613.5" font-size="15">Native CUDA → Triton → Torch</text>
+    <text x="465" y="637.5" font-size="15">首个兼容实现</text>
+    <rect x="640" y="555" width="310" height="105" rx="10" fill="#eaf2ff" stroke="#94a3b8"/>
+    <text x="795" y="589.5" font-size="17">Inductor expansion / 编译展开</text>
+    <text x="795" y="613.5" font-size="15">Triton → Native CUDA → Torch</text>
+    <text x="795" y="637.5" font-size="14">First compatible implementation</text>
+    <text x="480" y="681" font-size="15">Reuse a cached binding per device and execution path.</text>
+    <text x="480" y="705" font-size="15">按设备及执行路径复用绑定；CUDA Graph 沿用捕获时的选择。</text>
+  </g>
+</svg>
