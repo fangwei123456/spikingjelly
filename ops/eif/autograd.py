@@ -1,9 +1,11 @@
 import math
+from functools import partial
 from typing import Optional
 
 import torch
 
 from ..autograd import _higher_order_grad, _save_for_higher_order
+from ..layout import _fake_empty_like
 from ..validation import _check_gradients, _check_inputs
 
 
@@ -51,6 +53,8 @@ def _forward_fake(
     alpha: float,
     store_v_seq: bool,
     surrogate_id: int,
+    *,
+    _strided=False,
 ):
     _check(
         x,
@@ -67,14 +71,12 @@ def _forward_fake(
         surrogate_id,
     )
     return (
-        torch.empty_like(x, memory_format=torch.contiguous_format),
-        torch.empty_like(
-            x if store_v_seq else v,
-            dtype=torch.float32,
-            memory_format=torch.contiguous_format,
+        _fake_empty_like(x, strided=_strided),
+        _fake_empty_like(
+            x if store_v_seq else v, dtype=torch.float32, strided=_strided
         ),
-        torch.empty_like(x, dtype=torch.float32, memory_format=torch.contiguous_format),
-        torch.empty_like(x, dtype=torch.float32, memory_format=torch.contiguous_format),
+        _fake_empty_like(x, dtype=torch.float32, strided=_strided),
+        _fake_empty_like(x, dtype=torch.float32, strided=_strided),
     )
 
 
@@ -133,6 +135,8 @@ def _backward_fake(
     alpha: float,
     store_v_seq: bool,
     surrogate_id: int,
+    *,
+    _strided=False,
 ):
     _check_backward(
         gs,
@@ -151,8 +155,8 @@ def _backward_fake(
         surrogate_id,
     )
     return (
-        torch.empty_like(gs, memory_format=torch.contiguous_format),
-        torch.empty_like(h[0], memory_format=torch.contiguous_format),
+        _fake_empty_like(gs, strided=_strided),
+        _fake_empty_like(h[0], strided=_strided),
     )
 
 
@@ -160,8 +164,10 @@ def _register_ops(forward_name: str, backward_name: str, *, register_fake=True):
     namespace, opname = backward_name.split("::")
     backward_op = getattr(getattr(torch.ops, namespace), opname).default
     if register_fake:
-        torch.library.register_fake(forward_name, _forward_fake)
-        torch.library.register_fake(backward_name, _backward_fake)
+        torch.library.register_fake(forward_name, partial(_forward_fake, _strided=True))
+        torch.library.register_fake(
+            backward_name, partial(_backward_fake, _strided=True)
+        )
 
     def setup_context(ctx, inputs, output):
         ctx.dtype = inputs[0].dtype

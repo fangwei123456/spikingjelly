@@ -39,7 +39,7 @@ def _load_native(package: str) -> dict:
         )
     info = json.loads(metadata.read_text())
     if info.get("operator_abi") != _NATIVE_ABI:
-        raise ImportError("Native operator schema changed; rebuild the extensions")
+        raise ImportError("Native operator ABI changed; rebuild the extensions")
     if (
         info["torch_version"] != str(torch.__version__)
         or info["cuda_version"] != torch.version.cuda

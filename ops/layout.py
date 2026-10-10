@@ -3,6 +3,24 @@
 import torch
 
 
+def _fake_empty_like(x, *, dtype=None, strided=False):
+    # Meta empty_like can canonicalize singleton strides that kernels preserve.
+    if strided and (
+        x.is_contiguous() or torch.ops.aten.is_non_overlapping_and_dense.default(x)
+    ):
+        return torch.empty_strided(
+            x.shape,
+            x.stride(),
+            dtype=x.dtype if dtype is None else dtype,
+            device=x.device,
+        )
+    return torch.empty_like(
+        x,
+        dtype=dtype,
+        memory_format=torch.preserve_format if strided else torch.contiguous_format,
+    )
+
+
 def _empty_like(x, *, dtype=None, sequence=True, shape=None, align_time_slice=False):
     dense = x.is_contiguous() or torch.ops.aten.is_non_overlapping_and_dense.default(x)
     if shape is None and dense and not align_time_slice:

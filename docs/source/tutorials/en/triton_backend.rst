@@ -62,6 +62,28 @@ An ordinary FP16/BF16 module call therefore uses the reference recurrence.
 Functional calls can supply FP32 state with low-precision input directly;
 module storage overrides use :doc:`./precision`. See :doc:`./flexsn` for custom cores.
 
+Tensor layouts
+----------------------------
+
+The nine built-in point-neuron native CUDA and Triton implementations directly
+read compact, nonoverlapping layouts (including channels-last and transposes)
+and their ``expand`` broadcast views. Inputs, initial states, saved tensors and
+upstream gradients may have different strides. Time remains logical dimension
+zero, including when its physical stride is zero or is not the largest stride.
+These layouts do not require contiguous copies at the kernel boundary.
+
+Outputs and returned gradients use independent, nonoverlapping storage. PyTorch
+reduces gradients back to broadcast sources. Other valid strided views retain
+numerical support but may be converted; necessary dtype conversions are separate
+from layout copies. The existing dtype, state and surrogate restrictions still
+apply, and this contract does not cover FlexSN or fused projection kernels.
+
+Compiler-selected layouts and convolutions may introduce additional copies;
+inspect the generated code or a profile before claiming a copy-free model.
+Rebuild native extensions after this layout upgrade and regenerate compiled or
+exported graphs that assumed contiguous outputs. Layouts specialize Triton code;
+warm up the layouts to be measured before timing.
+
 Compilation and CUDA Graphs
 ----------------------------
 

@@ -2,6 +2,7 @@ from typing import Optional
 
 import torch
 
+from ..layout import _fake_empty_like
 from ..validation import _check_inputs
 
 
@@ -50,13 +51,13 @@ def _forward_fake(
     inner: int,
     reset: Optional[float],
     store_v_seq: bool,
+    *,
+    _strided=False,
 ):
     _check(x, v, threshold, offset, channels, inner, reset, store_v_seq)
     return (
-        torch.empty_like(x, memory_format=torch.contiguous_format),
-        torch.empty_like(
-            x if store_v_seq else v,
-            dtype=torch.float32,
-            memory_format=torch.contiguous_format,
+        _fake_empty_like(x, strided=_strided),
+        _fake_empty_like(
+            x if store_v_seq else v, dtype=torch.float32, strided=_strided
         ),
     )

@@ -93,3 +93,10 @@ complete eager path, not GPU kernels alone. To isolate GPU execution, capture
 many complete calls in one CUDA Graph and time its replay with CUDA events;
 timing an eager loop with CUDA events can still include gaps while the CPU
 submits work. Compare eager, compile, and CUDA Graph model runs separately.
+
+The neuron layout benchmark uses the functional LIF interface with FP32 initial
+state and FP16 input, and checks that native CUDA or Triton is selected. Module
+FP16 state would select the reference recurrence and cannot measure this kernel
+layout contract. Set `SJ_LIF_CUDA_IMPLEMENTATION=cuda` or `triton` before starting
+`python -m benchmark.benchmark_neuron_layout`; compare revisions with the same
+benchmark and state policy.
