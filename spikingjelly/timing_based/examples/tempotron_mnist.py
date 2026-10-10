@@ -1,12 +1,13 @@
 import argparse
+
 import torch
-import torch.nn as nn
+import torch.nn.functional as F
 import torch.utils.data as data
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
-import spikingjelly.timing_based.encoding as encoding
-import spikingjelly.timing_based.neuron as neuron
 from tqdm import tqdm
+
+from .. import encoding, neuron
 
 
 parser = argparse.ArgumentParser(description="spikingjelly Tempotron MNIST Training")
@@ -41,12 +42,10 @@ parser.add_argument(
     help='Batch 大小，例如“64”\n Batch size, e.g., "64"',
 )
 parser.add_argument(
-    "-T",
-    "--timesteps",
-    default=100,
-    type=int,
-    dest="T",
-    help='仿真时长，例如“100”\n Simulating timesteps, e.g., "100"',
+    "--duration",
+    default=100.0,
+    type=float,
+    help="连续观察窗终点 / Continuous observation-window endpoint",
 )
 parser.add_argument(
     "--lr",
@@ -72,33 +71,56 @@ parser.add_argument(
 )
 
 
-class Net(nn.Module):
-    def __init__(self, m, T):
-        # m是高斯调谐曲线编码器编码一个像素点所使用的神经元数量
-        super().__init__()
-        self.tempotron = neuron.Tempotron(28 * 28 * m, 10, T)  # mnist 28*28=784
+def _classification_loss(
+    v_max: torch.Tensor,
+    t_spike: torch.Tensor,
+    label: torch.Tensor,
+    v_threshold: float,
+) -> torch.Tensor:
+    target = F.one_hot(label, v_max.shape[1]).bool()
+    wrong = target != torch.isfinite(t_spike)
+    error = torch.where(target, v_threshold - v_max, v_max - v_threshold)
+    firing_error = (wrong * error).sum() / (label.numel() * v_threshold)
+    # Calibrate logits to threshold units instead of driving very large peaks.
+    return F.cross_entropy(5 * v_max / v_threshold, label) + firing_error
 
-    def forward(self, x: torch.Tensor):
-        # 返回的是输出层10个Tempotron在仿真时长内的电压峰值
-        return self.tempotron(x, "v_max")
 
+def main() -> None:
+    r"""
+    **API Language** - :ref:`中文 <timing-mnist-main-cn>` | :ref:`English <timing-mnist-main-en>`
 
-def main():
-    """
-    * :ref:`API in English <tempotron_mnist.main-en>`
+    ----
 
-    .. _tempotron_mnist.main-cn:
+    .. _timing-mnist-main-cn:
 
-    使用高斯调谐曲线编码器编码图像为脉冲，单层Tempotron进行MNIST识别。\n
-    这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。
+    * **中文**
 
-    * :ref:`中文API <tempotron_mnist.main-cn>`
+    根据命令行参数下载 MNIST，用连续高斯事件编码和单层 Tempotron 训练与评估。
+    示例使用尺度校准交叉熵加发放误差线性罚项，预测仍取峰值 argmax。
+    logits 为 5*v_max/v_threshold；温度对应阈值的 0.2，减少分类置信度对
+    过大电压的需求。正确类别应发放、其他类别应沉默；仅对错误发放状态惩罚
+    峰值与阈值的线性偏差，并按阈值归一化。抑制错误提前发放可以恢复后续证据。
+    loss 在示例中定义，神经元内部不增加替代梯度或恢复规则。
+    记录 TensorBoard 指标，打印准确率并保存模型。时间单位由 duration 与神经元默认时间常数共同约定。
+    事件求解是 CPU/CUDA PyTorch 数学基线，完整训练可能较慢。
 
-    .. _tempotron_mnist.main-en:
+    ----
 
-    Use Gaussian tuned activation function encoder to encode the images to spikes.\n
-    The network with single Tempotron structure for classifying MNIST.\n
-    This function initials the network, starts training and shows accuracy on test dataset.
+    .. _timing-mnist-main-en:
+
+    * **English**
+
+    Download MNIST and train/evaluate a single Tempotron with continuous Gaussian
+    events using command-line options. Prediction uses peak argmax. The external
+    loss combines calibrated cross-entropy with a linear firing-error penalty.
+    Logits are 5*v_max/v_threshold: temperature is 0.2 of the threshold, reducing
+    the voltage amplitude needed for classification confidence. The correct class
+    should fire and other classes remain silent; only misfiring outputs contribute
+    their signed peak-to-threshold deviation, normalized by threshold. Suppressing
+    false premature spikes can recover late evidence. No surrogate or recovery rule
+    is added inside the neuron. The example writes TensorBoard metrics, prints
+    accuracy and saves the model. Duration and default neuron time constants share time units.
+    CPU/CUDA event solving is a PyTorch mathematical baseline; full training may be slow.
     """
 
     args = parser.parse_args()
@@ -113,7 +135,7 @@ def main():
     model_output_dir = args.model_output_dir
 
     batch_size = args.batch_size
-    T = args.T
+    duration = args.duration
     learning_rate = args.lr
     train_epoch = args.epoch
     m = args.m
@@ -124,7 +146,7 @@ def main():
         m=m,
         x_min=torch.zeros(size=[1]).to(device),
         x_max=torch.ones(size=[1]).to(device),
-    )
+    ).to(device)
 
     writer = SummaryWriter(log_dir)
 
@@ -153,8 +175,7 @@ def main():
     )
 
     # 初始化网络
-    net = Net(m, T).to(device)
-    # 使用Adam优化器
+    net = neuron.Tempotron(28 * 28 * m, 10, duration).to(device)
     optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate)
 
     train_times = 0
@@ -168,13 +189,14 @@ def main():
         net.train()
         for img, label in tqdm(train_data_loader):
             img = img.view(img.shape[0], -1).unsqueeze(1)  # [batch_size, 1, 784]
-            in_spikes = encoder.encode(img.to(device), T)  # [batch_size, 1, 784, m]
-            in_spikes = in_spikes.view(in_spikes.shape[0], -1)  # [batch_size, 784*m]
+            events = encoder(img.to(device), duration)
 
             optimizer.zero_grad()
 
-            v_max = net(in_spikes)
-            loss = net.tempotron.mse_loss(v_max, label.to(device))
+            v_max, _, t_spike = net(*events)
+            loss = _classification_loss(
+                v_max, t_spike, label.to(device), net.v_threshold
+            )
             loss.backward()
             optimizer.step()
 
@@ -199,11 +221,8 @@ def main():
             for img, label in tqdm(test_data_loader):
                 img = img.view(img.shape[0], -1).unsqueeze(1)  # [batch_size, 1, 784]
 
-                in_spikes = encoder.encode(img.to(device), T)  # [batch_size, 1, 784, m]
-                in_spikes = in_spikes.view(
-                    in_spikes.shape[0], -1
-                )  # [batch_size, 784*m]
-                v_max = net(in_spikes)
+                events = encoder(img.to(device), duration)
+                v_max, _, _ = net(*events)
                 correct_num += (
                     (v_max.argmax(dim=1) == label.to(device)).float().sum().item()
                 )
@@ -220,6 +239,7 @@ def main():
 
     # 保存模型
     torch.save(net, model_output_dir + "/tempotron_snn_mnist.ckpt")
+    writer.close()
 
 
 if __name__ == "__main__":

@@ -66,6 +66,26 @@ Modules: ``spikingjelly.activation_based.neuron``,
 - Added ``functional.ternary_if_step`` and ``functional.ternary_lif_step`` for
   pure single-step execution with explicit membrane state.
 
+#### Continuous Timing-Based Neurons
+
+Modules: `spikingjelly.timing_based.functional`,
+`spikingjelly.timing_based.neuron`, and `spikingjelly.timing_based.encoding`.
+
+- Added continuous-event Tempotron solving with multiple spikes per connection,
+  finite observation windows, upward threshold crossings, and post-spike input
+  shunting. It returns peak voltage, earliest peak time, and first-spike time.
+- Added first-order analytical autograd for weights and input event times on
+  CPU/CUDA FP32/FP64, using FP64 internally. This is an eager PyTorch mathematical
+  baseline with event-control synchronization, not a specialized GPU implementation.
+- Tempotron batches continuous intervals into bounded event blocks using local
+  causal response matrices and aggregates simultaneous inputs once. Backward skips
+  unused output derivatives; no specialized kernel or time grid is introduced.
+- The MNIST Tempotron example calibrates peak logits to threshold units and adds
+  a linear penalty for incorrect firing states, helping recover late input evidence
+  hidden by premature shunting under raw peak cross-entropy.
+- GaussianTuning now uses fixed receptive-field buffers and emits differentiable,
+  continuous compact events without rounding or inactive placeholders.
+
 #### Backend-transparent Neuron Execution
 
 Modules: ``spikingjelly.activation_based.functional.neuron``,
@@ -411,6 +431,24 @@ Module: `spikingjelly.activation_based.neuron`.
   precision instead of being promoted to `float32`.
 
 ### Breaking Changes and Notices
+
+#### Timing-Based Event Interfaces
+
+Modules: `spikingjelly.timing_based.neuron`,
+`spikingjelly.timing_based.encoding`, and `spikingjelly.timing_based.functional`.
+
+- **Breaking change:** Tempotron takes `duration` and compact event tensors
+  `(spike_times, input_indices, batch_offsets)` and returns
+  `(v_max, t_peak, t_spike)`. Removed integer `T`, `ret_type`, voltage-trace output,
+  and built-in `mse_loss`; callers define the loss. Non-firing spike times are
+  `inf`, grazing does not fire, and output events precede simultaneous inputs.
+- **Breaking change:** PSPs have unit peak independent of the threshold; weights
+  use normal initialization with standard deviation 0.001 and checkpoint key
+  `weight` instead of `model.summation_layer.weight`. Continuous shunted peaks
+  replace the old sampled, unshunted voltage semantics.
+- **Breaking change:** GaussianTuning is an `nn.Module` called through `forward`,
+  replacing `encode`. It accepts a positive floating-point `duration` and returns
+  compact event tensors; checkpoint buffers are `mu` and `sigma2`.
 
 #### License Migration
 
