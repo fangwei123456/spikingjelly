@@ -95,6 +95,30 @@ Few-Spike / LAS Neuron Primitives
    :show-inheritance:
    :exclude-members: extra_repr
 
+Signed Ternary Neurons
+--------------------------------------------------
+
+三值神经元用于普通稠密 PyTorch 训练，输出包含负事件。二值脉冲压缩器和默认
+SynOps/能耗模型不适用于这些输出。使用 ``memopt.optimize_memory`` 时设置
+``compress=False``，使用 ``memopt.checkpoint_module`` 时保留 ``compressor=None``。
+检测任一极性的首次事件时，先取绝对值，再遵循 ``functional.first_spike_index``
+要求的时间维布局。
+
+----
+
+Ternary neurons support ordinary dense PyTorch training and emit signed events.
+Binary spike compressors and default SynOps/energy models do not apply to these
+outputs. Set ``compress=False`` for ``memopt.optimize_memory`` and keep
+``compressor=None`` for ``memopt.checkpoint_module``. To detect the first event of
+either polarity, take absolute values and follow the time-axis layout required
+by ``functional.first_spike_index``.
+
+.. automodule:: spikingjelly.activation_based.neuron.ternary
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :exclude-members: extra_repr
+
 SpikeZIP Neuron Primitives
 --------------------------------------------------
 

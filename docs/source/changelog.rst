@@ -47,6 +47,18 @@ Fixes
 Features
 ~~~~~~~~
 
+Signed Ternary Neurons
+^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ```spikingjelly.activation_based.neuron```.
+
+- Added trainable ```TernaryIFNode```` and ````TernaryLIFNode``` with symmetric signed
+  thresholds, hard or signed soft reset, surrogate gradients, explicit-state
+  functional transitions, and single-step/multi-step voltage recording. Execution
+  uses PyTorch without dedicated accelerated kernels. The documented LIF
+  configuration matches Guo et al. (AAAI 2024) unit-amplitude forward dynamics;
+  the paper's learnable spike amplitude and training STE are not implemented.
+
 Backend-transparent Neuron Execution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
