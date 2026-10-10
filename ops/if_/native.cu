@@ -1,8 +1,8 @@
 #include <ATen/ATen.h>
 #include <ATen/Dispatch.h>
 #include <ATen/cuda/CUDAContext.h>
-#include <c10/cuda/CUDAGuard.h>
 #include <c10/cuda/CUDAException.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <torch/library.h>
 
 #include "kernels.cuh"
@@ -47,26 +47,32 @@ if_forward_cuda(const Tensor &x, const Tensor &v, double threshold,
     TORCH_CHECK(v.layout() == at::kStrided, "only strided tensors are supported");
     TORCH_CHECK(v.sizes() == x.sizes().slice(1), "state shape must match x[0]");
     const c10::cuda::CUDAGuard guard(x.device());
-    auto input = x.contiguous();
-    auto initial = v.contiguous();
-    auto spikes = at::empty(x.sizes(), x.options());
+    const auto &input = x;
+    const auto &initial = v;
+    auto spikes = sj_empty_like(x);
     auto voltages =
-        at::empty(store_v_seq ? x.sizes() : v.sizes(), x.options().dtype(at::kFloat));
-    // ponytail: retain full workspace even in inference; specialize if measurements
-    // justify it.
-    auto charged = at::empty(x.sizes(), x.options().dtype(at::kFloat));
+        sj_empty_like(store_v_seq ? x : v, at::TensorOptions().dtype(at::kFloat));
+    // ponytail: retain full workspace even in inference; specialize if
+    // measurements justify it.
+    auto charged = sj_empty_like(x, at::TensorOptions().dtype(at::kFloat));
     const int64_t T = x.size(0), N = v.numel();
     const int blocks = std::min<int64_t>((N + 255) / 256, 65535);
     const auto stream = at::cuda::getCurrentCUDAStream(x.get_device());
     {
-        AT_DISPATCH_FLOATING_TYPES_AND2(
-            at::kHalf, at::kBFloat16, input.scalar_type(), "sj_if_forward", [&] {
-                if_forward<scalar_t><<<blocks, 256, 0, stream>>>(
-                    input.const_data_ptr<scalar_t>(), initial.const_data_ptr<float>(),
-                    spikes.mutable_data_ptr<scalar_t>(),
-                    voltages.mutable_data_ptr<float>(),
-                    charged.mutable_data_ptr<float>(), T, N, float(threshold),
-                    float(reset.value_or(0)), !reset.has_value(), store_v_seq);
+        sj_launch_layout<5>(
+            input, {&input, &initial, &spikes, &voltages, &charged}, [&](auto layout) {
+                AT_DISPATCH_FLOATING_TYPES_AND2(
+                    at::kHalf, at::kBFloat16, input.scalar_type(), "sj_if_forward",
+                    [&] {
+                        if_forward<scalar_t><<<blocks, 256, 0, stream>>>(
+                            input.const_data_ptr<scalar_t>(),
+                            initial.const_data_ptr<float>(),
+                            spikes.mutable_data_ptr<scalar_t>(),
+                            voltages.mutable_data_ptr<float>(),
+                            charged.mutable_data_ptr<float>(), T, N, float(threshold),
+                            float(reset.value_or(0)), !reset.has_value(), store_v_seq,
+                            layout);
+                    });
             });
     }
     C10_CUDA_KERNEL_LAUNCH_CHECK();
@@ -91,28 +97,33 @@ std::tuple<Tensor, Tensor> if_backward_cuda(const Tensor &gs, const Tensor &gv,
     TORCH_CHECK(gv.sizes() == (store_v_seq ? h.sizes() : h.sizes().slice(1)),
                 "voltage gradient shape must match output");
     const c10::cuda::CUDAGuard guard(h.device());
-    auto grad_s = gs.contiguous();
-    auto grad_v = gv.contiguous();
-    auto charged = h.contiguous();
-    auto gx = at::empty(h.sizes(), grad_s.options());
-    auto gv_init = at::empty(h.sizes().slice(1), h.options());
+    const auto &grad_s = gs;
+    const auto &grad_v = gv;
+    const auto &charged = h;
+    auto gx = sj_empty_like(h, at::TensorOptions().dtype(grad_s.scalar_type()));
+    auto gv_init = sj_empty_state_like(h);
     const int64_t T = h.size(0), N = gv_init.numel();
     const int blocks = std::min<int64_t>((N + 255) / 256, 65535);
     const auto stream = at::cuda::getCurrentCUDAStream(h.get_device());
     {
-        AT_DISPATCH_FLOATING_TYPES_AND2(
-            at::kHalf, at::kBFloat16, grad_s.scalar_type(), "sj_if_backward", [&] {
-                sj_dispatch_surrogate(surrogate_id, [&](auto tag) {
-                    if_backward<scalar_t, decltype(tag)::value>
-                        <<<blocks, 256, 0, stream>>>(
-                            grad_s.const_data_ptr<scalar_t>(),
-                            grad_v.const_data_ptr<float>(),
-                            charged.const_data_ptr<float>(),
-                            gx.mutable_data_ptr<scalar_t>(),
-                            gv_init.mutable_data_ptr<float>(), T, N, float(threshold),
-                            float(reset.value_or(0)), !reset.has_value(), detach_reset,
-                            float(alpha), store_v_seq);
-                });
+        sj_launch_layout<5>(
+            charged, {&grad_s, &grad_v, &charged, &gx, &gv_init}, [&](auto layout) {
+                AT_DISPATCH_FLOATING_TYPES_AND2(
+                    at::kHalf, at::kBFloat16, grad_s.scalar_type(), "sj_if_backward",
+                    [&] {
+                        sj_dispatch_surrogate(surrogate_id, [&](auto tag) {
+                            if_backward<scalar_t, decltype(tag)::value>
+                                <<<blocks, 256, 0, stream>>>(
+                                    grad_s.const_data_ptr<scalar_t>(),
+                                    grad_v.const_data_ptr<float>(),
+                                    charged.const_data_ptr<float>(),
+                                    gx.mutable_data_ptr<scalar_t>(),
+                                    gv_init.mutable_data_ptr<float>(), T, N,
+                                    float(threshold), float(reset.value_or(0)),
+                                    !reset.has_value(), detach_reset, float(alpha),
+                                    store_v_seq, layout);
+                        });
+                    });
             });
     }
     C10_CUDA_KERNEL_LAUNCH_CHECK();
@@ -123,7 +134,8 @@ std::tuple<Tensor, Tensor> if_backward_cuda(const Tensor &gs, const Tensor &gv,
 
 TORCH_LIBRARY_FRAGMENT(sj_if, m) {
     m.def("native_forward(Tensor x, Tensor v, float threshold, float? reset, bool "
-          "detach_reset, float alpha, bool store_v_seq=True, int surrogate_id=0) -> "
+          "detach_reset, float alpha, bool store_v_seq=True, int surrogate_id=0) "
+          "-> "
           "(Tensor, Tensor, Tensor)");
     m.def("native_backward(Tensor gs, Tensor gv, Tensor h, float threshold, float? "
           "reset, bool detach_reset, float alpha, bool store_v_seq=True, int "

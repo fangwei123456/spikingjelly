@@ -78,6 +78,7 @@ def _native_extensions():
                 str(source.with_name("kernels.cuh")),
                 "ops/_cuda.cuh",
                 "ops/cuda_surrogate.cuh",
+                "ops/native_layout.cuh",
             ],
             extra_compile_args={
                 "nvcc": [

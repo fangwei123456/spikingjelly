@@ -42,6 +42,8 @@ def _neuron_indices(
     NCL: tl.constexpr, BLOCK: tl.constexpr, SIZES: tl.constexpr, MINOR: tl.constexpr
 ):
     pid = tl.program_id(0)
+    if NCL > 2147483647:
+        pid = pid.to(tl.int64)
     if MINOR == 1:
         indices = (pid * BLOCK + tl.arange(0, BLOCK))[None, :]
         mask = indices < NCL
@@ -58,12 +60,13 @@ def _neuron_indices(
 
 
 @triton.jit
-def _time_offset(t, n: tl.constexpr, layouts: tl.constexpr, slot: tl.constexpr):
-    stride: tl.constexpr = (
-        n if len(layouts) == 0 else tl.constexpr(layouts).value[slot][0]
-    )
-    # Widen the stride before multiplying: the time offset can exceed int32.
-    return t * tl.full((), stride, tl.int64)
+def _time_offset(t, n, layouts: tl.constexpr, slot: tl.constexpr):
+    if len(layouts) == 0:
+        return tl.cast(t, tl.int64) * n
+    else:
+        stride: tl.constexpr = tl.constexpr(layouts).value[slot][0]
+        # Widen the stride before multiplying: the time offset can exceed int32.
+        return t * tl.full((), stride, tl.int64)
 
 
 @triton.jit

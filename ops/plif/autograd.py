@@ -1,6 +1,9 @@
+from functools import partial
+
 import torch
 
 from ..autograd import _higher_order_grad, _save_for_higher_order
+from ..layout import _fake_empty_like
 from ..surrogate import _DTYPES
 from ..validation import _check_gradients, _check_inputs
 
@@ -46,10 +49,12 @@ def _forward_fake(
     alpha,
     store_v_seq: bool = True,
     surrogate_id: int = 0,
+    *,
+    _strided=False,
 ):
     _check_forward(x, v, w, threshold, reset, alpha, surrogate_id)
     return tuple(
-        torch.empty_like(t, dtype=dtype, memory_format=torch.contiguous_format)
+        _fake_empty_like(t, dtype=dtype, strided=_strided)
         for t, dtype in (
             (x, x.dtype),
             (x if store_v_seq else v, torch.float32),
@@ -72,13 +77,15 @@ def _backward_fake(
     alpha,
     store_v_seq: bool = True,
     surrogate_id: int = 0,
+    *,
+    _strided=False,
 ):
     _check_backward(
         gs, gv, x, v, w, h, threshold, reset, alpha, store_v_seq, surrogate_id
     )
     return (
-        torch.empty_like(x, memory_format=torch.contiguous_format),
-        torch.empty_like(v, memory_format=torch.contiguous_format),
+        _fake_empty_like(x, strided=_strided),
+        _fake_empty_like(v, strided=_strided),
         torch.empty_like(w),
     )
 
@@ -93,8 +100,10 @@ def _setup_context(ctx, inputs, output):
 
 def _register_ops(forward_name: str, backward_name: str, *, register_fake: bool = True):
     if register_fake:
-        torch.library.register_fake(forward_name, _forward_fake)
-        torch.library.register_fake(backward_name, _backward_fake)
+        torch.library.register_fake(forward_name, partial(_forward_fake, _strided=True))
+        torch.library.register_fake(
+            backward_name, partial(_backward_fake, _strided=True)
+        )
     namespace, name = backward_name.split("::")
     backward_op = getattr(getattr(torch.ops, namespace), name).default
 

@@ -1,8 +1,8 @@
 #include <ATen/ATen.h>
 #include <ATen/Dispatch.h>
 #include <ATen/cuda/CUDAContext.h>
-#include <c10/cuda/CUDAGuard.h>
 #include <c10/cuda/CUDAException.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <torch/library.h>
 
 #include "kernels.cuh"
@@ -47,24 +47,29 @@ forward(const Tensor &x, const Tensor &v, const Tensor &w, bool decay_input,
         bool store_v_seq, int64_t surrogate_id) {
     check_inputs(x, v, w, threshold, reset, alpha, surrogate_id);
     const c10::cuda::CUDAGuard guard(x.device());
-    auto input = x.contiguous();
-    auto initial = v.contiguous();
+    const auto &input = x;
+    const auto &initial = v;
     auto q = w.to(at::kFloat).sigmoid();
-    auto spikes = at::empty(x.sizes(), x.options());
+    auto spikes = sj_empty_like(x);
     auto voltages =
-        at::empty(store_v_seq ? x.sizes() : v.sizes(), x.options().dtype(at::kFloat));
-    auto charged = at::empty(x.sizes(), x.options().dtype(at::kFloat));
+        sj_empty_like(store_v_seq ? x : v, at::TensorOptions().dtype(at::kFloat));
+    auto charged = sj_empty_like(x, at::TensorOptions().dtype(at::kFloat));
     const int64_t T = x.size(0), N = v.numel();
     const int blocks = std::min<int64_t>((N + 255) / 256, 65535);
     const auto stream = at::cuda::getCurrentCUDAStream(x.get_device());
-    AT_DISPATCH_FLOATING_TYPES_AND2(
-        at::kHalf, at::kBFloat16, input.scalar_type(), "sj_plif_forward", [&] {
-            plif_forward<scalar_t><<<blocks, 256, 0, stream>>>(
-                input.const_data_ptr<scalar_t>(), initial.const_data_ptr<float>(),
-                q.const_data_ptr<float>(), spikes.mutable_data_ptr<scalar_t>(),
-                voltages.mutable_data_ptr<float>(), charged.mutable_data_ptr<float>(),
-                T, N, decay_input, float(threshold), float(reset.value_or(0)),
-                !reset.has_value(), store_v_seq);
+    sj_launch_layout<5>(
+        input, {&input, &initial, &spikes, &voltages, &charged}, [&](auto layout) {
+            AT_DISPATCH_FLOATING_TYPES_AND2(
+                at::kHalf, at::kBFloat16, input.scalar_type(), "sj_plif_forward", [&] {
+                    plif_forward<scalar_t><<<blocks, 256, 0, stream>>>(
+                        input.const_data_ptr<scalar_t>(),
+                        initial.const_data_ptr<float>(), q.const_data_ptr<float>(),
+                        spikes.mutable_data_ptr<scalar_t>(),
+                        voltages.mutable_data_ptr<float>(),
+                        charged.mutable_data_ptr<float>(), T, N, decay_input,
+                        float(threshold), float(reset.value_or(0)), !reset.has_value(),
+                        store_v_seq, layout);
+                });
         });
     C10_CUDA_KERNEL_LAUNCH_CHECK();
     return {spikes, voltages, charged};
@@ -90,33 +95,41 @@ backward(const Tensor &gs, const Tensor &gv, const Tensor &x, const Tensor &v,
     TORCH_CHECK(gv.sizes() == (store_v_seq ? x.sizes() : v.sizes()),
                 "voltage gradient shape must match output");
     const c10::cuda::CUDAGuard guard(x.device());
-    auto input = x.contiguous();
-    auto initial = v.contiguous();
-    auto grad_s = gs.contiguous();
-    auto grad_v = gv.contiguous();
-    auto charged = h.contiguous();
+    const auto &input = x;
+    const auto &initial = v;
+    const auto &grad_s = gs;
+    const auto &grad_v = gv;
+    const auto &charged = h;
     auto q = w.to(at::kFloat).sigmoid();
-    auto gx = at::empty(x.sizes(), x.options());
-    auto gv_init = at::empty(v.sizes(), v.options());
-    auto gq = at::empty(v.sizes(), v.options());
+    auto gx = sj_empty_like(x);
+    auto gv_init = sj_empty_like(v);
+    auto gq = sj_empty_like(v);
     const int64_t T = x.size(0), N = v.numel();
     const int blocks = std::min<int64_t>((N + 255) / 256, 65535);
     const auto stream = at::cuda::getCurrentCUDAStream(x.get_device());
-    AT_DISPATCH_FLOATING_TYPES_AND2(
-        at::kHalf, at::kBFloat16, grad_s.scalar_type(), "sj_plif_backward", [&] {
-            sj_dispatch_surrogate(surrogate_id, [&](auto tag) {
-                plif_backward<scalar_t, decltype(tag)::value>
-                    <<<blocks, 256, 0, stream>>>(
-                        grad_s.const_data_ptr<scalar_t>(),
-                        grad_v.const_data_ptr<float>(),
-                        input.const_data_ptr<scalar_t>(),
-                        initial.const_data_ptr<float>(), q.const_data_ptr<float>(),
-                        charged.const_data_ptr<float>(),
-                        gx.mutable_data_ptr<scalar_t>(),
-                        gv_init.mutable_data_ptr<float>(), gq.mutable_data_ptr<float>(),
-                        T, N, decay_input, float(threshold), float(reset.value_or(0)),
-                        !reset.has_value(), detach_reset, float(alpha), store_v_seq);
-            });
+    sj_launch_layout<8>(
+        charged, {&grad_s, &grad_v, &input, &initial, &charged, &gx, &gv_init, &gq},
+        [&](auto layout) {
+            AT_DISPATCH_FLOATING_TYPES_AND2(
+                at::kHalf, at::kBFloat16, grad_s.scalar_type(), "sj_plif_backward",
+                [&] {
+                    sj_dispatch_surrogate(surrogate_id, [&](auto tag) {
+                        plif_backward<scalar_t, decltype(tag)::value>
+                            <<<blocks, 256, 0, stream>>>(
+                                grad_s.const_data_ptr<scalar_t>(),
+                                grad_v.const_data_ptr<float>(),
+                                input.const_data_ptr<scalar_t>(),
+                                initial.const_data_ptr<float>(),
+                                q.const_data_ptr<float>(),
+                                charged.const_data_ptr<float>(),
+                                gx.mutable_data_ptr<scalar_t>(),
+                                gv_init.mutable_data_ptr<float>(),
+                                gq.mutable_data_ptr<float>(), T, N, decay_input,
+                                float(threshold), float(reset.value_or(0)),
+                                !reset.has_value(), detach_reset, float(alpha),
+                                store_v_seq, layout);
+                    });
+                });
         });
     C10_CUDA_KERNEL_LAUNCH_CHECK();
     auto gw = (gq.sum() * q * (1 - q)).to(w.scalar_type());
@@ -128,9 +141,11 @@ TORCH_LIBRARY_FRAGMENT(sj_plif, m) {
     m.def("native_forward(Tensor x, Tensor v, Tensor w, bool decay_input, float "
           "threshold, float? reset, bool detach_reset, float alpha, bool "
           "store_v_seq=True, int surrogate_id=0) -> (Tensor, Tensor, Tensor)");
-    m.def("native_backward(Tensor gs, Tensor gv, Tensor x, Tensor v, Tensor w, Tensor "
+    m.def("native_backward(Tensor gs, Tensor gv, Tensor x, Tensor v, Tensor w, "
+          "Tensor "
           "h, bool decay_input, float threshold, float? reset, bool detach_reset, "
-          "float alpha, bool store_v_seq=True, int surrogate_id=0) -> (Tensor, Tensor, "
+          "float alpha, bool store_v_seq=True, int surrogate_id=0) -> (Tensor, "
+          "Tensor, "
           "Tensor)");
 }
 

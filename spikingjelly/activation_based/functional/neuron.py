@@ -2018,6 +2018,8 @@ def lif_multi_step(
     对 ``[T, ...]`` 输入执行 LIF 序列状态转移，使用显式初态并返回脉冲、最终电位及可选电位序列。设备类型决定 CPU 或 CUDA 执行，CUDA 实现按设备和执行配置自动选择。兼容 Python surrogate 的参考实现由 Torch 自动微分。
 
     :param x_seq: 时间优先的输入序列，形状 ``[T, ...]``。
+        compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
+        无需布局拷贝；其他合法 strided view 允许转换。
     :type x_seq: torch.Tensor
     :param v: 形状为 ``x_seq.shape[1:]`` 的初始膜电位；dtype 和 device 决定状态的存储类型。
     :type v: torch.Tensor
@@ -2054,6 +2056,9 @@ def lif_multi_step(
     Run the LIF sequence transition on a time-major ``[T, ...]`` input with an explicit initial state. Return spikes, final voltage, and an optional voltage trace. CPU/CUDA execution follows the tensor device; CUDA implementations are selected automatically by device and execution profile. The Torch reference supports Python surrogate callables and autograd.
 
     :param x_seq: Time-major input sequence shaped ``[T, ...]``.
+        Native CUDA/Triton kernels directly access compact nonoverlapping layouts
+        and their expand views without layout copies; other valid strided views
+        may be converted.
     :type x_seq: torch.Tensor
     :param v: Initial voltage shaped like ``x_seq.shape[1:]``; its dtype and device determine state storage.
     :type v: torch.Tensor
@@ -2192,6 +2197,8 @@ def if_multi_step(
 
     :param x_seq: CPU/NVIDIA CUDA 浮点输入 [T, ...]，T >= 1；神经元维度非空。
         FP32/FP16/BF16 使用注册算子，其余支持的 dtype 使用 Torch 参考实现。
+        compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
+        无需布局拷贝；其他合法 strided view 允许转换。
     :type x_seq: torch.Tensor
     :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
     :type v: torch.Tensor
@@ -2227,6 +2234,9 @@ def if_multi_step(
     Run an explicit-state sequence transition without mutating inputs or module memory. The input device selects a supported registered implementation; unsupported surrogate or state-dtype profiles use the Torch reference formulas. Output states and gradients follow the neuron dynamics.
 
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1`` and nonempty neuron dimensions. Default accelerated profiles support FP32, FP16, or BF16.
+        Native CUDA/Triton kernels directly access compact nonoverlapping layouts
+        and their expand views without layout copies; other valid strided views
+        may be converted.
     :type x_seq: torch.Tensor
     :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
     :type v: torch.Tensor
@@ -2345,6 +2355,8 @@ def plif_multi_step(
     执行显式状态序列转移，不修改输入或模块 memory。输入设备自动分发到支持的注册实现；不适用的 surrogate 或状态 dtype 使用 Torch 参考公式。具体输出状态与梯度遵循神经元动力学定义。
 
     :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+        compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
+        无需布局拷贝；其他合法 strided view 允许转换。
     :type x_seq: torch.Tensor
     :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
     :type v: torch.Tensor
@@ -2384,6 +2396,9 @@ def plif_multi_step(
     Run an explicit-state sequence transition without mutating inputs or module memory. The input device selects a supported registered implementation; unsupported surrogate or state-dtype profiles use the Torch reference formulas. Output states and gradients follow the neuron dynamics.
 
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1`` and nonempty neuron dimensions. Default accelerated profiles support FP32, FP16, or BF16.
+        Native CUDA/Triton kernels directly access compact nonoverlapping layouts
+        and their expand views without layout copies; other valid strided views
+        may be converted.
     :type x_seq: torch.Tensor
     :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
     :type v: torch.Tensor
@@ -2523,6 +2538,8 @@ def qif_multi_step(
     执行显式状态序列转移，不修改输入或模块 memory。输入设备自动分发到支持的注册实现；不适用的 surrogate 或状态 dtype 使用 Torch 参考公式。具体输出状态与梯度遵循神经元动力学定义。
 
     :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+        compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
+        无需布局拷贝；其他合法 strided view 允许转换。
     :type x_seq: torch.Tensor
     :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
     :type v: torch.Tensor
@@ -2559,6 +2576,9 @@ def qif_multi_step(
     Run an explicit-state sequence transition without mutating inputs or module memory. The input device selects a supported registered implementation; unsupported surrogate or state-dtype profiles use the Torch reference formulas. Output states and gradients follow the neuron dynamics.
 
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1`` and nonempty neuron dimensions. Default accelerated profiles support FP32, FP16, or BF16.
+        Native CUDA/Triton kernels directly access compact nonoverlapping layouts
+        and their expand views without layout copies; other valid strided views
+        may be converted.
     :type x_seq: torch.Tensor
     :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
     :type v: torch.Tensor
@@ -2668,6 +2688,8 @@ def eif_multi_step(
     执行显式状态序列转移，不修改输入或模块 memory。输入设备自动分发到支持的注册实现；不适用的 surrogate 或状态 dtype 使用 Torch 参考公式。具体输出状态与梯度遵循神经元动力学定义。
 
     :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+        compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
+        无需布局拷贝；其他合法 strided view 允许转换。
     :type x_seq: torch.Tensor
     :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
     :type v: torch.Tensor
@@ -2704,6 +2726,9 @@ def eif_multi_step(
     Run an explicit-state sequence transition without mutating inputs or module memory. The input device selects a supported registered implementation; unsupported surrogate or state-dtype profiles use the Torch reference formulas. Output states and gradients follow the neuron dynamics.
 
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1`` and nonempty neuron dimensions. Default accelerated profiles support FP32, FP16, or BF16.
+        Native CUDA/Triton kernels directly access compact nonoverlapping layouts
+        and their expand views without layout copies; other valid strided views
+        may be converted.
     :type x_seq: torch.Tensor
     :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
     :type v: torch.Tensor
@@ -2823,6 +2848,8 @@ def izhikevich_multi_step(
     执行显式状态序列转移，不修改输入或模块 memory。输入设备自动分发到支持的注册实现；不适用的 surrogate 或状态 dtype 使用 Torch 参考公式。具体输出状态与梯度遵循神经元动力学定义。
 
     :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+        compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
+        无需布局拷贝；其他合法 strided view 允许转换。
     :type x_seq: torch.Tensor
     :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
     :type v: torch.Tensor
@@ -2867,6 +2894,9 @@ def izhikevich_multi_step(
     Run an explicit-state sequence transition without mutating inputs or module memory. The input device selects a supported registered implementation; unsupported surrogate or state-dtype profiles use the Torch reference formulas. Output states and gradients follow the neuron dynamics.
 
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1`` and nonempty neuron dimensions. Default accelerated profiles support FP32, FP16, or BF16.
+        Native CUDA/Triton kernels directly access compact nonoverlapping layouts
+        and their expand views without layout copies; other valid strided views
+        may be converted.
     :type x_seq: torch.Tensor
     :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
     :type v: torch.Tensor
@@ -2991,6 +3021,8 @@ def ilif_multi_step(
     执行显式状态序列转移，不修改输入或模块 memory。输入设备自动分发到支持的注册实现；不适用的 surrogate 或状态 dtype 使用 Torch 参考公式。具体输出状态与梯度遵循神经元动力学定义。
 
     :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+        compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
+        无需布局拷贝；其他合法 strided view 允许转换。
     :type x_seq: torch.Tensor
     :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
     :type v: torch.Tensor
@@ -3019,6 +3051,9 @@ def ilif_multi_step(
     Run an explicit-state sequence transition without mutating inputs or module memory. The input device selects a supported registered implementation; unsupported surrogate or state-dtype profiles use the Torch reference formulas. Output states and gradients follow the neuron dynamics.
 
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1`` and nonempty neuron dimensions. Default accelerated profiles support FP32, FP16, or BF16.
+        Native CUDA/Triton kernels directly access compact nonoverlapping layouts
+        and their expand views without layout copies; other valid strided views
+        may be converted.
     :type x_seq: torch.Tensor
     :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
     :type v: torch.Tensor
@@ -3113,6 +3148,8 @@ def activation_aware_if_multi_step(
     执行显式状态序列推理，不修改输入或模块 memory。算子按输入设备自动分发；该路径不支持输入、状态或参数梯度。
 
     :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+        compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
+        无需布局拷贝；其他合法 strided view 允许转换。
     :type x_seq: torch.Tensor
     :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
     :type v: torch.Tensor
@@ -3142,6 +3179,9 @@ def activation_aware_if_multi_step(
     Run an explicit-state inference sequence without mutating inputs or module memory. The operator dispatches by input device. Inputs, states, and parameters must not require gradients.
 
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1`` and nonempty neuron dimensions. Default accelerated profiles support FP32, FP16, or BF16.
+        Native CUDA/Triton kernels directly access compact nonoverlapping layouts
+        and their expand views without layout copies; other valid strided views
+        may be converted.
     :type x_seq: torch.Tensor
     :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
     :type v: torch.Tensor
@@ -3194,6 +3234,8 @@ def stbif_multi_step(
     执行显式状态序列推理，不修改输入或模块 memory。算子按输入设备自动分发；该路径不支持输入、状态或参数梯度。
 
     :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
+        compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
+        无需布局拷贝；其他合法 strided view 允许转换。
     :type x_seq: torch.Tensor
     :param q: 与一个输入步同形状、同设备的状态；注册算子使用 FP32，参考实现与输入 dtype 相同。
     :type q: torch.Tensor
@@ -3222,6 +3264,9 @@ def stbif_multi_step(
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1``
         and nonempty neuron dimensions. FP32, FP16, and BF16 use registered operators;
         other supported dtypes use the Torch reference implementation.
+        Native CUDA/Triton kernels directly access compact nonoverlapping layouts
+        and their expand views without layout copies; other valid strided views
+        may be converted.
     :type x_seq: torch.Tensor
     :param q: Residual state shaped like one input step and on the same device.
         Registered operators use FP32; the reference implementation matches the input dtype.

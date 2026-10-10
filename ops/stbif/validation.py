@@ -1,5 +1,6 @@
 import torch
 
+from ..layout import _fake_empty_like
 from ..validation import _check_inputs
 
 
@@ -81,11 +82,13 @@ def _forward_fake(
     q_threshold: torch.Tensor,
     pos_max: torch.Tensor,
     neg_min: torch.Tensor,
+    *,
+    _strided=False,
 ):
     _check(x, q, acc_q, q_threshold, pos_max, neg_min)
     return (
-        torch.empty_like(x, memory_format=torch.contiguous_format),
-        torch.empty_like(q, memory_format=torch.contiguous_format),
-        torch.empty_like(q, memory_format=torch.contiguous_format),
-        torch.empty_like(q, memory_format=torch.contiguous_format),
+        _fake_empty_like(x, strided=_strided),
+        _fake_empty_like(q, strided=_strided),
+        _fake_empty_like(q, strided=_strided),
+        _fake_empty_like(q, strided=_strided),
     )

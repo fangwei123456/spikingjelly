@@ -18,9 +18,16 @@ Unreleased
 Fixes
 ~~~~~
 
+- Restored direct compact-layout and broadcast-view access in all nine built-in
+  native CUDA and Triton point-neuron implementations, including states and
+  backward inputs. Fake output layouts match execution; rebuild native extensions
+  and regenerate compiled/exported graphs after this change.
+- The neuron layout benchmark uses explicit FP32 state with low-precision inputs
+  and verifies the accelerated implementation it measures.
+
 - Binary neuron projection benchmarks use the correct IF surrogate argument and
-  reference method key; layout and SpikeZIP benchmark artifacts report the
-  reference implementation used with low-precision membrane state.
+  reference method key; SpikeZIP benchmark artifacts report the reference
+  implementation used with low-precision membrane state.
 - ActivationAwareIF avoids allocating unused channel indices for scalar
   threshold/offset parameters on the Torch path.
 

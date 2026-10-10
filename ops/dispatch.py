@@ -11,7 +11,6 @@ from torch._subclasses.fake_tensor import unset_fake_temporarily
 
 from spikingjelly.logger import logger
 
-
 _CACHE_TAG_LOCK = threading.Lock()
 
 
@@ -30,9 +29,16 @@ def _source_cache_tag(namespace, scope, module, trainable):
         owner,
         owner.with_name("autograd.py" if trainable else "validation.py"),
         Path(__file__),
+        Path(__file__).with_name("__init__.py"),
+        Path(__file__).with_name("layout.py"),
     ]
     if owner.stem == "triton":
-        sources.append(Path(__file__).with_name("triton_surrogate.py"))
+        sources.extend(
+            Path(__file__).with_name(name)
+            for name in ("triton_surrogate.py", "triton_layout.py")
+        )
+    elif owner.stem == "native":
+        sources.append(Path(__file__).with_name("native_layout.cuh"))
     elif owner.stem in {"cpu", "reference"}:
         torch_reference = owner.with_name("reference.py")
         if torch_reference.is_file():
@@ -130,6 +136,11 @@ def _register_dispatch(namespace, cpu, selection):
             def call(*args, **kwargs):
                 device = args[0].device
                 tracing = torch._guards.TracingContext.try_get() is not None
+                strided = device.type == "cuda" and selection._requested != "torch"
+                if device.type == "cuda":
+                    bound = selection._selections.get(device.index)
+                    if bound is not None:
+                        strided = bound.name != "torch"
                 if device.type == "cpu" and tracing:
                     _include_cache_tag(
                         _source_cache_tag(namespace, "cpu", cpu, trainable)
@@ -137,10 +148,10 @@ def _register_dispatch(namespace, cpu, selection):
                 elif device.type == "cuda" and tracing:
                     with unset_fake_temporarily():
                         selection.get_trace_forward(device)
-                    _include_cache_tag(
-                        selection._get_compile_selection(device).cache_tag
-                    )
-                return reference_fake(*args, **kwargs)
+                    bound = selection._get_compile_selection(device)
+                    strided = bound.name != "torch"
+                    _include_cache_tag(bound.cache_tag)
+                return reference_fake(*args, **kwargs, _strided=strided)
 
             return call
 
