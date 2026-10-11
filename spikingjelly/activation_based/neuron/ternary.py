@@ -67,11 +67,9 @@ class TernaryIFNode(BaseNode):
 
         * **中文**
 
-        基础的有符号三值 Integrate-and-Fire 神经元。输入为浮点张量，单步
-        形状为 ``[N, *]``，多步形状为 ``[T, N, *]``。使用原生 PyTorch
-        状态转移，训练与评估执行相同的方程；没有专用的加速 kernel。
-        在替代函数的 ``spiking=True`` 模式下，每一步只输出 ``-1``、
-        ``0`` 或 ``1``，形状、dtype 和 device 与输入相同：
+        有符号三值 IF 神经元，以正负阈值区分 ``-1``、``0``、``1`` 事件。
+        浮点输入的单步形状为 ``[N, *]``，多步为 ``[T, N, *]``；输出保持
+        输入的形状、dtype 和 device。训练和评估均使用以下 PyTorch 方程：
 
         .. math::
             H[t] &= V[t-1] + X[t], \\
@@ -79,37 +77,18 @@ class TernaryIFNode(BaseNode):
             N[t] &= \Theta(-H[t] - V_{threshold}), \\
             S[t] &= P[t] - N[t].
 
-        这里 :math:`\Theta(0)=1` ，所以两个阈值均包含等号。令
-        :math:`R[t]=P[t]+N[t]` ，硬重置为
-        :math:`V[t]=(1-R[t])H[t]+R[t]V_{reset}` ；``v_reset=None`` 时，
-        软重置为 :math:`V[t]=H[t]-V_{threshold}S[t]` 。任一方向的硬重置
-        都到同一个 ``v_reset``。这些规则是算法模型，不是离子通道推导。
+        :math:`\Theta` 为二值阶跃函数，:math:`\Theta(0)=1`，两个阈值均
+        包含等号。令 :math:`R[t]=P[t]+N[t]`，硬重置为
+        :math:`V[t]=(1-R[t])H[t]+R[t]V_{reset}`；``v_reset=None`` 时，
+        有符号软重置为 :math:`V[t]=H[t]-V_{threshold}S[t]`。
 
-        反向传播分别对两个阈值使用 ``surrogate_function``。硬重置保留
-        ``P + N`` 的替代梯度，而不对 ``abs(S)`` 求导；二者在离散前向中
-        等价，但后者在 ``S=0`` 处会产生不同的重置梯度。``detach_reset``
-        只分离重置中的 ``R`` 或 ``S``，不分离输出脉冲的梯度。如果替代
-        函数使用 ``spiking=False``，则使用其连续原函数，输出和重置掩码
-        也连续，不再保证三值输出。
+        两个阈值分别使用替代梯度，硬重置对 ``P + N`` 求导。
+        ``detach_reset`` 仅分离重置分支，保留输出脉冲的梯度。
+        ``spiking=False`` 使用替代函数的连续原函数，输出和重置掩码也连续。
+        ``v`` 保存重置后的电位；:meth:`reset` 恢复 ``v_reset``
+        （软重置时为 ``0.0``）并清空 ``v_seq``。
 
-        本模型采用 `Ternary Spike: Learning Ternary Spikes for Spiking Neural
-        Networks (Guo et al., AAAI 2024)
-        <https://ojs.aaai.org/index.php/AAAI/article/download/29114/30106>`_
-        的对称三值事件定义，并使用无泄漏的 IF 充电方程。软重置和非零
-        重置是库扩展；不实现论文的可学习脉冲幅值或训练用 STE。
-        :meth:`reset` 将电位恢复为 ``v_reset``（软重置时为 ``0.0``），
-        并清空 ``v_seq``。``v`` 保存重置后的电位。
-
-        有符号输出适用于普通稠密 PyTorch 层。不要用 ``memopt`` 中的
-        ``BooleanSpikeCompressor``、``Uint8SpikeCompressor``、
-        ``BitSpikeCompressor`` 或 ``SparseSpikeCompressor`` 压缩这些输出；
-        使用 :func:`~spikingjelly.activation_based.memopt.optimize_memory` 时
-        设置 ``compress=False``，使用
-        :func:`~spikingjelly.activation_based.memopt.checkpoint_module` 时设置
-        ``compressor=None``。检测任一极性的首次事件时，应先取绝对值，
-        再按 :func:`~spikingjelly.activation_based.functional.first_spike_index`
-        的时间维约定传入。默认二值 SynOps 计数和能耗模型不适用于有符号事件。
-        本类不支持 NIR 或 Lava 导出。
+        有符号输出的 :ref:`工具兼容性 <signed-ternary-compatibility>` 见模块文档。
 
         :param v_threshold: 对称阈值的正幅值，默认 ``1.0``，必须为有限正浮点数。
         :type v_threshold: float
@@ -118,7 +97,8 @@ class TernaryIFNode(BaseNode):
         :type v_reset: Optional[float]
         :param surrogate_function: 两个阈值共用的替代梯度函数，默认
             :class:`~spikingjelly.activation_based.surrogate.Sigmoid` 。
-            ``spiking=True`` 时前向输出离散事件，``False`` 时输出连续值。
+            离散模式要求前向为二值 Heaviside 函数，且 :math:`\Theta(0)=1`；
+            ``spiking=False`` 时输出连续值。
         :type surrogate_function: surrogate.SurrogateFunctionBase
         :param detach_reset: 是否分离重置掩码或有符号脉冲的梯度，默认 ``False``。
         :type detach_reset: bool
@@ -147,12 +127,11 @@ class TernaryIFNode(BaseNode):
 
         * **English**
 
-        A basic signed ternary Integrate-and-Fire neuron. Floating-point inputs
-        have shape ``[N, *]`` in single-step mode and ``[T, N, *]`` in multi-step
-        mode. The native PyTorch transition uses the same equations in training
-        and evaluation and has no dedicated accelerated kernel. When the
-        surrogate uses ``spiking=True``, each step emits only ``-1``, ``0`` or
-        ``1`` with the input shape, dtype and device:
+        A signed ternary IF neuron with positive and negative thresholds for
+        ``-1``, ``0`` and ``1`` events. Floating-point inputs have shape
+        ``[N, *]`` in single-step mode or ``[T, N, *]`` in multi-step mode.
+        Outputs retain the input shape, dtype and device. Training and evaluation
+        use the same PyTorch equations:
 
         .. math::
             H[t] &= V[t-1] + X[t], \\
@@ -160,40 +139,20 @@ class TernaryIFNode(BaseNode):
             N[t] &= \Theta(-H[t] - V_{threshold}), \\
             S[t] &= P[t] - N[t].
 
-        Here :math:`\Theta(0)=1`, so both thresholds are inclusive. With
-        :math:`R[t]=P[t]+N[t]`, hard reset is
+        :math:`\Theta` is a binary step function with :math:`\Theta(0)=1`, so
+        both thresholds are inclusive. With :math:`R[t]=P[t]+N[t]`, hard reset is
         :math:`V[t]=(1-R[t])H[t]+R[t]V_{reset}`. With ``v_reset=None``, signed
-        soft reset is :math:`V[t]=H[t]-V_{threshold}S[t]`. Both event polarities
-        hard-reset to the same ``v_reset``. These are algorithmic rules, not a
-        derivation from ion-channel dynamics.
+        soft reset is :math:`V[t]=H[t]-V_{threshold}S[t]`.
 
-        Backward uses ``surrogate_function`` at each threshold. Hard reset keeps
-        the surrogate gradients of ``P + N`` instead of differentiating
-        ``abs(S)``: they agree in discrete forward execution but the latter
-        gives different reset gradients at ``S=0``. ``detach_reset`` detaches
-        only ``R`` or ``S`` in reset, not the output spike gradients. With
-        ``spiking=False``, the surrogate's continuous primitive is used; outputs
-        and reset masks are continuous, so the ternary guarantee does not apply.
+        Each threshold uses the surrogate gradient; hard reset differentiates
+        ``P + N``. ``detach_reset`` detaches only the reset branch, preserving
+        output spike gradients. With ``spiking=False``, the surrogate's continuous
+        primitive gives continuous outputs and reset masks. ``v`` holds the
+        post-reset voltage; :meth:`reset` restores ``v_reset`` (``0.0`` for soft
+        reset) and clears ``v_seq``.
 
-        The symmetric event definition follows `Ternary Spike: Learning Ternary
-        Spikes for Spiking Neural Networks (Guo et al., AAAI 2024)
-        <https://ojs.aaai.org/index.php/AAAI/article/download/29114/30106>`_,
-        with non-leaky IF charging. Soft reset and nonzero reset are library
-        extensions. The paper's learnable spike amplitude and training STE are
-        not implemented. :meth:`reset` restores voltage to ``v_reset`` (``0.0``
-        for soft reset) and clears ``v_seq``. ``v`` holds the post-reset voltage.
-
-        Signed outputs work with ordinary dense PyTorch layers. Do not compress
-        them with ``memopt.BooleanSpikeCompressor``, ``Uint8SpikeCompressor``,
-        ``BitSpikeCompressor`` or ``SparseSpikeCompressor``. Set ``compress=False``
-        in :func:`~spikingjelly.activation_based.memopt.optimize_memory` and
-        ``compressor=None`` in
-        :func:`~spikingjelly.activation_based.memopt.checkpoint_module`. To detect
-        the first event of either polarity, take absolute values first and follow
-        the time-axis convention of
-        :func:`~spikingjelly.activation_based.functional.first_spike_index`.
-        Default binary SynOps counters and energy models do not apply to signed events.
-        NIR and Lava export are not supported for this class.
+        See the module documentation for
+        :ref:`tool compatibility <signed-ternary-compatibility>`.
 
         :param v_threshold: Positive magnitude of the symmetric thresholds;
             defaults to ``1.0`` and must be a finite positive float.
@@ -205,7 +164,8 @@ class TernaryIFNode(BaseNode):
         :param surrogate_function: Shared surrogate gradient function for both
             thresholds; defaults to
             :class:`~spikingjelly.activation_based.surrogate.Sigmoid`.
-            ``spiking=True`` gives discrete events; ``False`` gives continuous values.
+            Discrete mode requires binary Heaviside forward with :math:`\Theta(0)=1`;
+            ``spiking=False`` gives continuous values.
         :type surrogate_function: surrogate.SurrogateFunctionBase
         :param detach_reset: Whether to detach the reset mask or signed spike
             during reset; defaults to ``False``.
@@ -323,10 +283,10 @@ class TernaryLIFNode(BaseNode):
 
         * **中文**
 
-        基础的有符号三值 Leaky Integrate-and-Fire 神经元。输入为浮点张量，
-        单步形状为 ``[N, *]``，多步形状为 ``[T, N, *]``。使用原生
-        PyTorch 状态转移，无专用加速 kernel；训练和评估使用相同方程。
-        令 :math:`V_{rest}=V_{reset}` （软重置时为零），充电方程为：
+        有符号三值 LIF 神经元，在双阈值放电前对电位施加泄漏。
+        浮点输入的单步形状为 ``[N, *]``，多步为 ``[T, N, *]``；输出保持
+        输入的形状、dtype 和 device。训练和评估均使用以下 PyTorch 方程。
+        令 :math:`V_{rest}=V_{reset}` （软重置时为零）：
 
         .. math::
             H[t] = V[t-1] + \frac{X[t]-(V[t-1]-V_{rest})}{\tau}
@@ -336,48 +296,24 @@ class TernaryLIFNode(BaseNode):
             H[t] = V[t-1] - \frac{V[t-1]-V_{rest}}{\tau} + X[t]
             \quad (\mathrm{decay\_input=False}).
 
-        两个阈值的放电与重置方程为：
-
-        .. math::
-            P[t] &= \Theta(H[t]-V_{threshold}), \\
-            N[t] &= \Theta(-H[t]-V_{threshold}), \\
-            S[t] &= P[t]-N[t], \qquad R[t]=P[t]+N[t], \\
-            V[t] &= (1-R[t])H[t]+R[t]V_{reset}
-            \quad (V_{reset}\ne\mathrm{None}), \\
-            V[t] &= H[t]-V_{threshold}S[t]
-            \quad (V_{reset}=\mathrm{None}).
-
-        :math:`\Theta(0)=1` ；在替代函数 ``spiking=True`` 模式下输出
-        ``-1``、``0`` 或 ``1``，形状、dtype 和 device 与输入相同。
-        任一方向的硬重置都到同一个 ``v_reset``。``v`` 保存重置后的电位；
+        放电、重置及替代梯度规则与 :class:`TernaryIFNode` 相同：达到
+        正负阈值（包含等号）时输出 ``1`` 或 ``-1``，其余输出 ``0``。
+        硬重置均回到 ``v_reset``；``None`` 使用有符号软重置。
+        硬重置对两个阈值事件之和求导，``detach_reset`` 仅分离重置分支。
+        ``spiking=False`` 使用连续输出和重置掩码。``v`` 保存重置后的电位；
         :meth:`reset` 恢复 ``v_reset``（软重置时为 ``0.0``）并清空 ``v_seq``。
 
-        ``surrogate_function`` 分别提供两个阈值的替代梯度。硬重置对
-        ``P + N`` 求导，而不是 ``abs(S)``；虽然离散前向相同，但在静默
-        输出处梯度约定不同。``detach_reset`` 只分离重置中的 ``R`` 或
-        ``S``，保留输出脉冲的梯度。``spiking=False`` 使用连续原函数，
-        因而输出和重置掩码连续，不保证三值。
+        .. note::
 
-        `Ternary Spike: Learning Ternary Spikes for Spiking Neural Networks
-        (Guo et al., AAAI 2024)
-        <https://ojs.aaai.org/index.php/AAAI/article/download/29114/30106>`_
-        的公式 (7)-(8) 使用衰减系数 :math:`\lambda=0.25` 。
-        ``tau=4.0/3.0, decay_input=False, v_reset=0.0`` 在零初态下匹配
-        其单位幅值三值前向动力学：本类 ``H[t]`` 对应论文 ``u[t]``，
-        ``V[t]`` 是放电后重置的状态。默认配置沿用库中 LIF 的惯例。
-        本类不实现论文可学习的脉冲幅值或训练 STE；非零重置、软重置和
-        ``decay_input=True`` 是库扩展。这是算法模型，不是离子通道推导。
+            ``tau=4.0/3.0, decay_input=False, v_reset=0.0`` 在零初态下匹配
+            `Guo et al. (AAAI 2024)
+            <https://ojs.aaai.org/index.php/AAAI/article/download/29114/30106>`_
+            公式 (7)-(8) 的单位幅值前向动力学（保留系数为 ``0.25``）。
+            ``H[t]`` 对应论文的 ``u[t]``，``V[t]`` 为重置后的状态。
+            可学习幅值和论文的训练 STE 不在本类范围内；非零重置、软重置
+            和输入衰减是库扩展。
 
-        有符号输出适用于普通稠密 PyTorch 层。不要用 ``memopt`` 中的
-        ``BooleanSpikeCompressor``、``Uint8SpikeCompressor``、
-        ``BitSpikeCompressor`` 或 ``SparseSpikeCompressor`` 压缩这些输出；
-        使用 :func:`~spikingjelly.activation_based.memopt.optimize_memory` 时
-        设置 ``compress=False``，使用
-        :func:`~spikingjelly.activation_based.memopt.checkpoint_module` 时设置
-        ``compressor=None``。检测任一极性的首次事件时，应先取绝对值，
-        再按 :func:`~spikingjelly.activation_based.functional.first_spike_index`
-        的时间维约定传入。默认二值 SynOps 计数和能耗模型不适用于有符号事件。
-        本类不支持 NIR 或 Lava 导出。
+        有符号输出的 :ref:`工具兼容性 <signed-ternary-compatibility>` 见模块文档。
 
         :param tau: 以离散时间步为单位的膜电位时间常数，默认 ``2.0``，
             必须为大于 ``1.0`` 的有限浮点数；衰减系数为 ``1-1/tau``。
@@ -392,7 +328,8 @@ class TernaryLIFNode(BaseNode):
         :type v_reset: Optional[float]
         :param surrogate_function: 两个阈值共用的替代梯度函数，默认
             :class:`~spikingjelly.activation_based.surrogate.Sigmoid` 。
-            ``spiking=True`` 输出离散事件；``False`` 输出连续值。
+            离散模式要求前向为二值 Heaviside 函数，且 :math:`\Theta(0)=1`；
+            ``spiking=False`` 时输出连续值。
         :type surrogate_function: surrogate.SurrogateFunctionBase
         :param detach_reset: 是否分离重置掩码或有符号脉冲的梯度，默认 ``False``。
         :type detach_reset: bool
@@ -424,11 +361,11 @@ class TernaryLIFNode(BaseNode):
 
         * **English**
 
-        A basic signed ternary Leaky Integrate-and-Fire neuron. Floating-point
-        inputs have shape ``[N, *]`` in single-step mode and ``[T, N, *]`` in
-        multi-step mode. Native PyTorch transitions have no dedicated accelerated
-        kernel and use the same equations in training and evaluation. With
-        :math:`V_{rest}=V_{reset}` (zero for soft reset), charging is:
+        A signed ternary LIF neuron that applies voltage leakage before firing
+        at two thresholds. Floating-point inputs have shape ``[N, *]`` in
+        single-step mode or ``[T, N, *]`` in multi-step mode. Outputs retain the
+        input shape, dtype and device. Training and evaluation use the same
+        PyTorch equations. With :math:`V_{rest}=V_{reset}` (zero for soft reset):
 
         .. math::
             H[t] = V[t-1] + \frac{X[t]-(V[t-1]-V_{rest})}{\tau}
@@ -438,54 +375,28 @@ class TernaryLIFNode(BaseNode):
             H[t] = V[t-1] - \frac{V[t-1]-V_{rest}}{\tau} + X[t]
             \quad (\mathrm{decay\_input=False}).
 
-        Firing at both thresholds and resetting are defined by:
+        Firing, reset and surrogate gradients follow :class:`TernaryIFNode`:
+        reaching either inclusive threshold emits ``1`` or ``-1``; otherwise the
+        output is ``0``. Both polarities hard-reset to ``v_reset``; ``None`` selects
+        signed soft reset. Hard reset differentiates the sum of both threshold
+        events, and ``detach_reset`` detaches only the reset branch.
+        ``spiking=False`` gives continuous outputs and reset masks. ``v`` holds
+        the post-reset voltage; :meth:`reset` restores ``v_reset`` (``0.0`` for soft
+        reset) and clears ``v_seq``.
 
-        .. math::
-            P[t] &= \Theta(H[t]-V_{threshold}), \\
-            N[t] &= \Theta(-H[t]-V_{threshold}), \\
-            S[t] &= P[t]-N[t], \qquad R[t]=P[t]+N[t], \\
-            V[t] &= (1-R[t])H[t]+R[t]V_{reset}
-            \quad (V_{reset}\ne\mathrm{None}), \\
-            V[t] &= H[t]-V_{threshold}S[t]
-            \quad (V_{reset}=\mathrm{None}).
+        .. note::
 
-        With :math:`\Theta(0)=1` and ``spiking=True``, the output is ``-1``,
-        ``0`` or ``1`` with the input shape, dtype and device. Both event
-        polarities hard-reset to the same ``v_reset``. ``v`` holds the post-reset
-        voltage. :meth:`reset` restores ``v_reset`` (``0.0`` for soft reset) and
-        clears ``v_seq``.
+            With zero initial state, ``tau=4.0/3.0, decay_input=False, v_reset=0.0``
+            matches the unit-amplitude forward dynamics in equations (7)-(8) of
+            `Guo et al. (AAAI 2024)
+            <https://ojs.aaai.org/index.php/AAAI/article/download/29114/30106>`_
+            (retained fraction ``0.25``). ``H[t]`` corresponds to the paper's
+            ``u[t]``; ``V[t]`` is the post-reset state. Learnable amplitudes and
+            the paper's training STE are outside this class's scope. Nonzero
+            reset, soft reset and input decay are library extensions.
 
-        ``surrogate_function`` supplies gradients independently at both
-        thresholds. Hard reset differentiates ``P + N`` instead of ``abs(S)``;
-        they agree in discrete forward execution but differ in the gradient
-        convention for silent outputs. ``detach_reset`` detaches only ``R`` or
-        ``S`` in reset, preserving output spike gradients. ``spiking=False``
-        uses the continuous primitive, giving continuous outputs and reset masks
-        without the ternary guarantee.
-
-        Equations (7)-(8) of `Ternary Spike: Learning Ternary Spikes for Spiking
-        Neural Networks (Guo et al., AAAI 2024)
-        <https://ojs.aaai.org/index.php/AAAI/article/download/29114/30106>`_
-        use decay :math:`\lambda=0.25`. With zero initial state,
-        ``tau=4.0/3.0, decay_input=False, v_reset=0.0`` matches their unit-amplitude
-        ternary forward dynamics: ``H[t]`` corresponds to the paper's ``u[t]``
-        and ``V[t]`` is the post-spike reset state. Defaults follow the library's
-        LIF conventions. The paper's learnable spike amplitude and training STE
-        are not implemented. Nonzero reset, soft reset and ``decay_input=True``
-        are library extensions. This is an algorithmic model, not a derivation
-        from ion-channel dynamics.
-
-        Signed outputs work with ordinary dense PyTorch layers. Do not compress
-        them with ``memopt.BooleanSpikeCompressor``, ``Uint8SpikeCompressor``,
-        ``BitSpikeCompressor`` or ``SparseSpikeCompressor``. Set ``compress=False``
-        in :func:`~spikingjelly.activation_based.memopt.optimize_memory` and
-        ``compressor=None`` in
-        :func:`~spikingjelly.activation_based.memopt.checkpoint_module`. To detect
-        the first event of either polarity, take absolute values first and follow
-        the time-axis convention of
-        :func:`~spikingjelly.activation_based.functional.first_spike_index`.
-        Default binary SynOps counters and energy models do not apply to signed events.
-        NIR and Lava export are not supported for this class.
+        See the module documentation for
+        :ref:`tool compatibility <signed-ternary-compatibility>`.
 
         :param tau: Membrane time constant in discrete time steps; defaults to
             ``2.0`` and must be a finite float greater than ``1.0``. The decay
@@ -504,7 +415,8 @@ class TernaryLIFNode(BaseNode):
         :param surrogate_function: Shared surrogate gradient function for both
             thresholds; defaults to
             :class:`~spikingjelly.activation_based.surrogate.Sigmoid`.
-            ``spiking=True`` gives discrete events; ``False`` gives continuous values.
+            Discrete mode requires binary Heaviside forward with :math:`\Theta(0)=1`;
+            ``spiking=False`` gives continuous values.
         :type surrogate_function: surrogate.SurrogateFunctionBase
         :param detach_reset: Whether to detach the reset mask or signed spike
             during reset; defaults to ``False``.

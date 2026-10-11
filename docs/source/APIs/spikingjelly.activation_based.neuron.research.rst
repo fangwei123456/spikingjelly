@@ -98,20 +98,35 @@ Few-Spike / LAS Neuron Primitives
 Signed Ternary Neurons
 --------------------------------------------------
 
-三值神经元用于普通稠密 PyTorch 训练，输出包含负事件。二值脉冲压缩器和默认
-SynOps/能耗模型不适用于这些输出。使用 ``memopt.optimize_memory`` 时设置
-``compress=False``，使用 ``memopt.checkpoint_module`` 时保留 ``compressor=None``。
-检测任一极性的首次事件时，先取绝对值，再遵循 ``functional.first_spike_index``
-要求的时间维布局。
+:class:`~spikingjelly.activation_based.neuron.TernaryIFNode` 和
+:class:`~spikingjelly.activation_based.neuron.TernaryLIFNode` 使用正负两个阈值，
+分别产生 ``1`` 和 ``-1`` 事件，未达到阈值时输出 ``0``。IF 积累输入，
+LIF 在积累过程中加入电位泄漏；两者均支持替代梯度训练、硬重置和有符号软重置。
 
 ----
 
-Ternary neurons support ordinary dense PyTorch training and emit signed events.
-Binary spike compressors and default SynOps/energy models do not apply to these
-outputs. Set ``compress=False`` for ``memopt.optimize_memory`` and keep
-``compressor=None`` for ``memopt.checkpoint_module``. To detect the first event of
-either polarity, take absolute values and follow the time-axis layout required
-by ``functional.first_spike_index``.
+:class:`~spikingjelly.activation_based.neuron.TernaryIFNode` and
+:class:`~spikingjelly.activation_based.neuron.TernaryLIFNode` emit ``1`` or ``-1``
+at the positive or negative threshold, and ``0`` otherwise. IF accumulates input;
+LIF adds voltage leakage. Both support surrogate-gradient training, hard reset
+and signed soft reset.
+
+.. _signed-ternary-compatibility:
+
+.. admonition:: 工具兼容性 / Tool compatibility
+
+   有符号事件适用于稠密 PyTorch 层，但二值脉冲压缩、默认 SynOps/能耗估计
+   和 NIR/Lava 导出不适用。使用 ``memopt.optimize_memory`` 时设置
+   ``compress=False``，使用 ``memopt.checkpoint_module`` 时设置
+   ``compressor=None``。用 ``functional.first_spike_index`` 检测任一极性的
+   首次事件时，先取绝对值，并遵循其时间维布局。
+
+   Signed events work with dense PyTorch layers. Binary spike compression,
+   default SynOps/energy estimates and NIR/Lava export do not support them.
+   Set ``compress=False`` in ``memopt.optimize_memory`` and ``compressor=None``
+   in ``memopt.checkpoint_module``. To find the first event of either polarity
+   with ``functional.first_spike_index``, take absolute values first and follow
+   its time-axis layout.
 
 .. automodule:: spikingjelly.activation_based.neuron.ternary
    :members:
