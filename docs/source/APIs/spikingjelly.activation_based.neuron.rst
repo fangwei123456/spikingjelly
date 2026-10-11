@@ -212,6 +212,16 @@ Few-Spike / LAS Neuron Primitives
    * - :class:`HGNode <spikingjelly.activation_based.neuron.few_spike.HGNode>`
      - Hierarchically-gated Few-Spike node.
 
+Signed Ternary Neurons
+--------------------------------------------------
+
+.. list-table::
+
+   * - :class:`TernaryIFNode <spikingjelly.activation_based.neuron.ternary.TernaryIFNode>`
+     - Trainable signed ternary IF neuron with symmetric thresholds.
+   * - :class:`TernaryLIFNode <spikingjelly.activation_based.neuron.ternary.TernaryLIFNode>`
+     - Trainable signed ternary LIF neuron with hard or signed soft reset.
+
 SpikeZIP Neuron Primitives
 --------------------------------------------------
 

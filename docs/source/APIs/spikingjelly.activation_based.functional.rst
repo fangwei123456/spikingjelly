@@ -108,6 +108,10 @@ operator. Neuron modules do not expose a backend argument.
      - One EIF state update.
    * - :func:`lif_step <spikingjelly.activation_based.functional.neuron.lif_step>`
      - One LIF state update.
+   * - :func:`ternary_if_step <spikingjelly.activation_based.functional.neuron.ternary_if_step>`
+     - One signed ternary IF state update.
+   * - :func:`ternary_lif_step <spikingjelly.activation_based.functional.neuron.ternary_lif_step>`
+     - One signed ternary LIF state update.
    * - :func:`plif_step <spikingjelly.activation_based.functional.neuron.plif_step>`
      - One ParametricLIF state update.
    * - :func:`izhikevich_step <spikingjelly.activation_based.functional.neuron.izhikevich_step>`

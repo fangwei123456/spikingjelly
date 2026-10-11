@@ -39,6 +39,20 @@ and the archived documentation linked from the project README.
 
 ### Features
 
+#### Signed Ternary Neurons
+
+Modules: ``spikingjelly.activation_based.neuron``,
+``spikingjelly.activation_based.functional.neuron``.
+
+- Added trainable ``TernaryIFNode`` and ``TernaryLIFNode`` with symmetric signed
+  thresholds, hard or signed soft reset, surrogate gradients, explicit-state
+  functional transitions, and single-step/multi-step voltage recording. Execution
+  uses PyTorch without dedicated accelerated kernels. The documented LIF
+  configuration matches Guo et al. (AAAI 2024) unit-amplitude forward dynamics;
+  the paper's learnable spike amplitude and training STE are not implemented.
+- Added ``functional.ternary_if_step`` and ``functional.ternary_lif_step`` for
+  pure single-step execution with explicit membrane state.
+
 #### Backend-transparent Neuron Execution
 
 Modules: ``spikingjelly.activation_based.functional.neuron``,
