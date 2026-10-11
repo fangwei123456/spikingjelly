@@ -5,6 +5,9 @@ from torch.autograd.function import once_differentiable
 
 __all__ = ["tempotron"]
 
+_EVENT_BLOCK_SIZE = {"cpu": 128, "cuda": 512}
+_BACKWARD_BLOCK_SIZE = 16384
+
 
 def _parameters(duration, tau, tau_s, threshold):
     if any(
@@ -157,273 +160,323 @@ class _Tempotron(torch.autograd.Function):
         peak_types = torch.zeros_like(maxima, dtype=torch.int64)
         peak_events = torch.full_like(peak_types, -1)
         accepted = torch.zeros_like(peak_types)
-        event_orders, valid_offsets = [], [0]
-        boundaries = offsets.tolist()
-        for batch, (begin, end) in enumerate(zip(boundaries[:-1], boundaries[1:])):
-            positions = torch.arange(begin, end, device=times.device)
-            valid = (times64[positions] >= 0) & (times64[positions] <= duration)
-            positions = positions[valid]
-            positions = positions[torch.argsort(times64[positions], stable=True)]
-            event_orders.append(positions)
-            valid_offsets.append(valid_offsets[-1] + positions.numel())
-            unique, counts = torch.unique_consecutive(
-                times64[positions], return_counts=True
+        event_batches = torch.repeat_interleave(
+            torch.arange(batch_count, device=times.device),
+            offsets.diff(),
+            output_size=times.numel(),
+        )
+        order = torch.arange(times.numel(), device=times.device)
+        order = order[(times64 >= 0) & (times64 <= duration)]
+        order = order[torch.argsort(times64[order], stable=True)]
+        order = order[torch.argsort(event_batches[order], stable=True)]
+        sorted_batches = event_batches[order]
+        valid_counts = torch.bincount(sorted_batches, minlength=batch_count)
+        valid_offsets = torch.cat((offsets.new_zeros(1), valid_counts.cumsum(0)))
+        if order.numel():
+            new_group = torch.ones(order.numel(), dtype=torch.bool, device=times.device)
+            new_group[1:] = (sorted_batches[1:] != sorted_batches[:-1]) | (
+                times64[order[1:]] != times64[order[:-1]]
             )
-            if unique.numel() == 0:
-                continue
-            starts = counts.cumsum(0) - counts
-            first_events = positions[starts]
+            starts = new_group.nonzero().flatten()
+            counts = (
+                torch.cat((starts[1:], starts.new_tensor([order.numel()]))) - starts
+            )
+            first_events = order[starts]
+            unique = times64[first_events]
+            group_batches = event_batches[first_events]
             grouped_weight = torch.segment_reduce(
-                weight64[:, indices[positions]].T, "sum", lengths=counts
+                weight64[:, indices[order]].T, "sum", lengths=counts
             ).T
-            # Zero-current arrivals cannot change the trajectory; retain their
-            # positions below so their weight derivatives and shunting stay correct.
+            # Retain zero-current events in order for their weight derivatives.
             nonzero = (grouped_weight != 0).any(0)
-            unique = unique[nonzero]
-            first_events = first_events[nonzero]
+            unique, first_events, group_batches = (
+                unique[nonzero],
+                first_events[nonzero],
+                group_batches[nonzero],
+            )
             grouped_weight = grouped_weight[:, nonzero]
-            if unique.numel() == 0:
-                accepted[batch] = positions.numel()
-                continue
-            finite_weight = torch.isfinite(grouped_weight)
-            invalid_prefix = (~finite_weight).to(torch.int64).cumsum(1) > 0
-            grouped_weight = torch.where(finite_weight, grouped_weight, 0)
-            endpoints = torch.cat((unique[1:], times64.new_tensor([duration])))
-            right_events = torch.cat((first_events[1:], indices.new_tensor([-1])))
-            right_events = torch.where(endpoints < duration, right_events, -1)
-            voltage = times64.new_zeros(output_count)
-            current = voltage.clone()
-            origin = times64.new_zeros(())
-            outputs_index = torch.arange(output_count, device=times.device)
-            # ponytail: bounded event matrices; kernels await the kernel refactor merge.
-            for start in range(0, unique.numel(), 128):
-                end = min(start + 128, unique.numel())
-                block_times = unique[start:end]
-                active = torch.isinf(spike_times[batch])
-                incoming = torch.where(active[:, None], grouped_weight[:, start:end], 0)
-                delays = (block_times[:, None] - block_times[None, :]).clamp_min(0)
-                kernel = torch.exp(-delays / slow) * _phi(delays, delta) / normalizer
-                block_voltage = (
-                    _voltage(
-                        voltage[:, None],
-                        current[:, None],
-                        block_times - origin,
+        else:
+            unique = times64.new_empty(0)
+            first_events = order
+            group_batches = sorted_batches
+            grouped_weight = weight64.new_empty((output_count, 0))
+        group_counts = torch.bincount(group_batches, minlength=batch_count)
+        group_offsets = torch.cat((offsets.new_zeros(1), group_counts.cumsum(0)))
+        max_groups = int(group_counts.max()) if batch_count else 0
+        if max_groups:
+            next_same = torch.cat(
+                (
+                    group_batches[1:] == group_batches[:-1],
+                    group_batches.new_zeros(1, dtype=torch.bool),
+                )
+            )
+            endpoints = torch.where(
+                next_same,
+                torch.cat((unique[1:], unique.new_tensor([duration]))),
+                duration,
+            )
+            right_events = torch.where(
+                next_same & (endpoints < duration),
+                torch.cat((first_events[1:], first_events.new_tensor([-1]))),
+                -1,
+            )
+            invalid_weight = ~torch.isfinite(grouped_weight)
+            grouped_weight = torch.where(invalid_weight, 0, grouped_weight)
+        voltage = maxima.clone()
+        current = maxima.clone()
+        origin = times64.new_zeros(batch_count)
+        batches_index = torch.arange(batch_count, device=times.device)[:, None]
+        outputs_index = torch.arange(output_count, device=times.device)[None, :]
+        block_size = _EVENT_BLOCK_SIZE[times.device.type]
+        for start in range(0, max_groups, block_size):
+            width = min(block_size, max_groups - start)
+            local_groups = start + torch.arange(width, device=times.device)
+            valid = local_groups[None, :] < group_counts[:, None]
+            gather = (group_offsets[:-1, None] + local_groups).clamp_max(
+                unique.numel() - 1
+            )
+            block_times = torch.where(valid, unique[gather], duration)
+            block_endpoints = torch.where(valid, endpoints[gather], duration)
+            block_first = first_events[gather]
+            block_right = right_events[gather]
+            block_invalid = (
+                invalid_weight[:, gather].permute(1, 0, 2) & valid[:, None, :]
+            ).to(torch.int64).cumsum(-1) > 0
+            last = valid.sum(1).sub(1).clamp_min(0)
+            active = torch.isinf(spike_times) & valid.any(-1)[:, None]
+            incoming = torch.where(
+                active[..., None] & valid[:, None, :],
+                grouped_weight[:, gather].permute(1, 0, 2),
+                0,
+            )
+            delays = (block_times[:, :, None] - block_times[:, None, :]).clamp_min(0)
+            kernel = torch.exp(-delays / slow) * _phi(delays, delta) / normalizer
+            block_voltage = _voltage(
+                voltage[..., None],
+                current[..., None],
+                (block_times - origin[:, None])[:, None, :],
+                slow,
+                delta,
+                normalizer,
+            ) + incoming @ kernel.transpose(-1, -2)
+            decay = torch.exp(-delays / fast).tril()
+            block_current = current[..., None] * torch.exp(
+                -((block_times - origin[:, None])[:, None, :]) / fast
+            ) + incoming @ decay.transpose(-1, -2)
+            del delays, kernel, decay
+            finite_state = torch.isfinite(block_voltage) & torch.isfinite(block_current)
+            block_voltage = torch.where(finite_state, block_voltage, 0)
+            block_current = torch.where(finite_state, block_current, 0)
+            raw_voltage = block_voltage * normalizer
+            interval = (block_endpoints - block_times)[:, None, :]
+            critical = _stationary(raw_voltage, block_current, slow, delta)
+            interior = torch.isfinite(critical) & (critical > 0) & (critical < interval)
+            endpoint_stationary = (
+                torch.isfinite(critical)
+                & (critical > 0)
+                & (
+                    (critical - interval).abs()
+                    <= 8
+                    * torch.finfo(torch.float64).eps
+                    * (
+                        interval.abs()
+                        + torch.minimum(interval, interval.new_tensor(fast))
+                    )
+                )
+            )
+            local = torch.stack(
+                (
+                    torch.zeros_like(critical),
+                    torch.where(interior, critical, interval),
+                    interval.expand_as(critical),
+                ),
+                -1,
+            )
+            values = _voltage(
+                raw_voltage[..., None],
+                block_current[..., None],
+                local,
+                slow,
+                delta,
+                normalizer,
+            )
+            finite_values = torch.isfinite(values).all(-1)
+            values = torch.where(finite_values[..., None], values, 0)
+            left, right = values[..., :-1], values[..., 1:]
+            lower, upper = local[..., :-1], local[..., 1:]
+            lower_slope = (
+                block_current[..., None] * torch.exp(-lower / fast)
+                - left * normalizer / slow
+            ) / normalizer
+            upper_slope = (
+                block_current[..., None] * torch.exp(-upper / fast)
+                - right * normalizer / slow
+            ) / normalizer
+            stationary_end = torch.stack(
+                (interior | endpoint_stationary, endpoint_stationary), -1
+            )
+            at_threshold = right == threshold
+            reaches = (right > threshold) | (
+                at_threshold & ~stationary_end & (upper_slope > 0)
+            )
+            rising_start = torch.zeros_like(reaches)
+            rising_start[..., 0] = (left[..., 0] == threshold) & (
+                lower_slope[..., 0] > 0
+            )
+            bracket = (
+                active[..., None, None]
+                & valid[:, None, :, None]
+                & (upper > lower)
+                & (((left < threshold) & reaches) | rising_start)
+            )
+            firing = bracket.flatten(2).any(-1)
+            first = bracket.flatten(2).to(torch.int8).argmax(-1)
+            first_group, first_segment = first // 2, first % 2
+            accepted_groups = active[..., None] & (
+                ~firing[..., None]
+                | (torch.arange(width, device=times.device) <= first_group[..., None])
+            )
+            if bool(
+                (
+                    accepted_groups
+                    & valid[:, None, :]
+                    & (block_invalid | ~finite_state | ~finite_values)
+                ).any()
+            ):
+                raise RuntimeError("Tempotron voltage or current is not finite.")
+            if bool(firing.any()):
+                chosen_voltage = raw_voltage[batches_index, outputs_index, first_group]
+                chosen_current = block_current[
+                    batches_index, outputs_index, first_group
+                ]
+                chosen_lower = lower[
+                    batches_index, outputs_index, first_group, first_segment
+                ]
+                chosen_upper = upper[
+                    batches_index, outputs_index, first_group, first_segment
+                ]
+                chosen_origin = block_times[batches_index, first_group]
+                starts_rising = rising_start[
+                    batches_index, outputs_index, first_group, first_segment
+                ]
+                endpoint_hit = (
+                    at_threshold[
+                        batches_index, outputs_index, first_group, first_segment
+                    ]
+                    & ~stationary_end[
+                        batches_index, outputs_index, first_group, first_segment
+                    ]
+                    & ~starts_rising
+                )
+                root_mask = firing & ~endpoint_hit & ~starts_rising
+                root = (
+                    _roots(
+                        chosen_voltage,
+                        chosen_current,
+                        chosen_lower,
+                        chosen_upper,
+                        root_mask,
                         slow,
+                        fast,
                         delta,
                         normalizer,
+                        threshold,
+                        duration,
                     )
-                    + incoming @ kernel.T
+                    if bool(root_mask.any())
+                    else torch.zeros_like(chosen_lower)
                 )
-                decay = torch.exp(-delays / fast).tril()
-                block_current = (
-                    current[:, None] * torch.exp(-(block_times - origin) / fast)
-                    + incoming @ decay.T
-                )
-                finite_state = torch.isfinite(block_voltage) & torch.isfinite(
-                    block_current
-                )
-                block_voltage = torch.where(finite_state, block_voltage, 0)
-                block_current = torch.where(finite_state, block_current, 0)
-                raw_voltage = block_voltage * normalizer
-                interval = endpoints[start:end] - block_times
-                critical = _stationary(raw_voltage, block_current, slow, delta)
-                interior = (
-                    torch.isfinite(critical) & (critical > 0) & (critical < interval)
-                )
-                endpoint_stationary = (
-                    torch.isfinite(critical)
-                    & (critical > 0)
-                    & (
-                        (critical - interval).abs()
-                        <= 8
-                        * torch.finfo(torch.float64).eps
-                        * (
-                            interval.abs()
-                            + torch.minimum(interval, interval.new_tensor(fast))
-                        )
-                    )
-                )
-                local = torch.stack(
-                    (
-                        torch.zeros_like(critical),
-                        torch.where(interior, critical, interval),
-                        interval.expand_as(critical),
+                root = torch.where(endpoint_hit, chosen_upper, root)
+                resolved_time = torch.where(
+                    starts_rising,
+                    torch.nextafter(
+                        chosen_origin + chosen_lower, chosen_origin + chosen_upper
                     ),
-                    -1,
+                    chosen_origin + root,
                 )
-                values = _voltage(
-                    raw_voltage[..., None],
-                    block_current[..., None],
-                    local,
+                if bool(
+                    (
+                        firing
+                        & starts_rising
+                        & (resolved_time <= chosen_origin + chosen_lower)
+                    ).any()
+                ):
+                    raise RuntimeError(
+                        "Tempotron upcrossing time is not representable."
+                    )
+                spike_times = torch.where(firing, resolved_time, spike_times)
+                tail_critical = critical[batches_index, outputs_index, first_group]
+                tail_end = duration - chosen_origin
+                tail_interior = (
+                    torch.isfinite(tail_critical)
+                    & (tail_critical > resolved_time - chosen_origin)
+                    & (tail_critical < tail_end)
+                )
+                tail_time = torch.where(tail_interior, tail_critical, tail_end)
+                tail_max = _voltage(
+                    chosen_voltage,
+                    chosen_current,
+                    tail_time,
                     slow,
                     delta,
                     normalizer,
                 )
-                finite_values = torch.isfinite(values).all(-1)
-                values = torch.where(finite_values[..., None], values, 0)
-                left, right = values[..., :-1], values[..., 1:]
-                lower, upper = local[..., :-1], local[..., 1:]
-                lower_slope = (
-                    block_current[..., None] * torch.exp(-lower / fast)
-                    - left * normalizer / slow
-                ) / normalizer
-                upper_slope = (
-                    block_current[..., None] * torch.exp(-upper / fast)
-                    - right * normalizer / slow
-                ) / normalizer
-                stationary_end = torch.stack(
-                    (interior | endpoint_stationary, endpoint_stationary), -1
+                maxima = torch.where(firing, tail_max, maxima)
+                peak_times = torch.where(firing, chosen_origin + tail_time, peak_times)
+                peak_types = torch.where(
+                    firing, tail_interior.to(torch.int64), peak_types
                 )
-                at_threshold = right == threshold
-                reaches = (right > threshold) | (
-                    at_threshold & ~stationary_end & (upper_slope > 0)
-                )
-                rising_start = torch.zeros_like(reaches)
-                rising_start[..., 0] = (left[..., 0] == threshold) & (
-                    lower_slope[..., 0] > 0
-                )
-                bracket = (
-                    active[:, None, None]
-                    & (upper > lower)
-                    & (((left < threshold) & reaches) | rising_start)
-                )
-                firing = bracket.flatten(1).any(1)
-                first = bracket.flatten(1).to(torch.int8).argmax(1)
-                first_group, first_segment = first // 2, first % 2
-                accepted_groups = active[:, None] & (
-                    ~firing[:, None]
-                    | (
-                        torch.arange(end - start, device=times.device)
-                        <= first_group[:, None]
-                    )
-                )
-                if bool(
-                    (
-                        accepted_groups
-                        & (
-                            invalid_prefix[:, start:end]
-                            | ~finite_state
-                            | ~finite_values
-                        )
-                    ).any()
-                ):
-                    raise RuntimeError("Tempotron voltage or current is not finite.")
-                if bool(firing.any()):
-                    chosen_voltage = raw_voltage[outputs_index, first_group]
-                    chosen_current = block_current[outputs_index, first_group]
-                    chosen_lower = lower[outputs_index, first_group, first_segment]
-                    chosen_upper = upper[outputs_index, first_group, first_segment]
-                    chosen_origin = block_times[first_group]
-                    starts_rising = rising_start[
-                        outputs_index, first_group, first_segment
-                    ]
-                    endpoint_hit = (
-                        at_threshold[outputs_index, first_group, first_segment]
-                        & ~stationary_end[outputs_index, first_group, first_segment]
-                        & ~starts_rising
-                    )
-                    root_mask = firing & ~endpoint_hit & ~starts_rising
-                    root = (
-                        _roots(
-                            chosen_voltage,
-                            chosen_current,
-                            chosen_lower,
-                            chosen_upper,
-                            root_mask,
-                            slow,
-                            fast,
-                            delta,
-                            normalizer,
-                            threshold,
-                            duration,
-                        )
-                        if bool(root_mask.any())
-                        else torch.zeros_like(chosen_lower)
-                    )
-                    root = torch.where(endpoint_hit, chosen_upper, root)
-                    resolved_time = torch.where(
-                        starts_rising,
-                        torch.nextafter(
-                            chosen_origin + chosen_lower, chosen_origin + chosen_upper
-                        ),
-                        chosen_origin + root,
-                    )
-                    if bool(
-                        (
-                            firing
-                            & starts_rising
-                            & (resolved_time <= chosen_origin + chosen_lower)
-                        ).any()
-                    ):
-                        raise RuntimeError(
-                            "Tempotron upcrossing time is not representable."
-                        )
-                    spike_times[batch] = torch.where(
-                        firing, resolved_time, spike_times[batch]
-                    )
-                    tail_critical = critical[outputs_index, first_group]
-                    tail_end = duration - chosen_origin
-                    tail_interior = (
-                        torch.isfinite(tail_critical)
-                        & (tail_critical > resolved_time - chosen_origin)
-                        & (tail_critical < tail_end)
-                    )
-                    tail_time = torch.where(tail_interior, tail_critical, tail_end)
-                    tail_max = _voltage(
-                        chosen_voltage,
-                        chosen_current,
-                        tail_time,
-                        slow,
-                        delta,
-                        normalizer,
-                    )
-                    maxima[batch] = torch.where(firing, tail_max, maxima[batch])
-                    peak_times[batch] = torch.where(
-                        firing, chosen_origin + tail_time, peak_times[batch]
-                    )
-                    peak_types[batch] = torch.where(
-                        firing, tail_interior.to(torch.int64), peak_types[batch]
-                    )
-                    peak_events[batch] = torch.where(firing, -1, peak_events[batch])
-                values[..., 1] = torch.where(interior, values[..., 1], -torch.inf)
-                candidate_max, candidate_index = values.flatten(1).max(1)
-                candidate_group, candidate_phase = (
-                    candidate_index // 3,
-                    candidate_index % 3,
-                )
-                better = active & ~firing & (candidate_max > maxima[batch])
-                selected_local = (
-                    local.flatten(1).gather(1, candidate_index[:, None]).squeeze(1)
-                )
-                chosen_event = torch.where(
-                    candidate_phase == 0,
-                    first_events[start:end][candidate_group],
-                    right_events[start:end][candidate_group],
-                )
-                chosen_type = torch.where(
-                    candidate_phase == 1, 1, torch.where(chosen_event >= 0, 2, 0)
-                )
-                maxima[batch] = torch.where(better, candidate_max, maxima[batch])
-                peak_times[batch] = torch.where(
-                    better,
-                    block_times[candidate_group] + selected_local,
-                    peak_times[batch],
-                )
-                peak_types[batch] = torch.where(better, chosen_type, peak_types[batch])
-                peak_events[batch] = torch.where(
-                    better & (chosen_type == 2), chosen_event, peak_events[batch]
-                )
-                remaining = torch.isinf(spike_times[batch])
-                voltage = torch.where(remaining, raw_voltage[:, -1], 0)
-                current = torch.where(remaining, block_current[:, -1], 0)
-                origin = block_times[-1]
-                if not bool(remaining.any()):
-                    break
-            accepted[batch] = torch.searchsorted(
-                times64[positions], spike_times[batch], right=False
+                peak_events = torch.where(firing, -1, peak_events)
+            values[..., 1] = torch.where(interior, values[..., 1], -torch.inf)
+            candidate_max, candidate_index = (
+                torch.where(valid[:, None, :, None], values, -torch.inf)
+                .flatten(2)
+                .max(-1)
             )
-        order = torch.cat(event_orders) if event_orders else indices.new_empty(0)
-        valid_offsets = offsets.new_tensor(valid_offsets)
+            candidate_group, candidate_phase = (
+                candidate_index // 3,
+                candidate_index % 3,
+            )
+            better = active & ~firing & (candidate_max > maxima)
+            selected_local = (
+                local.flatten(2).gather(2, candidate_index[..., None]).squeeze(2)
+            )
+            chosen_event = torch.where(
+                candidate_phase == 0,
+                block_first[batches_index, candidate_group],
+                block_right[batches_index, candidate_group],
+            )
+            chosen_type = torch.where(
+                candidate_phase == 1, 1, torch.where(chosen_event >= 0, 2, 0)
+            )
+            maxima = torch.where(better, candidate_max, maxima)
+            peak_times = torch.where(
+                better,
+                block_times[batches_index, candidate_group] + selected_local,
+                peak_times,
+            )
+            peak_types = torch.where(better, chosen_type, peak_types)
+            peak_events = torch.where(
+                better & (chosen_type == 2), chosen_event, peak_events
+            )
+            remaining = (
+                torch.isinf(spike_times) & (group_counts > start + width)[:, None]
+            )
+            voltage = torch.where(
+                remaining, raw_voltage[batches_index, outputs_index, last[:, None]], 0
+            )
+            current = torch.where(
+                remaining, block_current[batches_index, outputs_index, last[:, None]], 0
+            )
+            origin = block_times[torch.arange(batch_count, device=times.device), last]
+            if not bool(remaining.any()):
+                break
+        if order.numel():
+            accepted.index_add_(
+                0,
+                sorted_batches,
+                (times64[order, None] < spike_times[sorted_batches]).to(torch.int64),
+            )
         ctx.save_for_backward(
             times,
             indices,
@@ -479,156 +532,143 @@ class _Tempotron(torch.autograd.Function):
             torch.zeros_like(times, dtype=torch.float64),
             torch.zeros_like(weight, dtype=torch.float64),
         )
-        bounds = offsets.tolist()
-        for batch, (begin, end) in enumerate(zip(bounds[:-1], bounds[1:])):
-            positions = order[begin:end]
-            count = positions.numel()
-            peak_slope = peak.new_zeros(weight.shape[0])
-            peak_curvature = peak_slope.clone()
-            spike_slope = peak_slope.clone()
-            finite_spike = torch.isfinite(spike[batch])
-            safe_spike = torch.where(finite_spike, spike[batch], 0)
-            use_peak = (kinds[batch] == 1) & (gpeak[batch] != 0)
-            use_spike = finite_spike & (gspike[batch] != 0)
-            compute_peak = grad_peak is not None and bool(use_peak.any())
-            compute_spike = grad_spike is not None and bool(use_spike.any())
-            compute_boundary = grad_max is not None and bool(
-                ((kinds[batch] == 2) & (gmax[batch] != 0)).any()
-            )
-            derivative_count = (
-                count if compute_peak or compute_spike or compute_boundary else 0
-            )
-            for start in range(0, derivative_count, 1024):
-                pos = positions[start : start + 1024]
-                event_times = times[pos].double()[None, :]
-                event_weight = weight[:, indices[pos]].double()
-                prefix = (
-                    torch.arange(start, start + pos.numel(), device=times.device)[
-                        None, :
-                    ]
-                    < accepted[batch, :, None]
+        event_batches = torch.repeat_interleave(
+            torch.arange(shape[0], device=times.device),
+            offsets.diff(),
+            output_size=order.numel(),
+        )
+        event_ranks = (
+            torch.arange(order.numel(), device=times.device) - offsets[event_batches]
+        )
+        peak_slope = peak.new_zeros(shape)
+        peak_curvature = peak_slope.clone()
+        spike_slope = peak_slope.clone()
+        finite_spike = torch.isfinite(spike)
+        safe_spike = torch.where(finite_spike, spike, 0)
+        use_peak = (kinds == 1) & (gpeak != 0)
+        use_spike = finite_spike & (gspike != 0)
+        compute_peak = grad_peak is not None and bool(use_peak.any())
+        compute_spike = grad_spike is not None and bool(use_spike.any())
+        compute_boundary = grad_max is not None and bool(
+            ((kinds == 2) & (gmax != 0)).any()
+        )
+        derivative_count = (
+            order.numel() if compute_peak or compute_spike or compute_boundary else 0
+        )
+        for start in range(0, derivative_count, _BACKWARD_BLOCK_SIZE):
+            end = start + _BACKWARD_BLOCK_SIZE
+            pos, batch = order[start:end], event_batches[start:end]
+            event_times = times[pos].double()[None, :]
+            event_weight = weight[:, indices[pos]].double()
+            prefix = event_ranks[start:end][None, :] < accepted[batch].T
+            if compute_peak or compute_boundary:
+                peak_mask = prefix & (event_times < peak[batch].T)
+                _, first, second = _psp(
+                    (peak[batch].T - event_times).clamp_min(0),
+                    slow,
+                    fast,
+                    delta,
+                    normalizer,
                 )
-                if compute_peak or compute_boundary:
-                    peak_mask = prefix & (event_times < peak[batch, :, None])
-                    _, first, second = _psp(
-                        (peak[batch, :, None] - event_times).clamp_min(0),
-                        slow,
-                        fast,
-                        delta,
-                        normalizer,
+                if compute_boundary:
+                    peak_slope.index_add_(
+                        0, batch, (torch.where(peak_mask, first, 0) * event_weight).T
                     )
-                    if compute_boundary:
-                        peak_slope += (
-                            torch.where(peak_mask, first, 0) * event_weight
-                        ).sum(1)
-                    if compute_peak:
-                        peak_curvature += (
-                            torch.where(peak_mask, second, 0) * event_weight
-                        ).sum(1)
-                if compute_spike:
-                    spike_mask = (
-                        prefix
-                        & finite_spike[:, None]
-                        & (event_times < safe_spike[:, None])
+                if compute_peak:
+                    peak_curvature.index_add_(
+                        0, batch, (torch.where(peak_mask, second, 0) * event_weight).T
                     )
-                    _, spike_first, _ = _psp(
-                        (safe_spike[:, None] - event_times).clamp_min(0),
-                        slow,
-                        fast,
-                        delta,
-                        normalizer,
-                    )
-                    spike_slope += (
-                        torch.where(spike_mask, spike_first, 0) * event_weight
-                    ).sum(1)
-            if compute_peak and bool(
-                (
-                    use_peak & (~torch.isfinite(peak_curvature) | (peak_curvature >= 0))
-                ).any()
-            ):
-                raise RuntimeError("Tempotron peak-time derivative is singular.")
-            if compute_spike and bool(
-                (use_spike & (~torch.isfinite(spike_slope) | (spike_slope <= 0))).any()
-            ):
-                raise RuntimeError("Tempotron spike-time derivative is singular.")
-            peak_factor = torch.where(use_peak, gpeak[batch], 0) / torch.where(
-                use_peak, peak_curvature, 1
-            )
-            spike_factor = torch.where(use_spike, gspike[batch], 0) / torch.where(
-                use_spike, spike_slope, 1
-            )
-            contribution_count = (
-                count if grad_max is not None or compute_peak or compute_spike else 0
-            )
-            for start in range(0, contribution_count, 1024):
-                pos = positions[start : start + 1024]
-                event_times = times[pos].double()[None, :]
-                columns = indices[pos]
-                event_weight = weight[:, columns].double()
-                prefix = (
-                    torch.arange(start, start + pos.numel(), device=times.device)[
-                        None, :
-                    ]
-                    < accepted[batch, :, None]
+            if compute_spike:
+                spike_mask = (
+                    prefix & finite_spike[batch].T & (event_times < safe_spike[batch].T)
                 )
-                dw, dt = torch.zeros_like(event_weight), torch.zeros_like(event_weight)
-                if grad_max is not None or compute_peak:
-                    peak_mask = prefix & (event_times < peak[batch, :, None])
-                    value, first, second = _psp(
-                        (peak[batch, :, None] - event_times).clamp_min(0),
-                        slow,
-                        fast,
-                        delta,
-                        normalizer,
-                    )
-                    dw = torch.where(
-                        peak_mask,
-                        gmax[batch, :, None] * value
-                        - (peak_factor[:, None] * first if compute_peak else 0),
-                        0,
-                    )
-                    dt = torch.where(
-                        peak_mask,
-                        event_weight
-                        * (
-                            -gmax[batch, :, None] * first
-                            + (peak_factor[:, None] * second if compute_peak else 0)
-                        ),
-                        0,
-                    )
-                if compute_spike:
-                    spike_mask = (
-                        prefix
-                        & finite_spike[:, None]
-                        & (event_times < safe_spike[:, None])
-                    )
-                    spike_value, spike_first, _ = _psp(
-                        (safe_spike[:, None] - event_times).clamp_min(0),
-                        slow,
-                        fast,
-                        delta,
-                        normalizer,
-                    )
-                    dw -= torch.where(
-                        spike_mask, spike_factor[:, None] * spike_value, 0
-                    )
-                    dt += torch.where(
-                        spike_mask,
-                        spike_factor[:, None] * event_weight * spike_first,
-                        0,
-                    )
-                if ctx.needs_input_grad[3]:
-                    weight_gradient.index_add_(1, columns, dw)
-                if ctx.needs_input_grad[0]:
-                    time_gradient.index_add_(0, pos, dt.sum(0))
-            boundary = kinds[batch] == 2
-            if ctx.needs_input_grad[0] and bool(boundary.any()):
-                time_gradient.index_add_(
+                _, spike_first, _ = _psp(
+                    (safe_spike[batch].T - event_times).clamp_min(0),
+                    slow,
+                    fast,
+                    delta,
+                    normalizer,
+                )
+                spike_slope.index_add_(
+                    0, batch, (torch.where(spike_mask, spike_first, 0) * event_weight).T
+                )
+        if compute_peak and bool(
+            (use_peak & (~torch.isfinite(peak_curvature) | (peak_curvature >= 0))).any()
+        ):
+            raise RuntimeError("Tempotron peak-time derivative is singular.")
+        if compute_spike and bool(
+            (use_spike & (~torch.isfinite(spike_slope) | (spike_slope <= 0))).any()
+        ):
+            raise RuntimeError("Tempotron spike-time derivative is singular.")
+        peak_factor = torch.where(use_peak, gpeak, 0) / torch.where(
+            use_peak, peak_curvature, 1
+        )
+        spike_factor = torch.where(use_spike, gspike, 0) / torch.where(
+            use_spike, spike_slope, 1
+        )
+        contribution_count = (
+            order.numel()
+            if grad_max is not None or compute_peak or compute_spike
+            else 0
+        )
+        for start in range(0, contribution_count, _BACKWARD_BLOCK_SIZE):
+            end = start + _BACKWARD_BLOCK_SIZE
+            pos, batch = order[start:end], event_batches[start:end]
+            event_times = times[pos].double()[None, :]
+            columns = indices[pos]
+            event_weight = weight[:, columns].double()
+            prefix = event_ranks[start:end][None, :] < accepted[batch].T
+            dw, dt = torch.zeros_like(event_weight), torch.zeros_like(event_weight)
+            if grad_max is not None or compute_peak:
+                peak_mask = prefix & (event_times < peak[batch].T)
+                value, first, second = _psp(
+                    (peak[batch].T - event_times).clamp_min(0),
+                    slow,
+                    fast,
+                    delta,
+                    normalizer,
+                )
+                dw = torch.where(
+                    peak_mask,
+                    gmax[batch].T * value
+                    - (peak_factor[batch].T * first if compute_peak else 0),
                     0,
-                    peak_events[batch, boundary],
-                    gpeak[batch, boundary]
-                    + gmax[batch, boundary] * peak_slope[boundary],
                 )
+                dt = torch.where(
+                    peak_mask,
+                    event_weight
+                    * (
+                        -gmax[batch].T * first
+                        + (peak_factor[batch].T * second if compute_peak else 0)
+                    ),
+                    0,
+                )
+            if compute_spike:
+                spike_mask = (
+                    prefix & finite_spike[batch].T & (event_times < safe_spike[batch].T)
+                )
+                spike_value, spike_first, _ = _psp(
+                    (safe_spike[batch].T - event_times).clamp_min(0),
+                    slow,
+                    fast,
+                    delta,
+                    normalizer,
+                )
+                dw -= torch.where(spike_mask, spike_factor[batch].T * spike_value, 0)
+                dt += torch.where(
+                    spike_mask, spike_factor[batch].T * event_weight * spike_first, 0
+                )
+            if ctx.needs_input_grad[3]:
+                weight_gradient.index_add_(1, columns, dw)
+            if ctx.needs_input_grad[0]:
+                time_gradient.index_add_(0, pos, dt.sum(0))
+        boundary = kinds == 2
+        if ctx.needs_input_grad[0] and bool(boundary.any()):
+            time_gradient.index_add_(
+                0,
+                peak_events[boundary],
+                gpeak[boundary] + gmax[boundary] * peak_slope[boundary],
+            )
         if ctx.needs_input_grad[0]:
             time_gradient = time_gradient.to(times.dtype)
             if not bool(torch.isfinite(time_gradient).all()):
@@ -676,9 +716,10 @@ def tempotron(
     同刻事件聚合，输出发放优先。
 
     支持 CPU/CUDA 上的 FP32/FP64，所有张量必须同设备，时刻和权重同 dtype。
-    内部使用 FP64，以有界局部事件矩阵分块求解，避免逐事件启动小算子。
-    CUDA 仍可能有块级控制流程同步，不使用专用 GPU 核。反向只重算被使用输出
-    所需的导数；仅支持对权重及输入时刻的一阶反向。
+    内部使用 FP64，整批样本并行推进有界事件块（CPU 128、CUDA 512 个事件组），
+    不展开均匀时间轴。CUDA 仍有块级同步；临时矩阵内存随 batch 大小及块宽平方增长，
+    不使用专用 GPU 核。反向按整批事件重算被使用输出所需的导数；
+    仅支持对权重及输入时刻的一阶反向。
 
     峰值并列时选择最早分支；事件边界使用稳定排序中的首个原事件作为时间分支，
     固定窗口端点的峰值时间梯度为零。非光滑点不保证唯一导数。未发放的 ``t_spike``
@@ -723,11 +764,13 @@ def tempotron(
     carry multiple events. Simultaneous events are grouped; output firing wins ties.
 
     Supports CPU/CUDA FP32/FP64 with all tensors on one device and matching time
-    and weight dtypes. Computation uses FP64 and bounded local event matrices to
-    solve blocks, avoiding tiny per-event launches. CUDA may still synchronize
-    block-level control flow; no specialized GPU kernel is used. Backward recomputes
-    only derivatives needed by used outputs. Only first-order weight and input-time
-    derivatives are supported.
+    and weight dtypes. Computation uses FP64 and advances samples together in
+    bounded event blocks
+    (128 groups on CPU, 512 on CUDA), without a uniform time grid. CUDA still has
+    block-level synchronization. Temporary matrix memory scales with batch size
+    and squared block width; no specialized GPU kernel is used. Backward processes
+    events across the batch, recomputing only derivatives needed by used outputs.
+    Only first-order weight and input-time derivatives are supported.
 
     Equal peaks select the earliest branch. Event-boundary time derivatives select
     the first original event in stable order; fixed-window peak times have zero

@@ -136,11 +136,13 @@ shunting nor internal autograd, and does not apply cross-entropy to ``t_spike``
 values containing ``inf``.
 
 This release uses eager PyTorch and internal FP64. Bounded event blocks evaluate
-states, stationary points and first-upcrossing candidates in batches; simultaneous
-inputs are aggregated once. Local time-difference matrices replace tiny per-event
-operations without a uniform time grid. Temporary matrices are bounded by the
-block width. Backward recomputes only derivatives needed by used outputs, with
-unchanged saved-tensor sizes. CUDA still has block-level synchronization and no
+states, stationary points and first-upcrossing candidates across the entire batch;
+simultaneous inputs are aggregated once. Blocks contain up to 128 event groups on
+CPU and 512 on CUDA. Local time-difference matrices replace tiny per-event
+operations without a uniform time grid. Temporary matrix memory scales with batch
+size and squared block width: larger blocks trade memory for fewer launches.
+Backward processes events across the batch, recomputing only required analytic
+derivatives, with unchanged saved-tensor sizes. CUDA still has block-level synchronization and no
 specialized GPU kernel. Full MNIST training requires its own evaluation; historical
 accuracy/speed do not describe the new dynamics.
 

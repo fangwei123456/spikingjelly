@@ -635,3 +635,85 @@ def test_shunted_overflowing_groups_do_not_contaminate_accepted_prefix(device):
             0.5,
             0.6,
         )
+
+
+@pytest.mark.parametrize("long_count", [1100, 16400])
+def test_ragged_batch_matches_independent_trials_and_gradients(device, long_count):
+    from spikingjelly.timing_based.functional import tempotron
+
+    generator = torch.Generator().manual_seed(20261011)
+    counts = [0, 5, long_count, 0, 17]
+    times = torch.cat(
+        [
+            torch.rand(count, generator=generator, dtype=torch.float64) * 30
+            for count in counts
+        ]
+    )
+    indices = torch.randint(3, (times.numel(),), generator=generator)
+    times[6:9] = 0.25
+    times[-1] = 31.0
+    times = times.to(device).requires_grad_()
+    indices = indices.to(device)
+    offsets = torch.tensor([0, *np.cumsum(counts)], device=device)
+    weight = torch.tensor(
+        [[0.8, 0.3, -0.2], [0.0002, -0.0003, 0.0001], [-0.1, -0.2, -0.3]],
+        dtype=torch.float64,
+        device=device,
+        requires_grad=True,
+    )
+    actual = tempotron(times, indices, offsets, weight, 30.0, 2.0, 0.5, 0.6)
+    independent = [
+        tempotron(
+            times[start:end],
+            indices[start:end],
+            offsets.new_tensor([0, end - start]),
+            weight,
+            30.0,
+            2.0,
+            0.5,
+            0.6,
+        )
+        for start, end in zip(offsets.tolist()[:-1], offsets.tolist()[1:])
+    ]
+    expected = tuple(torch.cat([trial[i] for trial in independent]) for i in range(3))
+    for batched, separate in zip(actual, expected):
+        torch.testing.assert_close(batched, separate, rtol=1e-9, atol=1e-10)
+    coefficients = (
+        torch.arange(15, dtype=torch.float64, device=device).reshape(5, 3) / 15
+    )
+    gradients = []
+    for result in (actual, expected):
+        objective = sum(
+            (torch.where(torch.isfinite(value), value, 0) * coefficients).sum()
+            for value in result
+        )
+        gradients.append(torch.autograd.grad(objective, (times, weight)))
+    for batched, separate in zip(*gradients):
+        torch.testing.assert_close(batched, separate, rtol=1e-8, atol=1e-9)
+
+
+def test_joint_gradcheck_ragged_batch(device):
+    from spikingjelly.timing_based.functional import tempotron
+
+    times = torch.tensor(
+        [0.3, 0.9, 0.2, 0.8, 1.1],
+        dtype=torch.float64,
+        device=device,
+        requires_grad=True,
+    )
+    indices = torch.tensor([0, 1, 1, 0, 1], device=device)
+    offsets = torch.tensor([0, 2, 2, 5], device=device)
+    weight = torch.tensor(
+        [[0.8, 0.7], [0.1, 0.2]],
+        dtype=torch.float64,
+        device=device,
+        requires_grad=True,
+    )
+
+    def evaluate(t, w):
+        maximum, peak, spike = tempotron(t, indices, offsets, w, 5.0, 2.0, 0.5, 0.6)
+        return maximum, peak, spike[[0, 2], 0]
+
+    assert torch.autograd.gradcheck(
+        evaluate, (times, weight), eps=1e-6, atol=1e-6, rtol=1e-4, nondet_tol=1e-12
+    )
