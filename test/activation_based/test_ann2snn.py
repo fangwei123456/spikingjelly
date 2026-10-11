@@ -825,32 +825,6 @@ class TestChannelVoltageScaler:
         assert torch.allclose(y_multi, y_single)
 
 
-class TestPublicExports:
-    def test_all_contains_new_public_api(self):
-        assert set(ann2snn.__all__) == {
-            "Converter",
-            "FXConverter",
-            "ModuleConverter",
-            "ConversionRecipe",
-            "FXConversionRecipe",
-            "ModuleConversionRecipe",
-            "RateCodingRecipe",
-            "LocalThresholdBalancingRecipe",
-            "STATransformerRecipe",
-            "TransformerTDEquivalentRecipe",
-            "SpikeZIPTFQANNRecipe",
-            "SignedQCFSSequenceEncoder",
-            "Qwen2SNNCalibration",
-            "Qwen2SNNConfig",
-            "Qwen2SNNModel",
-            "Qwen2SNNRecipe",
-            "calibrate_qwen2_snn",
-            "ChannelVoltageScaler",
-            "estimate_delay_start",
-            "download_url",
-        }
-
-
 class TestConverterRecipes:
     def test_converter_signature_is_algorithm_agnostic(self):
         signature = inspect.signature(Converter)

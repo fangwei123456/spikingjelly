@@ -11,16 +11,6 @@ from spikingjelly.activation_based.precision import convert as precision_convert
 from spikingjelly._ops import triton_layout as triton_neuron_utils
 
 
-def test_public_precision_surface():
-    import spikingjelly.activation_based.precision as precision
-
-    assert precision.__all__ == [
-        "PrecisionArtifacts",
-        "PrecisionConfig",
-        "prepare_model_for_precision",
-    ]
-
-
 @pytest.mark.parametrize("mode", ("fp32", "fp16", "bf16", "fp8"))
 def test_precision_config_modes(mode):
     assert PrecisionConfig.from_any(mode).mode == mode

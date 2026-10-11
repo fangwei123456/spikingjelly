@@ -1160,7 +1160,7 @@ directly from the summary:
 
 .. code-block:: bash
 
-    python benchmark/plot_distributed_inference.py \
+    python tools/viz/plot_distributed_inference.py \
         docs/source/_static/tutorials/distributed/distributed-inference-tradeoff.csv \
         docs/source/_static/tutorials/distributed
 
@@ -1221,6 +1221,6 @@ the figure directly:
 
 .. code-block:: bash
 
-    python benchmark/plot_sglang_inference.py \
+    python tools/viz/plot_sglang_inference.py \
         docs/source/_static/tutorials/distributed/sglang-inference-results.csv \
         docs/source/_static/tutorials/distributed/sglang-inference.png

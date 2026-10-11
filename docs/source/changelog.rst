@@ -18,6 +18,23 @@ Unreleased
 Fixes
 ~~~~~
 
+- Removed the private GPT-2 conversion example runners; use the Qwen conversion
+  runners for current language-model evaluation.
+- Moved NSYS workloads to ``spikingjelly/activation_based/examples/profiling/``
+  (``nsys_lif.py`` and ``nsys_multigpu.py``); capture and analysis tools stay in
+  ``tools/nsys/``.
+- Moved Nsight Systems capture, analysis and plotting utilities to ``tools/nsys/``,
+  and distributed-result plotting scripts to ``tools/viz/``. Use the new
+  paths in existing commands.
+- Retired historical SpikeGPT and T=8 phase-cache benchmark runners, standalone
+  ANN2SNN step-mode microbenchmarks, and migration-specific dispatch/LIF checks.
+  Use ``benchmark_neuron_implementations.py`` for current neuron comparisons;
+  Qwen correctness/quality runners remain available.
+- The fused neuron–Linear training benchmark validates gradients against the
+  Torch reference before timing, using the operator regression tolerances.
+- Removed private benchmark entry points ``snn_llm/smoke.py``,
+  ``snn_llm/report_distributed.py``, and ``snn_llm/finetune_qwen2.py``.
+  Use ``python -m benchmark.snn_llm.cli qwen2-finetune`` for fine-tuning.
 - Restored direct compact-layout and broadcast-view access in all nine built-in
   native CUDA and Triton point-neuron implementations, including states and
   backward inputs. Fake output layouts match execution; rebuild native extensions
@@ -26,17 +43,13 @@ Fixes
   and verifies the accelerated implementation it measures.
 
 - Binary neuron projection benchmarks use the correct IF surrogate argument and
-  reference method key; SpikeZIP benchmark artifacts report the reference
-  implementation used with low-precision membrane state.
+  reference method key.
 - ActivationAwareIF avoids allocating unused channel indices for scalar
   threshold/offset parameters on the Torch path.
 
 - Multi-step IF/LIF/PLIF modules record voltage trajectories through the same
   sequence operator used without trajectories, preserving initial-state and
   parameter gradients.
-- SpikeGPT benchmark startup no longer requires CuPy or records a CuPy backend
-  in checkpoint configuration. Checkpoints retaining the old configuration are
-  rejected on resume.
 - Operator registration no longer hashes source files or modifies the compiler
   cache tag at import time; fingerprints are computed for compilation bindings.
 - Explicit IF/LIF/PLIF precision preserves the input dtype for spikes while
@@ -216,7 +229,7 @@ Module: ``spikingjelly.nsys``.
   attributes CUDA work across CPU threads and plots CUDA API launches, GPU
   execution, synchronization waits, and reset alongside four captured steps;
   offline plots can select a captured step with ``--step-index``.
-- Added ``benchmark/nsys_snn.sh capture-graph`` to preserve build-time NVTX
+- Added ``tools/nsys/nsys_snn.sh capture-graph`` to preserve build-time NVTX
   ranges for projection onto CUDA Graph replay nodes in a diagnostic report;
   analysis emits a GPU stage timeline without implying CPU forward/backward
   execution on replay.
@@ -224,17 +237,12 @@ Module: ``spikingjelly.nsys``.
   records the automatically selected implementation in case and matrix reports.
 - Retired the ``benchmark/native_lif`` migration runners, the obsolete FlexSN
   bucket probe, and fixed ConvNet/handwritten-LIF timing scripts. Use
-  ``benchmark.benchmark_snn_single_gpu`` and ``benchmark/nsys_snn.sh`` for full-model
+  ``benchmark.benchmark_snn_single_gpu`` and ``tools/nsys/nsys_snn.sh`` for full-model
   training comparisons and profiling; current entry points are listed in
   ``benchmark/README.md``.
-- Added ``benchmark.check_triton_lif_performance`` for paired FP32 LIF backward
-  checks against production Triton, using captured Spikformer inputs, shared
-  output buffers, numerical validation and independent process rounds. Reports
-  retain raw timings and distinguish passes, regressions and inconsistent rounds;
-  CUDA/CuPy performance is not part of this gate.
 - ``benchmark.benchmark_snn_single_gpu`` now supports Spikformer-S ImageNet-size
   workloads alongside Spikformer-Ti for launch-overhead and batch-size studies.
-- Added ``benchmark/nsys_lif_host_functions.json`` as an opt-in NSYS preset for
+- Added ``tools/nsys/nsys_lif_host_functions.json`` as an opt-in NSYS preset for
   tracing Python work around Triton LIF launches in separate diagnostic runs.
 
 Spiking Neurons

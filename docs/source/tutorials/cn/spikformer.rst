@@ -214,5 +214,5 @@ SpikingJelly ``0.0.0.1.0`` 提供了 SSA 的高效实现 :class:`SpikingSelfAtte
 
 模型结构教学片段保留原有表达；测速请使用仓库 ``benchmark/README.md`` 中的
 标准 Spikformer 流程。使用 ``benchmark.benchmark_snn_single_gpu case`` 做未 profile
-测量；使用 ``benchmark/nsys_snn.sh`` 捕获，再用 ``benchmark/analyze_nsys_snn.py``
+测量；使用 ``tools/nsys/nsys_snn.sh`` 捕获，再用 ``tools/nsys/analyze_nsys_snn.py``
 分析归因。具体参数以 ``--help`` 和 benchmark 文档为准，不将 profile 耗时当作稳定延迟。

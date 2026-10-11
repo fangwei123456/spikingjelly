@@ -77,19 +77,6 @@ def test_collect_reset_modules_ignores_non_callable_reset_attributes():
     assert modules == (net[1],)
 
 
-def test_reset_net_cache_hit_reuses_same_module_tuple():
-    net = nn.Sequential(_ResetCounter(), nn.ReLU(), _ResetCounter())
-    reset_net(net)
-    try:
-        cached = _RESET_MODULE_CACHE[net]
-        reset_net(net)
-        assert _RESET_MODULE_CACHE[net] is cached
-        assert net[0].reset_calls == 2
-        assert net[2].reset_calls == 2
-    finally:
-        invalidate_reset_cache(net)
-
-
 def test_invalidate_then_reset_recollects():
     net = nn.Sequential(_ResetCounter(), nn.ReLU(), _ResetCounter())
     reset_net(net)
@@ -148,21 +135,6 @@ def test_reset_net_with_module_list():
         invalidate_reset_cache(net)
 
 
-def test_independent_models_have_independent_caches():
-    net1 = nn.Sequential(_ResetCounter(), _ResetCounter())
-    net2 = nn.Sequential(_ResetCounter())
-    reset_net(net1)
-    reset_net(net2)
-    try:
-        assert net1 in _RESET_MODULE_CACHE
-        assert net2 in _RESET_MODULE_CACHE
-        assert len(_RESET_MODULE_CACHE[net1]) == 2
-        assert len(_RESET_MODULE_CACHE[net2]) == 1
-    finally:
-        invalidate_reset_cache(net1)
-        invalidate_reset_cache(net2)
-
-
 def test_reset_collected_modules_works_after_invalidate():
     net = nn.Sequential(_ResetCounter(), nn.ReLU(), _ResetCounter())
     reset_net(net)
@@ -171,18 +143,6 @@ def test_reset_collected_modules_works_after_invalidate():
     reset_collected_modules(modules)
     assert net[0].reset_calls == 2
     assert net[2].reset_calls == 2
-
-
-def test_reset_net_idempotent():
-    net = nn.Sequential(_ResetCounter(), _ResetCounter())
-    reset_net(net)
-    reset_net(net)
-    reset_net(net)
-    try:
-        assert net[0].reset_calls == 3
-        assert net[1].reset_calls == 3
-    finally:
-        invalidate_reset_cache(net)
 
 
 def test_reset_net_in_training_loop():

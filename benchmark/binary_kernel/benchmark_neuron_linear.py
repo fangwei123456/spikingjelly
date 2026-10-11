@@ -192,6 +192,25 @@ def _methods(x, v, weight, bias, sg, mode, neuron, thread_counts):
     return methods
 
 
+def _validate_methods(methods, tensors, grads, training):
+    with torch.no_grad():
+        expected = methods["torch_reference"]()
+        for fn in methods.values():
+            actual = fn()
+            torch.testing.assert_close(actual[0], expected[0], rtol=1e-4, atol=1e-4)
+            torch.testing.assert_close(actual[1], expected[1], rtol=1e-5, atol=1e-6)
+    if training:
+        expected_grads = torch.autograd.grad(
+            methods["torch_reference"](), tensors, grads
+        )
+        for name, fn in methods.items():
+            actual_grads = torch.autograd.grad(fn(), tensors, grads)
+            for actual, expected in zip(actual_grads, expected_grads, strict=True):
+                torch.testing.assert_close(
+                    actual, expected, rtol=2e-4, atol=2e-5, msg=f"{name} gradient"
+                )
+
+
 def _gpu_uuid():
     visible = os.environ.get("CUDA_VISIBLE_DEVICES", str(torch.cuda.current_device()))
     device = visible.split(",", 1)[0]
@@ -268,20 +287,12 @@ def main():
                                 args.neuron,
                                 args.threads,
                             )
-                            with torch.no_grad():
-                                expected = methods["torch_reference"]()
-                                for name, fn in methods.items():
-                                    actual = fn()
-                                    torch.testing.assert_close(
-                                        actual[0], expected[0], rtol=1e-4, atol=1e-4
-                                    )
-                                    torch.testing.assert_close(
-                                        actual[1], expected[1], rtol=1e-5, atol=1e-6
-                                    )
-
                             grad_y = torch.randn(T, M, N, device=device)
                             grad_v = torch.randn(M, K, device=device)
                             tensors = (x, v, weight, bias)
+                            _validate_methods(
+                                methods, tensors, (grad_y, grad_v), training
+                            )
                             screening = {}
                             with (
                                 torch.enable_grad()

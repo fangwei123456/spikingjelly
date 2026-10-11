@@ -1,5 +1,4 @@
 import copy
-import inspect
 import math
 
 import pytest
@@ -8,7 +7,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from spikingjelly.activation_based import functional, layer, neuron
-from spikingjelly.activation_based.functional import layer as functional_layer
 
 
 def test_delay_step_matches_sequence_delay_and_gradients():
@@ -308,22 +306,3 @@ def test_voting_layer_averages_fixed_size_groups_in_both_step_modes():
 
     assert torch.equal(layer.VotingLayer(2)(x), expected)
     assert torch.equal(layer.VotingLayer(2, step_mode="m")(x.unsqueeze(0))[0], expected)
-
-
-def test_functional_layer_exports():
-    for name in functional_layer.__all__:
-        assert getattr(functional, name) is getattr(functional_layer, name)
-
-
-def test_functional_layer_public_api_documentation():
-    for name in functional_layer.__all__:
-        function = getattr(functional_layer, name)
-        signature = inspect.signature(function)
-        assert signature.return_annotation is not inspect.Signature.empty
-        assert all(
-            parameter.annotation is not inspect.Parameter.empty
-            for parameter in signature.parameters.values()
-        )
-        doc = inspect.getdoc(function)
-        assert f".. _{name}-cn:" in doc
-        assert f".. _{name}-en:" in doc

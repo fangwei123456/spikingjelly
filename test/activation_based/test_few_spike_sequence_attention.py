@@ -351,7 +351,7 @@ def test_decoder_block_autograd_with_sigmoid_surrogates():
     _assert_finite_gradients(block, x_seq)
 
 
-def test_synthetic_decoder_stack_benchmark_smoke():
+def test_decoder_stack_matches_step_loop_and_preserves_gradients():
     torch.manual_seed(0)
     table = _table()
     vocab_size = 11
