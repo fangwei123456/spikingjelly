@@ -1,235 +1,147 @@
-:orphan:
+连续事件 Tempotron
+==================
 
-事件驱动
-=======================================
+``timing_based`` 使用显式事件时刻作为接口。TTFS 是编码约束，不意味着实现一定
+使用时间戳；按时间步传递 01 激活的 TTFS 网络仍属于 ``activation_based``。
+本页的 Tempotron 在输入事件区间上求解，不构造均匀时间网格。
 
-本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
+神经元响应与输出
+----------------
 
-本节教程主要关注 ``spikingjelly.timing_based`` ，介绍事件驱动概念、Tempotron神经元。
+每条输入连接可以有多个脉冲，共享对应突触权重。静息电位为零，双指数 PSP
+归一化为单位峰值：
 
-事件驱动的SNN仿真
------------------
+.. math::
 
-``activation_based`` 使用时间驱动的方法对SNN进行仿真，因此在代码中都能够找到在时间上的循环，例如：
+   V(t)=\sum_i w_i\sum_r h(t-t_{i,r}),\qquad
+   h(u)=\frac{e^{-u/\tau}-e^{-u/\tau_s}}
+               {e^{-u_p/\tau}-e^{-u_p/\tau_s}}\mathbf{1}_{u\ge0},
+
+   u_p=\frac{\tau\tau_s\log(\tau/\tau_s)}{\tau-\tau_s}.
+
+支持两个不同的正时间常数，包括顺序交换和接近相等的情况。内部使用稳定的
+电压/电流状态、``expm1`` 和 ``log1p``，避免累计全局正指数。
+
+观察窗为 ``[0,duration]``，各时刻与时间常数使用同一单位。首次上穿阈值时发放；
+与阈值相切不算发放。发放后屏蔽同刻及更晚的输入，已有 PSP 继续演化，不执行
+硬重置。因此电压峰值可能晚于首次发放。
+
+:class:`spikingjelly.timing_based.neuron.Tempotron` 返回三个独立的 ``[B,O]`` 张量：
+
+* ``v_max``：实际 shunting 轨迹的最大电压。
+* ``t_peak``：最早达到最大电压的时刻。
+* ``t_spike``：首次上穿时刻，未发放为 ``inf``。
+
+判断是否发放使用 ``torch.isfinite(t_spike)``。相切时即使 ``v_max`` 达到阈值也不
+发放。空样本返回 ``(0,0,inf)``；调用间无状态持久化，不需要 ``reset()``。
+
+紧凑事件输入
+------------
+
+输入包含有限时刻 ``spike_times[E]``、int64 输入列索引 ``input_indices[E]`` 和
+int64 CSR 边界 ``batch_offsets[B+1]``。边界从 0 开始、非递减、以 E 结束。
+样本内事件可以无序；同刻事件聚合；重复边界表示空样本。窗外事件忽略且梯度为零。
+所有张量必须与权重同设备；时刻和权重支持同 dtype 的 FP32/FP64 CPU/CUDA。
 
 .. code-block:: python
 
-    for t in range(T):
-        if t == 0:
-            out_spikes_counter = net(encoder(img).float())
-        else:
-            out_spikes_counter += net(encoder(img).float())
+   import torch
+   from spikingjelly.timing_based.neuron import Tempotron
 
-而使用事件驱动的SNN仿真，并不需要在时间上进行循环，神经元的状态更新由事件触发，例如产生脉冲或接受输入脉冲，因而不同神经元的活动\
-可以异步计算，不需要在时钟上保持同步。
+   neuron = Tempotron(2, 1, duration=5.0, tau=2.0, tau_s=0.5).double()
+   with torch.no_grad():
+       neuron.weight.copy_(torch.tensor([[1.0, 0.5]], dtype=torch.float64))
+   times = torch.tensor([0.3, 0.4, 3.0], dtype=torch.float64,
+                        requires_grad=True)
+   indices = torch.tensor([0, 0, 1], dtype=torch.int64)
+   offsets = torch.tensor([0, 3, 3], dtype=torch.int64)
+   v_max, t_peak, t_spike = neuron(times, indices, offsets)
+   assert v_max.shape == t_peak.shape == t_spike.shape == (2, 1)
+   assert torch.isinf(t_spike[1]).all()
+   target = torch.tensor([[1.5], [0.0]], dtype=torch.float64)
+   loss = (v_max - target).square().mean()
+   loss.backward()
+   assert torch.isfinite(times.grad).all()
 
-脉冲响应模型(Spike response model, SRM)
------------------------------------------------
+无状态计算入口为 :func:`spikingjelly.timing_based.functional.tempotron`；模块只拥有
+``weight[O,I]`` 和超参数。权重以 ``N(0,0.001²)`` 初始化，checkpoint 键为
+``weight``。归一化不随阈值变化。
 
-在脉冲响应模型(Spike response model, SRM)中，使用显式的 :math:`V-t` 方程来描述神经元的活动，而不是用微分方程去描述神经元的充\
-电过程。由于 :math:`V-t` 是已知的，因此给与任何输入 :math:`X(t)`，神经元的响应 :math:`V(t)` 都可以被直接算出。
+连续高斯编码
+------------
 
-Tempotron神经元
----------------------
+:class:`spikingjelly.timing_based.encoding.GaussianTuning` 是普通 ``nn.Module``，
+感受野中心 ``mu`` 与方差 ``sigma2`` 是固定 buffers。输入为
+``[B,n,samples_count]``；输出直接是上述事件三张量。
 
-Tempotron神经元是 [#f1]_ 提出的一种SNN神经元，其命名来源于ANN中的感知器（Perceptron）。感知器是最简单的ANN神经元，对输入数据\
-进行加权求和，输出二值0或1来表示数据的分类结果。Tempotron可以看作是SNN领域的感知器，它同样对输入数据进行加权求和，并输出二分类\
-的结果。
+.. code-block:: python
 
-Tempotron的膜电位定义为：
+   from spikingjelly.timing_based.encoding import GaussianTuning
 
-.. math::
-    V(t) = \sum_{i} w_{i} \sum_{t_{i}} K(t - t_{i}) + V_{reset}
+   encoder = GaussianTuning(1, 4, torch.zeros(1), torch.ones(1)).double()
+   x = torch.tensor([[[0.2, 0.7]]], dtype=torch.float64, requires_grad=True)
+   events = encoder(x, duration=5.0)
+   net = Tempotron(1 * 2 * 4, 2, duration=5.0).double()
+   logits, _, _ = net(*events)
+   torch.nn.functional.cross_entropy(logits, torch.tensor([0])).backward()
 
-其中 :math:`w_{i}` 是第 :math:`i` 个输入的权重，也可以看作是所连接的突触的权重；:math:`t_{i}` 是第 :math:`i` 个输入的脉冲发\
-放时刻，:math:`K(t - t_{i})` 是由于输入脉冲引发的突触后膜电位(postsynaptic potentials, PSPs)；:math:`V_{reset}` 是Tempotron\
-的重置电位，或者叫静息电位。
+编码时刻为 ``duration * (1-response)``，不取整。输入列按特征、样本、感受野
+展平；仅输出 ``0 <= time < duration`` 的事件，没有 ``-1`` 或 ``inf`` 填充。
+有效事件时刻可对输入值求导，事件选择边界不保证唯一导数。
 
-:math:`K(t - t_{i})` 是一个关于 :math:`t_{i}` 的函数(PSP Kernel)，[#f1]_ 中使用的函数形式如下：
+Autograd 与 loss
+----------------
 
-.. math::
-    K(t - t_{i}) =
-    \begin{cases}
-    V_{0} (exp(-\frac{t - t_{i}}{\tau}) - exp(-\frac{t - t_{i}}{\tau_{s}})), & t \geq t_{i} \\
-    0, & t < t_{i}
-    \end{cases}
+内部仅支持权重及输入时刻的一阶反向。首次发放时刻使用阈值方程的隐式导数，
+不是对二分分支求导；峰值与峰值时刻使用局部解析导数。共享连接及事件的
+贡献累加。并列峰值选择最早分支；事件边界时间使用稳定排序中首个原事件的
+分支。固定窗口端点的峰值时间梯度为零，未发放的 ``t_spike`` 分支梯度为零。
 
-其中 :math:`V_{0}` 是归一化系数，使得函数的最大值为1；:math:`\tau` 是膜电位时间常数，可以看出输入的脉冲在Tempotron上会引起\
-瞬时的点位激增，但之后会指数衰减；:math:`\tau_{s}` 则是突触电流的时间常数，这一项的存在表示突触上传导的电流也会随着时间衰减。
+非光滑点不保证唯一导数。只有 loss 使用相应时间输出时才检查其奇异导数；
+不隐藏裁剪、替代梯度或沉默恢复。二阶反向明确不支持。
 
-单个的Tempotron可以作为一个二分类器，分类结果的判别，是看Tempotron的膜电位在仿真周期内是否过阈值:
+Loss 由调用方选择；上例展示峰值平方误差及交叉熵的一阶反向。MNIST 示例
+使用尺度校准交叉熵加发放错误线性罚项，避免原始峰值 CE 与 shunting 的训练
+目标不匹配。含 ``inf``
+的发放时刻必须由任务自己的 loss 正确处理。全负响应或无输入的数学峰值可能
+是静息平台，其梯度可以为零；初始化、正则化或恢复策略由任务决定。
 
-.. math::
-    y =
-    \begin{cases}
-    1, & V_{t_{max}} \geq V_{threshold} \\
-    0, & V_{t_{max}} < V_{threshold}
-    \end{cases}
-
-其中 :math:`t_{max} = \mathrm{argmax} \{V_{t}\}`。
-从Tempotron的输出结果也能看出，Tempotron只能发放不超过1个脉冲。单个Tempotron只能做二分类，但多个Tempotron就可以做多分类。
-
-如何训练Tempotron
+MNIST 示例与性能范围
 --------------------
 
-使用Tempotron的SNN网络，通常是“全连接层 + Tempotron”的形式，网络的参数即为全连接层的权重。使用梯度下降法来优化网络参数。
+.. code-block:: bash
 
-以二分类为例，损失函数被定义为仅在分类错误的情况下存在。当实际类别是1而实际输出是0，损失为 :math:`V_{threshold} - V_{t_{max}}`;\
-当实际类别是0而实际输出是1，损失为 :math:`V_{t_{max}} - V_{threshold}`。可以统一写为：
+   uv run python -m spikingjelly.timing_based.examples.tempotron_mnist \
+       --device cpu --duration 100 --batch-size 64 --dataset-dir ./data
 
-.. math::
-    E = (y - \hat{y})(V_{threshold} - V_{t_{max}})
+示例将 ``5*v_max/v_threshold`` 作为 logits，并加入只针对错误发放状态的
+线性阈值偏差（按阈值归一化）。正确类别应发放，其他类别应沉默；错误提前
+发放受到抑制，使后续证据重新可用。预测仍用 ``v_max.argmax``。
+loss 是任务层选择，未改变神经元的阈值、shunting 或内部 autograd；这不是
+直接对含 ``inf`` 的 ``t_spike`` 使用交叉熵。
 
-直接对参数求梯度，可以得到：
+求解器使用 eager 执行与内部 FP64：按有界事件块批量求状态、驻点及首次上穿，
+整批样本并行推进，同刻事件一次聚合；局部时差矩阵替代逐事件小算子。
+CPU 块宽为 128，CUDA 为 512 个事件组，不构造均匀时间网格。Torch 参考的临时矩阵内存
+随 batch 大小及块宽平方增长；更大的块用内存换取更少的调度。反向按整批事件
+重算被使用输出所需的解析导数，保存张量规模保持不变。
+安装 Triton 时，CUDA 自动使用融合 FP64 核计算仿射前缀扫描块状态、阈值求根
+及仅对峰值电压求导的权重反向。扫描按时序合成连续电压/电流的精确状态转移，
+块内存随事件数线性增长，避免二次方响应矩阵；只改变浮点归约顺序，不引入时间
+采样。其他解析导数使用 PyTorch。未安装 Triton 时 CUDA
+使用相同的 Torch 参考。仍有块级同步，并非整模型融合或 CUDA Graph 执行。
+旧实现的历史正确率与速度不代表新动力学的结果。
 
-.. math::
-    \frac{\partial E}{\partial w_{i}} = (y - \hat{y}) (\sum_{t_{i} < t_{max}} K(t_{max} - t_{i}) \
-    + \frac{\partial V(t_{max})}{\partial t_{max}} \frac{\partial t_{max}}{\partial w_{i}}) \\
-    = (y - \hat{y})(\sum_{t_{i} < t_{max}} K(t_{max} - t_{i}))
+示例默认最多训练 40 轮；完整复现需显式指定 ``--epoch 100``。两次已完成的
+单随机种子 100 轮实验在 20–40 轮进入测试平台，此后继续拟合训练数据。较短
+上限是实验预算，不保证所有任务在 40 轮收敛；不根据测试准确率早停或选择模型。
 
-因为 :math:`\frac{\partial V(t_{max})}{\partial t_{max}}=0`。
+本次接口替换了整数 T、ret_type、mse_loss、旧 checkpoint 包装和
+GaussianTuning.encode；当前用法以上述接口为准。
 
-并行实现
---------
+参考
+----
 
-如前所述，对于脉冲响应模型，一旦输入给定，神经元的响应方程已知，任意时刻的神经元状态都可以求解。此外，计算 :math:`t` 时刻的电\
-压值，并不需要依赖于 :math:`t-1` 时刻的电压值，因此不同时刻的电压值完全可以并行求解。在 ``spikingjelly/timing_based/neuron.py`` 中\
-实现了集成全连接层、并行计算的Tempotron，将时间看作是一个单独的维度，整个网络在 :math:`t=0, 1, ..., T-1` 时刻的状态全都被并
-行地计算出。读者如有兴趣可以直接阅读源代码。
-
-示例：识别MNIST
----------------
-
-我们使用Tempotron搭建一个简单的SNN网络，识别MNIST数据集。首先我们需要考虑如何将MNIST数据集转化为脉冲输入。在 ``activation_based`` 中\
-的泊松编码器，在伴随着整个网络的for循环中，不断地生成脉冲；但在使用Tempotron时，我们使用高斯调谐曲线编码器 [#f2]_，这一编码器\
-可以在时间维度上并行地将输入数据转化为脉冲发放时刻。
-
-高斯调谐曲线编码器
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-假设我们要编码的数据有 :math:`n` 个特征，对于MNIST图像，因其是单通道图像，可以认为 :math:`n=1`。高斯调谐曲线编码器，使\
-用 :math:`m (m>2)` 个神经元去编码每个特征，并将每个特征编码成这 :math:`m` 个神经元的脉冲发放时刻，因此可以认为编码器内\
-共有 :math:`nm` 个神经元。
-
-对于第 :math:`i` 个特征 :math:`X^{i}`，它的取值范围为 :math:`X^{i}_{min} \leq X^{i} \leq X^{i}_{max}`，首先计算\
-出 :math:`m` 条高斯曲线 :math:`g^{i}_{j}` 的均值和方差：
-
-.. math::
-    \mu^{i}_{j} & = x^{i}_{min} + \frac{2j - 3}{2} \frac{x^{i}_{max} - x^{i}_{min}}{m - 2}, j=1, 2, ..., m \\
-    \sigma^{i}_{j} & = \frac{1}{\beta} \frac{x^{i}_{max} - x^{i}_{min}}{m - 2}
-
-其中 :math:`\beta` 通常取值为 :math:`1.5`。可以看出，这 :math:`m` 条高斯曲线的形状完全相同，只是对称轴所在的位置不同。
-
-对于要编码的数据 :math:`x \in X^{i}`，首先计算出 :math:`x` 对应的高斯函数值 :math:`g^{i}_{j}(x)`，这些函数值全部介\
-于 :math:`[0, 1]` 之间。接下来，将函数值线性地转换到 :math:`[0, T]` 之间的脉冲发放时刻，其中 :math:`T` 是编码周期，或者说\
-是仿真时长：
-
-.. math::
-    t_{j} = \mathrm{Round}((1 - g^{i}_{j}(x))T)
-
-其中 :math:`\mathrm{Round}` 取整函数。此外，对于发放时刻太晚的脉冲，例如发放时刻为 :math:`T`，则直接将发放时刻设置\
-为 :math:`-1`，表示没有脉冲发放。
-
-形象化的示例如下图 [#f2]_ 所示，要编码的数据 :math:`x \in X^{i}` 是一条垂直于横轴的直线，与 :math:`m` 条高斯曲线相交\
-于 :math:`m` 个交点，这些交点在纵轴上的投影点，即为 :math:`m` 个神经元的脉冲发放时刻。但由于我们在仿真时，仿真步长通常是整\
-数，因此脉冲发放时刻也需要取整。
-
-.. image:: ../../_static/tutorials/timing_based.png
-
-定义网络、损失函数、分类结果
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-网络的结构非常简单，单层的Tempotron，输出层是10个神经元，因为MNIST图像共有10类：
-
-.. code-block:: python
-
-    class Net(nn.Module):
-        def __init__(self, m, T):
-            # m是高斯调谐曲线编码器编码一个像素点所使用的神经元数量
-            super().__init__()
-            self.tempotron = neuron.Tempotron(28*28*m, 10, T)     # mnist 28*28=784
-        
-        def forward(self, x: torch.Tensor):
-            # 返回的是输出层10个Tempotron在仿真时长内的电压峰值
-            return self.tempotron(x, 'v_max')
-
-分类结果被认为是输出的10个电压峰值的最大值对应的神经元索引，因此训练时正确率计算如下：
-
-.. code-block:: python
-
-    train_batch_accuracy = (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().mean().item()
-
-我们使用的损失函数与 [#f1]_ 中的类似，但并不完全相同。对于分类错误的神经元，误差为其峰值电压与阈值电压之差的平方，损失函数可以\
-在 ``timing_based.neuron`` 中找到源代码。当前实现中， ``mse_loss`` 是 ``Tempotron`` 的实例方法：
-
-.. code-block:: python
-
-    class Tempotron(nn.Module):
-        ...
-        def mse_loss(self, v_max, label):
-            '''
-            :param v_max: Tempotron神经元在仿真周期内输出的最大电压值，与forward函数在ret_type == 'v_max'时的返回值相\
-            同。shape=[batch_size, out_features]的tensor
-            :param label: 样本的真实标签，shape=[batch_size]的tensor
-            :return: 分类错误的神经元的电压，与阈值电压之差的均方误差
-            '''
-            wrong_mask = (
-                (v_max >= self.model.cfg.threshold_voltage).float()
-                != F.one_hot(label, self.model.cfg.out_neurons_count)
-            ).float()
-            squared_error = torch.pow(
-                (v_max - self.model.cfg.threshold_voltage) * wrong_mask, 2
-            )
-            return torch.sum(squared_error) / label.shape[0]
-
-下面我们直接运行代码。完整的源代码位于 ``spikingjelly/timing_based/examples/tempotron_mnist.py``：
-
-.. code-block:: shell
-
-    $ python
-    >>> import spikingjelly.timing_based.examples.tempotron_mnist as tempotron_mnist
-    >>> tempotron_mnist.main()
-    ########## Configurations ##########
-    device=cuda:0
-    dataset_dir=./
-    log_dir=./
-    model_output_dir=./
-    batch_size=64
-    T=100
-    lr=0.001
-    epoch=100
-    m=16
-    ####################################
-    Epoch 0:
-    Training...
-    100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 937/937 [01:07<00:00, 13.91it/s]
-    Testing...
-    100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 157/157 [00:10<00:00, 14.50it/s]
-    Epoch 0: train_acc = 0.49112860192102453, test_acc=0.6316, max_test_acc=0.6316, train_times=937
-
-保存和读取模型：
-
-.. code-block:: python
-    
-    # 保存模型
-    torch.save(net, model_output_dir + "/tempotron_snn_mnist.ckpt")
-    # 读取模型
-    # net = torch.load(model_output_dir + "/tempotron_snn_mnist.ckpt")
-
-查看训练结果
-^^^^^^^^^^^^
-
-在Tesla K80上训练100个epoch，大约需要32分钟。训练时每个batch的正确率、测试集正确率的变化情况如下：
-
-.. image:: ../../_static/examples/timing_based/tempotron_mnist/train_batch_acc_scale.*
-    :width: 100%
-    
-
-.. image:: ../../_static/examples/timing_based/tempotron_mnist/test_accuracy_scale.*
-    :width: 100%
-
-
-训练100个Epoch，测试集的正确率为84.19%，可以看出Tempotron实现了感知器的功能，具有一定的分类能力。
-
-.. [#f1] Gutig R, Sompolinsky H. The tempotron: a neuron that learns spike timing–based decisions[J]. Nature Neuroscience, 2006, 9(3): 420-428.
-.. [#f2] Bohte S M, Kok J N, La Poutre J A, et al. Error-backpropagation in temporally encoded networks of spiking neurons[J]. Neurocomputing, 2002, 48(1): 17-37.
+Gütig R, Sompolinsky H. The tempotron: a neuron that learns spike timing–based
+decisions. Nature Neuroscience 9, 420–428 (2006).
+`原文 <https://www.nature.com/articles/nn1643>`_。

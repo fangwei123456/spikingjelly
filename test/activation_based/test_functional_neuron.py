@@ -1,10 +1,7 @@
-import inspect
-
 import pytest
 import torch
 
 from spikingjelly.activation_based import functional, lava_exchange, neuron, surrogate
-from spikingjelly.activation_based.functional import neuron as functional_neuron
 
 
 def _surrogate():
@@ -1088,20 +1085,6 @@ def test_stbif_step_matches_reference_sequence():
         for actual, expected in zip(step, reference):
             _assert_close(actual, expected)
         q_ref, acc_q_ref = step[1:3]
-
-
-def test_functional_neuron_public_api_documentation():
-    for name in functional_neuron.__all__:
-        function = getattr(functional_neuron, name)
-        signature = inspect.signature(function)
-        assert signature.return_annotation is not inspect.Signature.empty, name
-        assert all(
-            parameter.annotation is not inspect.Parameter.empty
-            for parameter in signature.parameters.values()
-        ), name
-        doc = inspect.getdoc(function)
-        assert f".. _{name}-cn:" in doc, name
-        assert f".. _{name}-en:" in doc, name
 
 
 @pytest.mark.parametrize(

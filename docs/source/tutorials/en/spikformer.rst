@@ -222,6 +222,6 @@ current V2, so they cannot establish its speed or accuracy.
 Model-structure fragments retain their original teaching form. Use the standard
 Spikformer workflow in the repository's ``benchmark/README.md``: unprofiled
 ``benchmark.benchmark_snn_single_gpu case`` measurements, captures with
-``benchmark/nsys_snn.sh`` and attribution with ``benchmark/analyze_nsys_snn.py``.
+``tools/nsys/nsys_snn.sh`` and attribution with ``tools/nsys/analyze_nsys_snn.py``.
 Check ``--help``/benchmark documentation for options; profiler latency is not
 steady-state latency.

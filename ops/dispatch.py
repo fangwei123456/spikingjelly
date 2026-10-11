@@ -96,7 +96,10 @@ def _register_dispatch(namespace, cpu, selection):
         f"{cpu.__package__}.{'autograd' if trainable else 'validation'}"
     )
     for direction in ("forward", "backward"):
-        schema = getattr(cpu, f"_{direction}_impl", None)
+        implementation_name = (
+            selection._forward_name if direction == "forward" else "_backward_impl"
+        )
+        schema = getattr(cpu, implementation_name, None)
         reference = cpu_forward if direction == "forward" else selection._cpu_backward
         if reference is None:
             continue
@@ -155,7 +158,8 @@ def _register_dispatch(namespace, cpu, selection):
 
             return call
 
-        definition.register_fake(fake_impl(getattr(validation, f"_{direction}_fake")))
+        fake_name = implementation_name.removesuffix("_impl") + "_fake"
+        definition.register_fake(fake_impl(getattr(validation, fake_name)))
         definitions.append(definition)
         library.impl(direction, reference, "CPU")
         library.impl(direction, cuda_impl(select_cuda), "CUDA")
@@ -166,7 +170,7 @@ def _register_dispatch(namespace, cpu, selection):
         torch_reference = Path(cpu.__file__).with_name("reference.py")
         if torch_reference.is_file():
             library.impl("forward", cpu_forward, "AutogradCPU")
-    if getattr(cpu, "_forward_impl", None) is not None:
+    if getattr(cpu, selection._forward_name, None) is not None:
         logger.info(
             "ops binding operator={} device=cpu implementation=torch-reference",
             namespace,

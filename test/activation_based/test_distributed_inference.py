@@ -1,10 +1,7 @@
-import asyncio
-import contextlib
 import json
 import math
 import os
 import sys
-import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,14 +9,9 @@ import pytest
 import torch
 from torch.utils.data import Dataset
 
-from benchmark.snn_llm import sglang_benchmark, spikelm
-from benchmark.snn_llm.spikelm import SpikeLMConfig
-from benchmark.snn_llm.qwen2 import _gated_tensor, _reorder_qkv
-from benchmark.snn_llm.sglang_benchmark import _prompts, _run_requests
-from benchmark import vision_inference
-from benchmark.vision_inference import build_synthetic_dataset
 from spikingjelly.activation_based.distributed.llm import (
     EvaluationConfig,
+    ModelConfig,
     SGLangExportStage,
     SGLangEngineConfig,
     generate,
@@ -65,14 +57,8 @@ def test_mcore_generate_points_low_level_callers_to_generate_mcore():
         generate(object(), torch.ones((1, 2), dtype=torch.long))
 
 
-def test_vision_inference_synthetic_dataset_follows_input_layout():
-    dataset = build_synthetic_dataset(2, 10, 8, 4, "NTCHW")
-
-    assert dataset[0][0].shape == (4, 3, 8, 8)
-
-
 def test_evaluation_config_and_padding_mask():
-    model = SpikeLMConfig(
+    model = ModelConfig(
         transformer=object(), vocab_size=16, max_sequence_length=4, time_steps=2
     )
     config = EvaluationConfig(
@@ -155,7 +141,7 @@ def test_sglang_engine_rejects_invalid_artifact_and_package(tmp_path):
         with open_sglang_engine(
             SGLangEngineConfig(
                 artifact=artifact,
-                external_model_package="benchmark.snn_llm.sglang_models",
+                external_model_package=__name__,
             )
         ):
             pass
@@ -169,7 +155,7 @@ def test_sglang_engine_rejects_invalid_artifact_and_package(tmp_path):
         _validate_artifact(
             SGLangEngineConfig(
                 artifact=artifact,
-                external_model_package="benchmark.snn_llm.sglang_models",
+                external_model_package=__name__,
             )
         )
 
@@ -210,7 +196,7 @@ def test_sglang_engine_manages_lifecycle_and_environment(tmp_path, monkeypatch):
     with open_sglang_engine(
         SGLangEngineConfig(
             artifact=artifact,
-            external_model_package="benchmark.snn_llm.sglang_models",
+            external_model_package=__name__,
         )
     ) as engine:
         assert engine.kwargs["disable_cuda_graph"]
@@ -218,7 +204,7 @@ def test_sglang_engine_manages_lifecycle_and_environment(tmp_path, monkeypatch):
         assert engine.kwargs["disable_decode_cuda_graph"]
 
     assert observed == [
-        "benchmark.snn_llm.sglang_models",
+        __name__,
         "shutdown",
     ]
     assert os.environ["SGLANG_EXTERNAL_MODEL_PACKAGE"] == "original"
@@ -265,14 +251,6 @@ def test_sglang_export_reconstructs_tp_tensor_layouts():
     assert stage.tensor_names() == ("replicated", "gated")
     assert torch.equal(stage.merge_tensor("replicated"), torch.tensor([3]))
     assert torch.equal(stage.merge_tensor("other", pipeline_rank=1), torch.tensor([5]))
-    assert torch.equal(
-        _gated_tensor(stage, "gated"), torch.tensor([[0], [1], [10], [11]])
-    )
-    assert torch.equal(
-        _reorder_qkv(torch.arange(8), heads=4, kv_heads=2),
-        torch.tensor([0, 1, 4, 5, 2, 6, 3, 7]),
-    )
-
     readers[0][1].values["replicated"] = torch.tensor([4])
     with pytest.raises(ValueError, match="differs across ranks"):
         stage.merge_tensor("replicated")
@@ -313,166 +291,6 @@ def test_sglang_export_rejects_mismatched_preinitialized_topology():
 
     with pytest.raises(ValueError, match="source TP/PP/CP"):
         _validate_model_parallel_topology(transformer, parallel_state)
-
-
-def test_sglang_benchmark_builds_variable_prompts_with_shared_prefix():
-    prompts = _prompts(
-        count=4,
-        input_length=16,
-        shared_prefix_length=4,
-        vocab_size=32,
-        seed=7,
-    )
-
-    assert [len(prompt) for prompt in prompts] == [16, 15, 16, 15]
-    assert all(prompt[:4] == prompts[0][:4] for prompt in prompts)
-
-    full_prefix = _prompts(
-        count=4,
-        input_length=16,
-        shared_prefix_length=16,
-        vocab_size=32,
-        seed=7,
-    )
-    assert [len(prompt) for prompt in full_prefix] == [16, 16, 16, 16]
-
-
-def test_sglang_benchmark_validates_prompt_array_shape(tmp_path, monkeypatch):
-    import numpy as np
-
-    path = tmp_path / "prompts.npy"
-    np.save(path, np.ones((2, 4), dtype=np.int64))
-    assert sglang_benchmark._load_prompts(path, 2, 4) == [[1] * 4, [1] * 4]
-
-    with pytest.raises(ValueError, match="shape"):
-        sglang_benchmark._load_prompts(path, 3, 4)
-    with pytest.raises(ValueError, match="shape"):
-        sglang_benchmark._load_prompts(path, 2, 5)
-
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "sglang_benchmark",
-            "--artifact",
-            "artifact",
-            "--prompts-npy",
-            str(path),
-            "--input-length",
-            "4",
-            "--shared-prefix-length",
-            "5",
-        ],
-    )
-    with pytest.raises(SystemExit):
-        sglang_benchmark.main()
-
-
-def test_sglang_benchmark_flushes_cache_before_each_repeat(
-    tmp_path, monkeypatch, capsys
-):
-    artifact = tmp_path / "artifact"
-    artifact.mkdir()
-    (artifact / "config.json").write_text('{"vocab_size": 16}', encoding="utf-8")
-    flushes = []
-
-    class Engine:
-        def __init__(self):
-            self.loop = asyncio.new_event_loop()
-
-        def get_server_info(self):
-            return {"max_total_num_tokens": 128}
-
-        def flush_cache(self):
-            flushes.append(None)
-
-        async def async_generate(self, **_kwargs):
-            async def stream():
-                yield {"output_ids": [1], "meta_info": {"completion_tokens": 1}}
-
-            return stream()
-
-    @contextlib.contextmanager
-    def open_engine(_config):
-        engine = Engine()
-        try:
-            yield engine
-        finally:
-            engine.loop.close()
-
-    monkeypatch.setattr(sglang_benchmark.llm, "open_sglang_engine", open_engine)
-    monkeypatch.setattr(
-        sglang_benchmark, "_gpu_memory", lambda stop, _peaks, _errors: stop.wait()
-    )
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "sglang_benchmark",
-            "--artifact",
-            str(artifact),
-            "--requests",
-            "1",
-            "--input-length",
-            "1",
-            "--output-length",
-            "1",
-            "--repeats",
-            "2",
-        ],
-    )
-
-    sglang_benchmark.main()
-
-    assert len(flushes) == 2
-    assert '"kv_cache_capacity_tokens": 128' in capsys.readouterr().out
-
-
-def test_spikelm_sglang_export_supports_tied_embeddings(monkeypatch):
-    transformer = SimpleNamespace(
-        num_attention_heads=4,
-        hidden_size=16,
-        num_layers=0,
-        ffn_hidden_size=32,
-        layernorm_epsilon=1e-5,
-    )
-    config = SpikeLMConfig(
-        transformer=transformer,
-        vocab_size=16,
-        max_sequence_length=8,
-        time_steps=2,
-        share_embeddings_and_output_weights=True,
-    )
-    embedding = torch.arange(8)
-
-    def merge_tensor(name, **_kwargs):
-        if name == "output_layer.weight":
-            raise AssertionError("tied export must reuse the embedding")
-        return {
-            "embedding.word_embeddings.weight": embedding,
-            "decoder.final_layernorm.weight": torch.ones(1),
-            "decoder.final_layernorm.bias": torch.zeros(1),
-        }[name]
-
-    stage = SimpleNamespace(
-        is_first=True,
-        is_last=True,
-        layer_offset=0,
-        local_layer_count=0,
-        tensor_names=lambda: (),
-        merge_tensor=merge_tensor,
-    )
-    tensors = dict(spikelm._sglang_tensors(config, stage))
-    assert tensors["lm_head.weight"] is embedding
-
-    captured = {}
-    monkeypatch.setattr(
-        spikelm,
-        "export_sglang_artifact",
-        lambda *_args, **kwargs: captured.update(kwargs),
-    )
-    spikelm.export_sglang(config, object(), Path("checkpoint"), Path("artifact"))
-    assert captured["artifact_config"]["tie_word_embeddings"] is True
 
 
 def test_sglang_export_copies_generic_tokenizer_assets_and_counts_parameters(
@@ -520,87 +338,3 @@ def test_sglang_export_copies_generic_tokenizer_assets_and_counts_parameters(
     tokenizer_file.write_text("{}", encoding="utf-8")
     with pytest.raises(ValueError, match="not a directory"):
         _copy_tokenizer(tokenizer_file, output)
-
-
-def test_sglang_benchmark_rejects_failed_gpu_memory_poll(monkeypatch):
-    monkeypatch.setattr(
-        sglang_benchmark.subprocess,
-        "run",
-        lambda *_args, **_kwargs: SimpleNamespace(
-            returncode=1, stdout="", stderr="nvidia-smi failed"
-        ),
-    )
-    errors = []
-
-    sglang_benchmark._gpu_memory(threading.Event(), [0], errors)
-
-    assert errors == ["nvidia-smi failed"]
-
-
-def test_sglang_benchmark_rejects_gpu_memory_poll_timeout(monkeypatch):
-    def timeout(*_args, **_kwargs):
-        raise sglang_benchmark.subprocess.TimeoutExpired("nvidia-smi", 5)
-
-    monkeypatch.setattr(sglang_benchmark.subprocess, "run", timeout)
-    errors = []
-
-    sglang_benchmark._gpu_memory(threading.Event(), [0], errors)
-
-    assert errors
-
-
-def test_sglang_benchmark_samples_gpu_memory_when_already_stopped(monkeypatch):
-    monkeypatch.setattr(
-        sglang_benchmark.subprocess,
-        "run",
-        lambda *_args, **_kwargs: SimpleNamespace(
-            returncode=0, stdout="123\n", stderr=""
-        ),
-    )
-    stop = threading.Event()
-    stop.set()
-    peaks = [0]
-    errors = []
-
-    sglang_benchmark._gpu_memory(stop, peaks, errors)
-
-    assert peaks == [123]
-    assert errors == []
-
-
-def test_sglang_benchmark_merges_incremental_stream_tokens():
-    class Engine:
-        async def async_generate(self, **_kwargs):
-            async def stream():
-                yield {
-                    "output_ids": [1, 2],
-                    "meta_info": {"completion_tokens": 2},
-                }
-                yield {
-                    "output_ids": [3, 4],
-                    "meta_info": {"completion_tokens": 4},
-                }
-
-            return stream()
-
-    requests, _ = asyncio.run(_run_requests(Engine(), [[7, 8]], 4))
-
-    assert requests[0]["tokens"] == 4
-    assert requests[0]["output_ids"] == [1, 2, 3, 4]
-
-
-def test_sglang_benchmark_rejects_stream_chunks_without_token_counts():
-    class Engine:
-        async def async_generate(self, **_kwargs):
-            async def stream():
-                yield {"output_ids": [1]}
-                yield {"output_ids": [2]}
-
-            return stream()
-
-    with pytest.raises(RuntimeError, match="completion_tokens"):
-        asyncio.run(_run_requests(Engine(), [[7, 8]], 2))
-
-
-def test_vision_benchmark_subset_indices_span_the_dataset():
-    assert vision_inference._spread_indices(10, 4) == [0, 3, 6, 9]

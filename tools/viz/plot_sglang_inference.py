@@ -4,7 +4,10 @@ import argparse
 import csv
 from pathlib import Path
 
-from plot_distributed_inference import PLOT_RC
+if __package__:
+    from .plot_distributed_inference import PLOT_RC
+else:
+    from plot_distributed_inference import PLOT_RC
 
 
 def _load(path: Path) -> list[dict[str, object]]:

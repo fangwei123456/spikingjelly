@@ -19,7 +19,7 @@ using the native start/stop/shutdown commands printed by the shell:
 
 .. code-block:: bash
 
-   bash benchmark/nsys_snn.sh capture \
+   bash tools/nsys/nsys_snn.sh capture \
      --control=manual --session=sj-ddp \
      --trace=cuda,nvtx,osrt,python-gil,nccl \
      output/ddp -- \
@@ -75,10 +75,10 @@ world_size across ranks. Local scopes remain distinct across processes/threads.
 
 .. code-block:: bash
 
-   bash benchmark/nsys_snn.sh analyze output/ddp.nsys-rep output/ddp-analysis
-   python benchmark/analyze_nsys_snn.py analyze output/ddp-analysis/trace.sqlite \
+   bash tools/nsys/nsys_snn.sh analyze output/ddp.nsys-rep output/ddp-analysis
+   python tools/nsys/analyze_nsys_snn.py analyze output/ddp-analysis/trace.sqlite \
      --output-dir output/rank1-step8 --step-index 8 --rank 1
-   python benchmark/analyze_nsys_snn.py analyze output/ddp-analysis/trace.sqlite \
+   python tools/nsys/analyze_nsys_snn.py analyze output/ddp-analysis/trace.sqlite \
      --output-dir output/window --time-range-ms 10 30
 
 ``--pid``、``--rank``、``--device`` 和时间窗口只筛选图表视图；完整报告统计仍保留。
@@ -104,12 +104,12 @@ Summing GPU times does not yield step latency. NCCL kernel duration may include
 GPU waiting and is not pure link-transfer time. Use unprofiled measurements for
 performance conclusions. Use a fresh output directory to avoid stale plots.
 
-``benchmark/nsys_multigpu_example.py`` 提供独立 DP/DDP/PP 训练/推理示例。
+``spikingjelly/activation_based/examples/profiling/nsys_multigpu.py`` 提供独立 DP/DDP/PP 训练/推理示例。
 手动模式指定 ``--gate-dir``：所有 ``ready-N`` 文件出现后启动 NSYS 并创建
 ``go``，所有 ``done-N`` 出现后停止采集并创建 ``exit``，最后关闭 session。
 此协议只用于可复现示例，不是分布式训练框架的一部分。
 
-``benchmark/nsys_multigpu_example.py`` provides independent DP/DDP/PP
+``spikingjelly/activation_based/examples/profiling/nsys_multigpu.py`` provides independent DP/DDP/PP
 training/inference workloads. With manual control and ``--gate-dir``, wait
 for every ``ready-N``, start NSYS and create ``go``; wait for every
 ``done-N``, stop collection and create ``exit``, then shut down the

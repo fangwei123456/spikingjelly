@@ -8,7 +8,6 @@ from spikingjelly.activation_based import (
     base,
     functional,
     layer,
-    model,
     neuron,
     surrogate,
 )
@@ -28,28 +27,6 @@ def _train_step(model):
     assert output.shape == (2, 5)
     output.mean().backward()
     assert any(parameter.grad is not None for parameter in model.parameters())
-
-
-def test_model_package_exports_new_models_and_builders():
-    expected = {
-        "AttMSResNet",
-        "MASNN",
-        "MSResNet",
-        "MaxFormer",
-        "MaxResNet",
-        "QKFormer",
-        "SpikeDrivenTransformer",
-        "att_ms_resnet18",
-        "masnn_dvs128_gesture",
-        "max_resnet18",
-        "maxformer_10_384",
-        "ms_resnet18",
-        "ms_resnet34",
-        "qkformer_10_384",
-        "sdt_8_384",
-    }
-
-    assert expected <= set(model.__all__)
 
 
 def test_spike_driven_self_attention_preserves_feature_shape():

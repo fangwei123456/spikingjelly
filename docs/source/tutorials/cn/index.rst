@@ -22,6 +22,7 @@ GPU 使用与编译见
     :caption: 进阶
 
     /tutorials/cn/stdp
+    /tutorials/cn/timing_based
     /tutorials/cn/ann2snn
     /tutorials/cn/ann2snn_transformer
     /tutorials/cn/lif_fc_mnist

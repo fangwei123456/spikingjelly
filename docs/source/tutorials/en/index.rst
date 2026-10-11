@@ -22,6 +22,7 @@ Use :doc:`./flexsn` for custom dynamics and :doc:`./migrate_from_legacy` for old
     :caption: Intermediate
 
     /tutorials/en/stdp
+    /tutorials/en/timing_based
     /tutorials/en/ann2snn
     /tutorials/en/ann2snn_transformer
     /tutorials/en/lif_fc_mnist

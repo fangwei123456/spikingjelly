@@ -94,6 +94,8 @@ class _CudaSelection:
         cpu_forward: Callable,
         cpu_backward: Optional[Callable] = None,
         on_select=None,
+        *,
+        forward_name: str = "_forward_impl",
     ):
         self._on_select = on_select
         self._package = package
@@ -101,6 +103,7 @@ class _CudaSelection:
         self._environment_variable = environment_variable
         self._requested = os.environ.get(environment_variable, "auto")
         self._cpu_forward = cpu_forward
+        self._forward_name = forward_name
         self._cpu_backward = cpu_backward
         self._selections = {}
         self._compiled_selections = {}
@@ -135,8 +138,8 @@ class _CudaSelection:
                     unavailable[name] = str(error)
                     logger.info("{} {} unavailable: {}", self._namespace, name, error)
                     continue
-                if name == "triton" and hasattr(module, "_forward_impl"):
-                    forward_impl = module._forward_impl
+                if name == "triton" and hasattr(module, self._forward_name):
+                    forward_impl = getattr(module, self._forward_name)
                     backward_impl = getattr(module, "_backward_impl", None)
                     trace_forward = partial(
                         forward_impl, _kernel_wrapper=torch.library.wrap_triton
@@ -149,13 +152,14 @@ class _CudaSelection:
                         else None
                     )
                 elif name == "torch":
-                    trace_forward = forward_impl = module._forward_impl
+                    trace_forward = forward_impl = getattr(module, self._forward_name)
                     trace_backward = backward_impl = getattr(
                         module, "_backward_impl", None
                     )
                 else:
                     trace_forward = getattr(
-                        getattr(torch.ops, self._namespace), f"{module_name}_forward"
+                        getattr(torch.ops, self._namespace),
+                        f"{module_name}{self._forward_name.removesuffix('_impl')}",
                     ).default
                     trace_backward = getattr(
                         getattr(torch.ops, self._namespace),

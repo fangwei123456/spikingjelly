@@ -11,6 +11,23 @@ and the archived documentation linked from the project README.
 
 ### Fixes
 
+- Removed the private GPT-2 conversion example runners; use the Qwen conversion
+  runners for current language-model evaluation.
+- Moved NSYS workloads to `spikingjelly/activation_based/examples/profiling/`
+  (`nsys_lif.py` and `nsys_multigpu.py`); capture and analysis tools stay in
+  `tools/nsys/`.
+- Moved Nsight Systems capture, analysis and plotting utilities to `tools/nsys/`,
+  and distributed-result plotting scripts to `tools/viz/`. Use the new
+  paths in existing commands.
+- Retired historical SpikeGPT and T=8 phase-cache benchmark runners, standalone
+  ANN2SNN step-mode microbenchmarks, and migration-specific dispatch/LIF checks.
+  Use `benchmark_neuron_implementations.py` for current neuron comparisons;
+  Qwen correctness/quality runners remain available.
+- The fused neuron–Linear training benchmark validates gradients against the
+  Torch reference before timing, using the operator regression tolerances.
+- Removed private benchmark entry points `snn_llm/smoke.py`,
+  `snn_llm/report_distributed.py`, and `snn_llm/finetune_qwen2.py`.
+  Use `python -m benchmark.snn_llm.cli qwen2-finetune` for fine-tuning.
 - Restored direct compact-layout and broadcast-view access in all nine built-in
   native CUDA and Triton point-neuron implementations, including states and
   backward inputs. Fake output layouts match execution; rebuild native extensions
@@ -19,17 +36,13 @@ and the archived documentation linked from the project README.
   and verifies the accelerated implementation it measures.
 
 - Binary neuron projection benchmarks use the correct IF surrogate argument and
-  reference method key; SpikeZIP benchmark artifacts report the reference
-  implementation used with low-precision membrane state.
+  reference method key.
 - ActivationAwareIF avoids allocating unused channel indices for scalar
   threshold/offset parameters on the Torch path.
 
 - Multi-step IF/LIF/PLIF modules record voltage trajectories through the same
   sequence operator used without trajectories, preserving initial-state and
   parameter gradients.
-- SpikeGPT benchmark startup no longer requires CuPy or records a CuPy backend
-  in checkpoint configuration. Checkpoints retaining the old configuration are
-  rejected on resume.
 - Operator registration no longer hashes source files or modifies the compiler
   cache tag at import time; fingerprints are computed for compilation bindings.
 - Explicit IF/LIF/PLIF precision preserves the input dtype for spikes while
@@ -69,6 +82,31 @@ Modules: ``spikingjelly.activation_based.neuron``,
   the paper's learnable spike amplitude and training STE are not implemented.
 - Added ``functional.ternary_if_step`` and ``functional.ternary_lif_step`` for
   pure single-step execution with explicit membrane state.
+
+#### Continuous Timing-Based Neurons
+
+Modules: `spikingjelly.timing_based.functional`,
+`spikingjelly.timing_based.neuron`, and `spikingjelly.timing_based.encoding`.
+
+- Added continuous-event Tempotron solving with multiple spikes per connection,
+  finite observation windows, upward threshold crossings, and post-spike input
+  shunting. It returns peak voltage, earliest peak time, and first-spike time.
+- Added first-order analytical autograd for weights and input event times on
+  CPU/CUDA FP32/FP64, using FP64 internally. Execution remains eager with
+  event-control synchronization.
+- Tempotron batches continuous intervals into bounded event blocks using local
+  causal response matrices and aggregates simultaneous inputs once. Backward skips
+  unused output derivatives without introducing a uniform time grid.
+- The MNIST Tempotron example calibrates peak logits to threshold units and adds
+  a linear penalty for incorrect firing states, helping recover late input evidence
+  hidden by premature shunting under raw peak cross-entropy.
+- Optional Triton CUDA operators fuse FP64 affine prefix-scan block states, threshold
+  root finding, and peak-voltage weight-only backward. Other gradient modes retain
+  the Torch reference; full-model fusion and CUDA Graph capture are not provided.
+- The MNIST example defaults to a maximum of 40 epochs; full 100-epoch
+  reproduction requires an explicit `--epoch 100`.
+- GaussianTuning now uses fixed receptive-field buffers and emits differentiable,
+  continuous compact events without rounding or inactive placeholders.
 
 #### Backend-transparent Neuron Execution
 
@@ -219,7 +257,7 @@ Module: `spikingjelly.nsys`.
   attributes CUDA work across CPU threads and plots CUDA API launches, GPU
   execution, synchronization waits, and reset alongside four captured steps;
   offline plots can select a captured step with `--step-index`.
-- Added `benchmark/nsys_snn.sh capture-graph` to preserve build-time NVTX
+- Added `tools/nsys/nsys_snn.sh capture-graph` to preserve build-time NVTX
   ranges for projection onto CUDA Graph replay nodes in a diagnostic report;
   analysis emits a GPU stage timeline without implying CPU forward/backward
   execution on replay.
@@ -227,17 +265,12 @@ Module: `spikingjelly.nsys`.
   records the automatically selected implementation in case and matrix reports.
 - Retired the `benchmark/native_lif` migration runners, the obsolete FlexSN
   bucket probe, and fixed ConvNet/handwritten-LIF timing scripts. Use
-  `benchmark.benchmark_snn_single_gpu` and `benchmark/nsys_snn.sh` for full-model
+  `benchmark.benchmark_snn_single_gpu` and `tools/nsys/nsys_snn.sh` for full-model
   training comparisons and profiling; current entry points are listed in
   `benchmark/README.md`.
-- Added `benchmark.check_triton_lif_performance` for paired FP32 LIF backward
-  checks against production Triton, using captured Spikformer inputs, shared
-  output buffers, numerical validation and independent process rounds. Reports
-  retain raw timings and distinguish passes, regressions and inconsistent rounds;
-  CUDA/CuPy performance is not part of this gate.
 - `benchmark.benchmark_snn_single_gpu` now supports Spikformer-S ImageNet-size
   workloads alongside Spikformer-Ti for launch-overhead and batch-size studies.
-- Added `benchmark/nsys_lif_host_functions.json` as an opt-in NSYS preset for
+- Added `tools/nsys/nsys_lif_host_functions.json` as an opt-in NSYS preset for
   tracing Python work around Triton LIF launches in separate diagnostic runs.
 
 #### Spiking Neurons
@@ -459,6 +492,24 @@ Module: `spikingjelly.activation_based.learning`.
   multiple recorded pairs. Timing continues to use the previous step's eligibility.
 - STDP trace time constants must be finite and at least one simulated step;
   reward-rule time constants must be finite and positive.
+
+#### Timing-Based Event Interfaces
+
+Modules: `spikingjelly.timing_based.neuron`,
+`spikingjelly.timing_based.encoding`, and `spikingjelly.timing_based.functional`.
+
+- **Breaking change:** Tempotron takes `duration` and compact event tensors
+  `(spike_times, input_indices, batch_offsets)` and returns
+  `(v_max, t_peak, t_spike)`. Removed integer `T`, `ret_type`, voltage-trace output,
+  and built-in `mse_loss`; callers define the loss. Non-firing spike times are
+  `inf`, grazing does not fire, and output events precede simultaneous inputs.
+- **Breaking change:** PSPs have unit peak independent of the threshold; weights
+  use normal initialization with standard deviation 0.001 and checkpoint key
+  `weight` instead of `model.summation_layer.weight`. Continuous shunted peaks
+  replace the old sampled, unshunted voltage semantics.
+- **Breaking change:** GaussianTuning is an `nn.Module` called through `forward`,
+  replacing `encode`. It accepts a positive floating-point `duration` and returns
+  compact event tensors; checkpoint buffers are `mu` and `sigma2`.
 
 #### License Migration
 

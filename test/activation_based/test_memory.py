@@ -111,9 +111,6 @@ def test_extract_memories():
 
     assert isinstance(memory_list, list)
     assert len(memory_list) == 3
-    for memory in memory_list:
-        memory == 0.0
-
     memory_gen_list = list(base.memories(net))
     assert len(memory_list) == len(memory_gen_list)
     for m1, m2 in zip(memory_list, memory_gen_list):
