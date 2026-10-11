@@ -438,6 +438,39 @@ def test_availability_priority_is_cached_per_device_and_strict_override(monkeypa
     )
 
 
+@pytest.mark.parametrize("provider", ["torch", "triton", "cuda"])
+def test_named_forward_is_used_by_each_provider(monkeypatch, provider):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    from spikingjelly._ops import selection
+
+    def named(*args, **kwargs):
+        return None
+
+    module = SimpleNamespace(_roots_impl=named, _build_info={})
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda index: (8, 0))
+    monkeypatch.setattr(torch.cuda, "device", lambda index: nullcontext())
+    monkeypatch.setattr(selection.importlib, "import_module", lambda *args: module)
+    monkeypatch.setattr(selection, "_check_native_device", lambda *args: None)
+    monkeypatch.setattr(
+        torch.ops,
+        "sj_named_test",
+        SimpleNamespace(native_roots=SimpleNamespace(default=named)),
+    )
+    monkeypatch.setenv("SJ_NAMED_TEST", provider)
+    selector = selection._CudaSelection(
+        "test",
+        "sj_named_test",
+        "SJ_NAMED_TEST",
+        named,
+        forward_name="_roots_impl",
+    )
+    assert selector.get_cuda_forward(torch.device("cuda", 0)) is named
+    trace = selector.get_trace_forward(torch.device("cuda", 0))
+    assert (trace.func if provider == "triton" else trace) is named
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("compiled", [False, True])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])

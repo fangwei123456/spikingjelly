@@ -1,9 +1,7 @@
 import pytest
 import torch
 
-from spikingjelly._ops.tempotron_states import cpu as states
-from spikingjelly._ops.tempotron_roots import cpu as roots
-from spikingjelly._ops.tempotron_weight_gradient import cpu as gradient
+from spikingjelly._ops.tempotron import _roots, _states, _weight_gradient, cpu
 from spikingjelly.timing_based.functional import _parameters, tempotron
 
 
@@ -12,21 +10,69 @@ def _normalizer(slow, delta):
     return torch.exp(-peak / slow) * (-torch.expm1(-delta * peak)) / delta
 
 
+def test_shared_package_registers_each_operator_fake_signature():
+    from torch._subclasses.fake_tensor import FakeTensorMode
+
+    with FakeTensorMode():
+        state = torch.empty(2, 3, dtype=torch.float64)
+        norm = torch.ones((), dtype=torch.float64)
+        root = _roots(
+            state,
+            state,
+            state,
+            state,
+            torch.empty(2, 3, dtype=torch.bool),
+            2.0,
+            0.5,
+            1.5,
+            norm,
+            0.6,
+            5.0,
+        )
+        incoming = torch.empty(2, 3, 4, dtype=torch.float64)
+        states = _states(
+            torch.empty(2, 4, dtype=torch.float64),
+            incoming,
+            state,
+            state,
+            torch.empty(2, dtype=torch.float64),
+            2.0,
+            0.5,
+            1.5,
+            norm,
+        )
+        events = torch.empty(4, dtype=torch.int64)
+        gradient = _weight_gradient(
+            torch.empty(4, dtype=torch.float32),
+            events,
+            torch.empty(3, 7, dtype=torch.float32),
+            events,
+            torch.empty(3, dtype=torch.int64),
+            state,
+            torch.empty(2, 3, dtype=torch.int64),
+            state,
+            2.0,
+            1.5,
+            norm,
+        )
+        assert root.shape == (2, 3) and root.dtype == torch.float64
+        assert all(x.shape == incoming.shape for x in states)
+        assert gradient.shape == (3, 7) and gradient.dtype == torch.float64
+
+
 @pytest.fixture
 def cuda_ops():
     if not torch.cuda.is_available():
         pytest.skip("CUDA unavailable")
     pytest.importorskip("triton")
-    from spikingjelly._ops.tempotron_states import triton as states_cuda
-    from spikingjelly._ops.tempotron_roots import triton as roots_cuda
-    from spikingjelly._ops.tempotron_weight_gradient import triton as gradient_cuda
+    from spikingjelly._ops.tempotron import triton
 
-    return states_cuda, roots_cuda, gradient_cuda
+    return triton
 
 
 @pytest.mark.parametrize("fast", [0.5, 2.0 - 1e-10])
 def test_fused_states_and_roots_match_fp64(cuda_ops, fast):
-    states_cuda, roots_cuda, _ = cuda_ops
+    triton = cuda_ops
     slow, fast, delta = _parameters(5.0, 2.0, fast, 0.6)
     norm = _normalizer(slow, delta)
     norm = norm.cuda()
@@ -40,9 +86,7 @@ def test_fused_states_and_roots_match_fp64(cuda_ops, fast):
     carry = torch.tensor([[0.1, -0.2]], device="cuda", dtype=torch.float64)
     origin = torch.tensor([0.0], device="cuda", dtype=torch.float64)
     args = times, incoming, carry, carry, origin, slow, fast, delta, norm
-    for actual, expected in zip(
-        states_cuda._forward_impl(*args), states._forward_impl(*args)
-    ):
+    for actual, expected in zip(triton._states_impl(*args), cpu._states_impl(*args)):
         torch.testing.assert_close(actual, expected, rtol=1e-12, atol=1e-14)
     shape = (2, 3)
     voltage = torch.zeros(shape, dtype=torch.float64, device="cuda")
@@ -52,8 +96,8 @@ def test_fused_states_and_roots_match_fp64(cuda_ops, fast):
     mask = torch.tensor([[True, False, True], [False, True, True]], device="cuda")
     args = voltage, current, lower, upper, mask, slow, fast, delta, norm, 0.6, 5.0
     torch.testing.assert_close(
-        roots_cuda._forward_impl(*args),
-        roots._forward_impl(*args),
+        triton._roots_impl(*args),
+        cpu._roots_impl(*args),
         rtol=1e-12,
         atol=1e-14,
     )
@@ -70,12 +114,12 @@ def test_fused_states_and_roots_match_fp64(cuda_ops, fast):
         0.6,
         5.0,
     )
-    assert roots_cuda._forward_impl(*empty).shape == (0, 3)
+    assert triton._roots_impl(*empty).shape == (0, 3)
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_fused_weight_gradient_with_repeated_strided_events(cuda_ops, dtype):
-    _, _, gradient_cuda = cuda_ops
+    triton = cuda_ops
     slow, _, delta = _parameters(5.0, 2.0, 0.5, 0.6)
     norm = _normalizer(slow, delta)
     times = torch.tensor([0.3, 0.1, 0.1, 2.0, 0.2], device="cuda", dtype=dtype)
@@ -105,8 +149,8 @@ def test_fused_weight_gradient_with_repeated_strided_events(cuda_ops, dtype):
         norm.cuda(),
     )
     torch.testing.assert_close(
-        gradient_cuda._forward_impl(*args),
-        gradient._forward_impl(*args),
+        triton._weight_gradient_impl(*args),
+        cpu._weight_gradient_impl(*args),
         rtol=1e-12,
         atol=1e-14,
     )
@@ -124,7 +168,7 @@ def test_fused_weight_gradient_with_repeated_strided_events(cuda_ops, dtype):
         norm.cuda(),
     )
     torch.testing.assert_close(
-        gradient_cuda._forward_impl(*empty), torch.zeros_like(weight).double()
+        triton._weight_gradient_impl(*empty), torch.zeros_like(weight).double()
     )
 
 

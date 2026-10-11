@@ -3,10 +3,8 @@ import math
 import torch
 from torch.autograd.function import once_differentiable
 
-from .._ops.tempotron_roots import _forward as _roots
-from .._ops.tempotron_roots.reference import _phi, _psp, _stationary, _voltage
-from .._ops.tempotron_states import _forward as _states
-from .._ops.tempotron_weight_gradient import _forward as _weight_gradient
+from .._ops.tempotron import _roots, _states, _weight_gradient
+from .._ops.tempotron.reference import _phi, _psp, _stationary, _voltage
 
 __all__ = ["tempotron"]
 
