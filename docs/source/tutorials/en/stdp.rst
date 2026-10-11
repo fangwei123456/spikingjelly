@@ -1,412 +1,254 @@
-STDP Learning
-=======================================
+Local Synaptic Plasticity and STDP
+===================================
 
-Author: `fangwei123456 <https://github.com/fangwei123456>`_
+中文版本: :doc:`../cn/stdp`
 
-中文版： :doc:`../cn/stdp`
+Purpose and supported scope
+-----------------------------
 
-Researchers of SNNs are always interested in biological learning rules. In SpkingJelly, STDP(Spike Timing Dependent Plasticity) \
-is also provided and can be applied to convolutional or linear layers.
+``learning`` provides local synaptic weight-update tools. STDP activity
+correlations are not gradients of a classification loss. Writing updates to
+``weight.grad`` borrows an optimizer update channel and does not guarantee task
+improvement. Encoding, competition, homeostasis, initialization and readout are
+parts of the training method.
 
-STDP(Spike Timing Dependent Plasticity)
------------------------------------------------------
+See :doc:`../../APIs/spikingjelly.activation_based.learning` for supported modes,
+time constants, layouts, reward alignment and migration. Ordinary STDP uses
+``1-1/tau`` decay; MSTDP/MSTDPET use ``exp(-1/tau)``. Their distinct
+discretizations are retained rather than unified for appearance.
 
-STDP(Spike Timing Dependent Plasticity) is proposed by [#STDP]_, which is a synaptic plasticity rule found in biological \
-neural system. The experiments in the biological neural systems find that the weight of synapse is influenced by the firing time of spikes \
-of the pre and post neuron. More specific, STDP can be formulated as:
+Rule updates and state
+------------------------
 
-If the pre neuron fires early and the post neuron fires later, then the weight will increase;
-If the pre neuron fires later while the post neuron fires early, then the weight will decrease.
-
-The curve [#STDP_figure]_ that fits the experiments data is as follows:
-
-.. image:: ../../_static/tutorials/stdp/stdp.*
-    :width: 100%
-
-We can use the following equation to describe STDP:
+For current pre/post spikes ``p[t]`` and ``q[t]``, ordinary STDP computes:
 
 .. math::
 
-    \begin{align}
-    \begin{split}
-    \Delta w_{ij} =
-    \begin{cases}
-        A\exp(\frac{-|t_{i}-t_{j}|}{\tau_{+}}) , t_{i} \leq t_{j}, A > 0\\
-        B\exp(\frac{-|t_{i}-t_{j}|}{\tau_{-}}) , t_{i} > t_{j}, B < 0
-    \end{cases}
-    \end{split}
-    \end{align}
+   a_t &= (1-1/\tau_{pre})a_{t-1}+p_t \\
+   b_t &= (1-1/\tau_{post})b_{t-1}+q_t \\
+   \Delta W_t &= F_{post}(W)(q_t\otimes a_t)-F_{pre}(W)(b_t\otimes p_t)
 
-where :math:`A, B` are the maximum of weight variation, and :math:`\tau_{+}, \tau_{-}` are time constants.
+Updates sum over batch and convolution spatial positions; multi-step execution
+also sums over time. Changing batch/spatial size changes update magnitude, so
+callers explicitly adjust learning rate or ``scale``. Current spikes enter
+traces first; simultaneous spikes only cancel for suitable modulation functions.
+Fixed-weight sequence accumulation differs from updating weights every step.
 
-However, the above equation is seldom used in practicals because it needs to record all firing times of pre and post neurons.\
-The trace method [#Trace]_  is a more popular method to implement STDP.
-
-For the pre neuron :math:`i` and the post neuron :math:`j`, we use the traces :math:`tr_{pre}[i]` and :math:`tr_{post}[j]` to track their firing. The update of \
-traces are similar to the LIF neuron:
-
-.. math::
-
-    tr_{pre}[i][t] = tr_{pre}[i][t] -\frac{tr_{pre}[i][t-1]}{\tau_{pre}} + s[i][t]
-
-    tr_{post}[j][t] = tr_{pre}[i][t] -\frac{tr_{post}[j][t-1]}{\tau_{post}} + s[j][t]
-
-where :math:`\tau_{pre}, \tau_{post}` are time constants of the pre and post neuron. :math:`s[i][t], s[j][t]` are the \
-spikes at time-step :math:`t` of the pre neuron :math:`i` and the post neuron :math:`j`, which can only be 0 or 1.
-
-The update of weight is:
-
-.. math::
-
-    \Delta W[i][j][t] = F_{post}(w[i][j][t]) \cdot tr_{i}[t] \cdot s[j][t] - F_{pre}(w[i][j][t]) \cdot tr_{j}[t] \cdot s[i][t]
-
-where :math:`F_{pre}, F_{post}` are functions that control how weight changes.
-
-STDP Learner
------------------------------------------------------
-:class:`spikingjelly.activation_based.learning.STDPLearner` can apply STDP learning on convolutional or linear layers. \
-Please read the api doc first to learn how to use it.
-
-Now let us use ``STDPLearner`` to build the simplest ``1x1`` SNN with only one pre and one post neuron. \
-And we set the weight as ``0.4``:
+This example applies returned updates without gradients or an optimizer:
 
 .. code-block:: python
 
     import torch
-    import torch.nn as nn
-    from spikingjelly.activation_based import neuron, layer, learning
-    from matplotlib import pyplot as plt
-    torch.manual_seed(0)
+    from torch import nn
+    from spikingjelly.activation_based import learning, neuron
 
-    def f_weight(x):
-        return torch.clamp(x, -1, 1.)
+    fc = nn.Linear(4, 3, bias=False)
+    sn = neuron.IFNode()
+    learner = learning.STDPLearner("s", fc, sn, 20., 20.)
+    try:
+        with torch.no_grad():
+            sn(fc((torch.rand(2, 4) > 0.7).float()))
+            delta_w = learner.step(on_grad=False, scale=1 / 2)
+            fc.weight.add_(delta_w, alpha=0.01)
+        learner.reset()
+        sn.reset()
+    finally:
+        learner.close()
 
-    tau_pre = 2.
-    tau_post = 2.
-    T = 128
-    N = 1
-    lr = 0.01
-    net = nn.Sequential(
-        layer.Linear(1, 1, bias=False),
-        neuron.IFNode()
-    )
-    nn.init.constant_(net[0].weight.data, 0.4)
 
-``STDPLearner`` can add the negative weight variation ``- delta_w * scale`` on the gradient of weight, which makes it compatible with deep learning methods. We can use \
-the optimizer, learning rate scheduler with ``STDPLearner`` together. 
+``step`` consumes records but retains traces. Reset between independent samples
+or episodes; retain traces for continuous activity. Reset both neuron and learner
+before changing batch size. Disable explicitly for evaluation: ``net.eval()``
+does not disable recording. Close afterwards. A silent post neuron with zero
+post trace can have no update; a displayed loss does not demonstrate learning.
 
-In this example, we use the simplest parameter update method:
+Mechanism demonstrations
+--------------------------
+
+The scripts below show traces, activity and weight changes. They run without a
+GUI by default and write to an untracked directory. They are not task benchmarks.
+Use ``--show`` for a window and ``--output-dir`` for a different directory.
+
+.. code-block:: bash
+
+    uv run python -m spikingjelly.activation_based.examples.stdp_trace
+    uv run python -m spikingjelly.activation_based.examples.mstdp
+    uv run python -m spikingjelly.activation_based.examples.mstdpet
+
+
+Reward learners require exactly one activity pair per step. ``reward[t]`` acts
+on ``eligibility[t-1]``; the initial update is zero. Reward after the final
+activity needs a subsequent forward; an empty step does not advance time.
+MSTDP accepts scalar or ``[N]`` reward; MSTDPET accepts scalar reward. Remove
+``batch_size`` from MSTDP construction. Replace accumulated forwards with one
+reward step immediately after every forward.
+
+Combining with gradient training
+----------------------------------
+
+Training different layers with different rules and adding both updates to the
+same parameter are different experiments. For layer-wise separation, clear
+task gradients of STDP-only parameters after backward, then inject STDP updates.
+For additive updates, retain task gradients. Do not detach the loss before
+backward. ``sn`` must produce actual post spikes; an adjacent BatchNorm is not
+a spiking neuron. Only SGD without momentum or weight decay corresponds to
+simple ``W += lr * delta_w``; other optimizers alter the dynamics. The following
+only demonstrates additive update wiring, not task effectiveness:
+
+.. code-block:: python
+
+    import torch
+    from torch import nn
+    from spikingjelly.activation_based import learning, neuron
+
+    fc = nn.Linear(4, 3, bias=False)
+    sn = neuron.IFNode()
+    learner = learning.STDPLearner("s", fc, sn, 20., 20.)
+    optimizer = torch.optim.SGD(fc.parameters(), lr=0.01)
+    try:
+        optimizer.zero_grad()
+        output = sn(fc((torch.rand(2, 4) > 0.5).float()))
+        loss = (output - 1).square().mean()
+        loss.backward()
+        learner.step(on_grad=True, scale=0.01)
+        optimizer.step()
+        learner.reset()
+        sn.reset()
+    finally:
+        learner.close()
+
+
+Complete MNIST example
+------------------------
+
+``stdp_mnist`` uses a bias-free 784→400 feedforward layer and adaptive LIF neurons.
+All trainable feedforward weights learn through STDP, without backward,
+pretraining or a trainable readout; recurrent connections are fixed.
+Competition comes from inhibitory conductance delayed by one step, without
+argmax winner selection. Neurons independently cross threshold and reset only
+their own voltage; multiple neurons may fire together. A firing neuron's
+refractory period applies only to that neuron, without resetting its neighbors.
+
+Existing ``LinearRecurrentContainer`` receives concatenated ``[I_ff, 0]`` and
+outputs separate excitatory current and inhibitory conductance increments.
+Recurrent matrix R has zero diagonal and positive off-diagonal magnitude g;
+it sums other neurons' previous spikes and supplies negative feedback through
+the inhibitory conductance channel. The child neuron stores conductance G and
+refractory counter r, with these discrete dynamics:
 
 .. math::
 
-    W = W - lr \cdot \nabla W
+    G[t] &= e^{-1/\tau_{inh}}G[t-1] + R s[t-1] \\
+    H[t] &= \frac{0.99V[t-1]+I_{ff}[t]-G[t]}{1+G[t]} \\
+    s_j[t] &= \mathbf{1}\{H_j[t]\ge 1+\theta_j^{-}[t],\ r_j[t-1]=0\}.
+
+Refractory neurons stay at voltage 0 without firing. Others continue integrating,
+and firing neurons reset themselves to 0. The inhibitory reversal potential is
+-1; implicit conductance integration avoids Euler overshoot under strong
+inhibition. Time is measured in simulation steps, with membrane time constant
+100. During training the comparison offset is first
+``theta_minus=exp(-1/1e5)*theta``; after firing, mean batch spikes increase it
+to obtain the offset retained for the next step. Initial offsets are independently uniform in
+``[0, theta_initial)``, breaking equal-threshold symmetry. These simplified
+teaching dynamics are not a Diehl–Cook paper reproduction.
+
+Each batch uses ``functional.reset_net`` to clear recurrent output, voltage,
+conductance and refractory counters, then resets STDP traces. Threshold offsets
+persist. Assignment and evaluation freeze weights and offsets and disable
+monitor recording while simulating the same neuron dynamics. Fixed seeds control
+initialization and encoding.
+
+Split seed 42 divides training data into 50,000 unlabeled learning images,
+5,000 assignment images and 5,000 validation images. The official 10,000 test
+images are evaluated after recipe freezing. Labels never enter weight learning.
+Neuron assignment uses its mean spikes per class; classification averages spikes
+of assigned neurons per class. Samples without valid activity count as errors.
+The frozen-feedforward control uses identical initialization, input spikes,
+recurrence and threshold-update rules, with a separate fixed assignment.
+
+.. code-block:: bash
+
+    uv run python -m spikingjelly.activation_based.examples.stdp_mnist \
+        --device cuda:0 --download --seed 0 \
+        --output-dir logs/plasticity/conductance/seed-0
+    uv run python -m spikingjelly.activation_based.examples.stdp_mnist \
+        --device cuda:0 --checkpoint logs/plasticity/conductance/seed-0/selected.pt \
+        --output-dir logs/plasticity/conductance/seed-0
+
+Defaults are 700 steps, batch 32 and one epoch; spike probability ``pixel*0.064``,
+base threshold 1, inhibitory increment 1, conductance time constant 5,
+refractory period 5 and initial offset upper bound 1. Pre/post STDP trace time
+constants are 20, LTD modulation is ``1e-4*weight``, LTP modulation is
+``0.02*(1-weight)``, and threshold increment coefficient is 0.5. Updates divide
+by actual batch size without time averaging. Initialization is positive uniform
+random weights, with target row sum 78.4. Each update clamps to ``[0,1]``,
+normalizes rows, then clamps to ``[0,1]`` again.
+
+``--inhibition``, ``--inhibition-tau`` and ``--refractory-steps`` configure feedback;
+``--v-threshold``, ``--theta-plus`` and ``--theta-initial`` configure thresholds.
+The conductance time constant must be finite and positive; refractory steps are
+a nonnegative integer, and the initial offset bound is finite and nonnegative.
+``--inhibition 0`` disables feedback; zero refractory steps allow spikes on
+adjacent steps. Use ``--epochs`` and ``--select-best`` to compare epochs using
+validation only, breaking ties in favor of earlier epochs. Other seeds use the
+same frozen epoch count. Small sample-count options are for smoke checks and
+cannot prove full-test accuracy. ``--checkpoint`` restores saved dynamics,
+encoding and assignments without training or reassignment. Former hard-winner,
+negative-current or non-unit-step experimental checkpoints are unsupported;
+use archived experiment source or retrain. New output goes to the separate
+``logs/plasticity/conductance`` directory.
+
+Validation status
+----------------------
+
+Recipe selection used validation only. Three full-training candidates were
+``(theta_plus, ltp)=(0.2,0.01), (0.5,0.01), (0.5,0.02)``. Each completed two
+epochs, then stopped during the third at its experiment budget; incomplete
+states were excluded from selection. Their best validation accuracies were
+85.82%, 87.00% and 87.20%; the last recipe's first-epoch checkpoint was selected.
+Its mean receptive-field cosine similarity was about 0.744, with 134/400 neurons
+assigned to digit 8, versus about 0.959 and 352/400 in earlier short training
+with weak homeostasis. These diagnostics suggest better specialization but
+cannot replace task acceptance. The full tests below used frozen models and class assignments, all 10,000
+samples per seed, and no recipe selection or seed omission based on test results.
+
+.. list-table:: Full MNIST tests with conductance competition
+   :header-rows: 1
+
+   * - Seed
+     - STDP
+     - Frozen feedforward control
+     - Difference (percentage points)
+   * - 0
+     - 87.51%
+     - 29.89%
+     - +57.62
+   * - 1
+     - 86.66%
+     - 29.56%
+     - +57.10
+   * - 2
+     - 85.88%
+     - 28.70%
+     - +57.18
+
+Mean accuracy is **86.68%**, with sample standard deviation
+**0.82 percentage points**. The mean exceeds the 85% gate,
+and every seed also exceeds 85%. Every test sample produced activity. The
+environment was Python 3.11.14, PyTorch 2.7.1+cu118, torchvision 0.22.1+cu118;
+formal tests ran on g2 A100-SXM4-80GB GPUs. These results support this shallow
+recipe, not arbitrary deep-network training with pure STDP.
+
+Repeat the commands with ``--seed`` 1 and 2 and separate output directories,
+keeping the same default recipe and one epoch. Checkpoints save weights,
+threshold offsets, class assignments and configuration; environment metadata
+and metrics are stored in JSON. Independent evaluation does not require retraining. Recipe-search, failed-run
+and acceptance ledgers are retained in experiment output directories. No silent
+sample retries or automatic input-intensity increases were introduced.
 
-where :math:`\nabla W` is ``- delta_w * scale``. Thus, the optimizer will apply \
-``weight.data = weight.data - lr * weight.grad = weight.data + lr * delta_w * scale``.
 
-We can implement the above parameter update method by the plain :class:`torch.optim.SGD` with ``momentum=0.``:
+References
+------------
 
-.. code-block:: python
-
-    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.)
-
-Then we create the input spikes and set ``STDPLearner``:
-
-.. code-block:: python
-
-    in_spike = (torch.rand([T, N, 1]) > 0.7).float()
-    stdp_learner = learning.STDPLearner(step_mode='s', synapse=net[0], sn=net[1], tau_pre=tau_pre, tau_post=tau_post,
-                                        f_pre=f_weight, f_post=f_weight)
-
-Then we send data to the network. Note that to plot the figure, we will ``squeeze()`` the data, which reshape them from ``shape = [T, N, 1]`` \
-to ``shape = [T]``:
-
-.. code-block:: python
-
-    out_spike = []
-    trace_pre = []
-    trace_post = []
-    weight = []
-    with torch.no_grad():
-        for t in range(T):
-            optimizer.zero_grad()
-            out_spike.append(net(in_spike[t]).squeeze())
-            stdp_learner.step(on_grad=True)  # add ``- delta_w * scale`` on grad
-            optimizer.step()
-            weight.append(net[0].weight.data.clone().squeeze())
-            trace_pre.append(stdp_learner.trace_pre.squeeze())
-            trace_post.append(stdp_learner.trace_post.squeeze())
-
-    in_spike = in_spike.squeeze()
-    out_spike = torch.stack(out_spike)
-    trace_pre = torch.stack(trace_pre)
-    trace_post = torch.stack(trace_post)
-    weight = torch.stack(weight)
-
-The complete codes are available at ``spikingjelly/activation_based/examples/stdp_trace.py``:
-
-Let us plot ``in_spike, out_spike, trace_pre, trace_post, weight``:
-
-.. image:: ../../_static/tutorials/stdp/stdp_trace.*
-    :width: 100%
-
-This figure is similar to Fig.3 in [#Trace]_  (note that they use `j` as the pre neuron and `i` as the post neuron, while we use the opposite symbol):
-
-.. image:: ../../_static/tutorials/stdp/trace_paper_fig3.*
-    :width: 100%
-
-
-Combine STDP Learning with Gradient Descent
------------------------------------------------------
-A widely used method with STDP is using gradient descent and STDP to train different layers in an SNN. \
-With ``STDPLearner``, we can combine STDP learning with gradient descent easily.
-
-Our goal is to build a deep SNN, train convolutional layers with STDP, and train linear layers with gradient descent. \
-First, let us define the hyper-parameters:
-
-
-.. code-block:: python
-
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-    from torch.optim import SGD, Adam
-    from spikingjelly.activation_based import learning, layer, neuron, functional
-
-    T = 8
-    N = 2
-    C = 3
-    H = 32
-    W = 32
-    lr = 0.1
-    tau_pre = 2.
-    tau_post = 100.
-    step_mode = 'm'
-
-Here we use the input with ``shape = [T, N, C, H, W] = [8, 2, 3, 32, 32]``.
-
-Then we define the weight function and the SNN. Here we build a convolutional SNN with a multi-step mode:
-
-.. code-block:: python
-
-    def f_weight(x):
-        return torch.clamp(x, -1, 1.)
-
-
-    net = nn.Sequential(
-        layer.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False),
-        neuron.IFNode(),
-        layer.MaxPool2d(2, 2),
-        layer.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False),
-        neuron.IFNode(),
-        layer.MaxPool2d(2, 2),
-        layer.Flatten(),
-        layer.Linear(16 * 8 * 8, 64, bias=False),
-        neuron.IFNode(),
-        layer.Linear(64, 10, bias=False),
-        neuron.IFNode(),
-    )
-
-    functional.set_step_mode(net, step_mode)
-
-We want to use STDP to train ``layer.Conv2d`` while other layers are to be trained with gradient descent. \
-We use ``instances_stdp`` as the layers which are trained by STDP:
-
-.. code-block:: python
-
-    instances_stdp = (layer.Conv2d, )
-
-We create an STDP learner for each layer in the SNN with the instance in ``instances_stdp``:
-
-.. code-block:: python
-
-    stdp_learners = []
-
-    for i in range(net.__len__()):
-        if isinstance(net[i], instances_stdp):
-            stdp_learners.append(
-                learning.STDPLearner(step_mode=step_mode, synapse=net[i], sn=net[i+1], tau_pre=tau_pre, tau_post=tau_post,
-                                    f_pre=f_weight, f_post=f_weight)
-            )
-
-Now we split parameters into two groups. The parameters from layers whose instances are in or not in ``instances_stdp`` \
-will be set to two optimizers. Here we use ``Adam`` to optimize the parameters which are trained by gradient descent, and ``SGD`` \
-to optimize the parameters which are trained by STDP:
-
-.. code-block:: python
-
-    params_stdp = []
-    for m in net.modules():
-        if isinstance(m, instances_stdp):
-            for p in m.parameters():
-                params_stdp.append(p)
-                
-    params_stdp_set = set(params_stdp)
-    params_gradient_descent = []
-    for p in net.parameters():
-        if p not in params_stdp_set:
-            params_gradient_descent.append(p)
-
-    optimizer_gd = Adam(params_gradient_descent, lr=lr)
-    optimizer_stdp = SGD(params_stdp, lr=lr, momentum=0.)
-
-When we train the SNN in actual tasks, e.g., classifying CIFAR-10, we get samples from the dataset. But here we only want to \
-implement an example. Hence, we create the samples manually:
-
-.. code-block:: python
-
-    x_seq = (torch.rand([T, N, C, H, W]) > 0.5).float()
-    target = torch.randint(low=0, high=10, size=[N])
-
-Then we will use the two optimizers to update the parameters. Note that the following codes are different from the plain \
-gradient descent we use before.
-
-
-First, let us clear all gradients, do a forward, calculate the loss and do a backward:
-
-.. code-block:: python
-
-    optimizer_gd.zero_grad()
-    optimizer_stdp.zero_grad()
-    y = net(x_seq).mean(0)
-    loss = F.cross_entropy(y, target)
-    loss.backward()
-
-Note that even though ``optimizer_gd`` will only update parameters in ``params_gradient_descent``, ``loss.backward()`` will \
-calculate and set ``.grad`` to all parameters including those we want to calculate the weight variation (implemented by on ``.grad``) by STDP.
-
-Thus, we need to clear the gradients of ``params_stdp``:
-
-.. code-block:: python
-
-    optimizer_stdp.zero_grad()
-
-
-Then we need to use ``STDPLearner`` to get "gradients", and use two optimizers to update all parameters:
-
-.. code-block:: python
-
-    for i in range(stdp_learners.__len__()):
-        stdp_learners[i].step(on_grad=True)
-
-    optimizer_gd.step()
-    optimizer_stdp.step()
-
-
-All the learners ( ``STDPLearner`` , for instance) inherit from ``MemoryModule``. \
-Hence, they have internal memories ( ``trace_pre, trace_post`` for ``STDPLearner`` ). \
-In addition, the monitors inside the learners record the firing histories of the pre-synaptic and post-synaptic neurons; these histories \
-may also be considered as internal memories of the learners. We should call the ``reset()`` method to clear the internal memory promptly \
-so as to avoid the nonstop growing of memory consumption. We suggest resetting the learners together with the network after each batch:
-
-.. code-block:: python
-
-    functional.reset_net(net)
-    for i in range(stdp_learners.__len__()):
-        stdp_learners[i].reset()
-
-
-The complete codes are as follows:
-
-.. code-block:: python
-
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-    from torch.optim import SGD, Adam
-    from spikingjelly.activation_based import learning, layer, neuron, functional
-
-    T = 8
-    N = 2
-    C = 3
-    H = 32
-    W = 32
-    lr = 0.1
-    tau_pre = 2.
-    tau_post = 100.
-    step_mode = 'm'
-
-    def f_weight(x):
-        return torch.clamp(x, -1, 1.)
-
-
-    net = nn.Sequential(
-        layer.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False),
-        neuron.IFNode(),
-        layer.MaxPool2d(2, 2),
-        layer.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False),
-        neuron.IFNode(),
-        layer.MaxPool2d(2, 2),
-        layer.Flatten(),
-        layer.Linear(16 * 8 * 8, 64, bias=False),
-        neuron.IFNode(),
-        layer.Linear(64, 10, bias=False),
-        neuron.IFNode(),
-    )
-
-    functional.set_step_mode(net, step_mode)
-
-    instances_stdp = (layer.Conv2d, )
-
-    stdp_learners = []
-
-    for i in range(net.__len__()):
-        if isinstance(net[i], instances_stdp):
-            stdp_learners.append(
-                learning.STDPLearner(step_mode=step_mode, synapse=net[i], sn=net[i+1], tau_pre=tau_pre, tau_post=tau_post,
-                                    f_pre=f_weight, f_post=f_weight)
-            )
-
-
-    params_stdp = []
-    for m in net.modules():
-        if isinstance(m, instances_stdp):
-            for p in m.parameters():
-                params_stdp.append(p)
-
-    params_stdp_set = set(params_stdp)
-    params_gradient_descent = []
-    for p in net.parameters():
-        if p not in params_stdp_set:
-            params_gradient_descent.append(p)
-
-    optimizer_gd = Adam(params_gradient_descent, lr=lr)
-    optimizer_stdp = SGD(params_stdp, lr=lr, momentum=0.)
-
-
-
-    x_seq = (torch.rand([T, N, C, H, W]) > 0.5).float()
-    target = torch.randint(low=0, high=10, size=[N])
-
-    optimizer_gd.zero_grad()
-    optimizer_stdp.zero_grad()
-
-    y = net(x_seq).mean(0)
-    loss = F.cross_entropy(y, target)
-    loss.backward()
-
-
-
-    optimizer_stdp.zero_grad()
-
-    for i in range(stdp_learners.__len__()):
-        stdp_learners[i].step(on_grad=True)
-
-    optimizer_gd.step()
-    optimizer_stdp.step()
-
-    functional.reset_net(net)
-    for i in range(stdp_learners.__len__()):
-        stdp_learners[i].reset()
-
-
-
-
-
-
-
-.. [#STDP] Bi, Guo-qiang, and Mu-ming Poo. "Synaptic modifications in cultured hippocampal neurons: dependence on spike timing, synaptic strength, and postsynaptic cell type." Journal of neuroscience 18.24 (1998): 10464-10472.
-
-.. [#STDP_figure] Froemke, Robert C., et al. "Contribution of individual spikes in burst-induced long-term synaptic modification." Journal of neurophysiology (2006).
-
-.. [#Trace] Morrison, Abigail, Markus Diesmann, and Wulfram Gerstner. "Phenomenological models of synaptic plasticity based on spike timing." Biological cybernetics 98.6 (2008): 459-478.
+* `Diehl and Cook (2015) <https://www.frontiersin.org/journals/computational-neuroscience/articles/10.3389/fncom.2015.00099/full>`_
+* `Florian (2007) <https://florian.io/papers/2007_Florian_Modulated_STDP.pdf>`_

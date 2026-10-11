@@ -16,6 +16,36 @@ __all__ = [
 ]
 
 
+def _check_time_constants(
+    tau_pre: float, tau_post: float, exponential: bool = False
+) -> None:
+    for name, tau in (("tau_pre", tau_pre), ("tau_post", tau_post)):
+        if not math.isfinite(tau) or tau <= 0 or (not exponential and tau < 1):
+            bound = "> 0" if exponential else ">= 1"
+            raise ValueError(f"{name} must be finite and {bound} time steps.")
+
+
+def _check_inputs(in_spike, out_spike, trace, weight, ndim: int) -> None:
+    if in_spike.ndim != ndim or out_spike.ndim != ndim:
+        raise ValueError(f"Spikes must both have {ndim} dimensions.")
+    if weight.ndim != (2 if ndim <= 2 else ndim):
+        raise ValueError("Weight dimensions do not match the spike layout.")
+    channel_dim = 0 if ndim == 1 else 1
+    if (
+        in_spike.shape[channel_dim] != weight.shape[1]
+        or out_spike.shape[channel_dim] != weight.shape[0]
+        or (ndim > 1 and in_spike.shape[0] != out_spike.shape[0])
+    ):
+        raise ValueError("Spike shapes do not match the weight or batch dimensions.")
+    for name, spike, state in zip(("pre", "post"), (in_spike, out_spike), trace):
+        if state.shape != spike.shape:
+            raise ValueError(
+                f"{name} trace shape differs from spikes; reset before changing batch size."
+            )
+        if spike.device != weight.device or state.device != weight.device:
+            raise ValueError("Spikes, traces and weight must be on the same device.")
+
+
 def _identity(x: torch.Tensor) -> torch.Tensor:
     return x
 
@@ -39,6 +69,9 @@ def stdp_linear_step(
     .. _functional_stdp_linear_step-cn:
 
     * **中文**
+
+    时间常数单位为模拟时间步，须为有限值且 >= 1。活动及 trace 的形状必须精确匹配，不允许状态通过广播适配 batch。建议活动、状态及权重使用相同浮点
+    dtype，device 必须相同。使用 Euler 衰减 1-1/tau，更新按 batch 和空间位置求和。
 
     执行全连接权重的单步 STDP 更新。``trace`` 是
     ``(trace_pre, trace_post)``；函数先更新两个 trace，再用更新后的 trace
@@ -70,11 +103,18 @@ def stdp_linear_step(
         ``weight`` 同形状
     :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
 
+    :raises ValueError: 时间常数或张量形状/device 不合法。
+
     ----
 
     .. _functional_stdp_linear_step-en:
 
     * **English**
+
+    Time constants are in simulated time steps, finite and >= 1. Activity and trace
+    shapes must match exactly; state broadcasting cannot adapt batch size. Matching
+    floating dtypes are recommended for activity, state and weight; devices must
+    match.Uses Euler decay 1-1/tau and sums updates over batch and spatial positions.
 
     Run one STDP update for a linear weight. ``trace`` is
     ``(trace_pre, trace_post)``. The function updates both traces first, computes
@@ -107,12 +147,15 @@ def stdp_linear_step(
     :return: ``(delta_w, (trace_pre_next, trace_post_next))``; ``delta_w`` has
         the same shape as ``weight``
     :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
+    :raises ValueError: Invalid time constants or tensor shapes/devices.
 
     .. note::
 
        本函数没有独立多步形式；多步执行由调用者逐步循环。
        This function has no independent multi-step form; callers iterate it.
     """
+    _check_time_constants(tau_pre, tau_post, exponential=False)
+    _check_inputs(in_spike, out_spike, trace, weight, 2)
     trace_pre, trace_post = trace
     trace_pre = trace_pre - trace_pre / tau_pre + in_spike
     trace_post = trace_post - trace_post / tau_post + out_spike
@@ -145,6 +188,9 @@ def mstdp_linear_step(
 
     * **中文**
 
+    时间常数单位为模拟时间步，须为有限值且 > 0。活动及 trace 的形状必须精确匹配，不允许状态通过广播适配 batch。建议活动、状态及权重使用相同浮点
+    dtype，device 必须相同。使用指数衰减 exp(-1/tau)，保留原有离散定义。
+
     执行全连接权重的单步 mSTDP eligibility 计算。``trace`` 是
     ``(trace_pre, trace_post)``。返回的 eligibility 保留 batch 维，供调用者
     进一步施加 reward；本函数不接收或处理 reward。
@@ -170,11 +216,18 @@ def mstdp_linear_step(
         ``eligibility`` 形状为 ``[N, out_features, in_features]``
     :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
 
+    :raises ValueError: 时间常数或张量形状/device 不合法。
+
     ----
 
     .. _functional_mstdp_linear_step-en:
 
     * **English**
+
+    Time constants are in simulated time steps, finite and > 0. Activity and trace
+    shapes must match exactly; state broadcasting cannot adapt batch size. Matching
+    floating dtypes are recommended for activity, state and weight; devices must
+    match.Uses exponential decay exp(-1/tau), preserving the existing discretization.
 
     Compute one mSTDP eligibility step for a linear weight. ``trace`` is
     ``(trace_pre, trace_post)``. The returned eligibility retains its batch
@@ -201,12 +254,15 @@ def mstdp_linear_step(
     :return: ``(eligibility, (trace_pre_next, trace_post_next))``;
         ``eligibility`` is shaped ``[N, out_features, in_features]``
     :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
+    :raises ValueError: Invalid time constants or tensor shapes/devices.
 
     .. note::
 
        本函数没有独立多步形式；多步执行由调用者逐步循环。
        This function has no independent multi-step form; callers iterate it.
     """
+    _check_time_constants(tau_pre, tau_post, exponential=True)
+    _check_inputs(in_spike, out_spike, trace, weight, 2)
     trace_pre, trace_post = trace
     trace_pre = trace_pre * math.exp(-1 / tau_pre) + in_spike
     trace_post = trace_post * math.exp(-1 / tau_post) + out_spike
@@ -236,6 +292,9 @@ def mstdpet_linear_step(
 
     * **中文**
 
+    时间常数单位为模拟时间步，须为有限值且 > 0。活动及 trace 的形状必须精确匹配，不允许状态通过广播适配 batch。建议活动、状态及权重使用相同浮点
+    dtype，device 必须相同。使用指数衰减 exp(-1/tau)，保留原有离散定义。
+
     执行无 batch 维全连接脉冲的单步 mSTDP-ET eligibility 计算。``trace`` 是
     ``(trace_pre, trace_post)``。本函数只更新神经元 trace 并计算 eligibility；
     eligibility trace 的衰减与 reward 调制由 :func:`mstdpet_reward_step` 完成。
@@ -261,11 +320,18 @@ def mstdpet_linear_step(
         ``eligibility`` 与 ``weight`` 同形状
     :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
 
+    :raises ValueError: 时间常数或张量形状/device 不合法。
+
     ----
 
     .. _functional_mstdpet_linear_step-en:
 
     * **English**
+
+    Time constants are in simulated time steps, finite and > 0. Activity and trace
+    shapes must match exactly; state broadcasting cannot adapt batch size. Matching
+    floating dtypes are recommended for activity, state and weight; devices must
+    match.Uses exponential decay exp(-1/tau), preserving the existing discretization.
 
     Compute one mSTDP-ET eligibility step for unbatched linear spikes. ``trace``
     is ``(trace_pre, trace_post)``. This function only updates the neuronal
@@ -292,12 +358,15 @@ def mstdpet_linear_step(
     :return: ``(eligibility, (trace_pre_next, trace_post_next))``;
         ``eligibility`` has the same shape as ``weight``
     :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
+    :raises ValueError: Invalid time constants or tensor shapes/devices.
 
     .. note::
 
        本函数没有独立多步形式；多步执行由调用者逐步循环。
        This function has no independent multi-step form; callers iterate it.
     """
+    _check_time_constants(tau_pre, tau_post, exponential=True)
+    _check_inputs(in_spike, out_spike, trace, weight, 1)
     trace_pre, trace_post = trace
     trace_pre = trace_pre * math.exp(-1 / tau_pre) + in_spike
     trace_post = trace_post * math.exp(-1 / tau_post) + out_spike
@@ -328,6 +397,9 @@ def stdp_conv2d_step(
 
     * **中文**
 
+    时间常数单位为模拟时间步，须为有限值且 >= 1。活动及 trace 的形状必须精确匹配，不允许状态通过广播适配 batch。建议活动、状态及权重使用相同浮点
+    dtype，device 必须相同。使用 Euler 衰减 1-1/tau，更新按 batch 和空间位置求和。
+
     执行二维卷积权重的单步 STDP 更新。``trace`` 是
     ``(trace_pre, trace_post)``。``in_spike`` 必须已经按突触层的 padding
     规则展开；函数因此只表达 dilation 为 1、groups 为 1 的卷积 STDP 方程，
@@ -356,11 +428,18 @@ def stdp_conv2d_step(
         ``weight`` 同形状
     :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
 
+    :raises ValueError: 时间常数或张量形状/device 不合法。
+
     ----
 
     .. _functional_stdp_conv2d_step-en:
 
     * **English**
+
+    Time constants are in simulated time steps, finite and >= 1. Activity and trace
+    shapes must match exactly; state broadcasting cannot adapt batch size. Matching
+    floating dtypes are recommended for activity, state and weight; devices must
+    match.Uses Euler decay 1-1/tau and sums updates over batch and spatial positions.
 
     Run one STDP update for a 2D convolution weight. ``trace`` is
     ``(trace_pre, trace_post)``. ``in_spike`` must already include the synaptic
@@ -390,12 +469,23 @@ def stdp_conv2d_step(
     :return: ``(delta_w, (trace_pre_next, trace_post_next))``; ``delta_w`` has
         the same shape as ``weight``
     :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
+    :raises ValueError: Invalid time constants or tensor shapes/devices.
 
     .. note::
 
        本函数没有独立多步形式；多步执行由调用者逐步循环。
        This function has no independent multi-step form; callers iterate it.
     """
+    _check_time_constants(tau_pre, tau_post, exponential=False)
+    _check_inputs(in_spike, out_spike, trace, weight, 4)
+    if any(value <= 0 for value in stride):
+        raise ValueError("Stride must be positive.")
+    expected = tuple(
+        (size - kernel) // step + 1
+        for size, kernel, step in zip(in_spike.shape[2:], weight.shape[2:], stride)
+    )
+    if out_spike.shape[2:] != expected:
+        raise ValueError("Output spatial shape does not match the kernel and stride.")
     trace_pre, trace_post = trace
     trace_pre = trace_pre - trace_pre / tau_pre + in_spike
     trace_post = trace_post - trace_post / tau_post + out_spike
@@ -442,6 +532,9 @@ def stdp_conv1d_step(
 
     * **中文**
 
+    时间常数单位为模拟时间步，须为有限值且 >= 1。活动及 trace 的形状必须精确匹配，不允许状态通过广播适配 batch。建议活动、状态及权重使用相同浮点
+    dtype，device 必须相同。使用 Euler 衰减 1-1/tau，更新按 batch 和空间位置求和。
+
     执行一维卷积权重的单步 STDP 更新。``trace`` 是
     ``(trace_pre, trace_post)``。``in_spike`` 必须已经按突触层的 padding
     规则展开；函数因此只表达 dilation 为 1、groups 为 1 的卷积 STDP 方程，
@@ -470,11 +563,18 @@ def stdp_conv1d_step(
         ``weight`` 同形状
     :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
 
+    :raises ValueError: 时间常数或张量形状/device 不合法。
+
     ----
 
     .. _functional_stdp_conv1d_step-en:
 
     * **English**
+
+    Time constants are in simulated time steps, finite and >= 1. Activity and trace
+    shapes must match exactly; state broadcasting cannot adapt batch size. Matching
+    floating dtypes are recommended for activity, state and weight; devices must
+    match.Uses Euler decay 1-1/tau and sums updates over batch and spatial positions.
 
     Run one STDP update for a 1D convolution weight. ``trace`` is
     ``(trace_pre, trace_post)``. ``in_spike`` must already include the synaptic
@@ -504,12 +604,23 @@ def stdp_conv1d_step(
     :return: ``(delta_w, (trace_pre_next, trace_post_next))``; ``delta_w`` has
         the same shape as ``weight``
     :rtype: Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
+    :raises ValueError: Invalid time constants or tensor shapes/devices.
 
     .. note::
 
        本函数没有独立多步形式；多步执行由调用者逐步循环。
        This function has no independent multi-step form; callers iterate it.
     """
+    _check_time_constants(tau_pre, tau_post, exponential=False)
+    _check_inputs(in_spike, out_spike, trace, weight, 3)
+    if any(value <= 0 for value in stride):
+        raise ValueError("Stride must be positive.")
+    expected = tuple(
+        (size - kernel) // step + 1
+        for size, kernel, step in zip(in_spike.shape[2:], weight.shape[2:], stride)
+    )
+    if out_spike.shape[2:] != expected:
+        raise ValueError("Output spatial shape does not match the kernel and stride.")
     trace_pre, trace_post = trace
     trace_pre = trace_pre - trace_pre / tau_pre + in_spike
     trace_post = trace_post - trace_post / tau_post + out_spike
@@ -549,6 +660,9 @@ def mstdpet_reward_step(
 
     * **中文**
 
+    reward 为标量；eligibility 与 trace_e 同形状、同 device。tau_trace
+    单位为时间步，须为有限正数。本函数只根据传入状态计算，不负责 Learner 的活动时间对齐。
+
     更新 mSTDP-ET eligibility trace，并用 reward 调制更新后的 trace。
 
     .. math::
@@ -567,11 +681,17 @@ def mstdpet_reward_step(
     :return: ``(delta_w, trace_e_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
 
+    :raises ValueError: 时间常数或张量形状/device 不合法。
+
     ----
 
     .. _functional_mstdpet_reward_step-en:
 
     * **English**
+
+    Reward is scalar; eligibility and trace_e must have matching shapes and devices.
+    tau_trace is in time steps and must be finite and positive. This function computes
+    from supplied states and does not perform Learner activity alignment.
 
     Update the mSTDP-ET eligibility trace and modulate the updated trace with the
     reward.
@@ -592,11 +712,19 @@ def mstdpet_reward_step(
     :type tau_trace: float
     :return: ``(delta_w, trace_e_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
+    :raises ValueError: Invalid time constants or tensor shapes/devices.
 
     .. note::
 
        本函数没有独立多步形式；多步执行由调用者逐步循环。
        This function has no independent multi-step form; callers iterate it.
     """
+    _check_time_constants(tau_trace, tau_trace, exponential=True)
+    if eligibility.shape != trace_e.shape or eligibility.device != trace_e.device:
+        raise ValueError(
+            "Eligibility and eligibility trace must have matching shapes and devices."
+        )
+    if isinstance(reward, torch.Tensor) and reward.ndim != 0:
+        raise ValueError("MSTDPET reward must be scalar.")
     trace_e = trace_e * math.exp(-1 / tau_trace) + eligibility / tau_trace
     return reward * trace_e, trace_e

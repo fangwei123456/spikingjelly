@@ -1,11 +1,24 @@
+import argparse
+from functools import partial
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 from spikingjelly.activation_based import neuron, layer, learning
 from matplotlib import pyplot as plt
 
-torch.manual_seed(0)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Plasticity mechanism demo; not a task benchmark."
+    )
+    parser.add_argument("--show", action="store_true")
+    parser.add_argument("--output-dir", type=Path, default=Path("logs/plasticity"))
+    args = parser.parse_args()
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    torch.manual_seed(0)
+    if not args.show:
+        plt.switch_backend("Agg")
 
     def f_pre(x, w_min, alpha=0.0):
         return (x - w_min) ** alpha
@@ -24,18 +37,15 @@ if __name__ == "__main__":
     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.0)
 
     in_spike = (torch.rand([T, batch_size, N_in]) > 0.7).float()
-    reward = torch.rand([T, batch_size])
+    reward = torch.rand([T, batch_size]) * 2 - 1
     learner = learning.MSTDPLearner(
         step_mode="s",
-        batch_size=batch_size,
         synapse=net[0],
         sn=net[1],
         tau_pre=tau_pre,
         tau_post=tau_post,
-        w_min=w_min,
-        w_max=w_max,
-        f_pre=f_pre,
-        f_post=f_post,
+        f_pre=partial(f_pre, w_min=w_min),
+        f_post=partial(f_post, w_max=w_max),
     )
 
     out_spike = []
@@ -98,7 +108,7 @@ if __name__ == "__main__":
 
     plt.subplot(6, 1, 5)
     plt.plot(t, reward, c=cmap(4))
-    plt.ylabel("$reward$", rotation=0)
+    plt.ylabel("$r_t$", rotation=0)
     plt.yticks([reward.min().item(), reward.max().item()])
     plt.xlim(-0.5, T + 0.5)
     plt.xticks([])
@@ -106,13 +116,17 @@ if __name__ == "__main__":
     plt.subplot(6, 1, 6)
     plt.plot(t, weight, c=cmap(5))
     plt.xlim(-0.5, T + 0.5)
-    plt.ylabel("$w[i][j]$", rotation=0)
+    plt.ylabel("$W[j,i]$", rotation=0)
     plt.yticks([weight.min().item(), weight.max().item()])
     plt.xlabel("time-step")
 
+    plt.gcf().suptitle("reward[t] acts on eligibility[t-1]")
+    plt.gcf().set_size_inches(6.4, 7.2)
     plt.gcf().subplots_adjust(left=0.18)
 
-    plt.show()
-    plt.savefig("./docs/source/_static/tutorials/stdp/mstdp.png")
-    plt.savefig("./docs/source/_static/tutorials/stdp/mstdp.svg")
-    plt.savefig("./docs/source/_static/tutorials/stdp/mstdp.pdf")
+    learner.close()
+    for suffix in ("png", "svg", "pdf"):
+        plt.savefig(args.output_dir / ("mstdp." + suffix))
+    if args.show:
+        plt.show()
+    plt.close()

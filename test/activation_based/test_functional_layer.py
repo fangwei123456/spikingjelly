@@ -327,3 +327,14 @@ def test_functional_layer_public_api_documentation():
         doc = inspect.getdoc(function)
         assert f".. _{name}-cn:" in doc
         assert f".. _{name}-en:" in doc
+
+
+def test_linear_recurrent_container_rejects_batch_change_until_reset():
+    module = layer.LinearRecurrentContainer(nn.Identity(), 3, 3, bias=False)
+    module(torch.zeros(1, 3))
+    previous = module.y.clone()
+    with pytest.raises(ValueError, match="reset_net"):
+        module(torch.zeros(2, 3))
+    torch.testing.assert_close(module.y, previous)
+    functional.reset_net(module)
+    assert module(torch.zeros(2, 3)).shape == (2, 3)

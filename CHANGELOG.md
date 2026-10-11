@@ -11,6 +11,22 @@ and the archived documentation linked from the project README.
 
 ### Features
 
+#### Plasticity Learning Example
+
+Module: `spikingjelly.activation_based.examples.stdp_mnist`.
+
+- Added a shallow STDP-only MNIST example with adaptive thresholds, fixed
+  recurrent inhibitory conductance via `LinearRecurrentContainer`, individual
+  refractory periods, training-set class assignment, frozen-feedforward controls
+  and checkpoint evaluation. Multiple neurons may spike together; there is no
+  single-winner selection or forced reset of neighbors. Defaults use 700 steps,
+  one epoch, LTP coefficient 0.02 and threshold increment coefficient 0.5.
+  Full MNIST tests for seeds 0, 1 and 2 achieve 87.51%, 86.66% and 85.88%
+  (mean 86.68%), using weights trained only by STDP and statistical class
+  assignment. Former hard-winner and negative-current checkpoints
+  require their archived source or retraining.
+
+
 #### SNN Performance Profiling
 
 Module: `spikingjelly.nsys`.
@@ -114,6 +130,14 @@ Modules: `spikingjelly.activation_based.distributed.vision`,
 
 ### Improvements
 
+#### Recurrent Container State Validation
+
+Module: `spikingjelly.activation_based.layer.container`.
+
+- `LinearRecurrentContainer` rejects changed batch/leading state shapes with a
+  clear error before forwarding; reset it and its stateful child with
+  `functional.reset_net(container)` before changing batch shape.
+
 #### Point-Neuron Execution
 
 Module: `spikingjelly.activation_based.neuron`.
@@ -200,6 +224,13 @@ Module: `spikingjelly.activation_based.learning`.
 
 - Made `MSTDPLearner` eligibility and reward-derived weight updates follow the
   synapse device and dtype.
+- Validate plasticity configurations and activity/state shapes before updates.
+- Plasticity learners compute without retaining modulation or reward autograd graphs.
+- Added `close()` to plasticity learners to permanently remove hooks and clear
+  learning states. Closed learners cannot be stepped or enabled again.
+- Restored the STDP/MSTDP/MSTDPET mechanism demos with deterministic rewards,
+  headless plotting, explicit output directories, and correctly bound modulation
+  functions.
 
 #### DSpike Search Network
 
@@ -306,6 +337,18 @@ Module: `spikingjelly.activation_based.neuron`.
   failing with `mat1 and mat2 must have the same dtype`.
 
 ### Breaking Changes and Notices
+
+#### Plasticity Learner Interfaces
+
+Module: `spikingjelly.activation_based.learning`.
+
+- Removed `MSTDPLearner(batch_size=...)`; batch size comes from activity.
+  Remove that constructor argument and reset before changing batch size.
+- Reward learners require one forward activity pair per `step(reward)`.
+  Call it immediately after every forward instead of reusing one reward for
+  multiple recorded pairs. Timing continues to use the previous step's eligibility.
+- STDP trace time constants must be finite and at least one simulated step;
+  reward-rule time constants must be finite and positive.
 
 #### Point-Neuron Compilation
 

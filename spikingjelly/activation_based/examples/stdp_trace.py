@@ -1,3 +1,6 @@
+import argparse
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 from spikingjelly.activation_based import neuron, layer, learning
@@ -8,15 +11,17 @@ def f_weight(x):
     return torch.clamp(x, -1, 1.0)
 
 
-torch.manual_seed(0)
-
 if __name__ == "__main__":
-
-    def f_pre(x, w_min, alpha=0.0):
-        return (x - w_min) ** alpha
-
-    def f_post(x, w_max, alpha=0.0):
-        return (w_max - x) ** alpha
+    parser = argparse.ArgumentParser(
+        description="Plasticity mechanism demo; not a task benchmark."
+    )
+    parser.add_argument("--show", action="store_true")
+    parser.add_argument("--output-dir", type=Path, default=Path("logs/plasticity"))
+    args = parser.parse_args()
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    torch.manual_seed(0)
+    if not args.show:
+        plt.switch_backend("Agg")
 
     w_min, w_max = -1.0, 1.0
     tau_pre, tau_post = 2.0, 2.0
@@ -99,13 +104,16 @@ if __name__ == "__main__":
     plt.subplot(5, 1, 5)
     plt.plot(t, weight, c=cmap(4))
     plt.xlim(-0.5, T + 0.5)
-    plt.ylabel("$w[i][j]$", rotation=0)
+    plt.ylabel("$W[j,i]$", rotation=0)
     plt.yticks([weight.min().item(), weight.max().item()])
     plt.xlabel("time-step")
 
+    plt.gcf().set_size_inches(6.4, 6.0)
     plt.gcf().subplots_adjust(left=0.18)
 
-    plt.show()
-    plt.savefig("./docs/source/_static/tutorials/stdp/stdp_trace.png")
-    plt.savefig("./docs/source/_static/tutorials/stdp/stdp_trace.svg")
-    plt.savefig("./docs/source/_static/tutorials/stdp/stdp_trace.pdf")
+    learner.close()
+    for suffix in ("png", "svg", "pdf"):
+        plt.savefig(args.output_dir / ("stdp_trace." + suffix))
+    if args.show:
+        plt.show()
+    plt.close()
