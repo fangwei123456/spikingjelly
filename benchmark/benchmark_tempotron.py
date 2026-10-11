@@ -7,12 +7,14 @@ import json
 import os
 import platform
 import resource
+import statistics
 import subprocess
 import time
 from pathlib import Path
 
 import torch
 
+from spikingjelly._ops import tempotron as tempotron_ops
 from spikingjelly.timing_based import functional
 from spikingjelly.timing_based.encoding import GaussianTuning
 
@@ -61,20 +63,6 @@ def main() -> None:
                     "Another compute process is using the benchmark GPU."
                 )
 
-    # Initialize the device/allocator without repeating the largest workload.
-    functional.tempotron(
-        torch.tensor([0.3], device=device),
-        torch.tensor([0], device=device),
-        torch.tensor([0, 1], device=device),
-        torch.ones(1, 1, device=device),
-        5.0,
-    )
-    synchronize()
-    if legacy_type is not None:
-        warm_model = legacy_type(1, 1, 5).to(device)
-        warm_model(torch.tensor([[0.3]], device=device), "v_max").sum().backward()
-        synchronize()
-        del warm_model
     cases = [
         (1, 500, 1, 1, 100.0),
         (8, 500, 10, 1, 100.0),
@@ -122,37 +110,63 @@ def main() -> None:
             )
             return tensor
 
+        def objective(result, mode):
+            if mode == "v_max":
+                return result[0].sum()
+            if mode == "t_peak":
+                return result[1].sum()
+            spike = torch.where(torch.isfinite(result[2]), result[2], 0).sum()
+            return (
+                spike
+                if mode == "t_spike"
+                else result[0].sum() + result[1].sum() + spike
+            )
+
+        modes = ("v_max", "t_peak", "t_spike", "all")
+        for _ in range(3):
+            result = functional.tempotron(times, indices, offsets, weight, duration)
+            for mode in modes:
+                times.grad = weight.grad = None
+                objective(result, mode).backward(retain_graph=True)
+            del result
+        times.grad = weight.grad = None
+        synchronize()
         if device.type == "cuda":
             torch.cuda.reset_peak_memory_stats(device)
             initial_memory = torch.cuda.memory_allocated(device)
-        synchronize()
-        start = time.perf_counter()
         with torch.autograd.graph.saved_tensors_hooks(pack, lambda x: x):
             result = functional.tempotron(times, indices, offsets, weight, duration)
+        objective(result, "all").backward()
         synchronize()
-        forward_ms = (time.perf_counter() - start) * 1000
-        backward = {}
-        for mode in ("v_max", "t_peak", "t_spike", "all"):
-            times.grad = None
-            weight.grad = None
+        if device.type == "cuda":
+            peak_memory = torch.cuda.max_memory_allocated(device)
+        del result
+        forward_samples = []
+        backward_samples = {mode: [] for mode in modes}
+        for _ in range(5):
+            times.grad = weight.grad = None
             synchronize()
             start = time.perf_counter()
-            terms = [
-                result[0].sum(),
-                result[1].sum(),
-                torch.where(torch.isfinite(result[2]), result[2], 0).sum(),
-            ]
-            loss = (
-                sum(terms)
-                if mode == "all"
-                else terms[("v_max", "t_peak", "t_spike").index(mode)]
-            )
-            loss.backward(retain_graph=True)
+            result = functional.tempotron(times, indices, offsets, weight, duration)
             synchronize()
-            backward[mode] = (time.perf_counter() - start) * 1000
-            assert (
-                torch.isfinite(times.grad).all() and torch.isfinite(weight.grad).all()
-            )
+            forward_samples.append((time.perf_counter() - start) * 1000)
+            for mode in modes:
+                times.grad = weight.grad = None
+                synchronize()
+                start = time.perf_counter()
+                objective(result, mode).backward(retain_graph=True)
+                synchronize()
+                backward_samples[mode].append((time.perf_counter() - start) * 1000)
+                assert (
+                    torch.isfinite(times.grad).all()
+                    and torch.isfinite(weight.grad).all()
+                )
+            del result
+        forward_ms = statistics.median(forward_samples)
+        backward = {
+            mode: statistics.median(samples)
+            for mode, samples in backward_samples.items()
+        }
         record = {
             "B": batch,
             "I": inputs,
@@ -164,20 +178,27 @@ def main() -> None:
             if inputs == 12544
             else "seeded synthetic events, fixed [0,100]",
             "forward_ms": forward_ms,
+            "forward_samples_ms": forward_samples,
             "backward_ms": backward,
-            "forward_backward_ms": {k: forward_ms + v for k, v in backward.items()},
+            "backward_samples_ms": backward_samples,
+            "forward_backward_ms": {
+                mode: statistics.median(
+                    [a + b for a, b in zip(forward_samples, samples)]
+                )
+                for mode, samples in backward_samples.items()
+            },
             "saved_tensors": saved,
             "saved_tensor_bytes": sum(x["bytes"] for x in saved),
         }
         if device.type == "cuda":
-            record["peak_allocated_bytes"] = torch.cuda.max_memory_allocated(device)
+            record["peak_allocated_bytes"] = peak_memory
             record["peak_extra_allocated_bytes"] = (
                 record["peak_allocated_bytes"] - initial_memory
             )
         record["process_peak_rss_bytes"] = resource.getrusage(
             resource.RUSAGE_SELF
         ).ru_maxrss * (1 if platform.system() == "Darwin" else 1024)
-        del result, times, terms, loss
+        del times
         weight.grad = None
         if legacy_type is not None:
             model = legacy_type(inputs * events_per_input, outputs, int(duration)).to(
@@ -204,25 +225,45 @@ def main() -> None:
                 ).reshape(batch, -1)
                 old_times[old_times >= duration] = -1
             old_times = old_times.detach().requires_grad_()
+            for _ in range(3):
+                model.zero_grad(set_to_none=True)
+                old_times.grad = None
+                model(old_times, "v_max").sum().backward()
+            model.zero_grad(set_to_none=True)
+            old_times.grad = None
+            synchronize()
             if device.type == "cuda":
                 torch.cuda.reset_peak_memory_stats(device)
                 legacy_initial_memory = torch.cuda.memory_allocated(device)
-            synchronize()
-            start = time.perf_counter()
             historical = model(old_times, "v_max")
-            synchronize()
-            record["legacy_forward_ms"] = (time.perf_counter() - start) * 1000
-            synchronize()
-            start = time.perf_counter()
             historical.sum().backward()
             synchronize()
-            record["legacy_backward_ms"] = (time.perf_counter() - start) * 1000
             if device.type == "cuda":
-                record["legacy_peak_allocated_bytes"] = torch.cuda.max_memory_allocated(
-                    device
-                )
+                legacy_peak_memory = torch.cuda.max_memory_allocated(device)
+            del historical
+            legacy_forward, legacy_backward = [], []
+            for _ in range(5):
+                model.zero_grad(set_to_none=True)
+                old_times.grad = None
+                synchronize()
+                start = time.perf_counter()
+                historical = model(old_times, "v_max")
+                synchronize()
+                legacy_forward.append((time.perf_counter() - start) * 1000)
+                synchronize()
+                start = time.perf_counter()
+                historical.sum().backward()
+                synchronize()
+                legacy_backward.append((time.perf_counter() - start) * 1000)
+                del historical
+            record["legacy_forward_ms"] = statistics.median(legacy_forward)
+            record["legacy_backward_ms"] = statistics.median(legacy_backward)
+            record["legacy_forward_samples_ms"] = legacy_forward
+            record["legacy_backward_samples_ms"] = legacy_backward
+            if device.type == "cuda":
+                record["legacy_peak_allocated_bytes"] = legacy_peak_memory
                 record["legacy_peak_extra_allocated_bytes"] = (
-                    record["legacy_peak_allocated_bytes"] - legacy_initial_memory
+                    legacy_peak_memory - legacy_initial_memory
                 )
         records.append(record)
         check_gpu_owner()
@@ -240,9 +281,21 @@ def main() -> None:
                     "threads": 1,
                     "dtype": "float32; new internal float64",
                     "seed": 20261007,
-                    "source_sha256": hashlib.sha256(
-                        Path(functional.__file__).read_bytes()
-                    ).hexdigest(),
+                    "warmup": 3,
+                    "repeats": 5,
+                    "source_sha256": {
+                        "timing_based/functional.py": hashlib.sha256(
+                            Path(functional.__file__).read_bytes()
+                        ).hexdigest(),
+                        **{
+                            "ops/tempotron/" + path.name: hashlib.sha256(
+                                path.read_bytes()
+                            ).hexdigest()
+                            for path in sorted(
+                                Path(tempotron_ops.__file__).parent.glob("*.py")
+                            )
+                        },
+                    },
                     "benchmark_source_sha256": hashlib.sha256(
                         Path(__file__).read_bytes()
                     ).hexdigest(),
@@ -269,7 +322,7 @@ def main() -> None:
         )
         del weight
         if legacy_type is not None:
-            del model, historical, old_times
+            del model, old_times
 
 
 if __name__ == "__main__":

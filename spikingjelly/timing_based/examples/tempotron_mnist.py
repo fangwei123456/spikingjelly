@@ -192,26 +192,22 @@ def main() -> None:
         train_sum = 0
         net.train()
         for img, label in tqdm(train_data_loader):
+            label = label.to(device)
             img = img.view(img.shape[0], -1).unsqueeze(1)  # [batch_size, 1, 784]
             events = encoder(img.to(device), duration)
 
             optimizer.zero_grad()
 
             v_max, _, t_spike = net(*events)
-            loss = _classification_loss(
-                v_max, t_spike, label.to(device), net.v_threshold
-            )
+            loss = _classification_loss(v_max, t_spike, label, net.v_threshold)
             loss.backward()
             optimizer.step()
 
-            train_correct_sum += (
-                (v_max.argmax(dim=1) == label.to(device)).float().sum().item()
-            )
+            correct_count = (v_max.argmax(dim=1) == label).sum().item()
+            train_correct_sum += correct_count
             train_sum += label.numel()
 
-            train_batch_acc = (
-                (v_max.argmax(dim=1) == label.to(device)).float().mean().item()
-            )
+            train_batch_acc = correct_count / label.numel()
             writer.add_scalar("train_batch_acc", train_batch_acc, train_times)
 
             train_times += 1

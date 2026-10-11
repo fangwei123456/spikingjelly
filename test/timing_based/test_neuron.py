@@ -572,6 +572,24 @@ def test_multiblock_crossing_and_gradients(device, tau, tau_s):
     )
 
 
+def test_cancelled_event_boundary_gradient_is_independent_of_other_outputs(device):
+    from spikingjelly.timing_based.functional import tempotron
+
+    peak = 2 * 0.5 * math.log(4) / (2 - 0.5)
+    indices = torch.tensor([0, 1, 2], device=device)
+    offsets = torch.tensor([0, 3], device=device)
+    for rows in ([[1.0, 1.0, -1.0]], [[1.0, 1.0, -1.0], [0.1, 0.1, 0.1]]):
+        times = torch.tensor(
+            [0.0, peak, peak], dtype=torch.float64, device=device, requires_grad=True
+        )
+        weight = torch.tensor(rows, dtype=torch.float64, device=device)
+        result = tempotron(times, indices, offsets, weight, 5.0, 2.0, 0.5, 3.0)
+        gradient = torch.autograd.grad(result[1][0, 0], times)[0]
+        torch.testing.assert_close(
+            gradient, times.new_tensor([0.0, 1.0, 0.0]), rtol=0, atol=1e-12
+        )
+
+
 def test_zero_current_groups_preserve_grazing_and_weight_gradients(device):
     from spikingjelly.timing_based.functional import tempotron
 

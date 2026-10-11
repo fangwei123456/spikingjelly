@@ -77,8 +77,9 @@ class _Tempotron(torch.autograd.Function):
             grouped_weight = torch.segment_reduce(
                 weight64[:, indices[order]].T, "sum", lengths=counts
             ).T
-            # Retain zero-current events in order for their weight derivatives.
+            # Keep zero-current boundary metadata without accumulating decay roundoff.
             nonzero = (grouped_weight != 0).any(0)
+            zero_events = first_events[~nonzero]
             unique, first_events, group_batches = (
                 unique[nonzero],
                 first_events[nonzero],
@@ -86,6 +87,7 @@ class _Tempotron(torch.autograd.Function):
             )
             grouped_weight = grouped_weight[:, nonzero]
         else:
+            zero_events = order
             unique = times64.new_empty(0)
             first_events = order
             group_batches = sorted_batches
@@ -363,6 +365,25 @@ class _Tempotron(torch.autograd.Function):
                 sorted_batches,
                 (times64[order, None] < spike_times[sorted_batches]).to(torch.int64),
             )
+        if zero_events.numel() and bool((peak_types == 1).any()):
+            branches = torch.full_like(peak_events, times.numel())
+            for start in range(0, zero_events.numel(), _BACKWARD_BLOCK_SIZE):
+                pos = zero_events[start : start + _BACKWARD_BLOCK_SIZE]
+                batch = event_batches[pos]
+                at_peak = (
+                    (peak_types[batch] == 1)
+                    & (times64[pos, None] == peak_times[batch])
+                    & (times64[pos, None] < spike_times[batch])
+                )
+                branches.scatter_reduce_(
+                    0,
+                    batch[:, None].expand(-1, output_count),
+                    torch.where(at_peak, pos[:, None], times.numel()),
+                    reduce="amin",
+                )
+            boundary = branches < times.numel()
+            peak_types = torch.where(boundary, 2, peak_types)
+            peak_events = torch.where(boundary, branches, peak_events)
         ctx.save_for_backward(
             times,
             indices,
