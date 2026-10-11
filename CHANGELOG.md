@@ -75,14 +75,19 @@ Modules: `spikingjelly.timing_based.functional`,
   finite observation windows, upward threshold crossings, and post-spike input
   shunting. It returns peak voltage, earliest peak time, and first-spike time.
 - Added first-order analytical autograd for weights and input event times on
-  CPU/CUDA FP32/FP64, using FP64 internally. This is an eager PyTorch mathematical
-  baseline with event-control synchronization, not a specialized GPU implementation.
+  CPU/CUDA FP32/FP64, using FP64 internally. Execution remains eager with
+  event-control synchronization.
 - Tempotron batches continuous intervals into bounded event blocks using local
   causal response matrices and aggregates simultaneous inputs once. Backward skips
-  unused output derivatives; no specialized kernel or time grid is introduced.
+  unused output derivatives without introducing a uniform time grid.
 - The MNIST Tempotron example calibrates peak logits to threshold units and adds
   a linear penalty for incorrect firing states, helping recover late input evidence
   hidden by premature shunting under raw peak cross-entropy.
+- Optional Triton CUDA operators fuse FP64 affine prefix-scan block states, threshold
+  root finding, and peak-voltage weight-only backward. Other gradient modes retain
+  the Torch reference; full-model fusion and CUDA Graph capture are not provided.
+- The MNIST example defaults to a maximum of 40 epochs; full 100-epoch
+  reproduction requires an explicit `--epoch 100`.
 - GaussianTuning now uses fixed receptive-field buffers and emits differentiable,
   continuous compact events without rounding or inactive placeholders.
 

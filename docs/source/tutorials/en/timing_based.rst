@@ -135,16 +135,28 @@ premature spikes can restore late evidence. Prediction still uses
 shunting nor internal autograd, and does not apply cross-entropy to ``t_spike``
 values containing ``inf``.
 
-This release uses eager PyTorch and internal FP64. Bounded event blocks evaluate
+The solver uses internal FP64 and eager execution. Bounded event blocks evaluate
 states, stationary points and first-upcrossing candidates across the entire batch;
 simultaneous inputs are aggregated once. Blocks contain up to 128 event groups on
 CPU and 512 on CUDA. Local time-difference matrices replace tiny per-event
-operations without a uniform time grid. Temporary matrix memory scales with batch
-size and squared block width: larger blocks trade memory for fewer launches.
+operations without a uniform time grid. Torch reference matrix memory scales with
+batch size and squared block width: larger blocks trade memory for fewer launches.
 Backward processes events across the batch, recomputing only required analytic
-derivatives, with unchanged saved-tensor sizes. CUDA still has block-level synchronization and no
-specialized GPU kernel. Full MNIST training requires its own evaluation; historical
+derivatives, with unchanged saved-tensor sizes. When Triton is installed, CUDA
+automatically uses fused FP64 kernels for affine prefix-scan block states, threshold
+roots and weight-only peak-voltage backward. The scan composes exact continuous
+voltage/current transitions in chronological order and uses linear block storage,
+avoiding the quadratic response matrices. It changes floating-point reduction
+order, without introducing temporal sampling. Other analytic derivatives use
+PyTorch. Without Triton, the same Torch reference runs on CUDA. Block-level synchronization remains;
+this is not a fused full-model implementation or CUDA Graph execution. Historical
 accuracy/speed do not describe the new dynamics.
+
+The example defaults to a maximum of 40 epochs; use ``--epoch 100`` for an explicit
+full reproduction. Two completed single-seed 100-epoch runs reached a test plateau
+by 20–40 epochs and continued fitting training data afterward. The shorter cap is
+an experiment budget, not a guarantee that every task converges by 40 epochs. Test
+accuracy does not drive early stopping or checkpoint selection.
 
 The new interface replaces integer T, ret_type, mse_loss, the old checkpoint
 wrapper and GaussianTuning.encode. Use the interfaces shown above.

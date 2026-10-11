@@ -59,9 +59,9 @@ parser.add_argument(
 parser.add_argument(
     "-N",
     "--epoch",
-    default=100,
+    default=40,
     type=int,
-    help='训练epoch，例如“100”\n Training epoch, e.g., "100"',
+    help="最大训练轮数，默认40；完整复现可显式设100 / Maximum epochs, default 40; use 100 explicitly for a full reproduction",
 )
 parser.add_argument(
     "-m",
@@ -101,8 +101,9 @@ def main() -> None:
     过大电压的需求。正确类别应发放、其他类别应沉默；仅对错误发放状态惩罚
     峰值与阈值的线性偏差，并按阈值归一化。抑制错误提前发放可以恢复后续证据。
     loss 在示例中定义，神经元内部不增加替代梯度或恢复规则。
+    默认最多训练40轮；完整100轮复现需显式指定 ``--epoch 100``。本示例不按测试集早停。
     记录 TensorBoard 指标，打印准确率并保存模型。时间单位由 duration 与神经元默认时间常数共同约定。
-    事件求解是 CPU/CUDA PyTorch 数学基线，完整训练可能较慢。
+    CPU 使用 PyTorch；安装 Triton 时 CUDA 自动选择融合算子，仍有块级同步。
 
     ----
 
@@ -118,9 +119,12 @@ def main() -> None:
     should fire and other classes remain silent; only misfiring outputs contribute
     their signed peak-to-threshold deviation, normalized by threshold. Suppressing
     false premature spikes can recover late evidence. No surrogate or recovery rule
-    is added inside the neuron. The example writes TensorBoard metrics, prints
+    is added inside the neuron. Training defaults to at most 40 epochs; explicitly
+    pass ``--epoch 100`` for a full reproduction. Test data does not drive early
+    stopping. The example writes TensorBoard metrics, prints
     accuracy and saves the model. Duration and default neuron time constants share time units.
-    CPU/CUDA event solving is a PyTorch mathematical baseline; full training may be slow.
+    CPU uses PyTorch; CUDA automatically selects fused operators when Triton is
+    installed and still has block-level synchronization.
     """
 
     args = parser.parse_args()
