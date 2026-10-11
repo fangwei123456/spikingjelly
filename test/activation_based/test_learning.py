@@ -1,5 +1,4 @@
 import gc
-import math
 
 import pytest
 import torch
@@ -807,21 +806,21 @@ def test_mnist_competition_mapping_and_checkpoint(tmp_path):
     )
     import copy
 
-    model = _SNN(4, 0.05, 0.5, 1.0)
+    model = _SNN(4, 0.05, 0.5, steps=100, covariance=torch.eye(784), device="cpu")
     baseline = copy.deepcopy(model)
-    node = model.sn.sub_module
-    node.v = torch.tensor([[3.0, 3.0, 0.5, 0.1], [0.1, 0.2, 0.3, 0.4]])
+    node = model.sn.sub_module[1]
+    node.v = torch.tensor([[0.03, 0.03, 0.005, 0.001], [0.001, 0.002, 0.003, 0.004]])
     spike = node.neuronal_fire()
     assert spike.tolist() == [[1.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]]
     node.neuronal_reset(spike)
-    torch.testing.assert_close(node.v[0], torch.tensor([0.0, 0.0, 0.5, 0.1]))
-    theta = node.theta.clone()
+    torch.testing.assert_close(node.v[0], torch.tensor([0.0, 0.0, 0.005, 0.001]))
+    bias = node.bias_current.clone()
     functional.reset_net(model.sn)
-    assert model.sn.y is None
-    torch.testing.assert_close(node.theta, theta)
+    assert model.sn.y is None and node.adaptation == 0
+    torch.testing.assert_close(node.bias_current, bias)
     model.eval()
     model(torch.ones(1, 784))
-    torch.testing.assert_close(node.theta, theta)
+    torch.testing.assert_close(node.bias_current, bias)
     functional.reset_net(model.sn)
     counts = torch.tensor([[2.0, 0.0, 0.0, 0.0], [0.0, 3.0, 0.0, 0.0]])
     labels = torch.tensor([1, 2])
@@ -838,19 +837,24 @@ def test_mnist_competition_mapping_and_checkpoint(tmp_path):
         assignments,
         {
             "neurons": 4,
-            "theta_plus": 0.05,
+            "steps": 100,
+            "model_kind": "current_stdp_mnist",
+            "input_encoding": "regular_if_uniform_phase",
+            "homeostasis_gain": 0.05,
             "inhibition": 0.5,
-            "v_threshold": 1.0,
+            "v_threshold": 0.01,
             "inhibition_tau": 5.0,
             "refractory_steps": 5,
-            "theta_initial": 1.0,
+            "bias_initial": 0.01,
         },
         1,
     )
     loaded, _ = _load_models(torch.load(path, weights_only=True), "cpu")
     torch.testing.assert_close(loaded.synapse.weight, model.synapse.weight)
-    torch.testing.assert_close(loaded.sn.sub_module.theta, model.sn.sub_module.theta)
-    assert loaded.sn.sub_module.v_threshold == model.sn.sub_module.v_threshold
+    torch.testing.assert_close(
+        loaded.sn.sub_module[1].bias_current, model.sn.sub_module[1].bias_current
+    )
+    assert loaded.sn.sub_module[1].v_threshold == model.sn.sub_module[1].v_threshold
     learner = learning.STDPLearner("s", model.synapse, model.sn, 20.0, 20.0)
     try:
         _run_batch(
@@ -1019,35 +1023,38 @@ def test_stdp_batch_sum_independent_oracle():
 def test_mnist_recurrent_inhibition_delay_and_reset():
     from spikingjelly.activation_based.examples.stdp_mnist import _SNN
 
-    model = _SNN(3, 0.05, 0.2, 1.0, theta_initial=0.0).eval()
-    node = model.sn.sub_module
+    model = _SNN(
+        3,
+        0.05,
+        0.2,
+        bias_initial=0.0,
+        steps=100,
+        covariance=torch.eye(784),
+        device="cpu",
+    ).eval()
+    node = model.sn.sub_module[1]
     with torch.no_grad():
-        first = model.sn(torch.tensor([[1.2, 0.6, 0.2, 0.0, 0.0, 0.0]]))
+        first = model.sn(torch.tensor([[12.0, 6.0, 2.0]]))
         torch.testing.assert_close(first, torch.tensor([[1.0, 0.0, 0.0]]))
-        torch.testing.assert_close(node.v, torch.tensor([[0.0, 0.6, 0.2]]))
-        second = model.sn(torch.zeros(1, 6))
+        torch.testing.assert_close(
+            node.v, torch.tensor([[0.0, -0.0013333333, -0.0093333333]])
+        )
+        second = model.sn(torch.zeros(1, 3))
         torch.testing.assert_close(second, torch.zeros(1, 3))
         torch.testing.assert_close(
-            node.v,
-            torch.tensor([[0.0, 0.394 / 1.2, -0.002 / 1.2]]),
-            atol=1e-6,
-            rtol=1e-5,
+            model.sn.sub_module[0].current,
+            torch.tensor([[0.8533333, -0.1466667, -0.7866667]]),
         )
-        torch.testing.assert_close(node.conductance, torch.tensor([[0.0, 0.2, 0.2]]))
-        model.sn(torch.zeros(1, 6))
         torch.testing.assert_close(
-            node.conductance, torch.tensor([[0.0, 0.2, 0.2]]) * math.exp(-1 / 5)
+            node.v, torch.tensor([[0.0, -0.0027866667, -0.0171066667]])
         )
         functional.reset_net(model.sn)
-        assert model.sn.y is None and node.v == 0.0
-        assert node.conductance == 0.0 and node.refractory == 0.0
-        torch.testing.assert_close(
-            model.sn(torch.tensor([[1.2, 0.6, 0.2, 0.0, 0.0, 0.0]])), first
-        )
-    recurrent = model.sn.rc.weight[3:, 6:]
-    torch.testing.assert_close(recurrent.diagonal(), torch.zeros(3))
-    assert torch.all(recurrent[~torch.eye(3, dtype=torch.bool)] == 0.2)
-    assert not model.sn.rc.weight.requires_grad
+        assert model.sn.y is None and node.v == 0
+        assert node.adaptation == 0 and node.refractory == 0
+        assert model.sn.sub_module[0].current == 0
+        torch.testing.assert_close(model.sn(torch.tensor([[12.0, 6.0, 2.0]])), first)
+    assert model.sn.element_wise_function.inhibition == 0.2
+    assert not any(p.requires_grad for p in model.parameters())
 
 
 def test_recurrent_mnist_preserves_feedforward_seed_initialization():
@@ -1059,7 +1066,7 @@ def test_recurrent_mnist_preserves_feedforward_seed_initialization():
         expected.weight.uniform_(0, 1)
         expected.weight.mul_(78.4 / expected.weight.sum(1, keepdim=True))
     torch.manual_seed(0)
-    actual = _SNN(4, 0.05, 0.5)
+    actual = _SNN(4, 0.05, 0.5, steps=100, covariance=torch.eye(784), device="cpu")
     torch.testing.assert_close(actual.synapse.weight, expected.weight, rtol=0, atol=0)
 
 
@@ -1067,33 +1074,35 @@ def test_mnist_cli_inhibition_and_refractory_contract():
     from spikingjelly.activation_based.examples.stdp_mnist import _SNN, _parser
 
     args = _parser().parse_args(
-        ["--inhibition", "5", "--inhibition-tau", "2", "--theta-initial", "0"]
+        ["--inhibition", "5", "--inhibition-tau", "2", "--bias-initial", "0"]
     )
     model = _SNN(
         2,
-        args.theta_plus,
+        args.homeostasis_gain,
         args.inhibition,
         args.v_threshold,
         args.inhibition_tau,
         args.refractory_steps,
-        args.theta_initial,
+        args.bias_initial,
+        steps=100,
+        covariance=torch.eye(784),
+        device="cpu",
     ).eval()
-    node = model.sn.sub_module
-    assert model.sn.rc.weight[2, 5].item() == 5
-    assert node.inhibition_decay == math.exp(-0.5)
+    node = model.sn.sub_module[1]
+    assert model.sn.element_wise_function.inhibition == 5
+    assert model.sn.sub_module[0].tau == 2
     with torch.no_grad():
-        first = model.sn(torch.tensor([[1.2, 1.2, 0.0, 0.0]]))
+        first = node(torch.tensor([[1.2, 1.2]]))
         assert first.tolist() == [[1.0, 1.0]]
         for _ in range(args.refractory_steps):
-            output = model.sn(torch.tensor([[100.0, 100.0, 0.0, 0.0]]))
-            assert not output.any()
-        assert model.sn(torch.tensor([[100.0, 100.0, 0.0, 0.0]])).all()
+            assert not node(torch.tensor([[100.0, 100.0]])).any()
+        assert node(torch.tensor([[100.0, 100.0]])).all()
 
 
 def test_mnist_frozen_evaluation_preserves_model_and_records():
     from spikingjelly.activation_based.examples.stdp_mnist import _SNN, _run_batch
 
-    model = _SNN(4, 0.5, 1.0).eval()
+    model = _SNN(4, 0.5, 1.0, steps=100, covariance=torch.eye(784), device="cpu").eval()
     learner = learning.STDPLearner("s", model.synapse, model.sn, 20.0, 20.0)
     learner.disable()
     before = {key: value.clone() for key, value in model.state_dict().items()}
@@ -1104,8 +1113,100 @@ def test_mnist_frozen_evaluation_preserves_model_and_records():
         assert not learner.in_spike_monitor.records
         assert not learner.out_spike_monitor.records
         assert model.sn.y is None
-        assert model.sn.sub_module.conductance == 0
-        assert model.sn.sub_module.refractory == 0
+        assert model.sn.sub_module[0].current == 0
+        assert model.sn.sub_module[1].adaptation == 0
+        assert model.sn.sub_module[1].refractory == 0
         assert all(parameter.grad is None for parameter in model.parameters())
     finally:
         learner.close()
+
+
+def test_mnist_intrinsic_current_independent_state_oracle():
+    import math
+    from spikingjelly.activation_based.examples.stdp_mnist import _AdaptiveLIFNode
+
+    node = _AdaptiveLIFNode(3, 0.0004, 0.01, 5, 0.0, 700).double()
+    voltage = torch.zeros(2, 3, dtype=torch.float64)
+    adaptation, refractory = voltage.clone(), voltage.clone()
+    bias = torch.zeros(3, dtype=torch.float64)
+    rng = torch.Generator().manual_seed(42)
+    with torch.no_grad():
+        for _ in range(100):
+            current = torch.randn(2, 3, generator=rng, dtype=torch.float64) * 0.2 + 0.1
+            voltage = voltage + (current + bias - adaptation - voltage) / 100
+            voltage = torch.where(refractory > 0, 0.0, voltage)
+            spike = ((voltage >= 0.01) & (refractory <= 0)).to(voltage)
+            voltage = voltage * (1 - spike)
+            refractory = torch.where(spike.bool(), 5, (refractory - 1).clamp_min(0))
+            adaptation = math.exp(-1 / 200) * adaptation + 0.01 * spike
+            bias = bias + 0.0004 * (120 / (3 * 700) - spike.mean(0))
+            actual = node(current)
+            torch.testing.assert_close(actual, spike, rtol=0, atol=0)
+            for a, b in (
+                (node.v, voltage),
+                (node.adaptation, adaptation),
+                (node.refractory, refractory),
+                (node.bias_current, bias),
+            ):
+                torch.testing.assert_close(a, b, rtol=1e-10, atol=1e-12)
+                assert a.grad_fn is None
+    saved = node.bias_current.clone()
+    functional.reset_net(node)
+    torch.testing.assert_close(node.bias_current, saved, rtol=0, atol=0)
+    assert node.v == 0 and node.adaptation == 0 and node.refractory == 0
+
+
+def test_mnist_covariance_and_gain_constraint():
+    from spikingjelly.activation_based.examples.stdp_mnist import (
+        _SNN,
+        _training_covariance,
+    )
+
+    pixels = torch.zeros(4, 28, 28, dtype=torch.uint8)
+    pixels[:, 0, 0] = torch.tensor([0, 85, 170, 255], dtype=torch.uint8)
+    pixels[:, 0, 1] = torch.tensor([255, 0, 85, 170], dtype=torch.uint8)
+    indices = torch.tensor([1, 3, 0])
+    actual = _training_covariance(pixels, indices)
+    x = pixels[indices].flatten(1).double() / 255
+    centered = x - sum(x) / len(x)
+    expected = sum(row[:, None] * row[None, :] for row in centered) / (len(x) - 1)
+    torch.testing.assert_close(actual.double(), expected, rtol=1e-5, atol=1e-6)
+    model = _SNN(4, 0.05, 0.2, steps=100, covariance=torch.eye(784), device="cpu")
+    initial = model.synapse.weight.detach().double()
+    reference = (initial - initial.mean(0)).square().sum(1)
+    with torch.no_grad():
+        model.synapse.weight[:, :10].mul_(1.2)
+        model.refresh_gain()
+    weights = model.synapse.weight.detach().double()
+    variance = (weights - weights.mean(0)).square().sum(1)
+    gain = model.sn.element_wise_function.input_gain.double()
+    torch.testing.assert_close(
+        gain.square() * variance, reference, rtol=1e-5, atol=1e-6
+    )
+
+
+def test_mnist_regular_input_counts_and_legacy_checkpoint_rejection():
+    from spikingjelly.activation_based.examples.stdp_mnist import (
+        _SNN,
+        _run_batch,
+        _load_models,
+    )
+
+    model = _SNN(
+        4, 0.05, 0.2, steps=700, covariance=torch.eye(784), device="cpu"
+    ).eval()
+    images = torch.rand(2, 28, 28)
+    images[:, 0, 0] = 0
+    seen = []
+    handle = model.synapse.register_forward_pre_hook(
+        lambda _, args: seen.append(args[0].detach().clone())
+    )
+    try:
+        _run_batch(model, images, 700, torch.Generator().manual_seed(42))
+    finally:
+        handle.remove()
+    incoming = sum(seen)
+    assert ((incoming - images.flatten(1) * 0.064 * 700).abs() <= 1.0001).all()
+    assert incoming[:, 0].eq(0).all()
+    with pytest.raises(ValueError, match="archived"):
+        _load_models({"config": {"inhibition_kind": "conductance"}}, "cpu")

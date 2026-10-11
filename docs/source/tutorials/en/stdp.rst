@@ -119,100 +119,124 @@ only demonstrates additive update wiring, not task effectiveness:
 
 
 Complete MNIST example
-------------------------
+----------------------
 
-``stdp_mnist`` uses a bias-free 784→400 feedforward layer and adaptive LIF neurons.
-All trainable feedforward weights learn through STDP, without backward,
-pretraining or a trainable readout; recurrent connections are fixed.
-Competition comes from inhibitory conductance delayed by one step, without
-argmax winner selection. Neurons independently cross threshold and reset only
-their own voltage; multiple neurons may fire together. A firing neuron's
-refractory period applies only to that neuron, without resetting its neighbors.
+``stdp_mnist`` uses a bias-free 784→3200 feedforward layer, identical current LIF neurons,
+and ``ElementWiseRecurrentContainer``. Feedforward weights start randomly and use the
+existing ``STDPLearner`` plus explicit weight constraints, without gradients, pretraining
+or a trainable readout. Fixed negative recurrent currents provide soft competition.
+Multiple neurons can fire together; there is no single-winner filter or neighbor reset.
 
-Existing ``LinearRecurrentContainer`` receives concatenated ``[I_ff, 0]`` and
-outputs separate excitatory current and inhibitory conductance increments.
-Recurrent matrix R has zero diagonal and positive off-diagonal magnitude g;
-it sums other neurons' previous spikes and supplies negative feedback through
-the inhibitory conductance channel. The child neuron stores conductance G and
-refractory counter r, with these discrete dynamics:
+Model and local adaptation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For input spikes x and feedforward current z=Wx:
 
 .. math::
 
-    G[t] &= e^{-1/\tau_{inh}}G[t-1] + R s[t-1] \\
-    H[t] &= \frac{0.99V[t-1]+I_{ff}[t]-G[t]}{1+G[t]} \\
-    s_j[t] &= \mathbf{1}\{H_j[t]\ge 1+\theta_j^{-}[t],\ r_j[t-1]=0\}.
+    U_j[t] &= g_j\left(z_j[t]-\frac{1}{N}\sum_k z_k[t]\right)
+      -a\left(\sum_k s_k[t-1]-s_j[t-1]\right),\\
+    I_j[t] &= I_j[t-1]+\frac{U_j[t]-I_j[t-1]}{5},\\
+    H_j[t] &= V_j[t-1]+\frac{I_j[t]+B_j[t-1]-A_j[t-1]-V_j[t-1]}{100}.
 
-Refractory neurons stay at voltage 0 without firing. Others continue integrating,
-and firing neurons reset themselves to 0. The inhibitory reversal potential is
--1; implicit conductance integration avoids Euler overshoot under strong
-inhibition. Time is measured in simulation steps, with membrane time constant
-100. During training the comparison offset is first
-``theta_minus=exp(-1/1e5)*theta``; after firing, mean batch spikes increase it
-to obtain the offset retained for the next step. Initial offsets are independently uniform in
-``[0, theta_initial)``, breaking equal-threshold symmetry. These simplified
-teaching dynamics are not a Diehl–Cook paper reproduction.
+This is ordinary SJ ``SimpleLIFNode(tau=100, decay_input=True)`` current integration.
+The base threshold is 0.01, own reset is zero, and own refractory period is five steps;
+only the neuron's own voltage is held during its refractory period. Signed currents
+can produce negative voltage; no voltage floor or conductance denominator is used.
+Population-mean subtraction suppresses common drive within each sample. Recurrent
+inhibition depends only on other neurons' previous-step spikes.
 
-Each batch uses ``functional.reset_net`` to clear recurrent output, voltage,
-conductance and refractory counters, then resets STDP traces. Threshold offsets
-persist. Assignment and evaluation freeze weights and offsets and disable
-monitor recording while simulating the same neuron dynamics. Fixed seeds control
-initialization and encoding.
+Every neuron has the same parameters; its history produces different adaptive states:
 
-Split seed 42 divides training data into 50,000 unlabeled learning images,
-5,000 assignment images and 5,000 validation images. The official 10,000 test
-images are evaluated after recipe freezing. Labels never enter weight learning.
-Neuron assignment uses its mean spikes per class; classification averages spikes
-of assigned neurons per class. Samples without valid activity count as errors.
-The frozen-feedforward control uses identical initialization, input spikes,
-recurrence and threshold-update rules, with a separate fixed assignment.
+.. math::
+
+    A_j[t] &= \exp(-1/200)A_j[t-1]+0.01s_j[t],\\
+    B_j[t] &= B_j[t-1]+\eta_B\left(\frac{120}{NT}
+        -\frac{1}{M}\sum_{n=1}^{M}s_{nj}[t]\right).
+
+A is fast own-spike adaptation current, reducing repeated responses. B is a slow signed
+intrinsic excitability current, using unlabeled local rate error to adjust participation.
+M is actual batch size, N neuron count, and T sample duration. B starts uniformly in
+[-0.01,0] and freezes after training. This is engineering homeostasis, not an exact
+biophysical channel model, global stability theorem, or guarantee of exact target rate
+while weights change. Positive B may permit spontaneous activity; sparsity and balanced
+mean rates do not substitute for task accuracy.
+
+Input gain updates at the end of each training batch. C is the pixel sample covariance
+of the fixed split-seed42 learning 50,000 images, without labels. With
+``f_j=W_j-mean(W,dim=0)``:
+
+.. math::
+
+    \sigma_j^2=f_j C f_j^\top,\qquad
+    g_j=\sqrt{\sigma_{j,\mathrm{initial}}^2/\sigma_j^2}.
+
+This preserves each initial random projected-current variance scale, reducing operating
+point drift from weight learning. Degenerate/nonfinite variance fails explicitly. C,
+initial reference variance and gain are saved in the checkpoint and frozen in evaluation.
+This is an unlabeled training-data constraint, not task gradients or test-statistic adaptation.
+
+Encoding, plasticity and readout
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Input uses ordinary ``SimpleIFNode(v_threshold=1, v_reset=None)`` with an independent
+uniform initial phase in [0,1) per sample/pixel. Each step adds ``pixel*0.064`` and applies
+own soft reset. Across 700 steps, pixel counts differ from expectation by at most about
+one spike. Regular firing reduces count noise and changes temporal correlations; mean
+rate preservation does not imply identical Poisson learning trajectories.
+
+Pre/post STDP traces both use 20 steps and include the current events.
+``f_pre=nu*weight`` and ``f_post=nu*(1-weight)``, with default nu=0.00229619779275505.
+Each step returns ``step(on_grad=False, scale=1/actual_batch_size)`` and directly adds
+its delta to weights, without averaging time. Weights are clipped to [0,1], normalized
+to row sum 78.4, then clipped again. Writing ``.grad`` elsewhere remains an optimizer
+delivery channel; this example does not use it.
+
+Batches clear voltage, A, refractory/filter state, recurrent output and STDP traces,
+retaining B, weights and gain. Assignment/evaluation freeze every persistent learning
+state while fast dynamics continue. Labels only provide post-training statistical neuron
+class assignment and metrics. Each neuron receives its highest mean-count class;
+nonfiring neurons remain unassigned. Predictions average raw counts across assigned
+neurons per class; all-zero scores are unclassified and counted as errors.
+
+Fixed data protocol: learning 50,000, assignment 5,000, validation 5,000, official test 10,000.
+Defaults are one epoch, batch 32, 700 steps. Negative recurrent strength a is
+0.09978118161925603; ``--homeostasis-gain`` is 0.007774997243242785,
+``--bias-initial`` is 0.01 and native ``--v-threshold`` is 0.01. Time constants are in
+simulation steps; current-filter tau is at least one.
 
 .. code-block:: bash
 
-    uv run python -m spikingjelly.activation_based.examples.stdp_mnist \
-        --device cuda:0 --download --seed 0 \
-        --output-dir logs/plasticity/conductance/seed-0
-    uv run python -m spikingjelly.activation_based.examples.stdp_mnist \
-        --device cuda:0 --checkpoint logs/plasticity/conductance/seed-0/selected.pt \
-        --output-dir logs/plasticity/conductance/seed-0
+    uv run --no-sync python -m spikingjelly.activation_based.examples.stdp_mnist \
+        --device cuda:0 --seed 0 --data-dir logs/plasticity/data --download \
+        --output-dir logs/plasticity/current/seed-0
+    uv run --no-sync python -m spikingjelly.activation_based.examples.stdp_mnist \
+        --device cuda:0 --checkpoint logs/plasticity/current/seed-0/selected.pt \
+        --data-dir logs/plasticity/data --output-dir logs/plasticity/current/seed-0
 
-Defaults are 700 steps, batch 32 and one epoch; spike probability ``pixel*0.064``,
-base threshold 1, inhibitory increment 1, conductance time constant 5,
-refractory period 5 and initial offset upper bound 1. Pre/post STDP trace time
-constants are 20, LTD modulation is ``1e-4*weight``, LTP modulation is
-``0.02*(1-weight)``, and threshold increment coefficient is 0.5. Updates divide
-by actual batch size without time averaging. Initialization is positive uniform
-random weights, with target row sum 78.4. Each update clamps to ``[0,1]``,
-normalizes rows, then clamps to ``[0,1]`` again.
+Use the same defaults and one epoch with ``--seed`` 1/2 and separate directories.
+``--checkpoint`` uses saved dynamics/mapping without reassignment or training;
+replaying results does not require retraining. Small sample-count options are smoke
+checks, not evidence of complete-test performance.
 
-``--inhibition``, ``--inhibition-tau`` and ``--refractory-steps`` configure feedback;
-``--v-threshold``, ``--theta-plus`` and ``--theta-initial`` configure thresholds.
-The conductance time constant must be finite and positive; refractory steps are
-a nonnegative integer, and the initial offset bound is finite and nonnegative.
-``--inhibition 0`` disables feedback; zero refractory steps allow spikes on
-adjacent steps. Use ``--epochs`` and ``--select-best`` to compare epochs using
-validation only, breaking ties in favor of earlier epochs. Other seeds use the
-same frozen epoch count. Small sample-count options are for smoke checks and
-cannot prove full-test accuracy. ``--checkpoint`` restores saved dynamics,
-encoding and assignments without training or reassignment. Former hard-winner,
-negative-current or non-unit-step experimental checkpoints are unsupported;
-use archived experiment source or retrain. New output goes to the separate
-``logs/plasticity/conductance`` directory.
+Migration and measured results
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Validation status
-----------------------
+This replaces the previous conductance example. ``--theta-plus`` and ``--theta-initial``
+become native-current ``--homeostasis-gain`` and ``--bias-initial``. Old conductance/hard
+competition checkpoints are not loaded automatically; use their archived source.
+Legacy fields of the measured current experiment undergo a one-off explicit configuration
+conversion, keeping all tensors/maps unchanged. There is no permanent compatibility
+branch. New output uses ``logs/plasticity/current`` separately from old conductance experiments; use a fresh directory for repeated runs.
 
-Recipe selection used validation only. Three full-training candidates were
-``(theta_plus, ltp)=(0.2,0.01), (0.5,0.01), (0.5,0.02)``. Each completed two
-epochs, then stopped during the third at its experiment budget; incomplete
-states were excluded from selection. Their best validation accuracies were
-85.82%, 87.00% and 87.20%; the last recipe's first-epoch checkpoint was selected.
-Its mean receptive-field cosine similarity was about 0.744, with 134/400 neurons
-assigned to digit 8, versus about 0.959 and 352/400 in earlier short training
-with weak homeostasis. These diagnostics suggest better specialization but
-cannot replace task acceptance. The full tests below used frozen models and class assignments, all 10,000
-samples per seed, and no recipe selection or seed omission based on test results.
+Independent validation selected the recipe and one epoch: same-width Poisson full
+training gave 88.76%; IF evaluation of that frozen model gave 89.16%; fresh IF short
+training gave 86.72%/control 82.94%; fresh IF full training gave 89.58%/control 83.04%.
+These are distinct stages, not interchangeable descriptions of one run. Seeds 1/2
+then trained from scratch with the same frozen recipe/epoch count. All three models/maps
+were fixed before official testing; test scores did not tune the recipe or exclude seeds.
 
-.. list-table:: Full MNIST tests with conductance competition
+.. list-table:: Full MNIST tests: regular IF input and current LIF
    :header-rows: 1
 
    * - Seed
@@ -220,31 +244,26 @@ samples per seed, and no recipe selection or seed omission based on test results
      - Frozen feedforward control
      - Difference (percentage points)
    * - 0
-     - 87.51%
-     - 29.89%
-     - +57.62
+     - 90.63%
+     - 84.01%
+     - +6.62
    * - 1
-     - 86.66%
-     - 29.56%
-     - +57.10
+     - 89.98%
+     - 83.20%
+     - +6.78
    * - 2
-     - 85.88%
-     - 28.70%
-     - +57.18
+     - 90.06%
+     - 84.06%
+     - +6.00
 
-Mean accuracy is **86.68%**, with sample standard deviation
-**0.82 percentage points**. The mean exceeds the 85% gate,
-and every seed also exceeds 85%. Every test sample produced activity. The
-environment was Python 3.11.14, PyTorch 2.7.1+cu118, torchvision 0.22.1+cu118;
-formal tests ran on g2 A100-SXM4-80GB GPUs. These results support this shallow
-recipe, not arbitrary deep-network training with pure STDP.
-
-Repeat the commands with ``--seed`` 1 and 2 and separate output directories,
-keeping the same default recipe and one epoch. Checkpoints save weights,
-threshold offsets, class assignments and configuration; environment metadata
-and metrics are stored in JSON. Independent evaluation does not require retraining. Recipe-search, failed-run
-and acceptance ledgers are retained in experiment output directories. No silent
-sample retries or automatic input-intensity increases were introduced.
+Mean accuracy is **90.2233%**, population standard deviation **0.2894 percentage points**,
+and mean paired improvement **6.4667 percentage points**. Every seed uses all 10,000 test
+samples. One silent seed 0 sample is counted as an error. Environment: Python 3.11.14,
+PyTorch 2.7.1+cu118, torchvision 0.22.1+cu118, V100S-PCIE-32GB testing.
+These measured shallow-recipe results are not a Diehl–Cook paper reproduction or a
+claim about arbitrary deep pure-STDP networks. Raw JSON/config/checkpoints/source hashes
+and commands are retained. Migration requires same-checkpoint numerical and full
+evaluation verification.
 
 
 References

@@ -1,6 +1,6 @@
-"""Shallow MNIST STDP with recurrent inhibitory conductance.
+"""Shallow MNIST STDP with current LIF and local neuronal adaptation.
 
-浅层 MNIST STDP 与层内循环抑制电导；标签仅用于学习后的类别指派。
+浅层 MNIST STDP 与电流 LIF、层内循环抑制；标签仅用于学习后的类别指派。
 """
 
 import argparse
@@ -16,96 +16,151 @@ import torch
 import torch.nn as nn
 import torchvision
 
-from spikingjelly.activation_based import functional, layer, learning, neuron
+from spikingjelly.activation_based import base, functional, layer, learning, neuron
 
 
 class _AdaptiveLIFNode(neuron.SimpleLIFNode):
     def __init__(
         self,
         neurons: int,
-        theta_plus: float,
+        homeostasis_gain: float,
         v_threshold: float,
-        inhibition_tau: float,
         refractory_steps: int,
-        theta_initial: float,
+        bias_initial: float,
+        steps: int,
     ):
-        super().__init__(tau=100.0, decay_input=False, v_threshold=v_threshold)
-        self.register_buffer("theta", torch.rand(neurons) * theta_initial)
-        self.theta_plus = theta_plus
-        self.inhibition_decay = math.exp(-1 / inhibition_tau)
+        super().__init__(tau=100.0, decay_input=True, v_threshold=v_threshold)
+        bias = (
+            -torch.rand(neurons) / (1 / bias_initial)
+            if bias_initial
+            else torch.zeros(neurons)
+        )
+        self.register_buffer("bias_current", bias)
+        self.homeostasis_gain = homeostasis_gain
+        self.target_rate = 120 / (neurons * steps)
         self.refractory_steps = refractory_steps
-        self.register_memory("conductance", 0.0)
+        self.register_memory("adaptation", 0.0)
         self.register_memory("refractory", 0.0)
 
     def neuronal_charge(self, x: torch.Tensor) -> None:
-        excitatory, inhibitory = x.chunk(2, dim=-1)
-        if self.training:
-            self.theta.mul_(math.exp(-1 / 1e5))
-        self.conductance = self.conductance * self.inhibition_decay + inhibitory
-        # Implicit inhibition approaches reversal -1 without Euler overshoot.
-        self.v = (0.99 * self.v + excitatory - self.conductance) / (
-            1 + self.conductance
-        )
+        super().neuronal_charge(x + self.bias_current - self.adaptation)
         self.v = torch.where(
             torch.as_tensor(self.refractory, device=x.device) > 0, 0.0, self.v
         )
 
     def neuronal_fire(self) -> torch.Tensor:
         return (
-            (self.v >= self.v_threshold + self.theta)
+            (self.v >= self.v_threshold)
             & (torch.as_tensor(self.refractory, device=self.v.device) <= 0)
         ).to(self.v)
 
     def neuronal_reset(self, spike: torch.Tensor) -> None:
         super().neuronal_reset(spike)
-        previous = torch.as_tensor(self.refractory, device=spike.device)
+        previous = torch.as_tensor(
+            self.refractory, device=spike.device, dtype=spike.dtype
+        )
         self.refractory = torch.where(
             spike.bool(), self.refractory_steps, (previous - 1).clamp_min(0)
         )
+        self.adaptation = math.exp(-1 / 200) * self.adaptation + 0.01 * spike
         if self.training:
-            self.theta.add_(spike.mean(0), alpha=self.theta_plus)
+            self.bias_current.add_(
+                self.target_rate - spike.mean(0), alpha=self.homeostasis_gain
+            )
+
+
+class _CurrentFilter(base.MemoryModule):
+    def __init__(self, tau):
+        super().__init__()
+        self.tau = tau
+        self.register_memory("current", 0.0)
+
+    def single_step_functional_forward(self, inputs, states, **kwargs):
+        current = states[0] + (inputs[0] - states[0]) / self.tau
+        return (current,), (current,)
+
+
+class _PopulationCurrent(nn.Module):
+    def __init__(self, neurons, inhibition):
+        super().__init__()
+        self.inhibition = inhibition
+        self.register_buffer("input_gain", torch.ones(neurons))
+
+    def forward(self, previous, current):
+        if previous.shape != current.shape:
+            raise ValueError("Recurrent batch shape changed; reset before reuse.")
+        return self.input_gain * (
+            current - current.mean(-1, keepdim=True)
+        ) - self.inhibition * (previous.sum(-1, keepdim=True) - previous)
 
 
 class _SNN(nn.Module):
     def __init__(
         self,
         neurons: int,
-        theta_plus: float,
+        homeostasis_gain: float,
         inhibition: float,
-        v_threshold: float = 1.0,
+        v_threshold: float = 0.01,
         inhibition_tau: float = 5.0,
         refractory_steps: int = 5,
-        theta_initial: float = 1.0,
+        bias_initial: float = 0.01,
+        *,
+        steps: int,
+        covariance: torch.Tensor,
+        device: str,
     ):
         super().__init__()
         self.synapse = nn.Linear(784, neurons, bias=False)
         with torch.no_grad():
             self.synapse.weight.uniform_(0, 1)
             self.synapse.weight.mul_(78.4 / self.synapse.weight.sum(1, keepdim=True))
-        self.sn = layer.LinearRecurrentContainer(
-            _AdaptiveLIFNode(
-                neurons,
-                theta_plus,
-                v_threshold,
-                inhibition_tau,
-                refractory_steps,
-                theta_initial,
+        self.sn = layer.ElementWiseRecurrentContainer(
+            nn.Sequential(
+                _CurrentFilter(inhibition_tau),
+                _AdaptiveLIFNode(
+                    neurons,
+                    homeostasis_gain,
+                    v_threshold,
+                    refractory_steps,
+                    bias_initial,
+                    steps,
+                ),
             ),
-            2 * neurons,
-            neurons,
-            bias=False,
+            _PopulationCurrent(neurons, inhibition),
         )
         self.requires_grad_(False)
-        with torch.no_grad():
-            self.sn.rc.weight.zero_()
-            self.sn.rc.weight[:neurons, :neurons].copy_(torch.eye(neurons))
-            recurrent = self.sn.rc.weight[neurons:, 2 * neurons :]
-            recurrent.fill_(inhibition)
-            recurrent.diagonal().zero_()
+        self.to(device)
+        self.register_buffer(
+            "pixel_covariance",
+            covariance.to(device=device, dtype=self.synapse.weight.dtype),
+        )
+        self.register_buffer("reference_input_variance", self.input_variance().clone())
+        self.refresh_gain()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        current = self.synapse(x)
-        return self.sn(torch.cat((current, torch.zeros_like(current)), dim=-1))
+        return self.sn(self.synapse(x))
+
+    @torch.no_grad()
+    def input_variance(self):
+        w = self.synapse.weight
+        field = w - w.mean(0, keepdim=True)
+        return (field @ self.pixel_covariance * field).sum(1)
+
+    @torch.no_grad()
+    def refresh_gain(self):
+        variance = self.input_variance()
+        if not torch.isfinite(variance).all() or (variance <= 0).any():
+            raise RuntimeError("Degenerate projected input variance; stop training.")
+        self.sn.element_wise_function.input_gain.copy_(
+            (self.reference_input_variance / variance).sqrt()
+        )
+
+
+@torch.no_grad()
+def _training_covariance(pixels, learning_indices):
+    x = pixels[learning_indices].flatten(1).float() / 255
+    x = x - x.mean(0)
+    return x.T @ x / (len(x) - 1)
 
 
 def _predict(counts: torch.Tensor, assignment: torch.Tensor) -> torch.Tensor:
@@ -134,11 +189,10 @@ def _run_batch(model, images, steps, generator, learner=None, baseline=None):
     counts = images.new_zeros((len(images), model.synapse.out_features))
     baseline_counts = torch.zeros_like(counts) if baseline is not None else None
     probability = images.flatten(1) * 0.064
+    encoder = neuron.SimpleIFNode(v_threshold=1.0, v_reset=None).to(images.device)
+    encoder.v = torch.rand(probability.shape, device=images.device, generator=generator)
     for _ in range(steps):
-        spikes = (
-            torch.rand(probability.shape, device=images.device, generator=generator)
-            < probability
-        ).to(images)
+        spikes = encoder(probability)
         counts.add_(model(spikes))
         if baseline is not None:
             baseline_counts.add_(baseline(spikes))
@@ -148,9 +202,12 @@ def _run_batch(model, images, steps, generator, learner=None, baseline=None):
             weight.add_(dw).clamp_(0, 1)
             weight.mul_(78.4 / weight.sum(1, keepdim=True).clamp_min(1e-12))
             weight.clamp_(0, 1)
-    functional.reset_net(model.sn)
     if learner is not None:
+        model.refresh_gain()
+        if baseline is not None:
+            baseline.refresh_gain()
         learner.reset()
+    functional.reset_net(model.sn)
     if baseline is not None:
         functional.reset_net(baseline.sn)
     return counts, baseline_counts
@@ -196,44 +253,28 @@ def _save_checkpoint(
 def _load_models(checkpoint, device):
     config = checkpoint["config"]
     if (
-        not all(
-            key in config
-            for key in (
-                "inhibition",
-                "v_threshold",
-                "inhibition_tau",
-                "refractory_steps",
-                "theta_initial",
-            )
-        )
-        or config.get("time_step", 1.0) != 1.0
+        config.get("model_kind") != "current_stdp_mnist"
+        or config.get("input_encoding") != "regular_if_uniform_phase"
     ):
         raise ValueError(
-            "Checkpoint must use inhibitory conductance at unit time steps; use the archived experiment source or retrain."
+            "Current STDP MNIST checkpoint required; use archived source for old experiments."
         )
     model = _SNN(
         config["neurons"],
-        config["theta_plus"],
+        config["homeostasis_gain"],
         config["inhibition"],
         config["v_threshold"],
         config["inhibition_tau"],
         config["refractory_steps"],
-        config["theta_initial"],
-    ).to(device)
-    baseline = _SNN(
-        config["neurons"],
-        config["theta_plus"],
-        config["inhibition"],
-        config["v_threshold"],
-        config["inhibition_tau"],
-        config["refractory_steps"],
-        config["theta_initial"],
-    ).to(device)
+        config["bias_initial"],
+        steps=config["steps"],
+        covariance=checkpoint["model"]["pixel_covariance"],
+        device=device,
+    )
+    baseline = copy.deepcopy(model)
     model.load_state_dict(checkpoint["model"])
     baseline.load_state_dict(checkpoint["baseline"])
-    model.eval()
-    baseline.eval()
-    return model, baseline
+    return model.eval(), baseline.eval()
 
 
 def _parser():
@@ -241,30 +282,30 @@ def _parser():
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--data-dir", type=Path, default=Path("logs/plasticity/data"))
     parser.add_argument(
-        "--output-dir", type=Path, default=Path("logs/plasticity/conductance/mnist")
+        "--output-dir", type=Path, default=Path("logs/plasticity/current/mnist")
     )
     parser.add_argument("--download", action="store_true")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--neurons", type=int, default=400)
+    parser.add_argument("--neurons", type=int, default=3200)
     parser.add_argument("--steps", type=int, default=700)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--epochs", type=int, default=1)
-    parser.add_argument("--ltp", type=float, default=0.02)
-    parser.add_argument("--theta-plus", type=float, default=0.5)
+    parser.add_argument("--ltp", type=float, default=0.00229619779275505)
+    parser.add_argument("--homeostasis-gain", type=float, default=0.007774997243242785)
     parser.add_argument("--inhibition-tau", type=float, default=5.0)
     parser.add_argument("--refractory-steps", type=int, default=5)
-    parser.add_argument("--theta-initial", type=float, default=1.0)
+    parser.add_argument("--bias-initial", type=float, default=0.01)
     parser.add_argument(
         "--v-threshold",
         type=float,
-        default=1.0,
-        help="Base membrane firing threshold.",
+        default=0.01,
+        help="Base membrane firing threshold in native voltage units.",
     )
     parser.add_argument(
         "--inhibition",
         type=float,
-        default=1.0,
-        help="Fixed off-diagonal conductance increment; zero disables feedback.",
+        default=0.09978118161925603,
+        help="Fixed negative recurrent current strength; zero disables feedback.",
     )
     parser.add_argument("--train-samples", type=int, default=50000)
     parser.add_argument("--calibration-samples", type=int, default=5000)
@@ -296,11 +337,14 @@ def main() -> None:
     从命令行训练或评估浅层 MNIST STDP 网络。训练不使用标签或梯度；
     训练集标签仅用于学习后固定的神经元类别指派。``--checkpoint`` 只评估
     冻结模型；其余参数和数据划分见 STDP 教程。输出 checkpoint 和 JSON 指标。
-    循环抑制电导延迟一个时间步，不应期只约束各神经元自身，允许同时多神经元
-    发放。每批清空活动状态和 STDP trace，保留阈值偏移；评估冻结权重及偏移。
+    循环抑制电流延迟一个时间步，不应期只约束自身，允许同时多神经元发放。
+    输入使用随机像素相位的普通 IF 编码；每批清空膜电位、快适应电流、滤波器
+    和 STDP trace，保留慢适应电流 B 与输入增益。评估冻结权重、B 和增益；
+    训练数据的像素协方差只用于无标签输入增益约束，随 checkpoint 保存。
 
     :raises ValueError: 命令行样本数量、网络规模、系数或预算不合法。
-    :raises TimeoutError: 训练超过预算；保存未完成状态，但不视为验收通过。
+    :raises TimeoutError: 训练超过时间上限；保存未完成状态，但不视为验收通过。
+    :raises RuntimeError: 投影输入方差退化或非有限。
 
     ----
 
@@ -313,14 +357,17 @@ def main() -> None:
     assign fixed neuron classes after learning. ``--checkpoint`` evaluates a
     frozen model; see the STDP tutorial for configuration and data splits.
     Writes checkpoints and JSON metrics.
-    Recurrent inhibitory conductance has a one-step delay, with individual
-    refractory periods and multiple simultaneous spikes allowed. Batches clear
-    activity state and STDP traces but retain threshold offsets; evaluation
-    freezes weights and offsets.
+    Recurrent inhibitory current has a one-step delay and individual refractory
+    periods; multiple simultaneous spikes are allowed. Input uses ordinary IF
+    coding with random pixel phases. Batches clear voltage, fast adaptation,
+    filter state and STDP traces, retaining slow intrinsic current B and input
+    gain. Evaluation freezes weights, B and gain. Training-only pixel covariance
+    provides an unlabeled gain constraint and is saved with the checkpoint.
 
     :raises ValueError: Invalid sample counts, model sizes, coefficients or budget.
-    :raises TimeoutError: Training exceeds its budget; saves incomplete states
+    :raises TimeoutError: Training exceeds its time limit; saves incomplete states
         without claiming acceptance.
+    :raises RuntimeError: Projected input variance is degenerate or nonfinite.
     """
     args = _parser().parse_args()
     for name, maximum in (
@@ -331,13 +378,15 @@ def main() -> None:
     ):
         if not 0 < getattr(args, name) <= maximum:
             raise ValueError(f"{name} must be between 1 and {maximum}.")
-    if min(args.steps, args.batch_size, args.neurons, args.epochs) <= 0:
-        raise ValueError("Steps, batch size, neurons and epochs must be positive.")
+    if min(args.steps, args.batch_size, args.epochs) <= 0:
+        raise ValueError("Steps, batch size and epochs must be positive.")
+    if args.neurons < 2 or args.inhibition_tau < 1:
+        raise ValueError("At least two neurons and current-filter tau >= 1 required.")
     if not all(
         math.isfinite(v) and v > 0
         for v in (
             args.ltp,
-            args.theta_plus,
+            args.homeostasis_gain,
             args.v_threshold,
             args.inhibition_tau,
             args.max_seconds,
@@ -350,11 +399,11 @@ def main() -> None:
         raise ValueError("Inhibition must be finite and non-negative.")
     if (
         args.refractory_steps < 0
-        or not math.isfinite(args.theta_initial)
-        or args.theta_initial < 0
+        or not math.isfinite(args.bias_initial)
+        or args.bias_initial < 0
     ):
         raise ValueError(
-            "Refractory steps and initial threshold offset must be non-negative."
+            "Refractory steps and initial bias range must be non-negative."
         )
     torch.set_num_threads(1)
     torch.manual_seed(args.seed)
@@ -418,15 +467,19 @@ def main() -> None:
     validation_images = images[validation_idx.to(args.device)]
     calibration_labels = dataset.targets[calibration_idx].to(args.device)
     validation_labels = dataset.targets[validation_idx].to(args.device)
+    covariance = _training_covariance(dataset.data, split[:50000])
     model = _SNN(
         args.neurons,
-        args.theta_plus,
+        args.homeostasis_gain,
         args.inhibition,
         args.v_threshold,
         args.inhibition_tau,
         args.refractory_steps,
-        args.theta_initial,
-    ).to(args.device)
+        args.bias_initial,
+        steps=args.steps,
+        covariance=covariance,
+        device=args.device,
+    )
     baseline = copy.deepcopy(model)
     initial_weight = model.synapse.weight.clone()
     learner = learning.STDPLearner(
@@ -435,14 +488,19 @@ def main() -> None:
         model.sn,
         20.0,
         20.0,
-        f_pre=lambda w: 1e-4 * w,
+        f_pre=lambda w: args.ltp * w,
         f_post=lambda w: args.ltp * (1 - w),
     )
     config = {
         key: str(value) if isinstance(value, Path) else value
         for key, value in vars(args).items()
     }
-    config["split_seed"] = 42
+    config.update(
+        split_seed=42,
+        model_kind="current_stdp_mnist",
+        input_encoding="regular_if_uniform_phase",
+        gain_statistics=dict(samples=50000, split_seed=42, labels_used=False),
+    )
     history = []
     best_accuracy = -1.0
     try:

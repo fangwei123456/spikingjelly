@@ -52,16 +52,18 @@ Plasticity Learning Example
 
 Module: ``spikingjelly.activation_based.examples.stdp_mnist``.
 
-- Added a shallow STDP-only MNIST example with adaptive thresholds, fixed
-  recurrent inhibitory conductance via ``LinearRecurrentContainer``, individual
-  refractory periods, training-set class assignment, frozen-feedforward controls
-  and checkpoint evaluation. Multiple neurons may spike together; there is no
-  single-winner selection or forced reset of neighbors. Defaults use 700 steps,
-  one epoch, LTP coefficient 0.02 and threshold increment coefficient 0.5.
-  Full MNIST tests for seeds 0, 1 and 2 achieve 87.51%, 86.66% and 85.88%
-  (mean 86.68%), using weights trained only by STDP and statistical class
-  assignment. Former hard-winner and negative-current checkpoints
-  require their archived source or retraining.
+- Added a shallow STDP-only MNIST recipe using classic current LIF, own-spike
+  adaptation, slow local rate-error excitability, negative recurrent feedback
+  through ``ElementWiseRecurrentContainer``, training-only covariance gain and
+  regular IF input coding. Multiple neurons can fire together, with no hard
+  winner selection or global neighbor reset. Labels only provide post-training
+  statistical class assignment. Weights and persistent neuronal/gain states
+  freeze during evaluation; fast state resets at batch boundaries.
+- The validation-selected 3,200-neuron, 700-step, one-epoch recipe achieves
+  90.63%, 89.98% and 90.06% on full MNIST tests for seeds 0, 1 and 2
+  (mean 90.2233%). Checkpoints contain all required covariance/gain states and
+  fixed class maps for independent evaluation. This is a measured teaching
+  recipe, not a Diehl–Cook paper reproduction or a general deep-STDP claim.
 
 Signed Ternary Neurons
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -468,6 +470,19 @@ Module: ``spikingjelly.activation_based.neuron``.
 
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Plasticity MNIST Example Migration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.examples.stdp_mnist``.
+
+- Replaced the provisional conductance example with the validated current
+  recipe. Use native-current ``--homeostasis-gain`` and ``--bias-initial`` instead
+  of ``--theta-plus`` and ``--theta-initial``; the native base threshold is 0.01.
+  Old conductance or hard-winner checkpoints require archived source. The
+  measured current-experiment checkpoints use an explicit one-off parameter
+  conversion that preserves every tensor and class map; no automatic legacy
+  loader or permanent compatibility branch is included.
 
 Plasticity Learner Interfaces
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
