@@ -1,5 +1,5 @@
-Continuous-event Tempotron
-==========================
+Continuous-event neurons
+========================
 
 ``timing_based`` exposes explicit event times. TTFS is a coding constraint, not
 an implementation category: TTFS networks passing step-wise binary activations
@@ -167,3 +167,68 @@ Reference
 Gütig R, Sompolinsky H. The tempotron: a neuron that learns spike timing–based
 decisions. Nature Neuroscience 9, 420–428 (2006).
 `Paper <https://www.nature.com/articles/nn1643>`_.
+
+Multi-spike SRM and two-layer MNIST
+------------------------------------------
+
+:class:`spikingjelly.timing_based.neuron.SRM` is an experimental fixed-kernel model:
+
+.. math::
+
+   u_j(t)=\sum_i w_{ji}\sum_e (t-t_{ie})_+
+          -\vartheta\sum_{f:s_{jf}<t}1.
+
+The input response is a linear-ramp PSP; each spike adds a step reset response,
+resetting voltage to zero while retaining current. With no leak or absolute
+refractory period, the model accepts multiple inputs, emits multiple outputs and
+continues accepting inputs after firing. This differs from double-exponential
+Tempotron dynamics and is not an equivalent acceleration. Spike k is the first
+upward crossing of raw level ``k*threshold``. Sorted prefix sums, cumulative endpoint
+maxima and analytic roots solve FP64 times without a uniform grid. PyTorch
+differentiates the selected time/weight branch; event creation/deletion and ordering
+boundaries need not have unique derivatives.
+
+Inputs and outputs are compact CSR ``(times,indices,offsets)``, directly composable.
+Outputs are ordered by trial, neuron index and spike number; the next layer sorts
+them. Empty trials emit nothing, upward crossings at the endpoint count, and
+outputs precede simultaneous inputs. Per-trial, per-output ``max_spikes`` defaults
+to 64; overflow raises instead of truncating. Standard ``nn.Module.to`` and
+``state_dict`` apply.
+
+.. code-block:: python
+
+   import torch
+   from spikingjelly.timing_based.neuron import SRM
+
+   first = SRM(2, 3, duration=2.0).double()
+   second = SRM(3, 1, duration=2.0).double()
+   with torch.no_grad():
+       first.weight.fill_(1.0)
+       second.weight.fill_(0.5)
+   times = torch.tensor([0.1, 0.4], dtype=torch.float64, requires_grad=True)
+   events = first(times, torch.tensor([0, 1]), torch.tensor([0, 2]))
+   output_times, _, _ = second(*events)
+   output_times.sum().backward()
+
+The MNIST example has two trainable SRM layers, 784→128→10. Pixels become
+``1-pixel`` times and the observation endpoint is 2. Hidden neurons can emit
+multiple spikes, which directly enter layer two. Each output event contributes
+``2-time`` to its class score; logits are five times the accumulated contribution
+and the loss is cross-entropy. Adam (default lr=0.01) trains raw parameters;
+the demo's PyTorch parametrization applies ``gain*softmax(weight)`` with fixed row
+gains 8 and 2, maintaining firing and bounding event counts. The constraints and
+readout belong to the example. SRM allows negative weights and contains no loss,
+surrogate or recovery rule.
+
+.. code-block:: bash
+
+   uv run python -m spikingjelly.timing_based.examples.srm_mnist \
+       --device cuda:0 --dataset-dir ./data --output-dir ./srm-mnist \
+       --batch-size 128 --epochs 10 --seed 0
+
+Use the complete MNIST dataset: a 55000/5000 train/validation split, validation-only
+checkpoint selection and early stopping (default patience=3), followed by final
+evaluation on all 10000 test examples. Save configuration, source fingerprints,
+epoch metrics, ``best.pt`` and ``result.json`` with test correct counts. Use
+``--device cpu`` for CPU. CUDA runs the same PyTorch mathematics without dedicated
+SRM kernels; no general speed advantage is claimed.

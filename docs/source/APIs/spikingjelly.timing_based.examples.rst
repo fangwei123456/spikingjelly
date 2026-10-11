@@ -8,3 +8,10 @@ MNIST Classification with Tempotron
    :members:
    :undoc-members:
    :show-inheritance:
+
+MNIST Classification with Two SRM Layers
+------------------------------------------
+
+.. automodule:: spikingjelly.timing_based.examples.srm_mnist
+   :members:
+   :undoc-members:
