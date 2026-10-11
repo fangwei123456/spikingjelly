@@ -855,7 +855,8 @@ def compare(baseline: dict, candidate: dict) -> dict:
         "microbatches",
     )
     if any(
-        k in cases[0] and k in cases[1] and cases[0][k] != cases[1][k] for k in keys
+        k in cases[0] and k in cases[1] and cases[0][k] != cases[1][k]
+        for k in (*keys, "neuron_family", "surrogate")
     ):
         raise ValueError("benchmark workload metadata differs; cannot compare")
     left_devices, right_devices = (

@@ -105,12 +105,12 @@ def main() -> None:
         level=args.level,
         sym=args.sym,
     ).to(device)
-    torch_opt = STBIFNode(
+    automatic = STBIFNode(
         args.scale,
         level=args.level,
         sym=args.sym,
     ).to(device)
-    functional.set_step_mode(torch_opt, "m")
+    functional.set_step_mode(automatic, "m")
 
     with torch.inference_mode():
         loop_seconds, loop_out = _time_call(
@@ -120,15 +120,14 @@ def main() -> None:
         )
         loop_state = _state(reference)
 
-        torch_opt.backend = "torch"
-        torch_seconds, torch_out = _time_call(
+        automatic_seconds, automatic_out = _time_call(
             device,
             args.repeat,
-            lambda: (functional.reset_net(torch_opt), torch_opt(x_seq))[1],
+            lambda: (functional.reset_net(automatic), automatic(x_seq))[1],
         )
-        functional.reset_net(torch_opt)
-        torch_out = torch_opt(x_seq)
-        torch_state = _state(torch_opt)
+        functional.reset_net(automatic)
+        automatic_out = automatic(x_seq)
+        automatic_state = _state(automatic)
 
         result = {
             "host": socket.gethostname(),
@@ -144,43 +143,16 @@ def main() -> None:
             "scale": args.scale,
             "sym": args.sym,
             "loop_seconds": loop_seconds,
-            "torch_seconds": torch_seconds,
-            "torch_speedup_vs_loop": _safe_speedup(loop_seconds, torch_seconds),
-            "torch_max_abs_diff": _max_abs_diff(loop_out, torch_out),
-            "torch_state_max_abs_diff": _compare_state(loop_state, torch_state),
+            "automatic_implementation": (
+                functional.neuron_implementation("stbif", device)["implementation"]
+                if device.type == "cuda" and x_seq.dtype == torch.float32
+                else "torch-reference"
+            ),
+            "automatic_seconds": automatic_seconds,
+            "automatic_speedup_vs_loop": _safe_speedup(loop_seconds, automatic_seconds),
+            "automatic_max_abs_diff": _max_abs_diff(loop_out, automatic_out),
+            "automatic_state_max_abs_diff": _compare_state(loop_state, automatic_state),
         }
-
-        if device.type == "cuda":
-            triton_neuron = STBIFNode(
-                args.scale,
-                level=args.level,
-                sym=args.sym,
-            ).to(device)
-            functional.set_step_mode(triton_neuron, "m")
-            triton_neuron.backend = "triton"
-            triton_seconds, triton_out = _time_call(
-                device,
-                args.repeat,
-                lambda: (functional.reset_net(triton_neuron), triton_neuron(x_seq))[1],
-            )
-            functional.reset_net(triton_neuron)
-            triton_out = triton_neuron(x_seq)
-            triton_state = _state(triton_neuron)
-            result.update(
-                {
-                    "triton_seconds": triton_seconds,
-                    "triton_speedup_vs_loop": _safe_speedup(
-                        loop_seconds, triton_seconds
-                    ),
-                    "triton_speedup_vs_torch": _safe_speedup(
-                        torch_seconds, triton_seconds
-                    ),
-                    "triton_max_abs_diff": _max_abs_diff(loop_out, triton_out),
-                    "triton_state_max_abs_diff": _compare_state(
-                        loop_state, triton_state
-                    ),
-                }
-            )
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)

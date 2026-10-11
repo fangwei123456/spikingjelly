@@ -17,7 +17,7 @@
 .. code-block:: python
 
     # ...
-    net = CSNN(T=args.T, channels=args.channels, use_cupy=args.cupy).half()
+    net = CSNN(T=args.T, channels=args.channels).half()
     # ...
     for img, label in train_data_loader:
         optimizer.zero_grad()
@@ -42,23 +42,23 @@
 
 .. code-block:: shell
 
-    python w1.py -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -cupy -opt sgd -lr 0.1 -j 8
+    python w1.py -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -opt sgd -lr 0.1 -j 8
 
 训练完成后：
 
 .. code-block:: shell
 
-    Namespace(T=4, device='cuda:0', b=128, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=False, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128, save_es=None)
-    ./logs/T4_b128_sgd_lr0.1_c128_cupy
+    Namespace(T=4, device='cuda:0', b=128, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=False, opt='sgd', momentum=0.9, lr=0.1, channels=128, save_es=None)
+    ./logs/T4_b128_sgd_lr0.1_c128
     epoch = 63, train_loss = 0.0041, train_acc = 0.9836, test_loss = 0.0110, test_acc = 0.9312, max_test_acc = 0.9330
     train speed = 8056.0318 images/s, test speed = 11152.5812 images/s
     escape time = 2022-08-16 10:52:51
 
-最高正确率为 `0.9330`，模型保存在 `./logs/T4_b128_sgd_lr0.1_c128_cupy` 中：
+最高正确率为 `0.9330`，模型保存在 `./logs/T4_b128_sgd_lr0.1_c128` 中：
 
 .. code-block:: shell
 
-    cxhpc@lxnode01:~/fangwei/tempdir/fmnist_test/logs/T4_b128_sgd_lr0.1_c128_cupy$ ls
+    cxhpc@lxnode01:~/fangwei/tempdir/fmnist_test/logs/T4_b128_sgd_lr0.1_c128$ ls
     args.txt  checkpoint_latest.pth  checkpoint_max.pth  events.out.tfevents.1660617801.mlg-ThinkStation-P920.3234566.0
 
 
@@ -92,7 +92,7 @@
 
     # spikingjelly/activation_based/examples/conv_fashion_mnist.py
     class CSNN(nn.Module):
-        def __init__(self, T: int, channels: int, use_cupy=False):
+        def __init__(self, T: int, channels: int):
             super().__init__()
             self.T = T
 
@@ -116,10 +116,6 @@
             )
 
             functional.set_step_mode(self, step_mode='m')
-
-            if use_cupy:
-                functional.set_backend(self, backend='cupy')
-
         def forward(self, x: torch.Tensor):
             # x.shape = [N, C, H, W]
             x_seq = x.unsqueeze(0).expand(self.T, -1, -1, -1, -1)  # [N, C, H, W] -> [T, N, C, H, W]
@@ -247,7 +243,7 @@
 
     python -m spikingjelly.activation_based.examples.lynxi_fmnist_inference \
         -data-dir /datasets/FashionMNIST/ \
-        -pt-path ./logs/T4_b128_sgd_lr0.1_c128_cupy/checkpoint_max.pth \
+        -pt-path ./logs/T4_b128_sgd_lr0.1_c128/checkpoint_max.pth \
         -out-model-path ./lynxi_model
 
     lynxi_exchange.py[line:185]-CRITICAL: lyngor.version=1.1.0
@@ -278,7 +274,7 @@
 
     CRITICAL:root:lyngor.version=1.1.0
     lynxi_exchange.py[line:185]-CRITICAL: lyngor.version=1.1.0
-    Namespace(T=4, b=16, channels=128, data_dir='/datasets/FashionMNIST/', j=4, lynxi_device=0, out_model_path='./lynxi_model', pt_path='./logs/T4_b128_sgd_lr0.1_c128_cupy/checkpoint_max.pth')
+    Namespace(T=4, b=16, channels=128, data_dir='/datasets/FashionMNIST/', j=4, lynxi_device=0, out_model_path='./lynxi_model', pt_path='./logs/T4_b128_sgd_lr0.1_c128/checkpoint_max.pth')
     max_test_acc=0.933
     InferenceNet(
     (module_list): Sequential(

@@ -70,17 +70,6 @@ def test_lemaire_runtime_counts_follow_paper_if_lif_buckets(node, expected_mac):
     assert report.breakdown_pj["ops_pj"] == pytest.approx(6 + expected_mac * 2)
 
 
-def test_lemaire_energy_profiler_bind_model_rejects_non_torch_backend_when_strict():
-    model = neuron.IFNode()
-    model._backend = "triton"
-    profiler = op_counter.LemaireEnergyProfiler(
-        config=op_counter.LemaireEnergyConfig(strict=True)
-    )
-
-    with pytest.raises(ValueError, match="only supports torch backend"):
-        profiler.bind_model(model)
-
-
 def test_lemaire_energy_strict_profiles_supported_linear():
     model = nn.Linear(4, 3, bias=False)
     x = torch.tensor([[1.0, 0.0, 1.0, 0.0]])
@@ -103,34 +92,6 @@ def test_lemaire_energy_supports_keyword_module_inputs():
 
     assert linear_report.counts["synop"] == 6
     assert neuron_report.counts["write_potential_bytes"] == x.numel() * 4
-
-
-def test_lemaire_energy_profiler_bind_model_warns_non_torch_backend_when_not_strict():
-    model = neuron.IFNode()
-    model._backend = "triton"
-    profiler = op_counter.LemaireEnergyProfiler(
-        config=op_counter.LemaireEnergyConfig(strict=False)
-    )
-
-    with pytest.warns(RuntimeWarning, match="only supports torch backend"):
-        profiler.bind_model(model)
-
-
-def test_lemaire_energy_profiler_rebind_clears_old_backend_warning():
-    unsupported = neuron.IFNode()
-    unsupported._backend = "triton"
-    profiler = op_counter.LemaireEnergyProfiler(
-        config=op_counter.LemaireEnergyConfig(strict=False)
-    )
-    with pytest.warns(RuntimeWarning, match="only supports torch backend"):
-        profiler.bind_model(unsupported)
-
-    model = nn.Linear(4, 2, bias=False)
-    profiler.bind_model(model)
-    with profiler:
-        model(torch.rand(1, 4))
-
-    assert profiler.get_report().warnings == []
 
 
 def test_lemaire_energy_conv_inference_report_has_memory_and_addressing():

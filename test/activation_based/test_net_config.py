@@ -1,4 +1,4 @@
-"""Tests for ``set_step_mode`` / ``set_backend`` behavior (issue #632)."""
+"""Tests for step-mode configuration."""
 
 import torch.nn as nn
 
@@ -35,23 +35,3 @@ def test_set_step_mode_step_module_container_configures_children():
 
     assert net.step_mode == "m"
     assert net.sn.step_mode == "m"
-
-
-def test_set_backend_before_multi_step_keeps_torch_until_mode_changes():
-    sn = neuron.ParametricLIFNode()
-    net = nn.Sequential(sn)
-    assert sn.step_mode == "s"
-    assert sn.backend == "torch"
-    assert sn.supported_backends == ("torch",)
-
-    functional.set_backend(net, "cupy")
-
-    assert sn.backend == "torch"
-    assert sn.step_mode == "s"
-
-    functional.set_step_mode(net, "m")
-    assert sn.step_mode == "m"
-    assert "cupy" in sn.supported_backends
-
-    functional.set_backend(net, "torch")
-    assert sn.backend == "torch"

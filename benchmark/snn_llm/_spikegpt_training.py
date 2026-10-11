@@ -1,6 +1,5 @@
 import argparse
 import hashlib
-import logging
 import math
 import os
 import random
@@ -102,7 +101,6 @@ def _make_config(author_model, vocab_size: int):
 
 def _checkpoint_config() -> dict:
     return {
-        "backend": "cupy",
         "batch_size": BATCH_SIZE,
         "betas": BETAS,
         "context_length": CONTEXT_LENGTH,
@@ -300,8 +298,8 @@ def _read_training_text(path: Path) -> tuple[str, tuple[str, ...]]:
 def _make_model(author_model, vocabulary_size: int, device: torch.device):
     model = author_model.GPT(_make_config(author_model, vocabulary_size))
     for block in model.blocks:
-        block.lif1 = make_current_lif("cupy")
-        block.lif2 = make_current_lif("cupy")
+        block.lif1 = make_current_lif()
+        block.lif2 = make_current_lif()
     model = model.to(device)
     parameter_count = sum(parameter.numel() for parameter in model.parameters())
     if parameter_count != EXPECTED_PARAMETER_COUNT:
@@ -492,12 +490,6 @@ def run(
 ) -> None:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the SpikeGPT training smoke.")
-    try:
-        import cupy  # noqa: F401
-    except ImportError as exc:
-        logging.info("SpikeGPT training smoke requires CuPy: %s", exc)
-        raise ImportError("CuPy is required for the SpikeGPT training smoke.") from exc
-
     revision = _verify_source(spikegpt_root.resolve(), declared_revision)
     checkpoint_path = _prepare_checkpoint_path(output_dir.resolve())
     training_text, vocabulary = _read_training_text(data_path.resolve())
@@ -621,7 +613,7 @@ def run(
     )
     print(
         f"model=SpikeGPT parameter_count={EXPECTED_PARAMETER_COUNT} layers={N_LAYER} "
-        f"hidden={N_EMBD} context={CONTEXT_LENGTH} backend=current-cupy"
+        f"hidden={N_EMBD} context={CONTEXT_LENGTH} neuron_implementation=automatic"
     )
     print(
         f"overfit loss_before={overfit_loss_before:.8f} "

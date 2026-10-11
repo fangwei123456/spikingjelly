@@ -116,14 +116,14 @@ def _parse_args() -> argparse.Namespace:
         default="auto",
     )
     parser.add_argument(
-        "--triton-storage",
+        "--neuron-storage",
         choices=("fp32", "fp16", "bf16", "float8_e4m3fn", "float8_e5m2"),
     )
     parser.add_argument(
-        "--triton-fwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+        "--neuron-fwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
     )
     parser.add_argument(
-        "--triton-bwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
+        "--neuron-bwd", choices=("fp32", "fp16", "bf16", "fp8"), default="fp32"
     )
     parser.add_argument("--input-layout", choices=("NCHW", "NTCHW"), default="NCHW")
     parser.add_argument("--time-steps", type=int, default=4)
@@ -195,9 +195,9 @@ def main() -> None:
         precision=PrecisionConfig(
             mode=args.precision,
             fp8_recipe=args.fp8_recipe,
-            triton_storage=args.triton_storage,
-            triton_fwd=args.triton_fwd,
-            triton_bwd=args.triton_bwd,
+            neuron_storage=args.neuron_storage,
+            neuron_fwd=args.neuron_fwd,
+            neuron_bwd=args.neuron_bwd,
         ),
         execution_mode=args.execution_mode,
         cuda_graph_warmup_steps=args.cuda_graph_warmup_steps,

@@ -3,23 +3,29 @@ import torch
 import torch.nn.functional as F
 
 from spikingjelly.activation_based import functional, surrogate
-from spikingjelly.activation_based.cuda_kernel.neuron_linear import (
-    if_linear,
-    lif_linear,
-)
-
-
-try:
-    __import__("cupy")
-    _HAS_CUPY = True
-except (ImportError, OSError):
-    _HAS_CUPY = False
+from spikingjelly._ops.if_linear import if_linear
+from spikingjelly._ops.lif_linear import lif_linear
 
 
 pytestmark = pytest.mark.skipif(
-    not _HAS_CUPY or not torch.cuda.is_available(),
-    reason="requires cupy and CUDA",
+    not torch.cuda.is_available(),
+    reason="requires CUDA",
 )
+
+
+@pytest.fixture(params=["native", "reference"], autouse=True)
+def projection_execution(request, monkeypatch):
+    from spikingjelly._ops.if_linear import functional as if_ops
+    from spikingjelly._ops.lif_linear import functional as lif_ops
+    from spikingjelly._ops.native_loader import _native_available
+
+    packages = (if_ops, lif_ops)
+    for package in packages:
+        if request.param == "native":
+            if not _native_available(package.__package__, 0):
+                pytest.skip("native extension not built")
+        else:
+            monkeypatch.setattr(package, "_native_available", lambda *args: False)
 
 
 def _reference(
@@ -67,10 +73,25 @@ def _reference(
         ((4, 3, 130), False, 0.25, True),
     ],
 )
-def test_lif_linear_forward_backward(shape, decay_input, v_reset, detach_reset):
+@pytest.mark.parametrize(
+    "surrogate_name",
+    [
+        "Sigmoid",
+        "ATan",
+        "PiecewiseQuadratic",
+        "PiecewiseExp",
+        "SoftSign",
+        "SuperSpike",
+        "Erf",
+        "LogTailedReLU",
+    ],
+)
+def test_lif_linear_forward_backward(
+    shape, decay_input, v_reset, detach_reset, surrogate_name
+):
     torch.manual_seed(0)
     K, N = shape[-1], 70
-    sg = surrogate.ATan()
+    sg = getattr(surrogate, surrogate_name)()
     x = torch.randn(*shape, device="cuda", requires_grad=True)
     v = torch.randn(shape[-2], K, device="cuda", requires_grad=True)
     weight = torch.randn(N, K, device="cuda", requires_grad=True)
@@ -105,11 +126,24 @@ def test_lif_linear_forward_backward(shape, decay_input, v_reset, detach_reset):
         torch.testing.assert_close(actual.grad, expected.grad, rtol=2e-4, atol=2e-5)
 
 
-def test_if_linear_forward_backward():
+@pytest.mark.parametrize(
+    "surrogate_name",
+    [
+        "Sigmoid",
+        "ATan",
+        "PiecewiseQuadratic",
+        "PiecewiseExp",
+        "SoftSign",
+        "SuperSpike",
+        "Erf",
+        "LogTailedReLU",
+    ],
+)
+def test_if_linear_forward_backward(surrogate_name):
     torch.manual_seed(2)
     shape, v_reset = (4, 3, 130), None
     K, N = shape[-1], 70
-    sg = surrogate.ATan()
+    sg = getattr(surrogate, surrogate_name)()
     x = torch.randn(*shape, device="cuda", requires_grad=True)
     v = torch.randn(shape[-2], K, device="cuda", requires_grad=True)
     weight = torch.randn(N, K, device="cuda", requires_grad=True)
@@ -220,3 +254,28 @@ def test_neuron_linear_fake_and_compile(fused_op):
     actual = torch.compile(f, fullgraph=True)(x, v, weight_t)
     torch.testing.assert_close(actual[0], expected[0])
     torch.testing.assert_close(actual[1], expected[1])
+
+
+@pytest.mark.parametrize(
+    "fused_op", [functional.if_linear, functional.lif_linear], ids=["if", "lif"]
+)
+@pytest.mark.parametrize("surrogate_name", ["Sigmoid", "ATan", "Erf"])
+def test_neuron_linear_public_compiled_backward(fused_op, surrogate_name):
+    torch.manual_seed(5)
+    inputs = tuple(
+        torch.randn(*shape, device="cuda", requires_grad=True)
+        for shape in ((4, 3, 16), (3, 16), (16, 8), (8,))
+    )
+    sg = getattr(surrogate, surrogate_name)()
+
+    def run(x, v, weight, bias):
+        return fused_op(x, v, weight, bias, surrogate_function=sg, threads=128)
+
+    reference = run(*inputs)
+    actual = torch.compile(run, fullgraph=True)(*inputs)
+    grads = (torch.randn_like(actual[0]), torch.randn_like(actual[1]))
+    torch.testing.assert_close(actual, reference)
+    torch.testing.assert_close(
+        torch.autograd.grad(actual, inputs, grads),
+        torch.autograd.grad(reference, inputs, grads),
+    )

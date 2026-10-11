@@ -610,7 +610,6 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         calibration_quantile=args.calibration_quantile,
         calibration_reservoir_size=args.calibration_reservoir_size,
         calibration_seed=20260719,
-        neuron_backend="triton",
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     if args.calibration_artifact is None:

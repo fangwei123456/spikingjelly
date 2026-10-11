@@ -257,7 +257,6 @@ class BaseNode(base.MemoryModule):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
-        backend="torch",
         store_v_seq: bool = False,
     ):
         """
@@ -290,11 +289,6 @@ class BaseNode(base.MemoryModule):
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
-
-        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。该参数是显式执行后端选择：设置为 ``'torch'``、``'cupy'`` 或 ``'triton'`` 时，
-            将分别使用对应后端，不会隐式切换到其他后端。在支持的情况下，``'cupy'`` 或 ``'triton'`` 后端通常更快。
-        :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
@@ -331,12 +325,6 @@ class BaseNode(base.MemoryModule):
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        :param backend: backend for this neurons layer. Different ``step_mode`` may support different backends. Users can
-            print ``self.supported_backends`` to check what backends are supported by the current ``step_mode``. This argument
-            is an explicit execution-backend choice: ``'torch'``, ``'cupy'``, and ``'triton'`` each use their own backend and
-            are not silently upgraded to another backend. If supported, ``'cupy'`` or ``'triton'`` is usually faster
-        :type backend: str
-
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
@@ -362,8 +350,7 @@ class BaseNode(base.MemoryModule):
         self.surrogate_function = surrogate_function
 
         self.step_mode = step_mode
-        self.backend = backend
-        self._triton_precision = None
+        self._neuron_precision = None
 
         self.store_v_seq = store_v_seq
 
@@ -475,7 +462,7 @@ class BaseNode(base.MemoryModule):
         )
 
     def extra_repr(self):
-        return f"v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}, step_mode={self.step_mode}, backend={self.backend}"
+        return f"v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}, step_mode={self.step_mode}"
 
     def single_step_forward(self, x: torch.Tensor, *args, **kwargs):
         r"""
@@ -583,8 +570,8 @@ class BaseNode(base.MemoryModule):
     ) -> tuple[object, ...]:
         x = inputs[0][0] if step_mode == "m" else inputs[0]
         state_dtype = (
-            self._triton_precision[0]
-            if step_mode == "m" and self._triton_precision is not None
+            self._neuron_precision[0]
+            if step_mode == "m" and self._neuron_precision is not None
             else x.dtype
         )
         v = states[0]

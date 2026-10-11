@@ -1,16 +1,14 @@
 import pytest
 import torch
 
-from spikingjelly.activation_based import neuron
+from spikingjelly.activation_based import functional, neuron
 from spikingjelly.activation_based.precision import (
     PrecisionArtifacts,
     PrecisionConfig,
     prepare_model_for_precision,
 )
 from spikingjelly.activation_based.precision import convert as precision_convert
-from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
-    utils as triton_neuron_utils,
-)
+from spikingjelly._ops import triton_layout as triton_neuron_utils
 
 
 def test_public_precision_surface():
@@ -30,13 +28,13 @@ def test_precision_config_modes(mode):
 
 def test_precision_config_normalizes_triton_fields():
     config = PrecisionConfig(
-        triton_storage="torch.float8_e4m3fn",
-        triton_fwd="BF16",
-        triton_bwd="FP16",
+        neuron_storage="torch.float8_e4m3fn",
+        neuron_fwd="BF16",
+        neuron_bwd="FP16",
     )
-    assert config.triton_storage == "float8_e4m3fn"
-    assert config.triton_fwd == "bf16"
-    assert config.triton_bwd == "fp16"
+    assert config.neuron_storage == "float8_e4m3fn"
+    assert config.neuron_fwd == "bf16"
+    assert config.neuron_bwd == "fp16"
 
 
 @pytest.mark.parametrize(
@@ -48,9 +46,9 @@ def test_precision_config_normalizes_triton_fields():
             {"mode": "bf16", "fp8_fallback_dtype": "fp16"},
             "mode='fp8'",
         ),
-        ({"triton_fwd": "bf16"}, "triton_storage"),
+        ({"neuron_fwd": "bf16"}, "neuron_storage"),
         (
-            {"triton_storage": "bf16", "triton_bwd": "fp8"},
+            {"neuron_storage": "bf16", "neuron_bwd": "fp8"},
             "FP8 Triton compute",
         ),
     ),
@@ -74,7 +72,7 @@ def test_precision_config_defaults_to_bf16_fallback():
 def test_precision_config_preserves_positional_fields():
     config = PrecisionConfig("fp8", "auto", "bf16", "fp16", "bf16")
 
-    assert (config.triton_storage, config.triton_fwd, config.triton_bwd) == (
+    assert (config.neuron_storage, config.neuron_fwd, config.neuron_bwd) == (
         "bf16",
         "fp16",
         "bf16",
@@ -112,16 +110,15 @@ def test_prepare_fp8_fails_instead_of_falling_back():
         prepare_model_for_precision(torch.nn.Linear(4, 4), "cpu", "fp8")
 
 
-def test_triton_precision_requires_convertible_nodes():
-    config = PrecisionConfig(triton_storage="float8_e4m3fn")
+def test_neuron_precision_requires_convertible_nodes():
+    config = PrecisionConfig(neuron_storage="float8_e4m3fn")
     with pytest.raises(RuntimeError, match="no multi-step IF/LIF/PLIF"):
         prepare_model_for_precision(torch.nn.Linear(4, 4), "cpu", config)
 
 
-def test_triton_precision_applies_atomically_and_clears(monkeypatch):
+def test_neuron_precision_applies_atomically_and_clears(monkeypatch):
     first = neuron.IFNode(step_mode="m")
     second = neuron.LIFNode(step_mode="s")
-    first._backend = second._backend = "triton"
     model = torch.nn.Sequential(first, second)
     monkeypatch.setattr(
         triton_neuron_utils,
@@ -129,25 +126,66 @@ def test_triton_precision_applies_atomically_and_clears(monkeypatch):
         lambda **_kwargs: None,
     )
     config = PrecisionConfig(
-        triton_storage="bf16",
-        triton_fwd="bf16",
-        triton_bwd="fp32",
+        neuron_storage="bf16",
+        neuron_fwd="bf16",
+        neuron_bwd="fp32",
     )
 
     with pytest.raises(RuntimeError, match="requires multi-step"):
         precision_convert._configure_triton_neurons(model, config, "cpu")
-    assert first._triton_precision is None
+    assert first._neuron_precision is None
 
     second.step_mode = "m"
     precision_convert._configure_triton_neurons(model, config, "cpu")
-    assert first._triton_precision == (torch.bfloat16, "bf16", "fp32")
-    assert second._triton_precision == first._triton_precision
+    assert first._neuron_precision == (torch.bfloat16, "bf16", "fp32")
+    assert second._neuron_precision == first._neuron_precision
 
     precision_convert._configure_triton_neurons(
         model, PrecisionConfig(mode="fp32"), "cpu"
     )
-    assert first._triton_precision is None
-    assert second._triton_precision is None
+    assert first._neuron_precision is None
+    assert second._neuron_precision is None
+
+
+def test_explicit_if_plif_precision_uses_triton_profiles(monkeypatch):
+    from spikingjelly._ops import selection
+    from spikingjelly._ops.if_ import triton_precision as if_precision
+    from spikingjelly._ops.plif import triton_precision as plif_precision
+
+    monkeypatch.setattr(selection, "_require_provider", lambda *_args: None)
+    x = torch.ones(3, 2)
+    v = torch.zeros(2)
+    seen = {}
+
+    def fake_forward(*args, **kwargs):
+        seen.update(kwargs)
+        return torch.ones_like(args[0]), args[0], None
+
+    monkeypatch.setattr(if_precision, "_multistep_if_mp", fake_forward)
+    spikes, final, trace = functional.if_multi_step(
+        x, v, store_v_seq=True, neuron_storage="bf16", neuron_fwd="fp16"
+    )
+    assert spikes.shape == x.shape
+    assert final.shape == v.shape
+    assert trace.shape == x.shape
+    assert seen["storage_dtype"] == "bf16"
+    assert seen["compute_dtype"] == "fp16"
+
+    seen.clear()
+    monkeypatch.setattr(plif_precision, "_multistep_plif_mp", fake_forward)
+    spikes, final, trace = functional.plif_multi_step(
+        x,
+        v,
+        torch.zeros(()),
+        store_v_seq=False,
+        neuron_storage=torch.bfloat16,
+        neuron_bwd="bf16",
+    )
+    assert spikes.shape == x.shape
+    assert final.shape == v.shape
+    assert trace is None
+    assert seen["storage_dtype"] is torch.bfloat16
+    assert seen["backward_compute_dtype"] == "bf16"
 
 
 def test_precision_artifacts_backward_steps_optimizer():

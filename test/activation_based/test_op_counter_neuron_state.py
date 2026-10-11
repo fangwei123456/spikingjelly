@@ -6,7 +6,7 @@ from spikingjelly.activation_based import neuron, op_counter
 
 class ToyCLIFNode(neuron.BaseNode):
     def __init__(self):
-        super().__init__(v_threshold=1.0, v_reset=None, step_mode="s", backend="torch")
+        super().__init__(v_threshold=1.0, v_reset=None, step_mode="s")
         self.register_memory("m", 0.0)
 
     def neuronal_charge(self, x: torch.Tensor):
@@ -46,6 +46,29 @@ def test_neuron_state_counter_ifnode_multi_step_has_state_metrics():
     assert metrics["state_adds"] > 0
     assert projection["read_potential"] == metrics["state_reads"]
     assert projection["write_potential"] == metrics["state_writes"]
+
+
+def test_neuron_state_counter_estimates_opaque_cuda_operator():
+    from torch._subclasses.fake_tensor import FakeTensorMode
+    from spikingjelly._ops.if_ import _forward
+
+    node = neuron.IFNode(step_mode="m")
+    counter = op_counter.NeuronStateCounter()
+    with FakeTensorMode() as mode:
+        x = mode.from_tensor(torch.empty(4, 2, 3, device="cuda"))
+        v = mode.from_tensor(torch.empty(2, 3, device="cuda"))
+        args = (x, v, 1.0, 0.0, False, 4.0, False, 1)
+        output = _forward(*args)
+        count = counter.count(_forward, args, {}, output, {node})
+        counter.record("Global", _forward, count)
+
+    metrics = counter.get_metric_counts()["Global"]
+    projection = counter.get_projection_counts()["Global"]
+    bytes_per_state = v.numel() * v.element_size()
+    assert metrics["state_reads"] == 4 * bytes_per_state
+    assert metrics["state_writes"] == 4 * bytes_per_state
+    assert metrics["neuron_logical_steps"] == x.numel()
+    assert projection["potential_buffer_bytes"] == bytes_per_state
 
 
 def test_neuron_state_counter_lif_projection_tracks_potential_access():

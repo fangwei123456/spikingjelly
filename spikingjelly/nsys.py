@@ -358,7 +358,6 @@ def module_ranges(model: nn.Module, output: Path) -> Iterator[None]:
                             "module": module_name,
                             "type": type(_module).__name__,
                             "step_mode": str(getattr(_module, "step_mode", "")) or None,
-                            "backend": str(getattr(_module, "backend", "")) or None,
                             "event": "input",
                             "value": _tensor_metadata(inputs),
                         }

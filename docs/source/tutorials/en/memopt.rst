@@ -253,19 +253,73 @@ Evaluation, prediction, generation, and model export omit training-time
 checkpoint wrappers. Because ``checkpoint_module`` preserves ``state_dict``
 keys, inference does not need a weight conversion step.
 
-Neuron Backends and ``torch.compile``
--------------------------------------
+Neuron Execution and ``torch.compile``
+---------------------------------------
 
-Memopt does not replace the neuron backend. Torch, CuPy, and Triton neurons can
-run inside a checkpoint when their functional forward path supports the selected
-backend. A custom backend that does not support this path will not become
-compatible just by adding memopt. Before a full training run, test forward and
-backward with the actual model, dtype, backend, and distributed topology.
+Memopt does not change neuron execution. It works with device-based neuron
+selection; validate training and backward with the actual model, dtype, and
+distributed topology.
 
 ``memopt.checkpoint`` uses PyTorch's non-reentrant checkpoint.
 The uncompressed, Boolean-compressed, and bit-compressed paths support
 ``torch.compile(..., fullgraph=True)``. Sparse payload size depends on the input
 and may require dynamic shapes during compilation.
+
+Binary and fused projections
+----------------------------
+
+Use memopt for memory-efficient ordinary Linear/Conv training. Legacy
+``SpikeLinear``/``SpikeConv*`` and ``spike_linear/spike_conv*`` were removed.
+The retained interfaces serve different workloads:
+
+* ``if_linear``/``lif_linear`` fuse neuron and Linear on CUDA FP32, returning
+  projection output and final voltage. Input, initial state, weight and bias
+  support first gradients; backward rematerializes spikes.
+* ``packed_spike_linear`` consumes row-packed binary input with CUDA
+  FP32/FP16/BF16 weights. Only weight and bias are differentiable.
+* ``sparse_linear(strategy="sparse")`` consumes unpacked 2D binary CUDA input
+  with FP32/FP16/BF16 support and input/weight/bias gradients. ``strategy``
+  chooses an algorithm, not a neuron backend.
+
+Built extensions use native CUDA; otherwise Torch reference equations run.
+Native fused forward avoids materializing intermediate spikes, while the
+reference path may still allocate them. The seven built-in surrogates support
+fused fullgraph training; custom surrogates support eager only. CUDA example:
+
+.. code-block:: python
+
+    import torch
+    import torch.nn.functional as F
+    from spikingjelly.activation_based import functional, surrogate
+
+    device = torch.device("cuda:0")
+    x = torch.rand(2, 2, 8, device=device, requires_grad=True)  # [T, M, K]
+    v0 = torch.zeros(2, 8, device=device, requires_grad=True)
+    weight_t = torch.nn.Parameter(torch.randn(8, 4, device=device))  # [K, N]
+    for project in (functional.if_linear, functional.lif_linear):
+        y, v_final = project(x, v0, weight_t, surrogate_function=surrogate.ATan())
+        gradients = torch.autograd.grad(y.sum() + v_final.sum(), (x, v0, weight_t))
+        assert y.shape == (2, 2, 4) and all(torch.isfinite(g).all() for g in gradients)
+    # Keep v_final for a continuous segment; reset explicitly for independent batches.
+
+    binary = torch.randint(0, 2, (2, 9), device=device).float().requires_grad_()
+    weight = torch.nn.Parameter(torch.randn(4, 9, device=device))  # [N, K]
+    packed = functional.bit_pack_spike_dense(binary.detach())
+    assert packed.shape == (2, 2)  # Each row pads independently to ceil(9/8) bytes.
+    packed_y = functional.packed_spike_linear(packed, weight)
+    sparse_y = functional.sparse_linear(binary, weight, strategy="sparse")
+    torch.testing.assert_close(packed_y, F.linear(binary.detach(), weight))
+    torch.testing.assert_close(sparse_y, F.linear(binary, weight))
+    torch.autograd.grad(packed_y.sum(), weight)  # No gradient to the packed input.
+    torch.autograd.grad(sparse_y.sum(), (binary, weight))
+
+Fused ``weight_t`` is ``[K, N]``; packed/sparse ``weight`` is ``[N, K]``.
+Caching transposed weights in training requires respecting parameter updates and
+autograd; do not retain an expired graph. Flat ``bit_spike_compress`` uses one
+least-significant-bit-first stream, whereas ``bit_pack_spike_dense`` pads each row.
+They are not interchangeable, especially when row width is not divisible by 8.
+memopt compressors independently manage saved tensors. See
+:doc:`/APIs/spikingjelly.activation_based.functional.spike` for full constraints.
 
 Measured Performance
 --------------------

@@ -2,6 +2,13 @@
 
 时间驱动：使用卷积SNN识别Fashion-MNIST
 =======================================
+
+.. warning::
+
+    本页为旧版 SpikingJelly 的历史归档，停止维护，不是当前 V2 使用说明。
+    含 CuPy 或旧 backend 的代码和命令不能直接用于当前包。当前用法见
+    :doc:`/tutorials/cn/neuron` 与 :doc:`/tutorials/cn/migrate_from_legacy`。
+
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 在本节教程中，我们将搭建一个卷积脉冲神经网络，对 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`__ 数据集进行
@@ -178,7 +185,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
       -out_dir OUT_DIR      root dir for saving logs and checkpoint
       -resume RESUME        resume from the checkpoint path
       -amp                  automatic mixed precision training
-      -cupy                 use cupy neuron and multi-step forward mode
+                      use cupy neuron and multi-step forward mode
       -opt OPT              use which optimizer. SDG or Adam
       -lr LR                learning rate
       -momentum MOMENTUM    momentum for SGD
@@ -188,7 +195,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
       -gamma GAMMA          gamma for StepLR
       -T_max T_MAX          T_max for CosineAnnealingLR
 
-其中 ``-cupy`` 是使用cupy后端和多步神经元，关于它的更多信息参见 :doc:`./10_propagation_pattern` 和 :doc:`./11_cext_neuron_with_lbl`。
+此示例已归档；当前神经元实现按输入设备自动选择。
 
 检查点会被保存在 ``tensorboard`` 日志文件的同级目录下。实验机器使用 `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080 Ti` 的GPU。
 

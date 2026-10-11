@@ -168,7 +168,7 @@ class LemaireEnergyConfig:
 
     控制 inference-only、Lemaire 对齐能耗分析器的行为。
 
-    :param strict: 遇到论文范围外的 module 或 backend 时是否抛出异常
+    :param strict: 遇到论文范围外的 module 时是否抛出异常
     :type strict: bool
     :param cost_config: 算术和 SRAM 访问成本
     :type cost_config: LemaireEnergyCostConfig
@@ -187,7 +187,7 @@ class LemaireEnergyConfig:
 
     Controls the inference-only, Lemaire-aligned energy profiler.
 
-    :param strict: Whether modules or backends outside the paper scope raise
+    :param strict: Whether modules outside the paper scope raise
     :type strict: bool
     :param cost_config: Arithmetic and SRAM-access costs
     :type cost_config: LemaireEnergyCostConfig
@@ -613,7 +613,7 @@ class LemaireEnergyProfiler:
         :param model: 待分析模型
         :type model: torch.nn.Module
         :raises RuntimeError: 分析器处于活跃 context 时抛出
-        :raises ValueError: 严格模式遇到不支持的神经元 backend 时抛出
+        :raises ValueError: 严格模式遇到不支持的神经元类型时抛出
 
         ----
 
@@ -626,29 +626,13 @@ class LemaireEnergyProfiler:
         :param model: Model to profile
         :type model: torch.nn.Module
         :raises RuntimeError: Raised while the profiler context is active
-        :raises ValueError: Raised for an unsupported neuron backend in strict mode
+        :raises ValueError: Raised for an unsupported neuron type in strict mode
         """
         if self._module_mode is not None and self._module_mode._active:
             raise RuntimeError(
                 "LemaireEnergyProfiler.bind_model() cannot run while profiling."
             )
         self._warnings.clear()
-        warned = False
-        for module in model.modules():
-            if not isinstance(module, BaseNode):
-                continue
-            if module.backend == "torch":
-                continue
-            message = (
-                "LemaireEnergyProfiler only supports torch backend for BaseNode modules, "
-                f"got {module.backend!r} from {module.__class__.__name__}."
-            )
-            if self.config.strict:
-                raise ValueError(message)
-            if not warned:
-                warnings.warn(message, RuntimeWarning, stacklevel=2)
-                self._warnings.append(message)
-                warned = True
         self.lemaire_counter.bind_model(model)
         self._module_mode = ModuleCounterMode(
             [self.lemaire_counter],

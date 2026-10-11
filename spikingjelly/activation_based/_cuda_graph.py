@@ -9,8 +9,6 @@ import torch
 
 def validate_cuda_graph_model(model: torch.nn.Module) -> None:
     for module in model.modules():
-        if getattr(module, "backend", None) == "cupy":
-            raise ValueError("CUDA Graph does not support the CuPy neuron backend.")
         if getattr(module, "store_v_seq", False):
             raise ValueError("CUDA Graph requires store_v_seq=False.")
 

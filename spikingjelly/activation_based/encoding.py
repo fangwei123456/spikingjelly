@@ -721,7 +721,6 @@ class PopSpikeEncoderDeterministic(nn.Module):
         )
 
         functional.set_step_mode(self, step_mode="m")
-        functional.set_backend(self, backend="torch")
 
     def forward(self, obs):
         r"""

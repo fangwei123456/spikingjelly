@@ -15,7 +15,7 @@ SPIKEGPT_REVISION = "029f86f0536f2b2451524038fc9890cc76c2429e"
 _GIT_TIMEOUT_SECONDS = 30
 
 
-def make_current_lif(backend: str) -> neuron.LIFNode:
+def make_current_lif() -> neuron.LIFNode:
     return neuron.LIFNode(
         tau=2.0,
         decay_input=True,
@@ -24,7 +24,6 @@ def make_current_lif(backend: str) -> neuron.LIFNode:
         surrogate_function=surrogate.ATan(alpha=2.0),
         detach_reset=False,
         step_mode="m",
-        backend=backend,
         store_v_seq=True,
     )
 

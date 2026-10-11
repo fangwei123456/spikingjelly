@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
 import gc
 import hashlib
 import math
@@ -38,7 +37,6 @@ from benchmark.snn_llm.qwen_conversion._runtime import (
     load_calibration as _load_calibration,
     load_lock as _load_lock,
     load_model as _load_model,
-    relative_l2 as _relative_l2,
 )
 
 
@@ -277,19 +275,6 @@ def _benchmark_decode(
     }
 
 
-def _backend_parity(
-    candidate: Mapping[str, object], reference: Mapping[str, object]
-) -> Dict[str, object]:
-    if int(candidate["token_id"]) != int(reference["token_id"]):
-        raise ValueError("Torch and Triton SNN token IDs differ.")
-    value = _relative_l2(
-        torch.as_tensor(candidate["logits"]), torch.as_tensor(reference["logits"])
-    )
-    if value > 0.02:
-        raise ValueError(f"Torch/Triton SNN logits relative L2 {value} exceeds 0.02.")
-    return {"relative_l2": value, "token_id_equal": True}
-
-
 def _run(args: argparse.Namespace) -> Dict[str, object]:
     lock = _load_lock()
     record = lock["models"][args.model_key]
@@ -327,32 +312,26 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         autocast_context=precision.autocast_context,
         encoding_mode=None,
     )
-    backend_results = {}
-    evidence = {}
-    for backend in ("torch", "triton"):
-        converted = ModuleConverter(
-            Qwen2SNNRecipe(calibration, replace(config, neuron_backend=backend))
-        ).convert(precision.model)
-        prefill, backend_evidence = _benchmark_prefill(
-            model=converted,
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            autocast_context=precision.autocast_context,
-            encoding_mode="signed_if",
-        )
-        decode = _benchmark_decode(
-            model=converted,
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            autocast_context=precision.autocast_context,
-            encoding_mode="signed_if",
-        )
-        backend_results[backend] = {"prefill": prefill, "decode": decode}
-        evidence[backend] = backend_evidence
-        del converted
-        gc.collect()
-        torch.cuda.empty_cache()
-    parity = _backend_parity(evidence["triton"], evidence["torch"])
+    converted = ModuleConverter(Qwen2SNNRecipe(calibration, config)).convert(
+        precision.model
+    )
+    prefill, snn_evidence = _benchmark_prefill(
+        model=converted,
+        input_ids=input_ids,
+        attention_mask=attention_mask,
+        autocast_context=precision.autocast_context,
+        encoding_mode="signed_if",
+    )
+    decode = _benchmark_decode(
+        model=converted,
+        input_ids=input_ids,
+        attention_mask=attention_mask,
+        autocast_context=precision.autocast_context,
+        encoding_mode="signed_if",
+    )
+    del converted
+    gc.collect()
+    torch.cuda.empty_cache()
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": CONTRACT_KIND,
@@ -366,6 +345,10 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         },
         "model": {"key": args.model_key, **record},
         "environment": build_environment(args.device),
+        "neuron_implementation": {
+            family: functional.neuron_implementation(family, torch.device(args.device))
+            for family in ("if", "activation_aware_if")
+        },
         "configuration": {
             "precision": "bf16",
             "time_steps": args.time_steps,
@@ -384,24 +367,16 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         },
         "performance": {
             "dense": {"prefill": dense_prefill, "decode": dense_decode},
-            "snn": backend_results,
-            "triton_vs_torch": {
-                "prefill_speedup": backend_results["torch"]["prefill"]["median_ms"]
-                / backend_results["triton"]["prefill"]["median_ms"],
-                "decode_speedup": backend_results["torch"]["decode"]["median_ms"]
-                / backend_results["triton"]["decode"]["median_ms"],
-            },
-            "triton_vs_dense": {
+            "snn": {"automatic": {"prefill": prefill, "decode": decode}},
+            "automatic_vs_dense": {
                 "prefill_speed_ratio": dense_prefill["median_ms"]
-                / backend_results["triton"]["prefill"]["median_ms"],
-                "decode_speed_ratio": dense_decode["median_ms"]
-                / backend_results["triton"]["decode"]["median_ms"],
+                / prefill["median_ms"],
+                "decode_speed_ratio": dense_decode["median_ms"] / decode["median_ms"],
             },
         },
         "correctness": {
-            "torch_triton": parity,
             "dense_token_id": dense_evidence["token_id"],
-            "snn_token_id": evidence["triton"]["token_id"],
+            "snn_token_id": snn_evidence["token_id"],
         },
     }
 

@@ -73,8 +73,7 @@ MCore LLM 精度与此独立，继续由原生 transformer 和 optimizer 配置�
 更新、scheduler、EMA、checkpoint、日志和 ``reset_net`` 保持在图外。训练默认先运行
 11 个真实 step 再捕获，不执行 dummy optimizer step。输入 shape、dtype 或 layout 与
 捕获点不同时，该 batch 使用 eager 并计入 fallback。CUDA Graph 当前不支持 Vision
-多 rank（DDP/TP/PP）、FSDP2、FP8、memopt、CuPy backend 或
-``store_v_seq=True``；分布式 CUDA Graph 使用 MCore 原生 runtime。默认仍为 eager。
+多 rank（DDP/TP/PP）、FSDP2、FP8、memopt 或 ``store_v_seq=True``；分布式 CUDA Graph 使用 MCore 原生 runtime。默认仍为 eager。
 
 ``batch_size`` 是每个 DP rank 的 batch size；global batch 为
 ``batch_size * DP``，不乘 TP、PP 或 SNN 时间步。``tensor_parallel_size`` 和
@@ -90,7 +89,7 @@ validation loss 和 validation accuracy；返回的 ``metrics`` 字典包含最�
 
 ``neuron_config`` 可为 SEW-ResNet34 和两种 Spikformer config 选择可序列化的神经元与
 替代梯度。省略时逐位保留论文默认配置。自定义神经元会替换模型中的所有神经元位置，
-并须接受模型提供的 ``backend`` 和 ``step_mode`` 参数。内置类按完整路径解析；外部类
+并须接受模型提供的 ``step_mode`` 参数。内置类按完整路径解析；外部类
 必须在训练、checkpoint 导出和推理的每个进程中先导入并注册：
 
 .. code-block:: python
@@ -116,7 +115,7 @@ validation loss 和 validation accuracy；返回的 ``metrics`` 字典包含最�
 输入布局不根据 tensor 维数自动推断。
 
 训练入口在并行包装前调用 ``functional.set_step_mode``，并在完整时间窗结束后调用
-``functional.reset_net``。single-step 当前不支持 PP、memopt 或 Triton 神经元后端。
+``functional.reset_net``。single-step 当前不支持 PP 或 memopt。神经元实现会根据输入设备自动选择。
 内置 SEW-ResNet34 支持 ``"s"`` 和 ``"m"``；Spikformer 的 architecture 与
 attention 原生只支持 ``"m"``，不会通过 wrapper 模拟单步接口。
 single-step DDP 会关闭逐次 forward 的 buffer 广播，避免 T 次调用期间原地修改

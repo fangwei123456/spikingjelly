@@ -20,7 +20,6 @@ class RAFNode(BaseNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode: str = "s",
-        backend: str = "torch",
         store_v_seq: bool = False,
     ) -> None:
         r"""
@@ -32,8 +31,8 @@ class RAFNode(BaseNode):
 
         * **中文**
 
-        Resonate-and-fire (RAF) 神经元的构造函数（Izhikevich, *Resonate-and-fire
-        neurons*, Neural Networks 14 (2001) 883-894）。
+        Resonate-and-fire (RAF) 神经元的构造函数（Izhikevich,
+        ``Resonate-and-fire neurons``, Neural Networks 14 (2001) 883-894）。
 
         与积分发放（IF/LIF/QIF/EIF/Izhikevich）神经元家族不同，RAF 神经元是一个
         二维线性阈下*振荡*系统，而非积分器：等价于一个以固定衰减率 :math:`b < 0`
@@ -54,8 +53,7 @@ class RAFNode(BaseNode):
         ``self.u`` 不受影响 —— 这正是产生放电后反弹（post-inhibitory rebound）
         的原因。
 
-        本次实现固定 :math:`b`、:math:`\omega`、:math:`dt`（不可学习），仅支持
-        ``'torch'`` 后端；可学习参数与其它后端留作后续工作。
+        本次实现固定衰减率 b、固有角频率 omega 和积分步长 dt（均不可学习）。
 
         :param b: 衰减率，须为负数
         :type b: float
@@ -75,8 +73,6 @@ class RAFNode(BaseNode):
         :type detach_reset: bool
         :param step_mode: 步进模式，可选 ``'s'`` （单步）或 ``'m'`` （多步）
         :type step_mode: str
-        :param backend: 计算后端。目前仅支持 ``'torch'``
-        :type backend: str
         :param store_v_seq: 当 ``step_mode = 'm'`` 且输入形状为 ``[T, N, *]`` 时，
             是否保存所有时间步的放电分量序列 ``self.v_seq``（形状为
             ``[T, N, *]``）。若为 ``False``，仅保留最后一个时间步的 ``self.v``
@@ -114,9 +110,8 @@ class RAFNode(BaseNode):
         :class:`BaseNode`'s soft/hard reset rule) — ``self.u`` is left
         untouched, which is what produces post-inhibitory rebound.
 
-        This implementation fixes :math:`b`, :math:`\omega`, :math:`dt`
-        (not learnable) and supports the ``'torch'`` backend only; learnable
-        parameters and other backends are left for future work.
+        This implementation fixes :math:`b`, :math:`\omega`, and :math:`dt`
+        (not learnable).
 
         :param b: Decay rate, must be negative
         :type b: float
@@ -140,9 +135,6 @@ class RAFNode(BaseNode):
         :param step_mode: step mode, either ``'s'`` (single-step) or ``'m'``
             (multi-step)
         :type step_mode: str
-        :param backend: backend for this neuron. Only ``'torch'`` is
-            currently supported
-        :type backend: str
         :param store_v_seq: when ``step_mode = 'm'`` and input shape is
             ``[T, N, *]``, whether to store the firing component at all time
             steps in ``self.v_seq``. If ``False``, only the final ``self.v``
@@ -158,9 +150,8 @@ class RAFNode(BaseNode):
             v_reset,
             surrogate_function,
             detach_reset,
-            step_mode,
-            backend,
-            store_v_seq,
+            step_mode=step_mode,
+            store_v_seq=store_v_seq,
         )
         self.register_memory("u", 0.0)
         self.b = b
@@ -210,10 +201,3 @@ class RAFNode(BaseNode):
             self.detach_reset,
         )
         return (spike,), (v, u)
-
-    @property
-    def supported_backends(self) -> tuple[str, ...]:
-        if self.step_mode in ("s", "m"):
-            return ("torch",)
-        else:
-            raise ValueError(self.step_mode)

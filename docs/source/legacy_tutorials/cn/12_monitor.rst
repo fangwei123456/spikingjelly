@@ -30,7 +30,7 @@
 .. code:: python
 
    from spikingjelly.activation_based.monitor import Monitor
-   mon = Monitor(net, device='cpu', backend='torch')
+   mon = Monitor(net, device='cpu')
 
 这样就将一个网络与监视器绑定了起来。但是此时监视功能还处于默认的禁用模式，因此在开始记录之前需要手动启用监视功能：
 

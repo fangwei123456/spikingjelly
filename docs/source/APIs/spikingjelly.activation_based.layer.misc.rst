@@ -11,4 +11,4 @@ SpikingJelly's **miscellaneous module** provides auxiliary layers and other util
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr

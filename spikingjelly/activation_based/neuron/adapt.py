@@ -22,7 +22,6 @@ class AdaptBaseNode(BaseNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
-        backend="torch",
         store_v_seq: bool = False,
     ):
         """
@@ -56,8 +55,6 @@ class AdaptBaseNode(BaseNode):
         :type detach_reset: bool
         :param step_mode: 步进模式，可为 ``'s'`` (单步) 或 ``'m'`` (多步)
         :type step_mode: str
-        :param backend: 后端
-        :type backend: str
         :param store_v_seq: 是否将每个时间步的膜电位保存到 ``self.v_seq``。当 ``step_mode = 's'`` 时，
             每个时间步结束后的膜电位会被追加到 ``self.v_seq``，直到调用 ``reset()``；每一步都会复制整个序列，
             因此该选项主要用于监控和调试
@@ -91,8 +88,6 @@ class AdaptBaseNode(BaseNode):
         :type detach_reset: bool
         :param step_mode: Step mode, can be ``'s'`` (single-step) or ``'m'`` (multi-step)
         :type step_mode: str
-        :param backend: Backend for computation
-        :type backend: str
         :param store_v_seq: Whether to store the membrane potential at each time-step in ``self.v_seq``.
             When ``step_mode = 's'``, the membrane potential after each time-step is appended to
             ``self.v_seq`` until ``reset()`` is called; every step copies the whole sequence,
@@ -112,9 +107,8 @@ class AdaptBaseNode(BaseNode):
             v_reset,
             surrogate_function,
             detach_reset,
-            step_mode,
-            backend,
-            store_v_seq,
+            step_mode=step_mode,
+            store_v_seq=store_v_seq,
         )
 
         self.register_memory("w", w_rest)
@@ -196,7 +190,6 @@ class IzhikevichNode(AdaptBaseNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
-        backend="torch",
         store_v_seq: bool = False,
     ):
         """
@@ -237,8 +230,6 @@ class IzhikevichNode(AdaptBaseNode):
         :type detach_reset: bool
         :param step_mode: 步进模式
         :type step_mode: str
-        :param backend: 后端
-        :type backend: str
         :param store_v_seq: 是否将每个时间步的膜电位保存到 ``self.v_seq``。当 ``step_mode = 's'`` 时，
             每个时间步结束后的膜电位会被追加到 ``self.v_seq``，直到调用 ``reset()``；每一步都会复制整个序列，
             因此该选项主要用于监控和调试
@@ -279,8 +270,6 @@ class IzhikevichNode(AdaptBaseNode):
         :type detach_reset: bool
         :param step_mode: Step mode, ``'s'`` or ``'m'``
         :type step_mode: str
-        :param backend: Backend
-        :type backend: str
         :param store_v_seq: Whether to store the membrane potential at each time-step in ``self.v_seq``.
             When ``step_mode = 's'``, the membrane potential after each time-step is appended to
             ``self.v_seq`` until ``reset()`` is called; every step copies the whole sequence,
@@ -301,7 +290,6 @@ class IzhikevichNode(AdaptBaseNode):
             surrogate_function,
             detach_reset,
             step_mode,
-            backend,
             store_v_seq,
         )
         self.tau = tau
@@ -338,72 +326,53 @@ class IzhikevichNode(AdaptBaseNode):
         )
         return (spike,), (v, w)
 
-    @property
-    def supported_backends(self):
-        if self.step_mode == "s":
-            return ("torch",)
-        elif self.step_mode == "m":
-            return ("torch", "cupy")
-        else:
-            raise ValueError(self.step_mode)
-
     def multi_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        if self.backend == "torch":
-            return super().multi_step_functional_forward(inputs, states, **kwargs)
-        elif self.backend == "cupy":
-            x_seq = inputs[0]
-            v = states[0]
-            w = states[-1]
-            spike_seq, v, w, _, _ = functional.izhikevich_multi_step_cupy(
-                x_seq,
-                v,
-                w,
-                self.tau,
-                self.v_threshold,
-                self.v_reset,
-                self.v_rest,
-                self.a,
-                self.b,
-                self.tau_w,
-                self.v_c,
-                self.a0,
-                self.detach_reset,
-                self.surrogate_function,
-                False,
-            )
-            return (spike_seq,), (v, w)
-        else:
-            raise ValueError(self.backend)
+        spike_seq, v, w, _, _ = functional.izhikevich_multi_step(
+            inputs[0],
+            states[0],
+            states[-1],
+            self.tau,
+            self.v_threshold,
+            self.v_reset,
+            self.v_rest,
+            self.a,
+            self.b,
+            self.tau_w,
+            self.v_c,
+            self.a0,
+            self.detach_reset,
+            self.surrogate_function,
+            False,
+        )
+        return (spike_seq,), (v, w)
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
-        if not self.store_v_seq or self.backend != "cupy":
+        if not self.store_v_seq:
             return super().multi_step_forward(x_seq, *args, **kwargs)
 
         states = self.materialize_states(
             (x_seq, *args), tuple(self._memories.values()), "m"
         )
-        spike_seq, self.v, self.w, self.v_seq, _ = (
-            functional.izhikevich_multi_step_cupy(
-                x_seq,
-                states[0],
-                states[-1],
-                self.tau,
-                self.v_threshold,
-                self.v_reset,
-                self.v_rest,
-                self.a,
-                self.b,
-                self.tau_w,
-                self.v_c,
-                self.a0,
-                self.detach_reset,
-                self.surrogate_function,
-                True,
-            )
+        spike_seq, self.v, self.w, self.v_seq, _ = functional.izhikevich_multi_step(
+            x_seq,
+            states[0],
+            states[-1],
+            self.tau,
+            self.v_threshold,
+            self.v_reset,
+            self.v_rest,
+            self.a,
+            self.b,
+            self.tau_w,
+            self.v_c,
+            self.a0,
+            self.detach_reset,
+            self.surrogate_function,
+            self.store_v_seq,
         )
         return spike_seq

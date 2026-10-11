@@ -17,7 +17,7 @@ def _empty_like(x, *, dtype=None, sequence=True, shape=None, align_time_slice=Fa
         strides[d] = size
         size *= max(output_shape[d], 1)
     if align_time_slice:
-        # CuPy returns result[1:]; align that view for Inductor's external-op ABI.
+        # An external implementation can return result[1:]; align that view for Inductor's external-op ABI.
         element_size = (x.dtype if dtype is None else dtype).itemsize
         prefix = -strides[0] % (16 // element_size)
         if prefix:

@@ -3,7 +3,6 @@ from typing import Optional
 import torch
 
 from .. import functional, surrogate
-from ..functional.neuron import _lif_multi_step_triton_mp
 from .base_node import BaseNode, NonSpikingBaseNode, SimpleBaseNode
 
 
@@ -105,7 +104,6 @@ class LIFNode(BaseNode):
         surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
-        backend="torch",
         store_v_seq: bool = False,
     ):
         """
@@ -150,11 +148,6 @@ class LIFNode(BaseNode):
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
-
-        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。该参数是显式执行后端选择：设置为 ``'torch'``、``'cupy'`` 或 ``'triton'`` 时，将分别使用
-            对应后端，不会隐式切换到其他后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端通常更快。
-        :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
@@ -203,12 +196,6 @@ class LIFNode(BaseNode):
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        :param backend: backend for this neurons layer. Different ``step_mode`` may support different backends. Users can
-            print ``self.supported_backends`` to check what backends are supported by the current ``step_mode``. This argument
-            is an explicit execution-backend choice: ``'torch'``, ``'cupy'``, and ``'triton'`` each use their own backend and
-            are not silently upgraded to another backend. If supported, ``'cupy'`` or ``'triton'`` is usually faster
-        :type backend: str
-
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
@@ -224,38 +211,15 @@ class LIFNode(BaseNode):
             v_reset,
             surrogate_function,
             detach_reset,
-            step_mode,
-            backend,
-            store_v_seq,
+            step_mode=step_mode,
+            store_v_seq=store_v_seq,
         )
 
         self.tau = tau
         self.decay_input = decay_input
 
-    @property
-    def supported_backends(self):
-        if self.step_mode == "s":
-            return ("torch", "cupy")
-        elif self.step_mode == "m":
-            return ("torch", "cupy", "triton")
-        else:
-            raise ValueError(self.step_mode)
-
     def extra_repr(self):
         return super().extra_repr() + f", tau={self.tau}"
-
-    @staticmethod
-    def _requires_mixed_precision_triton(x_seq, precision):
-        native_compute = {
-            torch.float32: "fp32",
-            torch.float16: "fp16",
-            torch.bfloat16: "bf16",
-        }.get(x_seq.dtype)
-        return precision is not None and precision != (
-            x_seq.dtype,
-            native_compute,
-            native_compute,
-        )
 
     def single_step_functional_forward(
         self,
@@ -266,36 +230,16 @@ class LIFNode(BaseNode):
         x = inputs[0]
         v = states[0]
 
-        if self.backend == "torch":
-            surrogate_function = (
-                self.surrogate_function
-                if self.training
-                or not getattr(self.surrogate_function, "spiking", True)
-                else surrogate.heaviside
-            )
-            spike, v = functional.lif_step(
-                x,
-                v,
-                self.tau,
-                self.decay_input,
-                self.v_threshold,
-                self.v_reset,
-                surrogate_function,
-                self.detach_reset,
-            )
-        elif self.backend == "cupy":
-            spike, v = functional.lif_step_cupy(
-                x,
-                v,
-                self.tau,
-                self.decay_input,
-                self.v_threshold,
-                self.v_reset,
-                self.surrogate_function,
-                self.detach_reset,
-            )
-        else:
-            raise ValueError(self.backend)
+        spike, v = functional.lif_step(
+            x,
+            v,
+            self.tau,
+            self.decay_input,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+        )
         return (spike,), (v, *states[1:])
 
     def multi_step_functional_forward(
@@ -304,111 +248,58 @@ class LIFNode(BaseNode):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        x_seq = inputs[0]
-        v = states[0]
-
-        if self.backend == "cupy":
-            spike_seq, v, _ = functional.lif_multi_step_cupy(
-                x_seq,
-                v,
-                self.tau,
-                self.decay_input,
-                self.v_threshold,
-                self.v_reset,
-                self.surrogate_function,
-                self.detach_reset,
-                False,
-            )
-        elif self.backend == "triton":
-            if not self.training and not getattr(
-                self.surrogate_function, "spiking", True
-            ):
-                raise NotImplementedError(
-                    "Triton backend only supports spiking surrogate functions. "
-                    "Use backend='torch' for non-spiking surrogate functions."
-                )
-            precision = self._triton_precision
-            use_mixed_precision = self._requires_mixed_precision_triton(
-                x_seq, precision
-            )
-            function = (
-                _lif_multi_step_triton_mp
-                if use_mixed_precision
-                else functional.lif_multi_step_triton
-            )
-            spike_seq, v, _ = function(
-                x_seq,
-                v,
-                self.tau,
-                self.decay_input,
-                self.v_threshold,
-                self.v_reset,
-                self.surrogate_function,
-                self.detach_reset,
-                False,
-                *((precision,) if use_mixed_precision else ()),
-            )
-        elif self.backend == "torch":
-            return super().multi_step_functional_forward(inputs, states, **kwargs)
-        else:
-            raise ValueError(self.backend)
-
+        spike_seq, v, _ = functional.lif_multi_step(
+            inputs[0],
+            states[0],
+            self.tau,
+            self.decay_input,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+            False,
+            neuron_storage=(
+                None if self._neuron_precision is None else self._neuron_precision[0]
+            ),
+            neuron_fwd=(
+                "fp32" if self._neuron_precision is None else self._neuron_precision[1]
+            ),
+            neuron_bwd=(
+                "fp32" if self._neuron_precision is None else self._neuron_precision[2]
+            ),
+        )
         return (spike_seq,), (v,)
 
-    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
-        if not self.store_v_seq or self.backend == "torch":
+    def multi_step_forward(
+        self, x_seq: torch.Tensor, *args: torch.Tensor, **kwargs: object
+    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
+        if (
+            type(self).single_step_functional_forward
+            is not LIFNode.single_step_functional_forward
+            or type(self).multi_step_functional_forward
+            is not LIFNode.multi_step_functional_forward
+        ):
             return super().multi_step_forward(x_seq, *args, **kwargs)
-
-        states = self.materialize_states(
-            (x_seq, *args), tuple(self._memories.values()), "m"
+        inputs = (x_seq, *args)
+        states = self.materialize_states(inputs, tuple(self._memories.values()), "m")
+        precision = self._neuron_precision
+        spikes, v, v_seq = functional.lif_multi_step(
+            x_seq,
+            states[0],
+            self.tau,
+            self.decay_input,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+            self.store_v_seq,
+            neuron_storage=None if precision is None else precision[0],
+            neuron_fwd="fp32" if precision is None else precision[1],
+            neuron_bwd="fp32" if precision is None else precision[2],
         )
-        v = states[0]
-        if self.backend == "cupy":
-            spike_seq, v, v_seq = functional.lif_multi_step_cupy(
-                x_seq,
-                v,
-                self.tau,
-                self.decay_input,
-                self.v_threshold,
-                self.v_reset,
-                self.surrogate_function,
-                self.detach_reset,
-                True,
-            )
-        elif self.backend == "triton":
-            if not self.training and not getattr(
-                self.surrogate_function, "spiking", True
-            ):
-                raise NotImplementedError(
-                    "Triton backend only supports spiking surrogate functions. "
-                    "Use backend='torch' for non-spiking surrogate functions."
-                )
-            precision = self._triton_precision
-            use_mixed_precision = self._requires_mixed_precision_triton(
-                x_seq, precision
-            )
-            function = (
-                _lif_multi_step_triton_mp
-                if use_mixed_precision
-                else functional.lif_multi_step_triton
-            )
-            spike_seq, v, v_seq = function(
-                x_seq,
-                v,
-                self.tau,
-                self.decay_input,
-                self.v_threshold,
-                self.v_reset,
-                self.surrogate_function,
-                self.detach_reset,
-                True,
-                *((precision,) if use_mixed_precision else ()),
-            )
-        else:
-            raise ValueError(self.backend)
-        self.v = v
+        self._memories["v"] = v
         self.v_seq = v_seq
-        return spike_seq
+        return spikes
 
 
 class NonSpikingLIFNode(NonSpikingBaseNode):

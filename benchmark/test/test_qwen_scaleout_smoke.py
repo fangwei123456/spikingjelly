@@ -50,8 +50,6 @@ def test_scaleout_invalid_levels_fail_before_cuda_or_model_loading(tmp_path, cap
             "32",
             "--calibration-quantile",
             "1.0",
-            "--neuron-backend",
-            "torch",
         ]
     )
 

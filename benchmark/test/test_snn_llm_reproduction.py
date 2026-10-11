@@ -103,18 +103,9 @@ def test_cpu_smoke_records_reproducible_workload_and_metrics(tmp_path: Path):
         "git",
         "locks",
     }
-    assert manifest["source"]["locks"] == {
-        "sources": {
-            "spikegpt": {
-                "repository": "https://github.com/ridgerchu/SpikeGPT.git",
-                "revision": "029f86f0536f2b2451524038fc9890cc76c2429e",
-            },
-            "spikingjelly": {
-                "repository": "https://github.com/fangwei123456/spikingjelly.git",
-                "revision": "2797c5575515b59d7f09a3d5b732d6d25e148d13",
-            },
-        },
-    }
+    assert manifest["source"]["locks"] == json.loads(
+        _SMOKE_SCRIPT.with_name("sources.json").read_text(encoding="utf-8")
+    )
     assert set(manifest["source"]["execution_files_sha256"]) == {
         "smoke.py",
         "sources.json",

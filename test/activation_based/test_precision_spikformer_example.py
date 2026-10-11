@@ -18,7 +18,6 @@ def _model():
         embed_dims=64,
         num_heads=4,
         depths=2,
-        backend="torch",
     ).train()
 
 

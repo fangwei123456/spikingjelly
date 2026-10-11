@@ -103,7 +103,7 @@ def test_checkpoint_module_preserves_names_state_dict_and_parameter_identity():
 
 
 def test_checkpoint_module_commits_neuron_state_once():
-    module = neuron.LIFNode(step_mode="m", backend="torch")
+    module = neuron.LIFNode(step_mode="m")
     reference = copy.deepcopy(module)
     wrapped = memopt.checkpoint_module(module)
 

@@ -54,7 +54,7 @@ jobs:
         run: uvx ruff==0.15.22 check .
 
       - name: Run CPU tests
-        run: uv run --no-sync pytest test/ -q
+        run: uv run --no-sync pytest test/ -v -o faulthandler_timeout=60
 
       - name: Build documentation without warnings
         run: uv run --no-sync sphinx-build -M html docs/source docs/build -W --keep-going
@@ -80,6 +80,35 @@ jobs:
       - name: Build distributions
         run: uv build --out-dir dist --build-constraints .github/ci-constraints.txt
 
+      - name: Check pure Python artifacts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import tarfile
+          import zipfile
+
+          wheel = next(Path("dist").glob("*.whl"))
+          models = [source.parent.name for source in Path("ops").glob("*/native.cu")]
+          assert models
+          assert wheel.name.endswith("-py3-none-any.whl"), wheel
+          with zipfile.ZipFile(wheel) as archive:
+              names = archive.namelist()
+              assert "spikingjelly/_ops/__init__.py" in names
+              for model in models:
+                  assert f"spikingjelly/_ops/{model}/__init__.py" in names
+                  assert f"spikingjelly/_ops/{model}/kernels.cuh" in names
+              assert "spikingjelly/_ops/_cuda.cuh" in names
+              assert not any(
+                  name.endswith((".so", ".pyd", "_native_build.json")) for name in names
+              )
+          with tarfile.open(next(Path("dist").glob("*.tar.gz"))) as archive:
+              for model in models:
+                  assert any(
+                      name.endswith(f"/ops/{model}/native.cu") for name in archive.getnames()
+                  )
+          PY
+
       - name: Install wheel in a clean environment
         shell: bash
         run: |
@@ -90,4 +119,33 @@ jobs:
           test -n "$wheel"
           uv pip install --python "$package_venv/bin/python" "$wheel" --no-deps
           cd "$(mktemp -d)"
-          "$package_venv/bin/python" -c 'import spikingjelly'
+          "$package_venv/bin/python" - <<'PY'
+          import importlib.util
+          import sys
+          import spikingjelly
+          import spikingjelly._ops
+
+          for model in ("lif", "if_", "plif"):
+              assert importlib.util.find_spec(f"spikingjelly._ops.{model}") is not None
+          assert "torch" not in sys.modules
+          PY
+
+      - name: Check editable mapping outside the source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_venv="$(mktemp -d)"
+          uv venv --python 3.11 "$package_venv"
+          uv pip install --python "$package_venv/bin/python" --editable . --no-deps \
+            --build-constraints .github/ci-constraints.txt
+          cd "$(mktemp -d)"
+          "$package_venv/bin/python" - <<'PY'
+          import importlib.util
+          import sys
+          import spikingjelly
+          import spikingjelly._ops
+
+          for model in ("lif", "if_", "plif"):
+              assert importlib.util.find_spec(f"spikingjelly._ops.{model}") is not None
+          assert "torch" not in sys.modules
+          PY

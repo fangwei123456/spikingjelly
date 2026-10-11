@@ -16,7 +16,12 @@ if [[ -z "$real_ocr" ]]; then
     exit 127
 fi
 
-"$real_ocr" "$@"
+if [[ "${1:-}" == "review" ]]; then
+    # Signal only the npm launcher: it forwards TERM to OCR; two signals force exit.
+    timeout --foreground --signal=TERM --kill-after=60s 35m "$real_ocr" "$@"
+else
+    "$real_ocr" "$@"
+fi
 ocr_exit_code=$?
 if [[ "${1:-}" != "review" ]]; then
     exit "$ocr_exit_code"
@@ -46,6 +51,31 @@ finding_count="$(jq -er 'if (.comments | type) == "array" then (.comments | leng
     fi
     exit 1
 }
+
+if (( ocr_exit_code == 124 )) || [[ "$review_status" == partial ]] ||
+    jq -e '.summary.budget_exceeded == true' "$result_path" >/dev/null; then
+    stop_reason="stopped with status $review_status"
+    if (( ocr_exit_code == 124 )); then
+        stop_reason="reached the 35-minute time limit"
+    elif jq -e '.summary.budget_exceeded == true' "$result_path" >/dev/null; then
+        stop_reason="reached the 20M token budget"
+    fi
+    printf -v message 'Review incomplete: %s; publishing %s confirmed finding(s).' \
+        "$stop_reason" "$finding_count"
+    updated_result="$(mktemp "${result_path}.XXXXXX")" || exit 1
+    jq --arg message "$message" '
+        if .status == "complete" or .status == "success" then
+            .status = "partial"
+        else . end |
+        if .manifest.terminal_state? == "complete" then
+            .manifest.terminal_state = "partial"
+        else . end |
+        .message = $message |
+        .warnings = (.warnings // []) + [{type: "review_incomplete", message: $message}]
+    ' "$result_path" > "$updated_result" && mv "$updated_result" "$result_path" || exit 1
+    printf '%s\n' "$message" >&2
+    exit 0
+fi
 
 if (( finding_count > 0 )); then
     if (( ocr_exit_code != 0 )) || [[ "$review_status" != complete && "$review_status" != success && "$review_status" != skipped ]]; then

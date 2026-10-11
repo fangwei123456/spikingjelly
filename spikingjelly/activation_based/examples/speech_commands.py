@@ -102,13 +102,6 @@ f_max = 4000
 f_min = 20
 delta_order = 0
 size = 16000
-try:
-    import cupy  # noqa
-
-    backend = "cupy"
-except ModuleNotFoundError:
-    backend = "torch"
-    print("Cupy is not intalled. Using torch backend for neurons.")
 
 
 def mel_to_hz(mels, dct_type):
@@ -427,7 +420,6 @@ class Net(nn.Module):
                 neuron.LIFNode(
                     tau=10.0 / 7,
                     surrogate_function=surrogate.Sigmoid(alpha=10.0),
-                    backend=backend,
                     step_mode="m",
                 )
             ),
@@ -445,7 +437,6 @@ class Net(nn.Module):
                 neuron.LIFNode(
                     tau=10.0 / 7,
                     surrogate_function=surrogate.Sigmoid(alpha=10.0),
-                    backend=backend,
                     step_mode="m",
                 )
             ),
@@ -463,7 +454,6 @@ class Net(nn.Module):
                 neuron.LIFNode(
                     tau=10.0 / 7,
                     surrogate_function=surrogate.Sigmoid(alpha=10.0),
-                    backend=backend,
                     step_mode="m",
                 ),
                 flatten=True,

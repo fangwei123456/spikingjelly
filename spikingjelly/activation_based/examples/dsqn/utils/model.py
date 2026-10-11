@@ -44,8 +44,6 @@ class DSQN(nn.Module):
         self.T = T
 
         functional.set_step_mode(self.network, step_mode="m")
-        if use_cuda:
-            functional.set_backend(self.network, backend="cupy")
 
     def forward(self, x):
         x_seq = x.unsqueeze(0).expand(

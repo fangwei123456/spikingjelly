@@ -38,7 +38,7 @@ The outputs are:
     (conv1): Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False, step_mode=s)
     (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
     (sn1): IFNode(
-      v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+      v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
       (surrogate_function): ATan(alpha=2.0, spiking=True)
     )
     (maxpool): MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False, step_mode=s)
@@ -47,13 +47,13 @@ The outputs are:
         (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
       )
@@ -61,13 +61,13 @@ The outputs are:
         (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
       )
@@ -77,13 +77,13 @@ The outputs are:
         (conv1): Conv2d(64, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (downsample): Sequential(
@@ -95,13 +95,13 @@ The outputs are:
         (conv1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
       )
@@ -111,13 +111,13 @@ The outputs are:
         (conv1): Conv2d(128, 256, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (downsample): Sequential(
@@ -129,13 +129,13 @@ The outputs are:
         (conv1): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
       )
@@ -145,13 +145,13 @@ The outputs are:
         (conv1): Conv2d(256, 512, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (downsample): Sequential(
@@ -163,13 +163,13 @@ The outputs are:
         (conv1): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn1): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
         (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=s)
         (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=s)
         (sn2): IFNode(
-          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s, backend=torch
+          v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=s
           (surrogate_function): ATan(alpha=2.0, spiking=True)
         )
       )
@@ -294,7 +294,6 @@ we can train large-scale SNNs easily. Here are the example codes:
       def get_args_parser(self, add_help=True):
           parser = super().get_args_parser()
           parser.add_argument('--T', type=int, help="total time-steps")
-          parser.add_argument('--cupy', action="store_true", help="set the neurons to use cupy backend")
           return parser
 
       def get_tb_logdir_name(self, args):
@@ -305,9 +304,6 @@ we can train large-scale SNNs easily. Here are the example codes:
               model = spiking_resnet.__dict__[args.model](pretrained=args.pretrained, spiking_neuron=neuron.IFNode,
                                                           surrogate_function=surrogate.ATan(), detach_reset=True)
               functional.set_step_mode(model, step_mode='m')
-              if args.cupy:
-                  functional.set_backend(model, 'cupy', neuron.IFNode)
-
               return model
           else:
               raise ValueError(f"args.model should be one of {spiking_resnet.__all__}")
@@ -333,3 +329,16 @@ Training with DDP on two GPUs:
 .. [#ResNet] He, Kaiming, et al. "Deep residual learning for image recognition." Proceedings of the IEEE conference on computer vision and pattern recognition. 2016.
 
 .. [#ImageNet] Deng, Jia, et al. "Imagenet: A large-scale hierarchical image database." 2009 IEEE conference on computer vision and pattern recognition. IEEE, 2009.
+
+Running the examples and interpreting results
+-------------------------------------------------
+
+The model runs on its input device automatically. Reset independent batches
+with ``functional.reset_net`` after backward and parameter updates; see
+:doc:`./neuron` for continuous state. AMP and fused neuron execution are separate
+policies. See :doc:`./precision` for state precision and :doc:`./triton_backend`
+for compilation and diagnostics.
+
+The accuracy, curves and logs on this page come from historical experiments;
+some runs lack an exact version. They have not been retrained or verified on
+current V2, so they cannot establish its speed or accuracy.

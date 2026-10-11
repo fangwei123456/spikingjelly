@@ -32,7 +32,7 @@ Adaptive Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Nonlinear Integrate-and-fire Neurons
 --------------------------------------------------
@@ -41,7 +41,7 @@ Nonlinear Integrate-and-fire Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Resonate-and-Fire Neurons
 --------------------------------------------------
@@ -50,7 +50,7 @@ Resonate-and-Fire Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 LIF Variants
 --------------------------------------------------
@@ -59,7 +59,7 @@ LIF Variants
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Neurons with Membrane Potential Batch Normalization
 ----------------------------------------------------------
@@ -68,7 +68,6 @@ Neurons with Membrane Potential Batch Normalization
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends
 
 Differentiation on Spike Representation (DSR)
 --------------------------------------------------
@@ -77,7 +76,7 @@ Differentiation on Spike Representation (DSR)
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Neurons for Online Learning
 -----------------------------------------------------------------
@@ -86,7 +85,6 @@ Neurons for Online Learning
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends
 
 Few-Spike / LAS Neuron Primitives
 --------------------------------------------------
@@ -95,7 +93,46 @@ Few-Spike / LAS Neuron Primitives
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
+
+Signed Ternary Neurons
+--------------------------------------------------
+
+:class:`~spikingjelly.activation_based.neuron.TernaryIFNode` 和
+:class:`~spikingjelly.activation_based.neuron.TernaryLIFNode` 使用正负两个阈值，
+分别产生 ``1`` 和 ``-1`` 事件，未达到阈值时输出 ``0``。IF 积累输入，
+LIF 在积累过程中加入电位泄漏；两者均支持替代梯度训练、硬重置和有符号软重置。
+
+----
+
+:class:`~spikingjelly.activation_based.neuron.TernaryIFNode` and
+:class:`~spikingjelly.activation_based.neuron.TernaryLIFNode` emit ``1`` or ``-1``
+at the positive or negative threshold, and ``0`` otherwise. IF accumulates input;
+LIF adds voltage leakage. Both support surrogate-gradient training, hard reset
+and signed soft reset.
+
+.. _signed-ternary-compatibility:
+
+.. admonition:: 工具兼容性 / Tool compatibility
+
+   有符号事件适用于稠密 PyTorch 层，但二值脉冲压缩、默认 SynOps/能耗估计
+   和 NIR/Lava 导出不适用。使用 ``memopt.optimize_memory`` 时设置
+   ``compress=False``，使用 ``memopt.checkpoint_module`` 时设置
+   ``compressor=None``。用 ``functional.first_spike_index`` 检测任一极性的
+   首次事件时，先取绝对值，并遵循其时间维布局。
+
+   Signed events work with dense PyTorch layers. Binary spike compression,
+   default SynOps/energy estimates and NIR/Lava export do not support them.
+   Set ``compress=False`` in ``memopt.optimize_memory`` and ``compressor=None``
+   in ``memopt.checkpoint_module``. To find the first event of either polarity
+   with ``functional.first_spike_index``, take absolute values first and follow
+   its time-axis layout.
+
+.. automodule:: spikingjelly.activation_based.neuron.ternary
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :exclude-members: extra_repr
 
 SpikeZIP Neuron Primitives
 --------------------------------------------------
@@ -104,7 +141,7 @@ SpikeZIP Neuron Primitives
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Integer-Valued Training Neurons
 --------------------------------------------------
@@ -113,7 +150,7 @@ Integer-Valued Training Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Neurons with Inter-layer Connection
 --------------------------------------------------
@@ -131,4 +168,4 @@ Neurons with Input or Output Noise
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr

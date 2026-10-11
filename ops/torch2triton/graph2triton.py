@@ -1,0 +1,442 @@
+import hashlib
+import linecache
+import re
+import threading
+import types
+import weakref
+from typing import Optional, Tuple
+
+import torch
+import torch.fx as fx
+
+from spikingjelly.logger import logger
+
+try:
+    import triton
+    import triton.language as tl
+except (ImportError, OSError) as e:
+    from .. import triton_missing as dummy
+
+    logger.info("Optional Triton dependency unavailable: {}", e)
+    triton = dummy.DummyImport()
+    tl = dummy.DummyImport()
+
+from ..triton_runtime import type_str_dict
+
+__all__ = [
+    "generate_triton_code_str",
+    "compile_triton_code_str",
+]
+
+
+_CODEGEN_LOCK = threading.Lock()
+
+
+class _SourceOwner:
+    pass
+
+
+_NAMESPACE_METADATA_KEYS = {
+    "__name__",
+    "__spec__",
+    "__loader__",
+    "__package__",
+    "__path__",
+    "__file__",
+    "__cached__",
+    "__builtins__",
+    "__doc__",
+    "__spikingjelly_source_owner__",
+}
+
+
+def _generate_hash(s: str, w: int = 8) -> str:
+    hasher = hashlib.sha256(s.encode("utf-8"))
+    return hasher.hexdigest()[:w]
+
+
+def _safe_codegen_stem(kernel_name: str) -> str:
+    name = str(kernel_name).replace("\\", "/").rsplit("/", 1)[-1]
+    safe = re.sub(r"[^0-9A-Za-z_.-]+", "_", name).strip("._")
+    return (safe or "kernel")[:128]
+
+
+def _has_real_triton_runtime() -> bool:
+    return isinstance(triton, types.ModuleType) and isinstance(tl, types.ModuleType)
+
+
+def _uw(arg) -> str:
+    """Unwrap an argument to its string representation for Triton code generation."""
+    if isinstance(arg, fx.Node):
+        return arg.name
+    elif isinstance(arg, torch.dtype):
+        return type_str_dict[arg]
+    return str(arg)
+
+
+# code generation rules
+FX_TO_TRITON = {
+    "add": lambda args, kwargs: f"{_uw(args[0])} + {_uw(args[1])}",
+    "add.Scalar": lambda args, kwargs: f"{_uw(args[0])} + {_uw(args[1])}",
+    "add.Tensor": lambda args, kwargs: (
+        f"{_uw(args[0])} + {_uw(args[1])}"
+        if kwargs.get("alpha", 1.0) == 1.0
+        else f"{_uw(args[0])} + ({kwargs['alpha']} * {_uw(args[1])})"
+    ),
+    "sub": lambda args, kwargs: f"{_uw(args[0])} - {_uw(args[1])}",
+    "sub.Tensor": lambda args, kwargs: (
+        f"{_uw(args[0])} - {_uw(args[1])}"
+        if kwargs.get("alpha", 1.0) == 1.0
+        else f"{_uw(args[0])} - ({kwargs['alpha']} * {_uw(args[1])})"
+    ),
+    "sub.Scalar": lambda args, kwargs: f"{_uw(args[0])} - {_uw(args[1])}",
+    "rsub.Scalar": lambda args, kwargs: f"{_uw(args[1])} - {_uw(args[0])}",
+    "mul": lambda args, kwargs: f"{_uw(args[0])} * {_uw(args[1])}",
+    "mul.Tensor": lambda args, kwargs: f"{_uw(args[0])} * {_uw(args[1])}",
+    "mul.Scalar": lambda args, kwargs: f"{_uw(args[0])} * {_uw(args[1])}",
+    "div": lambda args, kwargs: f"{_uw(args[0])} / {_uw(args[1])}",
+    "div.Tensor": lambda args, kwargs: f"{_uw(args[0])} / {_uw(args[1])}",
+    "div.Scalar": lambda args, kwargs: f"{_uw(args[0])} / {_uw(args[1])}",
+    "bitwise_and.Tensor": lambda args, kwargs: f"{_uw(args[0])} & {_uw(args[1])}",
+    "bitwise_or.Tensor": lambda args, kwargs: f"{_uw(args[0])} | {_uw(args[1])}",
+    "bitwise_not.default": lambda args, kwargs: f"~{_uw(args[0])}",
+    # logical_* follow ATen truthiness: non-zero = True; bitwise ops would give
+    # wrong results for numeric inputs (e.g. logical_not(2) → False, but ~2 = -3)
+    "logical_and.default": lambda args, kwargs: (
+        f"({_uw(args[0])} != 0) & ({_uw(args[1])} != 0)"
+    ),
+    "logical_or.default": lambda args, kwargs: (
+        f"({_uw(args[0])} != 0) | ({_uw(args[1])} != 0)"
+    ),
+    "logical_not.default": lambda args, kwargs: f"({_uw(args[0])} == 0)",
+    "eq.Tensor": lambda args, kwargs: f"{_uw(args[0])} == {_uw(args[1])}",
+    "eq.Scalar": lambda args, kwargs: f"{_uw(args[0])} == {_uw(args[1])}",
+    "ge.Tensor": lambda args, kwargs: f"{_uw(args[0])} >= {_uw(args[1])}",
+    "ge.Scalar": lambda args, kwargs: f"{_uw(args[0])} >= {_uw(args[1])}",
+    "le.Tensor": lambda args, kwargs: f"{_uw(args[0])} <= {_uw(args[1])}",
+    "le.Scalar": lambda args, kwargs: f"{_uw(args[0])} <= {_uw(args[1])}",
+    "gt.Tensor": lambda args, kwargs: f"{_uw(args[0])} > {_uw(args[1])}",
+    "gt.Scalar": lambda args, kwargs: f"{_uw(args[0])} > {_uw(args[1])}",
+    "lt.Tensor": lambda args, kwargs: f"{_uw(args[0])} < {_uw(args[1])}",
+    "lt.Scalar": lambda args, kwargs: f"{_uw(args[0])} < {_uw(args[1])}",
+    "reciprocal.default":  # may result in change of dtype!!!
+    lambda args, kwargs: f"(1. / {_uw(args[0])}).to({_uw(args[0])}.dtype)",
+    "neg.default": lambda args, kwargs: f"-{_uw(args[0])}",
+    "spike_fn.default": lambda args, kwargs: (
+        f"({_uw(args[0])} >= 0.).to({_uw(args[0])}.dtype)"
+    ),
+    "detach.default": lambda args, kwargs: f"{_uw(args[0])}",
+    "sigmoid.default":  # triton does not support exponential operations on fp16
+    lambda args, kwargs: (
+        f"tl.sigmoid({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "sigmoid_backward.default":  # args[1] is the output of sigmoid
+    lambda args, kwargs: f"{_uw(args[0])} * {_uw(args[1])} * (1 - {_uw(args[1])})",
+    "tanh_backward.default":  # args[0]=grad_out, args[1]=tanh_output
+    lambda args, kwargs: f"{_uw(args[0])} * (1 - {_uw(args[1])} * {_uw(args[1])})",
+    "threshold_backward.default":  # args: grad, input, threshold
+    lambda args, kwargs: (
+        f"tl.where({_uw(args[1])} > {_uw(args[2])}, {_uw(args[0])}, 0.0)"
+    ),
+    "_to_copy.default": lambda args, kwargs: (
+        f"{_uw(args[0])}.to({_uw(kwargs['dtype'])})"
+    ),
+    "scalar_tensor.default": lambda args, kwargs: (
+        f"tl.full([], {_uw(args[0])}, {_uw(kwargs['dtype'])})"
+    ),
+    "where.self": lambda args, kwargs: (
+        f"tl.where({_uw(args[0])}.to(tl.int1), {_uw(args[1])}, {_uw(args[2])})"
+    ),
+    # ---------- unary math (upcast fp16→fp32 for transcendentals) ----------
+    "exp.default": lambda args, kwargs: (
+        f"tl.exp({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "log.default": lambda args, kwargs: (
+        f"tl.log({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "log2.default": lambda args, kwargs: (
+        f"tl.log2({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "sqrt.default": lambda args, kwargs: (
+        f"tl.sqrt({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "rsqrt.default": lambda args, kwargs: (
+        f"tl.rsqrt({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "abs.default": lambda args, kwargs: f"tl.abs({_uw(args[0])})",
+    "tanh.default": lambda args, kwargs: (
+        f"tl.extra.cuda.libdevice.tanh("
+        f"{_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "sin.default": lambda args, kwargs: (
+        f"tl.math.sin({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "cos.default": lambda args, kwargs: (
+        f"tl.math.cos({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "erf.default": lambda args, kwargs: (
+        f"tl.math.erf({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    # ---------- rounding ----------
+    "floor.default": lambda args, kwargs: f"tl.floor({_uw(args[0])})",
+    "ceil.default": lambda args, kwargs: f"tl.ceil({_uw(args[0])})",
+    "round.default": lambda args, kwargs: (
+        f"tl.extra.cuda.libdevice.round("
+        f"{_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    # ---------- activation ----------
+    "relu.default": lambda args, kwargs: f"tl.maximum({_uw(args[0])}, 0.0)",
+    "sign.default": lambda args, kwargs: (
+        f"({_uw(args[0])} > 0.).to({_uw(args[0])}.dtype)"
+        f" - ({_uw(args[0])} < 0.).to({_uw(args[0])}.dtype)"
+    ),
+    "sgn.default": lambda args,  # complex sign; for real tensors same as sign
+    kwargs: (
+        f"({_uw(args[0])} > 0.).to({_uw(args[0])}.dtype)"
+        f" - ({_uw(args[0])} < 0.).to({_uw(args[0])}.dtype)"
+    ),
+    # ---------- binary element-wise ----------
+    "minimum.default": lambda args, kwargs: (
+        f"tl.minimum({_uw(args[0])}, {_uw(args[1])})"
+    ),
+    "maximum.default": lambda args, kwargs: (
+        f"tl.maximum({_uw(args[0])}, {_uw(args[1])})"
+    ),
+    "ne.Scalar": lambda args, kwargs: f"{_uw(args[0])} != {_uw(args[1])}",
+    "ne.Tensor": lambda args, kwargs: f"{_uw(args[0])} != {_uw(args[1])}",
+    "fmod.Scalar": lambda args, kwargs: (
+        f"tl.extra.cuda.libdevice.fmod("
+        f"{_uw(args[0])}.to(tl.float32),"
+        f" tl.full([], {_uw(args[1])}, tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "fmod.Tensor": lambda args, kwargs: (
+        f"tl.extra.cuda.libdevice.fmod("
+        f"{_uw(args[0])}.to(tl.float32),"
+        f" {_uw(args[1])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "pow.Tensor_Scalar": lambda args, kwargs: (
+        f"tl.extra.cuda.libdevice.pow("
+        f"{_uw(args[0])}.to(tl.float32),"
+        f" tl.full([], {_uw(args[1])}, tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "pow.Tensor_Tensor": lambda args, kwargs: (
+        f"tl.extra.cuda.libdevice.pow("
+        f"{_uw(args[0])}.to(tl.float32),"
+        f" {_uw(args[1])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    # ---------- clamp ----------
+    "clamp.default": lambda args, kwargs: (
+        # args: (tensor, min_val, max_val) — both optional
+        f"tl.minimum(tl.maximum({_uw(args[0])}, {_uw(args[1])}), {_uw(args[2])})"
+        if len(args) >= 3 and args[1] is not None and args[2] is not None
+        else f"tl.maximum({_uw(args[0])}, {_uw(args[1])})"
+        if len(args) >= 2 and args[1] is not None
+        else f"tl.minimum({_uw(args[0])}, {_uw(args[2])})"
+        if len(args) >= 3 and args[2] is not None
+        else _uw(args[0])
+    ),
+    "clamp_min.default": lambda args, kwargs: (
+        f"tl.maximum({_uw(args[0])}, {_uw(args[1])})"
+    ),
+    "clamp_max.default": lambda args, kwargs: (
+        f"tl.minimum({_uw(args[0])}, {_uw(args[1])})"
+    ),
+    # ---------- misc ----------
+    "clone.default": lambda args, kwargs: f"{_uw(args[0])}",
+    # Use tl.full to avoid propagating NaN/Inf from input values
+    "zeros_like.default": lambda args, kwargs: (
+        f"tl.full({_uw(args[0])}.shape, 0, {_uw(args[0])}.dtype)"
+    ),
+    "ones_like.default": lambda args, kwargs: (
+        f"tl.full({_uw(args[0])}.shape, 1, {_uw(args[0])}.dtype)"
+    ),
+    # masked_fill(tensor, mask, value): fill where mask=True with value
+    "masked_fill.Scalar": lambda args, kwargs: (
+        f"tl.where({_uw(args[1])}.to(tl.int1), {_uw(args[2])}, {_uw(args[0])})"
+    ),
+    "masked_fill.Tensor": lambda args, kwargs: (
+        f"tl.where({_uw(args[1])}.to(tl.int1), {_uw(args[2])}, {_uw(args[0])})"
+    ),
+}
+
+INDENTATION = " " * 4  # four spaces
+
+
+def generate_triton_code_str(
+    graph: fx.Graph,
+    fn_name: str,
+) -> Tuple[str, str]:
+    """Given a fx.Graph, generate its corresponding Triton code string.
+
+    **API Language** - :ref:`中文 <generate_triton_code_str-cn>` | :ref:`English <generate_triton_code_str-en>`
+
+    ----
+
+    .. _generate_triton_code_str-cn:
+
+    * **中文**
+
+    生成Triton代码字符串
+
+    Args:
+        graph (fx.Graph)
+        fn_name (str): name of the original PyTorch function. For generating the Triton kernel name.
+    Returns:
+        Tuple[str, str]: the generated Triton code string and the name of the Triton function.
+
+    ----
+
+    .. _generate_triton_code_str-en:
+
+    * **English**
+
+    Generate Triton code string
+    """
+    logger.debug("Generated graph={}", graph)
+
+    inputs = []
+    triton_code_lines = []
+    for node in graph.nodes:
+        if node.op == "placeholder":  # function inputs
+            inputs.append(node.name)
+        elif node.op in ["call_function", "call_method"]:
+            op_name = (
+                node.target.__name__ if node.op == "call_function" else node.target
+            )  # e.g. mul.Tensor, spike_fn.default, rsub.Scalar, ...
+            if op_name in FX_TO_TRITON:  # apply the transpile rule
+                rhs = FX_TO_TRITON[op_name](node.args, node.kwargs)
+                triton_code_lines.append(f"{node.name} = {rhs}")
+            else:
+                raise NotImplementedError(
+                    f"{node.op} {op_name} has not yet been implemented "
+                    f"in FX_TO_TRITON mapping."
+                )
+        elif node.op == "output":
+            if isinstance(node.args[0], fx.Node):
+                # only one return value
+                things = node.args[0].name
+            else:
+                # multiple return values
+                things = ", ".join(arg.name for arg in node.args[0])
+            triton_code_lines.append(f"return {things}")
+        else:
+            raise NotImplementedError(
+                f"Operation {node.op} has not yet been implemented."
+            )
+
+    triton_code_lines = f"{INDENTATION}" + f"\n{INDENTATION}".join(triton_code_lines)
+    fn_name = f"{fn_name}_{_generate_hash(triton_code_lines)}"
+    signature = ", ".join(inputs)
+    signature = f"@triton.jit\ndef {fn_name}({signature}):"
+    prefix = "import triton\nimport triton.language as tl"
+    return f"{prefix}\n\n{signature}\n{triton_code_lines}", fn_name
+
+
+def compile_triton_code_str(
+    triton_code: str,
+    kernel_name: str,
+    name_space: Optional[dict] = None,
+):
+    r"""Compile a Triton code string into a runnable Triton JIT function.
+
+    **API Language** - :ref:`中文 <compile_triton_code_str-cn>` | :ref:`English <compile_triton_code_str-en>`
+
+    ----
+
+    .. _compile_triton_code_str-cn:
+
+    * **中文**
+
+    在内存中执行 Triton 源码，返回其中名为 ``kernel_name`` 的 JIT 函数。
+    生成源码不会写入 SpikingJelly 的持久目录；Triton 自身仍可缓存编译结果。
+    源码保留至生成的函数不再被引用，以供后续 JIT 和编译图读取。
+    ``name_space`` 非 ``None`` 时，其全局变量供源码使用，执行后写回新增的符号。
+
+    :param triton_code: 包含目标 JIT 函数的 Triton 源码。
+    :type triton_code: str
+    :param kernel_name: 要返回的函数名。
+    :type kernel_name: str
+    :param name_space: 可选的执行全局变量字典；提供时会写回源码定义的符号。
+    :type name_space: Optional[dict]
+    :return: 指定的 Triton JIT 函数。
+    :rtype: triton.JITFunction
+    :raises ImportError: Triton 不可用。
+    :raises ValueError: 源码未定义 ``kernel_name``。
+
+    ----
+
+    .. _compile_triton_code_str-en:
+
+    * **English**
+
+    Execute Triton source in memory and return the JIT function named
+    ``kernel_name``. Generated source is not written to a persistent
+    SpikingJelly directory; it remains available while generated functions
+    are referenced for later JIT and graph compilation. Triton may still
+    cache compiled results. When
+    ``name_space`` is provided, its globals are available to the source and
+    newly defined symbols are written back after execution.
+
+    :param triton_code: Triton source containing the target JIT function.
+    :type triton_code: str
+    :param kernel_name: Name of the function to return.
+    :type kernel_name: str
+    :param name_space: Optional execution globals, updated with defined symbols.
+    :type name_space: Optional[dict]
+    :return: The named Triton JIT function.
+    :rtype: triton.JITFunction
+    :raises ImportError: If Triton is unavailable.
+    :raises ValueError: If the source does not define ``kernel_name``.
+    """
+    if not _has_real_triton_runtime():
+        raise ImportError(
+            "compile_triton_code_str requires a real Triton installation; "
+            "the imported triton/tl modules are unavailable."
+        )
+
+    if name_space is None:
+        module_globals = {"triton": triton, "tl": tl}
+    else:
+        module_globals = {
+            key: value
+            for key, value in name_space.items()
+            if key not in _NAMESPACE_METADATA_KEYS
+        }
+        module_globals.pop(kernel_name, None)
+        module_globals.setdefault("triton", triton)
+        module_globals.setdefault("tl", tl)
+
+    safe_kernel_name = _safe_codegen_stem(kernel_name)
+    module_hash = _generate_hash(f"{kernel_name}\n{triton_code}", w=16)
+    module_name = (
+        f"spikingjelly._ops.torch2triton.generated.{safe_kernel_name}_{module_hash}"
+    )
+    source_owner = _SourceOwner()
+    filename = f"<{module_name}_{id(source_owner):x}>"
+    module = types.ModuleType(module_name)
+    module.__file__ = filename
+    module.__dict__.update(module_globals)
+    with _CODEGEN_LOCK:
+        linecache.cache[filename] = (
+            len(triton_code),
+            None,
+            triton_code.splitlines(keepends=True),
+            filename,
+        )
+        try:
+            exec(compile(triton_code, filename, "exec"), module.__dict__)
+        except Exception:
+            linecache.cache.pop(filename, None)
+            raise
+        module.__dict__["__spikingjelly_source_owner__"] = source_owner
+        weakref.finalize(source_owner, linecache.cache.pop, filename, None)
+    if name_space is not None:
+        exported_symbols = {
+            key: value
+            for key, value in module.__dict__.items()
+            if key not in _NAMESPACE_METADATA_KEYS
+        }
+        name_space.update(exported_symbols)
+    if kernel_name in module.__dict__:
+        return module.__dict__[kernel_name]
+    raise ValueError(f"Function {kernel_name} not found in compiled namespace")

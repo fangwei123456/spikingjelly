@@ -135,29 +135,91 @@ Some Transformer Engine recipes serialize FP8 metadata as a pickle. Set
 ``NVTE_ALLOW_UNSAFE_PICKLE_EXTRA_STATE=1`` only when restoring a trusted
 checkpoint; do not enable it for unknown checkpoints.
 
-Configuring Triton neurons
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Input, state and computation precision
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Triton precision is set by ``prepare_model_for_precision`` rather than on every
-neuron constructor. Regular layers can use BF16 with BF16 neuron storage
-and forward arithmetic, and FP32 neuron backward arithmetic:
+Layer autocast controls operations within ordinary layers. Neurons also have
+an input dtype, temporal state storage dtype and forward/backward compute dtype.
+The table covers multi-step IFNode, LIFNode and ParametricLIFNode; consult the
+API for other neurons.
+
+.. list-table:: Neuron precision policies
+    :header-rows: 1
+    :widths: 40 60
+
+    * - Configuration
+      - Current behavior
+    * - Ordinary FP32 inputs/state
+      - Automatic device/execution-path selection
+    * - Ordinary FP16/BF16 inputs
+      - Membrane state follows inputs unless configured; existing FP32 state is also converted
+    * - FP16/BF16 state
+      - Ordinary calls use Torch reference recurrence, including fullgraph compilation
+    * - Explicit FP32 state with low-precision inputs
+      - Functional calls can supply FP32 state directly; modules require explicit storage configuration. Numerics differ from low-precision state
+    * - Explicit storage/forward/backward precision
+      - CUDA Triton feature requiring supported built-in surrogates and dtype combinations
+    * - FP8 state/computation
+      - Experimental, hardware/format/combination dependent; not universal neuron support
+
+For BF16 layers with FP32 neuron state, move the model to its device, prepare
+precision, then create the optimizer. This CUDA training example uses random
+inputs:
+
+.. code-block:: python
+
+    import torch
+    from torch import nn
+    from spikingjelly.activation_based import neuron, functional, surrogate
+    from spikingjelly.activation_based.precision import (
+        PrecisionConfig,
+        prepare_model_for_precision,
+    )
+
+    device = torch.device("cuda:0")
+    model = nn.Sequential(
+        nn.Linear(16, 16),
+        neuron.LIFNode(step_mode="m", surrogate_function=surrogate.ATan()),
+        nn.Linear(16, 4),
+    ).to(device)
+    precision = prepare_model_for_precision(
+        model, device, PrecisionConfig(mode="bf16", neuron_storage="fp32")
+    )
+    optimizer = torch.optim.SGD(precision.model.parameters(), lr=0.01)
+    optimizer.zero_grad(set_to_none=True)
+    with precision.autocast_context():
+        output = precision.model(torch.rand(4, 2, 16, device=device))
+        loss = output.float().square().mean()
+    precision.backward(loss, optimizer)
+    functional.reset_net(precision.model)
+
+To set storage, forward and backward precision separately, replace the config
+in the example with:
 
 .. code-block:: python
 
     config = PrecisionConfig(
-        mode="bf16",
-        triton_storage="bf16",
-        triton_fwd="bf16",
-        triton_bwd="fp32",
+        mode="bf16", neuron_storage="bf16", neuron_fwd="bf16", neuron_bwd="fp32"
     )
-    precision = prepare_model_for_precision(model, device, config)
 
-Only IFNode, LIFNode, and ParametricLIFNode instances with ``backend="triton"``
-and ``step_mode="m"`` use these options. The function does not switch backends.
-``triton_fwd`` and ``triton_bwd`` independently accept ``fp8``, ``fp16``,
-``bf16``, or ``fp32``. FP8 arithmetic requires ``triton_storage`` to be
-``float8_e4m3fn`` or ``float8_e5m2``. Exponentials and sensitive surrogate
-operations remain FP32 inside the kernels and are not user options.
+Explicit neuron precision uses Triton without module backend parameters.
+``neuron_fwd``/``neuron_bwd`` accept ``fp8``, ``fp16``, ``bf16`` or ``fp32``;
+not every combination is valid. FP8 arithmetic requires ``float8_e4m3fn`` or
+``float8_e5m2`` state storage. Exponentials and sensitive surrogate computations
+use FP32 inside kernels. See :doc:`./surrogate` for the seven supported surrogates.
+Unsupported explicit policies fail rather than silently changing numerics.
+
+An execution query reports the ordinary path's selection. Check support for
+the precision policy you intend to use. Prepare precision before compilation;
+with direct functional precision calls, warm up the same combination so device
+checks finish before graph capture.
+
+Changing state or recurrence precision can alter spikes, final state and
+gradients; validate model accuracy before adopting a new policy. Inductor can
+also change low-precision fusion and rounding, producing bitwise differences
+from eager. Benchmark with the same state
+policy, for example ``--precision bf16 --neuron-storage fp32``.
+See :doc:`./triton_backend` for automatic execution and compilation.
 
 Path 2: ``distributed.vision``
 --------------------------------
@@ -176,16 +238,16 @@ optimizer construction. ``TrainingConfig``, ``EvaluationConfig``, and
         dataset_builder=dataset_builder,
         precision=PrecisionConfig(
             mode="bf16",
-            triton_storage="bf16",
-            triton_fwd="bf16",
-            triton_bwd="fp32",
+            neuron_storage="bf16",
+            neuron_fwd="bf16",
+            neuron_bwd="fp32",
         ),
     )
     result = distributed.vision.train_classification(config)
 
 In the repository CLI, ``--precision`` maps to ``mode``. The remaining fields
-come from ``--fp8-recipe``, ``--triton-storage``, ``--triton-fwd``, and
-``--triton-bwd``:
+come from ``--fp8-recipe``, ``--neuron-storage``, ``--neuron-fwd``, and
+``--neuron-bwd``:
 
 .. code-block:: bash
 
@@ -250,7 +312,7 @@ When FP8 is faster
 ------------------
 
 FP8 benefits large matrices, not every low-precision workload. FC-SNN depends on
-the neuron backend and the Linear-to-neuron boundary; Spikformer has a larger
+neuron execution and the Linear-to-neuron boundary; Spikformer has a larger
 convolution, BatchNorm, and neuron share and does not cross the FP16/BF16
 baseline on one GPU yet.
 
@@ -314,19 +376,19 @@ End-to-end SNN and DDP
     * - workload
       - training FP8 / FP16, BF16
       - inference FP8 / FP16, BF16
-    * - FC-SNN: T16, batch 256, width 4096, depth 20 (Triton LIF, FP16 fallback)
+    * - FC-SNN: T16, batch 256, width 4096, depth 20 (automatically dispatched LIF, FP16 fallback)
       - 1.533x / 1.677x
       - 1.578x / 1.786x
-    * - FC-SNN: T16, batch 256, width 8192, depth 10 (Triton LIF, FP32 fallback)
+    * - FC-SNN: T16, batch 256, width 8192, depth 10 (automatically dispatched LIF, FP32 fallback)
       - 1.544x / 1.468x
       - 1.648x / 1.471x
 
 The ratios are end-to-end throughput ratios in the order ``FP8 / FP16`` and
-``FP8 / BF16``. Both FC-SNN cases use the existing Triton LIF; Triton neuron
+``FP8 / BF16``. Both FC-SNN cases use the existing automatically dispatched LIF; Triton neuron
 storage is not enabled and neuron computation remains high precision. W4096
 uses ``fp8_fallback_dtype="fp16"`` and its training/inference peak allocated
 memory is 4279.1/1460.3 MiB; W8192 is the earlier result without an outer
-autocast. Thus “FP8 Linear + Triton LIF” wins at these sizes, but this does not
+autocast. Thus “FP8 Linear + automatically dispatched LIF” wins at these sizes, but this does not
 mean that all neuron state is FP8 or that FP8 always saves memory.
 
 The slower FC-SNN numbers previously shown in this tutorial used Torch LIF and
@@ -339,18 +401,18 @@ Reproduce the FC-SNN profile with:
 
 .. code-block:: bash
 
-    nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
+    SJ_LIF_CUDA_IMPLEMENTATION=triton nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
       --trace=cuda,nvtx,cublas,osrt --sample=none --cpuctxsw=none \
       -o fcsnn-fp8 \
       uv run python benchmark/benchmark_train_precision_snn_fc.py \
-        --backend triton --precisions fp8 --fp8-fallback-dtype fp16 \
+        --precisions fp8 --fp8-fallback-dtype fp16 \
         --profile --profile-steps 10 --output fcsnn-fp8.json
 
 Single-GPU Spikformer
 ~~~~~~~~~~~~~~~~~~~~~
 
 For ``spikformer_ti`` with ``T=4``, input size ``224``, eager execution, and
-Triton LIF, the RTX 5090 end-to-end results are:
+automatically dispatched LIF, the RTX 5090 end-to-end results are:
 
 .. list-table::
     :header-rows: 1
@@ -432,13 +494,13 @@ FC-SNN Triton result. Reproduce a single-GPU profile with:
 
 .. code-block:: bash
 
-    nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
+    SJ_LIF_CUDA_IMPLEMENTATION=triton nsys profile --capture-range=cudaProfilerApi --capture-range-end=stop \
       --trace=cuda,nvtx,cublas,osrt --sample=none --cpuctxsw=none \
       -o spikformer-fp8 \
       uv run python benchmark/benchmark_snn_single_gpu.py case \
         --model spikformer_ti --phase inference --execution eager \
         --batch-size 64 --warmup 50 --steps 10 --profile --precision fp8 \
-        --neuron-backend triton --fp8-fallback-dtype bf16 \
+        --fp8-fallback-dtype bf16 \
         --tensor-metadata spikformer-fp8.tensors.jsonl \
         --output spikformer-fp8.json
 
@@ -475,7 +537,7 @@ this workload.
 Choosing a mode
 ---------------
 
-Start with BF16. Try FP8 for FC-SNN only with Triton LIF and matrix sizes near
+Start with BF16. Try FP8 for FC-SNN only with automatically dispatched LIF and matrix sizes near
 the table's crossover. For CNN/neuron-heavy models such as Spikformer, continue
 with FP16/BF16 until the FP32 boundary is optimized. Profile against the
 end-to-end step; FP8 memory may exceed BF16 and is not a memory-optimization

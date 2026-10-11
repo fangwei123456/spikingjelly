@@ -120,7 +120,6 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         time_steps=args.time_steps,
         calibration_levels=args.calibration_levels,
         calibration_quantile=args.calibration_quantile,
-        neuron_backend=args.neuron_backend,
     )
     if args.calibration_artifact is None:
         calibration_ids, calibration_mask = _encode(
@@ -225,7 +224,12 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
             "time_steps": args.time_steps,
             "calibration_levels": args.calibration_levels,
             "calibration_quantile": args.calibration_quantile,
-            "neuron_backend": args.neuron_backend,
+            "neuron_implementation": {
+                family: functional.neuron_implementation(
+                    family, torch.device(args.device)
+                )
+                for family in ("if", "activation_aware_if")
+            },
         },
         "precision": precision.describe(),
         "conversion": {
@@ -268,7 +272,6 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--calibration-levels", required=True, type=int)
     parser.add_argument("--calibration-quantile", required=True, type=float)
-    parser.add_argument("--neuron-backend", required=True, choices=("torch", "triton"))
     return parser.parse_args(argv)
 
 

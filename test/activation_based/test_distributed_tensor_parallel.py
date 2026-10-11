@@ -1,6 +1,7 @@
 import copy
 import os
 import tempfile
+from datetime import timedelta
 
 import torch
 import torch.distributed as dist
@@ -29,6 +30,7 @@ def _vision_tp_worker(rank: int, store_path: str) -> None:
         init_method=f"file://{store_path}",
         rank=rank,
         world_size=2,
+        timeout=timedelta(seconds=120),
     )
     try:
         cases = (
@@ -97,6 +99,7 @@ def _channel_tp_worker(rank: int, store_path: str) -> None:
         init_method=f"file://{store_path}",
         rank=rank,
         world_size=2,
+        timeout=timedelta(seconds=120),
     )
     try:
         torch.manual_seed(7)

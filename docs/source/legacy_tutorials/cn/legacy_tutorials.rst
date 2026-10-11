@@ -1,5 +1,12 @@
 遗产教程
 =======================================
+
+.. warning::
+
+    本页为旧版 SpikingJelly 的历史归档，停止维护，不是当前 V2 使用说明。
+    含 CuPy 或旧 backend 的代码和命令不能直接用于当前包。当前用法见
+    :doc:`/tutorials/cn/neuron` 与 :doc:`/tutorials/cn/migrate_from_legacy`。
+
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 由于开发者精力有限，有一些教程并未随着SpikingJelly的代码更新而同步更新，还有一些教程被精简合并进了新版教程。\
@@ -10,6 +17,7 @@
 
    ann2snn_converter_legacy
    5_ann2snn
+   11_cext_neuron_with_lbl
 
 `Activation-based` 的设计来源
 --------------------------------------------

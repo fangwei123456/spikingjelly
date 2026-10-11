@@ -302,7 +302,6 @@ class CubaLIFNode(neuron.BaseNode):
         norm: BatchNorm2d = None,
         detach_reset=False,
         step_mode="s",
-        backend="torch",
         store_v_seq: bool = False,
         store_i_seq: bool = False,
     ):
@@ -333,9 +332,6 @@ class CubaLIFNode(neuron.BaseNode):
         :type detach_reset: bool
         :param step_mode: 步进模式，可以为 `'s'` （单步）或 `'m'` （多步），默认为 `'s'` 。
         :type step_mode: str
-        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。目前只支持torch
-        :type backend: str
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.voltage_state`` 。
             通常设置成 ``False`` ，可以节省内存。在使用 ``step_mode = 's'`` 时，每个时间步结束后的 ``self.voltage_state`` 会被追加到
@@ -376,9 +372,6 @@ class CubaLIFNode(neuron.BaseNode):
         :type detach_reset: bool
         :param step_mode: the step mode, which can be ``'s'`` (single-step) or ``'m'`` (multi-step). Default to ``'s'`` .
         :type step_mode: str
-        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. Only ``torch`` is supported.
-        :type backend: str
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
             only the voltage at last time-step will be stored to ``self.voltage_state`` with ``shape = [N, *]``, which can reduce the
@@ -410,7 +403,6 @@ class CubaLIFNode(neuron.BaseNode):
             surrogate_function=surrogate_function,
             detach_reset=detach_reset,
             step_mode=step_mode,
-            backend=backend,
             store_v_seq=store_v_seq,
         )
 
@@ -551,16 +543,6 @@ class CubaLIFNode(neuron.BaseNode):
     def reset(self):
         super().reset()
         self.i_seq = None
-
-    @property
-    def supported_backends(self):
-        if self.step_mode == "m" or self.step_mode == "s":
-            return ("torch",)
-        else:
-            raise ValueError(
-                f"self.step_mode should be 's' or 'm', "
-                f"but get {self.step_mode} instead."
-            )
 
     # computation process
     def materialize_states(

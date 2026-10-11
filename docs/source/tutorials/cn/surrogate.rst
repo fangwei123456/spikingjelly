@@ -111,3 +111,34 @@ English version: :doc:`../en/surrogate`
 
 替代函数通常会有1个或多个控制形状的超参数，例如 :class:`spikingjelly.activation_based.surrogate.Sigmoid` 中的 ``alpha``。\
 SpikingJelly中替代函数的形状参数，默认情况下是使得替代函数梯度最大值为1，这在一定程度上可以避免梯度累乘导致的梯度爆炸问题。
+
+替代梯度与自动执行
+----------------------------
+
+普通融合神经元路径支持 Sigmoid、ATan、PiecewiseQuadratic、PiecewiseExp、
+SoftSign、SuperSpike 和 Erf；替代梯度对象仍通过 ``surrogate_function`` 传入，
+不需要选择 backend。下面是独立前后向示例：
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import neuron, surrogate
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    node = neuron.LIFNode(
+        step_mode="m", surrogate_function=surrogate.ATan(alpha=2.0)
+    ).to(device)
+    x = torch.rand(4, 2, 8, device=device, requires_grad=True)
+    spikes = node(x)
+    (spikes.sum() + node.v.sum()).backward()
+    assert torch.isfinite(x.grad).all()
+    node.reset()
+
+普通 IF/LIF/PLIF 也接受符合其 API 要求的其他替代梯度或 Python callable，可通过
+Torch 参考公式执行。``spiking=False`` 使用连续原函数，融合阶跃发放路径只接受
+固定的内置配置；自定义或带可训练参数的替代梯度需使用对应的参考路径。
+
+显式神经元精度要求受支持的内置替代梯度，见 :doc:`./precision`。
+融合 ``if_linear``/``lif_linear`` 支持一阶梯度，七种内置替代梯度可编译训练；
+自定义替代梯度仅支持 eager 训练，见 :doc:`./memopt`。使用显式精度或融合投影时，
+需按该接口检查替代梯度支持范围。

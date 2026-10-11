@@ -99,4 +99,5 @@ jobs:
           route_severity_below: 'low'
           route_categories: 'style,documentation'
           effort: 'medium'
+          max_tokens_budget: '20000000'
           stream_progress: 'true'

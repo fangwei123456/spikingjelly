@@ -261,13 +261,13 @@ def _assert_train_and_infer(
 def test_precision_prepares_triton_neuron_storage_and_compute(node_type):
     device = _cuda_device_or_skip("fp8")
     try:
-        model = node_type(step_mode="m", backend="triton", store_v_seq=True).to(device)
+        model = node_type(step_mode="m", store_v_seq=True).to(device)
     except ImportError as exc:
         _unavailable_backend("fp8", str(exc))
     config = PrecisionConfig(
-        triton_storage="float8_e4m3fn",
-        triton_fwd="bf16",
-        triton_bwd="fp16",
+        neuron_storage="float8_e4m3fn",
+        neuron_fwd="bf16",
+        neuron_bwd="fp16",
     )
     try:
         precision = prepare_model_for_precision(model, device, config)
@@ -381,7 +381,6 @@ def test_tiny_spikformer_fp8_trains_and_runs_inference(fp8_fallback_dtype):
         embed_dims=64,
         num_heads=4,
         depths=2,
-        backend="torch",
     ).to(device)
     reference_model = copy.deepcopy(model).train()
     _require_backend_capability(model, device, mode)

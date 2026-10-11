@@ -40,7 +40,6 @@ def _make_current_lif() -> neuron.LIFNode:
         v_reset=0.0,
         detach_reset=False,
         step_mode="s",
-        backend="torch",
     )
     lif.eval()
     return lif

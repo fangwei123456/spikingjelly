@@ -16,7 +16,6 @@ from torchvision import datasets, transforms
 
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.ann2snn import ModuleConverter, SpikeZIPTFQANNRecipe
-from spikingjelly.activation_based.neuron import STBIFNode
 
 try:
     from torch.serialization import safe_globals
@@ -512,7 +511,6 @@ def main() -> None:
     parser.add_argument("--debug-blocks", action="store_true")
     parser.add_argument("--return-sequences", action="store_true")
     parser.add_argument("--step-mode", choices=("m", "s"), default="m")
-    parser.add_argument("--stbif-backend", choices=("torch", "triton"), default="torch")
     parser.add_argument("--snn-batch-size", type=int)
     parser.add_argument(
         "--sequence-loop-bottlenecks",
@@ -564,7 +562,6 @@ def main() -> None:
         args.sequence_loop_bottlenecks,
     )
     functional.set_step_mode(converted, args.step_mode)
-    functional.set_backend(converted, args.stbif_backend, instance=STBIFNode)
 
     debug = {}
     qann_features = []
@@ -682,7 +679,11 @@ def main() -> None:
         "time_steps": args.time_steps,
         "executed_steps": executed_steps,
         "step_mode": args.step_mode,
-        "stbif_backend": args.stbif_backend,
+        "stbif_implementation": (
+            functional.neuron_implementation("stbif", device)["implementation"]
+            if device.type == "cuda"
+            else "torch"
+        ),
         "sequence_loop_bottlenecks": args.sequence_loop_bottlenecks,
         "wrapped_bottlenecks": wrapped_bottlenecks,
         "level": args.level,

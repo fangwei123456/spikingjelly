@@ -83,7 +83,7 @@ checkpointing, logging, and ``reset_net`` remain outside the graph. Training run
 11 real optimizer steps before capture and never runs dummy optimizer steps. A
 batch whose shape, dtype, or layout differs from the capture point runs eagerly
 and increments the fallback counter. Vision CUDA Graph currently rejects FSDP2,
-multi-rank DDP/TP/PP, FP8, memopt, CuPy backends, and ``store_v_seq=True``.
+multi-rank DDP/TP/PP, FP8, memopt, and ``store_v_seq=True``.
 Distributed CUDA Graph execution uses the native MCore runtime. Eager remains
 the default.
 
@@ -105,7 +105,7 @@ dictionary contains the final values and throughput statistics.
 ``neuron_config`` optionally selects a serializable neuron and surrogate for
 SEW-ResNet34 and both Spikformer configs. With no config, paper defaults are
 unchanged. Custom classes replace every neuron site and must accept the model's
-``backend`` and ``step_mode`` arguments. Built-in classes resolve by full path;
+``step_mode`` argument. Built-in classes resolve by full path;
 external classes must be imported and registered in every training, checkpoint
 export, and inference process before constructing the model:
 
@@ -136,7 +136,8 @@ to infer the declared layout.
 
 Before parallel wrapping, the entry point calls ``functional.set_step_mode`` and
 resets the model with ``functional.reset_net`` after each complete time window.
-Single-step currently does not support PP, memopt, or the Triton neuron backend.
+Single-step currently does not support PP or memopt. Neuron execution is selected
+automatically from the input device.
 The built-in SEW-ResNet34 supports both modes. Spikformer's architecture and
 attention are intrinsically multi-step and are not wrapped to simulate a
 single-step interface.

@@ -965,7 +965,6 @@ class SEWResNet34Config(ModelConfig):
     image_size: int = 224
     in_channels: int = 3
     connection: str = "ADD"
-    neuron_backend: str = "torch"
     tau: float = 2.0
     detach_reset: bool = True
     neuron_config: Optional[NeuronConfig] = None
@@ -980,8 +979,6 @@ class SEWResNet34Config(ModelConfig):
             raise ValueError("connection must be 'ADD', 'AND', or 'IAND'.")
         if self.neuron_config is None and self.tau <= 1.0:
             raise ValueError("tau must be greater than 1.0.")
-        if self.step_mode == "s" and self.neuron_backend == "triton":
-            raise ValueError("The Triton neuron backend requires step_mode='m'.")
 
 
 SEWResNet34Config.__init__.__doc__ = r"""Configure SEW-ResNet34 distributed execution.
@@ -1000,7 +997,7 @@ SEWResNet34Config.__init__.__doc__ = r"""Configure SEW-ResNet34 distributed exec
 :type time_steps: int
 :param num_classes: 类别数，默认 ``1000``，须为正数。
 :type num_classes: int
-:param step_mode: ``"s"`` 或 ``"m"``，默认 ``"m"``；Triton 后端要求 ``"m"``。
+:param step_mode: ``"s"`` 或 ``"m"``，默认 ``"m"``。
 :type step_mode: str
 :param image_size: 图像边长，默认 ``224``，须为正数。
 :type image_size: int
@@ -1008,8 +1005,6 @@ SEWResNet34Config.__init__.__doc__ = r"""Configure SEW-ResNet34 distributed exec
 :type in_channels: int
 :param connection: 残差连接 ``"ADD"``、``"AND"`` 或 ``"IAND"``，默认 ``"ADD"``。
 :type connection: str
-:param neuron_backend: 神经元后端，默认 ``"torch"``。
-:type neuron_backend: str
 :param tau: 默认 ``2.0``；仅在 ``neuron_config=None`` 时用于 LIF，且须大于 ``1``。
 :type tau: float
 :param detach_reset: 默认 ``True``；仅在 ``neuron_config=None`` 时用于 LIF。
@@ -1031,7 +1026,7 @@ Configure ImageNet-style SEW-ResNet34 with channel parallelism inside BasicBlock
 :type time_steps: int
 :param num_classes: Number of classes, positive; default ``1000``.
 :type num_classes: int
-:param step_mode: ``"s"`` or ``"m"`` (default); Triton requires ``"m"``.
+:param step_mode: ``"s"`` or ``"m"`` (default).
 :type step_mode: str
 :param image_size: Image side length, positive; default ``224``.
 :type image_size: int
@@ -1039,8 +1034,6 @@ Configure ImageNet-style SEW-ResNet34 with channel parallelism inside BasicBlock
 :type in_channels: int
 :param connection: ``"ADD"`` (default), ``"AND"``, or ``"IAND"`` residual rule.
 :type connection: str
-:param neuron_backend: Neuron backend; default ``"torch"``.
-:type neuron_backend: str
 :param tau: Default ``2.0``; used by LIF only when ``neuron_config=None`` and
     must then exceed ``1``.
 :type tau: float
@@ -1083,10 +1076,8 @@ class SEWResNet34Builder(ModelBuilder):
             spiking_neuron=spiking_neuron,
             num_classes=config.num_classes,
             **neuron_kwargs,
-            backend="torch",
         )
         functional.set_step_mode(model, config.step_mode)
-        functional.set_backend(model, config.neuron_backend, instance=neuron.BaseNode)
         return model
 
     def _pipeline_stage(self, model: nn.Module, rank: int, size: int) -> nn.Module:

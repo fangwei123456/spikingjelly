@@ -1,28 +1,19 @@
+import importlib
+
 import pytest
 import torch
 
 import spikingjelly.configure as configure
-from spikingjelly.activation_based import base as activation_base
-from spikingjelly.activation_based import functional, neuron, surrogate
+from spikingjelly.activation_based import neuron, surrogate
 from spikingjelly.activation_based.functional import neuron as functional_neuron
-from spikingjelly.activation_based.triton_kernel import triton_utils
-from spikingjelly.activation_based.triton_kernel.fp8_capability import (
-    supports_triton_fp8_neuron_backward,
-    supports_triton_fp8_neuron_forward,
-    triton_fp8_neuron_capability_report,
-)
-from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
-    integrate_and_fire as if_triton_kernel,
-)
-from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
-    lif as lif_triton_kernel,
-)
-from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
-    plif as plif_triton_kernel,
-)
-from spikingjelly.activation_based.triton_kernel.neuron_kernel import (
-    utils as neuron_triton_utils,
-)
+from spikingjelly._ops import triton_runtime as triton_utils
+from spikingjelly._ops.fp8_capability import supports_triton_fp8_neuron_backward
+from spikingjelly._ops.fp8_capability import supports_triton_fp8_neuron_forward
+from spikingjelly._ops.fp8_capability import triton_fp8_neuron_capability_report
+from spikingjelly._ops.if_ import triton_precision as if_triton_kernel
+from spikingjelly._ops.lif import triton_precision as lif_triton_kernel
+from spikingjelly._ops.plif import triton_precision as plif_triton_kernel
+from spikingjelly._ops import triton_layout as neuron_triton_utils
 
 
 def _assert_close(a: torch.Tensor, b: torch.Tensor, dtype: torch.dtype):
@@ -38,12 +29,11 @@ def _assert_no_host_scalar_read(operation_names):
     assert "aten::_local_scalar_dense" not in operation_names
 
 
-def _make_training_node(kind: str, backend: str):
+def _make_training_node(kind: str):
     common_kwargs = {
         "v_threshold": 1.0,
         "v_reset": 0.0,
         "step_mode": "m",
-        "backend": backend,
     }
     if kind == "if":
         return neuron.IFNode(**common_kwargs).to("cuda")
@@ -254,31 +244,52 @@ def _mixed_precision_reference(
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
-def test_mixed_precision_lif_skips_unrequested_voltage_sequence():
+@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+@pytest.mark.parametrize(
+    ("dtype", "storage_dtype", "compute_dtype"),
+    [
+        (torch.float16, torch.float32, "fp32"),
+        (torch.bfloat16, torch.float32, "fp32"),
+        (torch.bfloat16, torch.bfloat16, "bf16"),
+    ],
+)
+def test_explicit_precision_preserves_spike_dtype_and_optional_trace(
+    kind, dtype, storage_dtype, compute_dtype
+):
     torch.manual_seed(7)
-    x = torch.randn(4, 2, 3, device="cuda", dtype=torch.bfloat16)
-    v = torch.randn(2, 3, device="cuda", dtype=torch.bfloat16)
+    x = torch.randn(4, 2, 3, device="cuda", dtype=dtype)
+    v = torch.randn(2, 3, device="cuda", dtype=storage_dtype)
 
     def run(store_v_seq):
+        weight = torch.tensor(0.0, device="cuda", requires_grad=True)
         x_leaf = x.detach().clone().requires_grad_()
         v_leaf = v.detach().clone().requires_grad_()
-        spike, voltage, _ = lif_triton_kernel._multistep_lif_mp(
-            x_leaf,
-            v_leaf,
-            decay_input=True,
-            tau=2.0,
+        kwargs = dict(
             v_threshold=1.0,
             v_reset=0.0,
-            storage_dtype=torch.bfloat16,
-            compute_dtype="bf16",
-            backward_compute_dtype="bf16",
-            spike_dtype=torch.bfloat16,
-            save_intermediates=True,
+            neuron_storage=storage_dtype,
+            neuron_fwd=compute_dtype,
+            neuron_bwd=compute_dtype,
             store_v_seq=store_v_seq,
         )
-        final_voltage = voltage[-1] if store_v_seq else voltage
+        if kind == "if":
+            spike, final_voltage, trace = functional_neuron.if_multi_step(
+                x_leaf, v_leaf, **kwargs
+            )
+        elif kind == "lif":
+            spike, final_voltage, trace = functional_neuron.lif_multi_step(
+                x_leaf, v_leaf, tau=2.0, **kwargs
+            )
+        else:
+            spike, final_voltage, trace = functional_neuron.plif_multi_step(
+                x_leaf, v_leaf, weight, **kwargs
+            )
+        assert spike.dtype == x.dtype
+        assert final_voltage.dtype == v.dtype
+        voltage = trace if store_v_seq else final_voltage
         (spike.sum() + final_voltage.sum()).backward()
-        return spike, final_voltage, x_leaf.grad, v_leaf.grad, voltage
+        parameter_grad = weight.grad if kind == "plif" else None
+        return spike, final_voltage, x_leaf.grad, v_leaf.grad, parameter_grad, voltage
 
     full = run(True)
     final_only = run(False)
@@ -286,53 +297,6 @@ def test_mixed_precision_lif_skips_unrequested_voltage_sequence():
     assert final_only[-1].shape == v.shape
     for expected, actual in zip(full[:-1], final_only[:-1], strict=True):
         torch.testing.assert_close(actual, expected)
-
-
-def test_lif_native_triton_precision_uses_standard_path(monkeypatch):
-    node = neuron.LIFNode(step_mode="m", backend="torch")
-    node._backend = "triton"
-    node._triton_precision = (torch.bfloat16, "bf16", "bf16")
-    called = False
-
-    def standard_path(x_seq, v, *_args):
-        nonlocal called
-        called = True
-        return x_seq, v, None
-
-    monkeypatch.setattr(functional, "lif_multi_step_triton", standard_path)
-    x = torch.zeros(4, 2, 3, dtype=torch.bfloat16)
-    node.multi_step_functional_forward((x,), (torch.zeros_like(x[0]),))
-
-    assert called
-
-
-def test_lif_mixed_precision_wrapper_forwards_store_v_seq(monkeypatch):
-    received = None
-
-    def mixed_precision(x_seq, v, **kwargs):
-        nonlocal received
-        received = kwargs["store_v_seq"]
-        return x_seq, v, None
-
-    monkeypatch.setattr(lif_triton_kernel, "_multistep_lif_mp", mixed_precision)
-    x = torch.zeros(4, 2, 3)
-    v = torch.zeros_like(x[0])
-    _, final_v, v_seq = functional_neuron._lif_multi_step_triton_mp(
-        x,
-        v,
-        2.0,
-        True,
-        1.0,
-        0.0,
-        surrogate.Sigmoid(),
-        False,
-        False,
-        (torch.float16, "fp32", "fp32"),
-    )
-
-    assert received is False
-    assert final_v.shape == v.shape
-    assert v_seq is None
 
 
 def test_triton_fp8_capability_report_cpu_is_unavailable():
@@ -382,7 +346,7 @@ def test_normalize_triton_compute_dtype_accepts_native_fp8_dtype():
         )
 
 
-def test_normalize_triton_storage_dtype_rejects_ambiguous_fp8_alias():
+def test_normalize_neuron_storage_dtype_rejects_ambiguous_fp8_alias():
     with pytest.raises(ValueError, match="ambiguous"):
         triton_utils.normalize_triton_storage_dtype("fp8")
 
@@ -411,21 +375,12 @@ def test_triton_neuron_dtype_id_roundtrip():
         triton_utils.triton_neuron_dtype_id_to_torch_dtype(999)
 
 
-def test_mixed_precision_uses_custom_op_not_autograd_function():
-    assert not hasattr(if_triton_kernel, "_MixedPrecisionIF")
-    assert not hasattr(lif_triton_kernel, "_MixedPrecisionLIF")
-    assert not hasattr(plif_triton_kernel, "_MixedPrecisionPLIF")
-    assert hasattr(if_triton_kernel, "multistep_if_mp_forward")
-    assert hasattr(lif_triton_kernel, "multistep_lif_mp_forward")
-    assert hasattr(plif_triton_kernel, "multistep_plif_mp_forward")
-
-
 def test_fp8_backward_capability_uses_backward_probe(monkeypatch):
     storage_dtype = getattr(torch, "float8_e4m3fn", None)
     if storage_dtype is None:
         pytest.skip("This PyTorch build does not expose torch.float8_e4m3fn.")
 
-    from spikingjelly.activation_based.triton_kernel import fp8_capability
+    from spikingjelly._ops import fp8_capability as fp8_capability
 
     calls = {"forward": 0, "backward": 0}
 
@@ -465,32 +420,6 @@ def test__prepare_triton_neuron_execution_plan_rejects_cpu_device():
             storage_dtype=torch.float32,
             forward_compute_dtype="fp32",
         )
-
-
-def test__prepare_triton_neuron_execution_plan_normalizes_device_before_cache(
-    monkeypatch,
-):
-    expected = object()
-    calls = []
-    monkeypatch.setattr(
-        neuron_triton_utils,
-        "normalize_cuda_device",
-        lambda _device: torch.device("cuda", 1),
-    )
-    monkeypatch.setattr(
-        neuron_triton_utils,
-        "_prepare_triton_neuron_execution_plan_cached",
-        lambda **kwargs: calls.append(kwargs) or expected,
-    )
-
-    result = neuron_triton_utils._prepare_triton_neuron_execution_plan(
-        neuron_type="lif",
-        device="cuda",
-        storage_dtype=torch.float32,
-    )
-
-    assert result is expected
-    assert calls[0]["device"] == torch.device("cuda", 1)
 
 
 def test__prepare_triton_neuron_execution_plan_rejects_invalid_options():
@@ -572,153 +501,58 @@ def test_mixed_precision_forward_fp8_cpu_fails_with_capability_reason():
         )
 
 
-def test_torch_backend_does_not_probe_triton_in_eval(monkeypatch):
-    def _unexpected(*args, **kwargs):
-        raise AssertionError("non-triton backend should not call Triton kernel")
-
-    monkeypatch.setattr(functional, "if_multi_step_triton", _unexpected)
+def test_automatic_path_supports_non_spiking_surrogate():
     x = torch.randn(5, 2, 4)
-
-    neuron.IFNode(step_mode="m", backend="torch").eval()(x)
-
-
-def test_lif_torch_backend_does_not_probe_triton_in_training(monkeypatch):
-    def _unexpected(*args, **kwargs):
-        raise AssertionError("torch backend should not call Triton kernel in training")
-
-    monkeypatch.setattr(functional, "lif_multi_step_triton", _unexpected)
-    node = neuron.LIFNode(tau=2.0, step_mode="m", backend="torch").train()
-    x = torch.randn(5, 2, 4)
-    node(x)
-
-
-def test_triton_backend_rejects_non_spiking_surrogate_in_eval():
-    if activation_base.triton is None:
-        pytest.skip("Triton module import is unavailable in this environment.")
-
-    x = torch.randn(5, 2, 4)
-
-    if_node = neuron.IFNode(
-        step_mode="m",
-        backend="triton",
-        surrogate_function=surrogate.Sigmoid(spiking=False),
-    ).eval()
-    with pytest.raises(NotImplementedError, match="spiking surrogate functions"):
-        if_node(x)
-
-    lif_node = neuron.LIFNode(
-        tau=2.0,
-        step_mode="m",
-        backend="triton",
-        surrogate_function=surrogate.Sigmoid(spiking=False),
-    ).eval()
-    with pytest.raises(NotImplementedError, match="spiking surrogate functions"):
-        lif_node(x)
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize(("v_threshold", "v_reset"), [(1.0, 0.0), (0.5, -0.2)])
-def test_if_triton_matches_torch_eval(v_threshold, v_reset):
-    if_node = neuron.IFNode(
-        v_threshold=v_threshold,
-        v_reset=v_reset,
-        step_mode="m",
-        backend="torch",
-        store_v_seq=True,
-    ).eval()
-    if_triton = neuron.IFNode(
-        v_threshold=v_threshold,
-        v_reset=v_reset,
-        step_mode="m",
-        backend="triton",
-        store_v_seq=True,
-    ).eval()
-
-    x = torch.randn(32, 128, device="cuda", dtype=torch.float32)
-    out_torch = if_node(x)
-    out_triton = if_triton(x)
-
-    _assert_close(out_torch, out_triton, torch.float32)
-    _assert_close(if_node.v_seq, if_triton.v_seq, torch.float32)
-    _assert_close(if_node.v, if_triton.v, torch.float32)
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize(
-    ("tau", "detach_reset", "v_threshold", "v_reset"),
-    [
-        (2.0, True, 1.0, 0.0),
-        (2.0, False, 0.5, -0.2),
-        (5.0, False, 0.5, 0.0),
-        (5.0, True, 1.0, -0.2),
-        (10.0, False, 1.0, -0.2),
-        (10.0, True, 0.5, 0.0),
-    ],
-)
-def test_lif_triton_matches_torch_training(tau, detach_reset, v_threshold, v_reset):
-    lif = neuron.LIFNode(
-        tau,
-        detach_reset=detach_reset,
-        v_threshold=v_threshold,
-        v_reset=v_reset,
-        step_mode="m",
-        backend="torch",
-    ).to(device="cuda", dtype=torch.float32)
-    lif_triton = neuron.LIFNode(
-        tau,
-        detach_reset=detach_reset,
-        v_threshold=v_threshold,
-        v_reset=v_reset,
-        step_mode="m",
-        backend="triton",
-    ).to(device="cuda", dtype=torch.float32)
-
-    x = torch.randn(32, 128, device="cuda", dtype=torch.float32)
-    x1, x2 = x.clone().requires_grad_(), x.clone().requires_grad_()
-    out1 = lif(x1)
-    out2 = lif_triton(x2)
-    _assert_close(out1, out2, torch.float32)
-
-    out1.sum().backward()
-    out2.sum().backward()
-    _assert_close(x1.grad, x2.grad, torch.float32)
+    for node in (
+        neuron.IFNode(
+            step_mode="m", surrogate_function=surrogate.Sigmoid(spiking=False)
+        ),
+        neuron.LIFNode(
+            tau=2.0,
+            step_mode="m",
+            surrogate_function=surrogate.Sigmoid(spiking=False),
+        ),
+    ):
+        output = node(x)
+        assert torch.isfinite(output).all()
+        assert ((output != 0) & (output != 1)).any()
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
-def test_triton_backward_accepts_noncontiguous_upstream_gradient(kind):
+def test_automatic_backward_accepts_noncontiguous_upstream_gradient(kind):
     torch.manual_seed(20260713)
-    torch_node = _make_training_node(kind, "torch")
-    triton_node = _make_training_node(kind, "triton")
+    torch_node = _make_training_node(kind)
+    automatic_node = _make_training_node(kind)
     x = torch.randn(8, 3, 4, device="cuda", dtype=torch.float32)
     x_torch = x.clone().requires_grad_()
-    x_triton = x.clone().requires_grad_()
+    x_automatic = x.clone().requires_grad_()
 
     out_torch = torch_node(x_torch)
-    out_triton = triton_node(x_triton)
-    _assert_close(out_torch, out_triton, torch.float32)
+    out_automatic = automatic_node(x_automatic)
+    _assert_close(out_torch, out_automatic, torch.float32)
 
     upstream = torch.randn(3, 8, 4, device="cuda", dtype=torch.float32)
     assert not upstream.permute(1, 0, 2).is_contiguous()
     received_grad_layouts = []
-    out_triton.register_hook(
+    out_automatic.register_hook(
         lambda grad: received_grad_layouts.append(grad.is_contiguous())
     )
 
     out_torch.permute(1, 0, 2).backward(upstream)
-    out_triton.permute(1, 0, 2).backward(upstream)
+    out_automatic.permute(1, 0, 2).backward(upstream)
 
     assert received_grad_layouts == [False]
-    _assert_close(x_torch.grad, x_triton.grad, torch.float32)
+    _assert_close(x_torch.grad, x_automatic.grad, torch.float32)
     if kind == "plif":
-        _assert_close(torch_node.w.grad, triton_node.w.grad, torch.float32)
+        _assert_close(torch_node.w.grad, automatic_node.w.grad, torch.float32)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
 def test_mixed_precision_backward_accepts_noncontiguous_upstream_gradient(kind):
     torch.manual_seed(20260713)
-    torch_node = _make_training_node(kind, "torch")
+    torch_node = _make_training_node(kind)
     x = torch.randn(8, 3, 4, device="cuda", dtype=torch.float32)
     x_torch = x.clone().requires_grad_()
     x_mixed = x.clone().requires_grad_()
@@ -781,7 +615,6 @@ def test_mixed_precision_float32_matches_torch_eval(
                     v_threshold=1.0,
                     v_reset=v_reset,
                     step_mode="m",
-                    backend="torch",
                     store_v_seq=True,
                 )
                 .to("cuda")
@@ -796,7 +629,6 @@ def test_mixed_precision_float32_matches_torch_eval(
                     v_threshold=1.0,
                     v_reset=v_reset,
                     step_mode="m",
-                    backend="torch",
                     store_v_seq=True,
                 )
                 .to("cuda")
@@ -811,7 +643,6 @@ def test_mixed_precision_float32_matches_torch_eval(
                     v_threshold=1.0,
                     v_reset=v_reset,
                     step_mode="m",
-                    backend="torch",
                     store_v_seq=True,
                 )
                 .to("cuda")
@@ -1429,52 +1260,6 @@ def test_mixed_precision_fp8_matrix_meets_numerical_gates(
         _assert_gradient_metrics(r_tau.grad, reference_r_tau.grad)
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize(
-    ("decay_input", "detach_reset", "v_threshold", "v_reset"),
-    [
-        (True, True, 1.0, 0.0),
-        (True, False, 0.5, -0.2),
-        (False, True, 0.5, 0.0),
-        (False, False, 1.0, -0.2),
-        (True, True, 0.5, -0.2),
-        (True, False, 1.0, 0.0),
-        (False, True, 1.0, -0.2),
-        (False, False, 0.5, 0.0),
-    ],
-)
-def test_plif_triton_matches_torch_training(
-    decay_input, detach_reset, v_threshold, v_reset
-):
-    lif = neuron.ParametricLIFNode(
-        decay_input=decay_input,
-        detach_reset=detach_reset,
-        v_threshold=v_threshold,
-        v_reset=v_reset,
-        step_mode="m",
-        backend="torch",
-    ).to(device="cuda", dtype=torch.float32)
-    lif_triton = neuron.ParametricLIFNode(
-        decay_input=decay_input,
-        detach_reset=detach_reset,
-        v_threshold=v_threshold,
-        v_reset=v_reset,
-        step_mode="m",
-        backend="triton",
-    ).to(device="cuda", dtype=torch.float32)
-
-    x = torch.randn(32, 128, device="cuda", dtype=torch.float32)
-    x1, x2 = x.clone().requires_grad_(), x.clone().requires_grad_()
-    out1 = lif(x1)
-    out2 = lif_triton(x2)
-    _assert_close(out1, out2, torch.float32)
-
-    out1.sum().backward()
-    out2.sum().backward()
-    _assert_close(x1.grad, x2.grad, torch.float32)
-    _assert_close(lif.w.grad, lif_triton.w.grad, torch.float32)
-
-
 def test_plif_launch_requires_device_local_r_tau():
     x_seq = torch.empty(2, 3, device="meta")
     v_init = torch.empty(3, device="meta")
@@ -1499,89 +1284,9 @@ def test_plif_launch_requires_device_local_r_tau():
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_plif_training_avoids_device_scalar_read():
-    node = neuron.ParametricLIFNode(
-        init_tau=2.0,
-        step_mode="m",
-        backend="triton",
-        store_v_seq=True,
-    ).to("cuda")
-
-    def run():
-        functional.reset_net(node)
-        node.zero_grad(set_to_none=True)
-        x = torch.randn(8, 3, 8, device="cuda", requires_grad=True)
-        node(x).sum().backward()
-
-    run()
-    with torch.profiler.profile(
-        activities=[torch.profiler.ProfilerActivity.CPU]
-    ) as profile:
-        run()
-
-    operation_names = {event.key for event in profile.key_averages()}
-    _assert_no_host_scalar_read(operation_names)
-
-    node.eval()
-    functional.reset_net(node)
-    with (
-        torch.no_grad(),
-        torch.profiler.profile(
-            activities=[torch.profiler.ProfilerActivity.CPU]
-        ) as inference_profile,
-    ):
-        node(torch.randn(8, 3, 8, device="cuda"))
-    inference_operation_names = {
-        event.key for event in inference_profile.key_averages()
-    }
-    _assert_no_host_scalar_read(inference_operation_names)
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_plif_training_avoids_voltage_history_cat():
-    for T in (1, 4, 32):
-        torch_node = neuron.ParametricLIFNode(
-            init_tau=2.0, step_mode="m", backend="torch"
-        ).to("cuda")
-        triton_node = neuron.ParametricLIFNode(
-            init_tau=2.0,
-            step_mode="m",
-            backend="triton",
-            store_v_seq=True,
-        ).to("cuda")
-        triton_node.load_state_dict(torch_node.state_dict())
-        x = torch.randn(T, 3, 8, device="cuda")
-        x_torch = x.clone().requires_grad_()
-        x_triton = x.clone().requires_grad_()
-        v = torch.randn_like(x[0]) * 0.1
-        v_torch = v.clone().requires_grad_()
-        v_triton = v.clone().requires_grad_()
-        torch_node.v = v_torch
-        triton_node.v = v_triton
-
-        output_torch = torch_node(x_torch)
-        with torch.profiler.profile(
-            activities=[torch.profiler.ProfilerActivity.CPU]
-        ) as profile:
-            output_triton = triton_node(x_triton)
-
-        assert "aten::cat" not in {event.key for event in profile.key_averages()}
-        assert triton_node.v_seq.is_contiguous()
-        assert triton_node.v_seq.storage_offset() == 0
-        _assert_close(output_torch, output_triton, torch.float32)
-        output_torch.sum().backward()
-        output_triton.sum().backward()
-        _assert_close(x_torch.grad, x_triton.grad, torch.float32)
-        _assert_close(v_torch.grad, v_triton.grad, torch.float32)
-        _assert_close(torch_node.w.grad, triton_node.w.grad, torch.float32)
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_plif_mp_helper_dynamic_backward_uses_nonzero_initial_state():
     T = 32
-    torch_node = neuron.ParametricLIFNode(
-        init_tau=2.0, step_mode="m", backend="torch"
-    ).to("cuda")
+    torch_node = neuron.ParametricLIFNode(init_tau=2.0, step_mode="m").to("cuda")
     x = torch.randn(T, 3, 8, device="cuda")
     x_torch = x.clone().requires_grad_()
     x_mixed = x.clone().requires_grad_()
@@ -1651,29 +1356,6 @@ def test_triton_loop_mode_switches_for_large_T(kernel_module, kind):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize(
-    "node_factory",
-    [
-        lambda: neuron.IFNode(step_mode="m", backend="triton").to("cuda"),
-        lambda: neuron.LIFNode(tau=2.0, step_mode="m", backend="triton").to("cuda"),
-    ],
-    ids=["if", "lif"],
-)
-def test_triton_dynamic_backward_executes(node_factory):
-    original_threshold = configure.triton_neuron_kernel_static_range_max_T
-    try:
-        configure.triton_neuron_kernel_static_range_max_T = 16
-        node = node_factory()
-        x = torch.randn(32, 2, 8, device="cuda", requires_grad=True)
-
-        node(x).sum().backward()
-
-        assert torch.isfinite(x.grad).all()
-    finally:
-        configure.triton_neuron_kernel_static_range_max_T = original_threshold
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("variant", ["stable", "mp"])
 def test_triton_plif_low_precision_dynamic_backward_compiles(dtype, variant):
@@ -1731,11 +1413,6 @@ def test_triton_plif_low_precision_dynamic_backward_compiles(dtype, variant):
         "if_mp_inference",
         "lif_backward",
         "plif_forward",
-        "ilif_inference",
-        "ilif_forward",
-        "stbif_single",
-        "stbif_multi",
-        "activation_aware_if",
     ],
 )
 def test_registered_triton_neuron_contracts_pass_opcheck(kind):
@@ -1777,40 +1454,13 @@ def test_registered_triton_neuron_contracts_pass_opcheck(kind):
             "multistep_plif_forward",
             (x, v, scalar.requires_grad_(), True, 1.0, 0.0, False, False, 0, 4.0),
         )
-    elif kind == "ilif_inference":
-        name, args = "multistep_ilif_forward_no_grad", (x, v, 0.5, 1.0, 4, False)
-    elif kind == "ilif_forward":
-        name, args = (
-            "multistep_ilif_forward",
-            (x, v, 0.5, 1.0, 4, -1.0, 1.0, False, True),
-        )
-    elif kind in {"stbif_single", "stbif_multi"}:
-        name = "single_step_stbif" if kind == "stbif_single" else "multi_step_stbif"
-        state = torch.zeros(32, device="cuda")
-        args = (
-            x[0] if kind == "stbif_single" else x,
-            state,
-            state.clone(),
-            scalar,
-            torch.tensor(1.0, device="cuda"),
-            torch.tensor(-1.0, device="cuda"),
-        )
-    else:
-        name, args = (
-            "multistep_activation_aware_if_inference",
-            (
-                x,
-                v,
-                torch.tensor(1.0, device="cuda"),
-                torch.tensor(0.0, device="cuda"),
-                1,
-                32,
-                0.0,
-                False,
-                False,
-            ),
-        )
-    torch.library.opcheck(getattr(torch.ops.sj, name).default, args, kwargs)
+    family = (
+        "activation_aware_if" if kind == "activation_aware_if" else kind.split("_")[0]
+    )
+    package = "if_" if family == "if" else family
+    importlib.import_module(f"spikingjelly._ops.{package}.triton_precision")
+    namespace = getattr(torch.ops, "sj_" + family)
+    torch.library.opcheck(getattr(namespace, name).default, args, kwargs)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

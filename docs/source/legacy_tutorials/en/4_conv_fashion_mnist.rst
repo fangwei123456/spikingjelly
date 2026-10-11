@@ -3,6 +3,14 @@
 Clock driven: Use convolutional SNN to identify Fashion-MNIST
 =============================================================================================
 
+.. warning::
+
+    This is an unmaintained archive for older SpikingJelly, not current V2
+    instructions. Code/commands using CuPy or retired backends do not run directly
+    with the current package. See :doc:`/tutorials/en/neuron` and
+    :doc:`/tutorials/en/migrate_from_legacy` for current usage.
+
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Translator: `YeYumin <https://github.com/YEYUMIN>`_
@@ -184,7 +192,7 @@ The complete codes are available at :class:`spikingjelly.activation_based.exampl
       -out_dir OUT_DIR      root dir for saving logs and checkpoint
       -resume RESUME        resume from the checkpoint path
       -amp                  automatic mixed precision training
-      -cupy                 use cupy neuron and multi-step forward mode
+                      use cupy neuron and multi-step forward mode
       -opt OPT              use which optimizer. SDG or Adam
       -lr LR                learning rate
       -momentum MOMENTUM    momentum for SGD

@@ -6,7 +6,6 @@ import sys
 import pytest
 from loguru import logger as loguru_logger
 
-from spikingjelly.activation_based.functional import net_config
 from spikingjelly.activation_based.op_counter.simple_energy import (
     SimpleEnergyProfiler,
 )
@@ -62,54 +61,32 @@ assert output.getvalue().strip() == "user-sink-still-active"
     subprocess.run([sys.executable, "-c", script], check=True)
 
 
-def test_logging_benchmark_rejects_nonpositive_counts():
-    result = subprocess.run(
-        [sys.executable, "benchmark/benchmark_logging.py", "--calls", "0"],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 2
-    assert "value must be > 0" in result.stderr
-
-
-def test_package_is_disabled_until_enabled():
+def test_operator_binding_is_logged_once_only_when_enabled():
     script = """
 import io
-import torch.nn as nn
+import torch
 from loguru import logger
-from spikingjelly.activation_based.functional import net_config
+from spikingjelly.activation_based import functional
 output = io.StringIO()
 sink_id = logger.add(
     output,
     format="{message}",
     filter=lambda record: record["name"].startswith("spikingjelly"),
 )
-module = nn.Module()
-module.backend = "torch"
-module.supported_backends = ("torch",)
-net_config.set_backend(module, "unsupported")
+v = torch.zeros(2)
+functional.if_multi_step(torch.ones(2, 2), v)
 assert output.getvalue() == ""
 logger.enable("spikingjelly")
-net_config.set_backend(module, "unsupported")
-assert "unsupported" in output.getvalue()
-logger.disable("spikingjelly")
-before = output.getvalue()
-net_config.set_backend(module, "unsupported")
-assert output.getvalue() == before
+for _ in range(3):
+    functional.lif_multi_step(torch.ones(2, 2), v)
+messages = output.getvalue().splitlines()
+assert len(messages) == 1, messages
+assert "operator=sj_lif" in messages[0]
+assert "device=cpu" in messages[0]
+assert "implementation=torch-reference" in messages[0]
 logger.remove(sink_id)
 """
     subprocess.run([sys.executable, "-c", script], check=True)
-
-
-def test_net_config_warning_uses_package_logger(loguru_records):
-    import torch.nn as nn
-
-    module = nn.Module()
-    module.backend = "torch"
-    module.supported_backends = ("torch",)
-    net_config.set_backend(module, "unsupported")
-    assert loguru_records
-    assert all(record["name"].startswith("spikingjelly") for record in loguru_records)
 
 
 def test_simple_energy_summary_is_emitted_once(loguru_records):

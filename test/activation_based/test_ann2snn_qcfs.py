@@ -99,7 +99,6 @@ def test_count_domain_reconstruction_equals_multistep_temporal_sum():
     encoder = SignedQCFSSequenceEncoder(
         torch.tensor([0.25, 0.5, 1.0]),
         time_steps=8,
-        neuron_backend="torch",
     )
     value = torch.tensor([[0.125, -1.25, 9.0], [-0.5, 0.75, -2.5]])
 
@@ -124,7 +123,6 @@ def test_signed_qcfs_bfloat16_replays_large_time_step_counts_exactly():
     encoder = SignedQCFSSequenceEncoder(
         scale=scale,
         time_steps=160,
-        neuron_backend="torch",
     )
 
     sequence = encoder.encode(value)

@@ -17,7 +17,6 @@ model:
       detach_reset: True
       surrogate_function:
         class_path: spikingjelly.activation_based.surrogate.ATan
-      backend: "triton"
   level: 4
   T: 10
   compress_x: True

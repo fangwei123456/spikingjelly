@@ -70,7 +70,7 @@ def test_common_trainer_captures_forward_and_backward():
     )
     args.distributed = False
     model = torch.nn.Sequential(
-        torch.nn.Linear(4, 5), neuron.LIFNode(step_mode="s", backend="torch")
+        torch.nn.Linear(4, 5), neuron.LIFNode(step_mode="s")
     ).cuda()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     batches = [(torch.randn(2, 4), torch.tensor([0, 1])) for _ in range(3)]

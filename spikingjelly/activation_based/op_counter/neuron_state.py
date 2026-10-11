@@ -109,6 +109,18 @@ _STATE_MATERIALIZATION_OPS = {
     aten.zeros_like.default,
 }
 
+_REGISTERED_NEURON_STATES = {
+    "sj_if": (1,),
+    "sj_lif": (1,),
+    "sj_plif": (1,),
+    "sj_qif": (1,),
+    "sj_eif": (1,),
+    "sj_izhikevich": (1, 2),
+    "sj_ilif": (1,),
+    "sj_activation_aware_if": (1,),
+    "sj_stbif": (1, 2),
+}
+
 
 def _storage_key(x: torch.Tensor) -> tuple[Any, ...]:
     if x.is_meta:
@@ -165,7 +177,11 @@ class NeuronStateCounter(BaseCounter):
         - ``projection_records``：较粗粒度投影，如 ``read_potential``、
           ``write_potential``、``state_mac_like``、``state_acc_like``
 
-        :param strict: 是否在遇到不支持的 backend 时直接抛异常
+        注册神经元算子不暴露内部原语。此时 ``state_reads`` 和
+        ``state_writes`` 按每步状态字节数乘以时间步数估算，
+        ``neuron_logical_steps`` 等于输入元素数；不会推断内部原语分解。
+
+        :param strict: 是否在遇到不支持的状态操作时直接抛异常
         :type strict: bool
         :param extra_state_rules: 额外的状态规则，格式为
           ``{module_type: callable}``。其中 ``callable`` 的签名为
@@ -190,7 +206,13 @@ class NeuronStateCounter(BaseCounter):
         - ``projection_records``: coarser projections such as ``read_potential``,
           ``write_potential``, ``state_mac_like``, and ``state_acc_like``
 
-        :param strict: whether to raise immediately on unsupported backends
+        Registered neuron operators do not expose their internal primitives.
+        For them, ``state_reads`` and ``state_writes`` estimate state bytes
+        per step multiplied by the number of steps, and
+        ``neuron_logical_steps`` equals the input element count. The counter
+        does not infer a primitive-operation breakdown.
+
+        :param strict: whether to raise immediately on unsupported state operations
         :type strict: bool
         :param extra_state_rules: additional rules in the form
           ``{module_type: callable}``. The callable signature is
@@ -258,12 +280,15 @@ class NeuronStateCounter(BaseCounter):
 
         * **中文**
 
-        统计一次aten操作对神经元内部状态的影响。
+        统计一次 Aten 操作或注册神经元算子对神经元内部状态的影响。
 
         该函数会判断当前操作是否涉及 ``BaseNode`` 子类的内部状态张量，
         并根据操作类型（加法、乘法、比较、非线性、选择等）记录对应的
         细粒度状态统计。如果启用了稀疏内存估计，还会根据输入张量的
         稀疏度调整计数方式。
+
+        对注册神经元算子，状态读写按状态字节数乘以时间步数估算，并记录
+        ``neuron_logical_steps``；不将不透明实现拆解为虚构的原语操作数。
 
         :param func: 待计算的 aten 操作
         :type func: Any
@@ -286,7 +311,8 @@ class NeuronStateCounter(BaseCounter):
 
         * **English**
 
-        Count the impact of an aten operation on the internal state of neurons.
+        Count the impact of an ATen operation or registered neuron operator on
+        internal neuron state.
 
         This function checks whether the current operation involves internal
         state tensors of ``BaseNode`` subclasses, and records fine-grained
@@ -294,6 +320,11 @@ class NeuronStateCounter(BaseCounter):
         comparison, nonlinear, selection, etc.). When sparse memory estimation
         is enabled, the counting is adjusted based on the sparsity of input
         tensors.
+
+        For registered neuron operators, state reads and writes are estimated
+        from state bytes multiplied by time steps, and ``neuron_logical_steps``
+        is recorded. Opaque implementations are not assigned an invented
+        primitive-operation breakdown.
 
         :param func: the aten operation to be calculated
         :type func: Any
@@ -317,17 +348,34 @@ class NeuronStateCounter(BaseCounter):
             self._pending_projection = None
             return 0
 
-        for module in active_base_nodes:
-            backend = module.backend
-            if backend is not None and backend != "torch":
-                self._warn_or_raise(
-                    module,
-                    f"NeuronStateCounter only supports torch backend, got "
-                    f"{backend!r} from {module.__class__.__name__}.",
-                )
-                self._pending_metrics = None
-                self._pending_projection = None
-                return 0
+        op_name = resolve_name(func)
+        namespace = op_name.split(".", 1)[0]
+        state_positions = _REGISTERED_NEURON_STATES.get(namespace)
+        if (
+            state_positions is not None
+            and op_name.endswith(".forward.default")
+            and args[0].device.type == "cuda"
+        ):
+            x_seq = args[0]
+            steps = int(x_seq.shape[0])
+            state_bytes = sum(dense_bytes(args[index]) for index in state_positions)
+            logical_steps = int(x_seq.numel())
+            return self._store_breakdown(
+                {
+                    "state_reads": state_bytes * steps,
+                    "state_writes": state_bytes * steps,
+                    "neuron_logical_steps": logical_steps,
+                    "state_adds": 0,
+                    "state_muls": 0,
+                    "state_comps": 0,
+                    "state_nonlinear_ops": 0,
+                    "state_reset_ops": 0,
+                    "state_select_ops": 0,
+                    "spike_triggered_ops": 0,
+                    "timestep_dense_ops": 0,
+                },
+                state_buffer_bytes=state_bytes,
+            )
 
         state_tensor_keys: set[tuple[Any, ...]] = set()
         for module in active_base_nodes:
@@ -363,7 +411,6 @@ class NeuronStateCounter(BaseCounter):
             if breakdown is not None:
                 return self._store_breakdown(breakdown)
 
-        op_name = resolve_name(func)
         if op_name.startswith(_IGNORED_OP_PREFIXES):
             self._pending_metrics = None
             self._pending_projection = None

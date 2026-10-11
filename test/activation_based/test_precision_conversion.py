@@ -231,7 +231,6 @@ def test_conversion_report_marks_spikformer_linear_and_high_precision_modules():
         embed_dims=64,
         num_heads=4,
         depths=2,
-        backend="torch",
     )
     report = analyze_convertible_modules(model).to_dict()
     assert report["convertible_linear"] >= 1
@@ -542,7 +541,6 @@ def test_convert_model_for_precision_replaces_spikformer_projections_fp8_te(
         embed_dims=64,
         num_heads=4,
         depths=2,
-        backend="torch",
     )
     model.eval()
     x = torch.randn(2, 3, 64, 64)

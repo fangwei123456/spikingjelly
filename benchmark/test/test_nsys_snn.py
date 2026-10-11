@@ -63,7 +63,7 @@ def test_shell_capture_trace_mode(tmp_path, mode, graph_trace, options, trace, c
         **os.environ,
         "PATH": f"{tmp_path}:{os.environ['PATH']}",
         "NSYS_ARGS": str(args_file),
-        "SJ_USE_TRITON_OP": "0",
+        "SJ_LIF_CUDA_IMPLEMENTATION": "triton",
     }
     result = subprocess.run(
         [
@@ -91,7 +91,9 @@ def test_shell_capture_trace_mode(tmp_path, mode, graph_trace, options, trace, c
     manifest = json.loads(Path(f"{output}.manifest.json").read_text())
     assert manifest["trace"] == trace
     assert manifest["cuda_graph_trace"] == graph_trace
-    assert manifest["sj_use_triton_op"] == "0"
+    assert (
+        manifest["implementation_environment"]["SJ_LIF_CUDA_IMPLEMENTATION"] == "triton"
+    )
     assert manifest["pytorch_trace"] == "none"
     assert manifest["python_sampling"] is False
     assert manifest["command"] == command
@@ -463,15 +465,16 @@ def test_gil_intervals_are_clipped_to_steps_and_kept_per_thread(tmp_path):
     assert (output / "threads.csv").is_file()
 
 
-def test_compare_rejects_different_workloads():
+@pytest.mark.parametrize("field", ["model", "neuron_family", "surrogate"])
+def test_compare_rejects_different_workloads(field):
     baseline = {
         "schema_version": 2,
-        "benchmark": {"case": {"model": "a"}},
+        "benchmark": {"case": {field: "a"}},
         "steps": [{}],
     }
     candidate = {
         "schema_version": 2,
-        "benchmark": {"case": {"model": "b"}},
+        "benchmark": {"case": {field: "b"}},
         "steps": [{}],
     }
     with pytest.raises(ValueError, match="workload metadata differs"):
@@ -586,7 +589,8 @@ def test_module_ranges_include_stateful_snn_leaf(monkeypatch, tmp_path):
         model(torch.rand(2, 3))
     assert "module:0" in ranges
     record = json.loads((tmp_path / "modules.jsonl").read_text().splitlines()[0])
-    assert (record["step_mode"], record["backend"]) == ("s", "torch")
+    assert record["step_mode"] == "s"
+    assert "backend" not in record
     assert record["value"][0]["shape"] == [2, 3]
 
 

@@ -15,7 +15,6 @@ class _PatchEmbedInit(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
-        backend: str,
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]],
         neuron_kwargs: Dict[str, Any],
     ) -> None:
@@ -26,24 +25,24 @@ class _PatchEmbedInit(nn.Module):
         )
         self.bn1 = layer.BatchNorm2d(hidden_channels, step_mode="m")
         self.pool1 = layer.MaxPool2d(3, stride=2, padding=1, step_mode="m")
-        self.lif1 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
+        self.lif1 = _make_multi_step_neuron(spiking_neuron, neuron_kwargs)
         self.conv2 = layer.Conv2d(
             hidden_channels, out_channels, kernel_size=3, padding=1, step_mode="m"
         )
         self.bn2 = layer.BatchNorm2d(out_channels, step_mode="m")
         self.pool2 = layer.MaxPool2d(3, stride=2, padding=1, step_mode="m")
-        self.lif2 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
+        self.lif2 = _make_multi_step_neuron(spiking_neuron, neuron_kwargs)
         self.conv3 = layer.Conv2d(
             out_channels, out_channels, kernel_size=3, padding=1, step_mode="m"
         )
         self.bn3 = layer.BatchNorm2d(out_channels, step_mode="m")
-        self.lif3 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
+        self.lif3 = _make_multi_step_neuron(spiking_neuron, neuron_kwargs)
         self.shortcut = nn.Sequential(
             layer.Conv2d(
                 hidden_channels, out_channels, kernel_size=1, stride=2, step_mode="m"
             ),
             layer.BatchNorm2d(out_channels, step_mode="m"),
-            _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs),
+            _make_multi_step_neuron(spiking_neuron, neuron_kwargs),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -61,7 +60,6 @@ class _PatchEmbedStage(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
-        backend: str,
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]],
         neuron_kwargs: Dict[str, Any],
     ) -> None:
@@ -71,18 +69,18 @@ class _PatchEmbedStage(nn.Module):
         )
         self.bn1 = layer.BatchNorm2d(out_channels, step_mode="m")
         self.pool = layer.MaxPool2d(3, stride=2, padding=1, step_mode="m")
-        self.lif1 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
+        self.lif1 = _make_multi_step_neuron(spiking_neuron, neuron_kwargs)
         self.conv2 = layer.Conv2d(
             out_channels, out_channels, kernel_size=3, padding=1, step_mode="m"
         )
         self.bn2 = layer.BatchNorm2d(out_channels, step_mode="m")
-        self.lif2 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
+        self.lif2 = _make_multi_step_neuron(spiking_neuron, neuron_kwargs)
         self.shortcut = nn.Sequential(
             layer.Conv2d(
                 in_channels, out_channels, kernel_size=1, stride=2, step_mode="m"
             ),
             layer.BatchNorm2d(out_channels, step_mode="m"),
-            _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs),
+            _make_multi_step_neuron(spiking_neuron, neuron_kwargs),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -97,17 +95,16 @@ class _MLP(nn.Module):
         self,
         dim: int,
         hidden_dim: int,
-        backend: str,
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]],
         neuron_kwargs: Dict[str, Any],
     ) -> None:
         super().__init__()
         self.fc1 = layer.Conv1d(dim, hidden_dim, kernel_size=1, step_mode="m")
         self.bn1 = layer.BatchNorm1d(hidden_dim, step_mode="m")
-        self.lif1 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
+        self.lif1 = _make_multi_step_neuron(spiking_neuron, neuron_kwargs)
         self.fc2 = layer.Conv1d(hidden_dim, dim, kernel_size=1, step_mode="m")
         self.bn2 = layer.BatchNorm1d(dim, step_mode="m")
-        self.lif2 = _make_multi_step_neuron(backend, spiking_neuron, neuron_kwargs)
+        self.lif2 = _make_multi_step_neuron(spiking_neuron, neuron_kwargs)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.lif1(self.bn1(self.fc1(x)))
@@ -121,7 +118,6 @@ class _Block(nn.Module):
         num_heads: int,
         mlp_ratio: float,
         qka_type: str,
-        backend: str,
         self_attention: bool,
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]],
         neuron_kwargs: Dict[str, Any],
@@ -131,7 +127,6 @@ class _Block(nn.Module):
             SpikingSelfAttention(
                 dim,
                 num_heads,
-                backend=backend,
                 spiking_neuron=spiking_neuron,
                 **neuron_kwargs,
             )
@@ -140,14 +135,11 @@ class _Block(nn.Module):
                 dim,
                 num_heads,
                 qka_type=qka_type,
-                backend=backend,
                 spiking_neuron=spiking_neuron,
                 **neuron_kwargs,
             )
         )
-        self.mlp = _MLP(
-            dim, int(dim * mlp_ratio), backend, spiking_neuron, neuron_kwargs
-        )
+        self.mlp = _MLP(dim, int(dim * mlp_ratio), spiking_neuron, neuron_kwargs)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         shape = x.shape
@@ -168,7 +160,6 @@ class QKFormer(nn.Module):
         depths: tuple[int, int, int] = (1, 2, 7),
         mlp_ratio: float = 4.0,
         qka_type: str = "token",
-        backend: str = "torch",
         spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
         **kwargs: Any,
     ) -> None:
@@ -203,8 +194,6 @@ class QKFormer(nn.Module):
         :type mlp_ratio: float
         :param qka_type: Q-K Attention 类型，可选 ``"token"`` 或 ``"channel"``
         :type qka_type: str
-        :param backend: 内部脉冲神经元使用的后端
-        :type backend: str
         :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认值
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
         :param kwargs: 传给所有内部神经元的参数；指定自定义类时统一决定其构造
@@ -243,8 +232,6 @@ class QKFormer(nn.Module):
         :type mlp_ratio: float
         :param qka_type: Q-K Attention type, either ``"token"`` or ``"channel"``
         :type qka_type: str
-        :param backend: backend used by the internal spiking neurons
-        :type backend: str
         :param spiking_neuron: custom neuron class; ``None`` keeps the paper defaults
         :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
         :param kwargs: arguments passed to all internal neurons; with a custom
@@ -268,14 +255,10 @@ class QKFormer(nn.Module):
         dims = (embed_dims // 4, embed_dims // 2, embed_dims)
         self.T = T
         self.patch_embed1 = _PatchEmbedInit(
-            in_channels, dims[0], backend, spiking_neuron, kwargs
+            in_channels, dims[0], spiking_neuron, kwargs
         )
-        self.patch_embed2 = _PatchEmbedStage(
-            dims[0], dims[1], backend, spiking_neuron, kwargs
-        )
-        self.patch_embed3 = _PatchEmbedStage(
-            dims[1], dims[2], backend, spiking_neuron, kwargs
-        )
+        self.patch_embed2 = _PatchEmbedStage(dims[0], dims[1], spiking_neuron, kwargs)
+        self.patch_embed3 = _PatchEmbedStage(dims[1], dims[2], spiking_neuron, kwargs)
         self.stage1 = nn.ModuleList(
             [
                 _Block(
@@ -283,7 +266,6 @@ class QKFormer(nn.Module):
                     num_heads[0],
                     mlp_ratio,
                     qka_type,
-                    backend,
                     False,
                     spiking_neuron,
                     kwargs,
@@ -298,7 +280,6 @@ class QKFormer(nn.Module):
                     num_heads[1],
                     mlp_ratio,
                     qka_type,
-                    backend,
                     False,
                     spiking_neuron,
                     kwargs,
@@ -313,7 +294,6 @@ class QKFormer(nn.Module):
                     num_heads[2],
                     mlp_ratio,
                     qka_type,
-                    backend,
                     True,
                     spiking_neuron,
                     kwargs,
@@ -378,7 +358,6 @@ def qkformer_10_384(
     T: int = 4,
     in_channels: int = 3,
     num_classes: int = 1000,
-    backend: str = "torch",
     spiking_neuron: Optional[Callable[..., neuron.BaseNode]] = None,
     **kwargs: Any,
 ) -> QKFormer:
@@ -399,8 +378,6 @@ def qkformer_10_384(
     :type in_channels: int
     :param num_classes: 分类类别数
     :type num_classes: int
-    :param backend: 内部脉冲神经元使用的后端
-    :type backend: str
     :param spiking_neuron: 自定义神经元类；``None`` 保留论文默认值
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: 传给内部神经元的参数
@@ -422,8 +399,6 @@ def qkformer_10_384(
     :type in_channels: int
     :param num_classes: number of classes
     :type num_classes: int
-    :param backend: backend used by the internal spiking neurons
-    :type backend: str
     :param spiking_neuron: custom neuron class; ``None`` keeps the paper default
     :type spiking_neuron: Optional[Callable[..., neuron.BaseNode]]
     :param kwargs: arguments passed to the internal neurons
@@ -438,7 +413,6 @@ def qkformer_10_384(
         embed_dims=384,
         num_heads=(6, 6, 6),
         depths=(1, 2, 7),
-        backend=backend,
         spiking_neuron=spiking_neuron,
         **kwargs,
     )

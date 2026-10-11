@@ -37,7 +37,6 @@ class CIFAR10DVSVGG(nn.Module):
         decay_input: bool = False,
         detach_reset: bool = True,
         surrogate_function=surrogate.ATan(),
-        backend="triton",
     ):
         super().__init__()
         kwargs = {
@@ -45,7 +44,6 @@ class CIFAR10DVSVGG(nn.Module):
             "decay_input": decay_input,
             "detach_reset": detach_reset,
             "surrogate_function": surrogate_function,
-            "backend": backend,
             "step_mode": "m",
         }
         self.features = nn.Sequential(

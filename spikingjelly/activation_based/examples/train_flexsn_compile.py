@@ -1,6 +1,6 @@
 """Example training entrypoint for compiled FlexSN models.
 This script mirrors ``train_imagenet.py`` but uses ``spiking_vgg`` with
-``FlexSN(backend="triton")`` and defaults to ``torch.compile`` so users can
+automatic FlexSN implementation selection and defaults to ``torch.compile`` so users can
 exercise the compiler-visible FlexSN training path end-to-end.
 """
 
@@ -37,7 +37,7 @@ class _FlexSNTrainer(train_classify.Trainer):
     def get_tb_logdir_name(self, args):
         return (
             super().get_tb_logdir_name(args)
-            + f"_T{args.T}_flexsn_triton_{args.execution_mode}_sa{args.surrogate_alpha}"
+            + f"_T{args.T}_flexsn_auto_{args.execution_mode}_sa{args.surrogate_alpha}"
         )
 
     def load_model(self, args, num_classes):
@@ -57,7 +57,6 @@ class _FlexSNTrainer(train_classify.Trainer):
                 core=lif_core_sg,
                 num_states=1,
                 step_mode=kwargs.get("step_mode", "m"),
-                backend="triton",
             )
 
         model = spiking_vgg.__dict__[args.model](

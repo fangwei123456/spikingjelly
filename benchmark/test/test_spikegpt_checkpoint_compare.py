@@ -43,7 +43,7 @@ def test_current_lif_matches_author_inference_defaults():
     assert lif.v_reset == 0.0
     assert lif.detach_reset is False
     assert lif.step_mode == "s"
-    assert lif.backend == "torch"
+    assert not hasattr(lif, "backend")
     assert lif.training is False
 
 

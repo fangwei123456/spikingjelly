@@ -21,7 +21,7 @@ def main() -> None:
         raise RuntimeError("this example requires one CUDA GPU")
     torch.manual_seed(42)
     model = nn.Sequential(
-        neuron.LIFNode(step_mode="m", backend="torch"),
+        neuron.LIFNode(step_mode="m"),
         nn.Linear(128, 10),
     ).cuda()
     x = torch.randn(4, 16, 128, device="cuda")

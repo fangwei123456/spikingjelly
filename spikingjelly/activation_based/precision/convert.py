@@ -95,32 +95,30 @@ def _configure_triton_neurons(model: nn.Module, config, device) -> dict:
     from ..neuron.integrate_and_fire import IFNode
     from ..neuron.lif import LIFNode
     from ..neuron.plif import ParametricLIFNode
-    from ..triton_kernel.neuron_kernel.utils import (
-        _prepare_triton_neuron_execution_plan,
-    )
-    from ..triton_kernel.triton_utils import normalize_triton_storage_dtype
+    from ..._ops.triton_layout import _prepare_triton_neuron_execution_plan
+    from ..._ops.triton_runtime import normalize_triton_storage_dtype
 
     neuron_types = {
         IFNode: "if",
         LIFNode: "lif",
         ParametricLIFNode: "plif",
     }
-    if config.triton_storage is None:
+    if config.neuron_storage is None:
         for module in model.modules():
             if type(module) in neuron_types:
-                module._triton_precision = None
+                module._neuron_precision = None
         return {"converted_modules": [], "unsupported_modules": []}
 
     targets = []
     unsupported = []
     precision = (
-        normalize_triton_storage_dtype(config.triton_storage),
-        config.triton_fwd,
-        config.triton_bwd,
+        normalize_triton_storage_dtype(config.neuron_storage),
+        config.neuron_fwd,
+        config.neuron_bwd,
     )
     for name, module in model.named_modules():
         neuron_type = neuron_types.get(type(module))
-        if neuron_type is None or module.backend != "triton":
+        if neuron_type is None:
             continue
         if module.step_mode != "m":
             unsupported.append(name or "<root>")
@@ -129,13 +127,12 @@ def _configure_triton_neurons(model: nn.Module, config, device) -> dict:
 
     if unsupported:
         raise RuntimeError(
-            "Triton neuron precision requires multi-step IF/LIF/PLIF nodes: "
+            "Neuron precision requires multi-step IF/LIF/PLIF nodes: "
             + ", ".join(unsupported)
         )
     if not targets:
         raise RuntimeError(
-            "Triton neuron precision requested, but no multi-step IF/LIF/PLIF "
-            "nodes with backend='triton' were found."
+            "Neuron precision requested, but no multi-step IF/LIF/PLIF nodes were found."
         )
 
     for _, _, neuron_type in targets:
@@ -147,7 +144,7 @@ def _configure_triton_neurons(model: nn.Module, config, device) -> dict:
             backward_compute_dtype=precision[2],
         )
     for _, module, _ in targets:
-        module._triton_precision = precision
+        module._neuron_precision = precision
     return {
         "converted_modules": [name for name, _, _ in targets],
         "unsupported_modules": [],

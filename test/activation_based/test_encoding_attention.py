@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from spikingjelly.activation_based import base, functional
+from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.encoding import (
     LatencyEncoder,
     PeriodicEncoder,
@@ -174,18 +174,11 @@ def test_multidimensional_attention_matches_the_direct_three_stage_equation():
     }
 
 
-def test_spiking_attention_backend_updates_all_internal_neurons(monkeypatch):
-    monkeypatch.setattr(base, "check_backend_library", lambda _backend: None)
-
+def test_spiking_attention_has_no_backend_api():
     ssa = SpikingSelfAttention(dim=8, num_heads=2)
     qka = QKAttention(dim=8, num_heads=2)
-    for attention in (ssa, qka):
-        attention.backend = "cupy"
-        assert attention.backend == "cupy"
-        assert attention.attn_lif.backend == "cupy"
-        assert attention.proj_lif.backend == "cupy"
-    assert ssa.qkv_lif.backend == "cupy"
-    assert qka.qk_lif.backend == "cupy"
+    for module in (ssa, qka, ssa.attn_lif, ssa.proj_lif, ssa.qkv_lif, qka.qk_lif):
+        assert not hasattr(module, "backend")
 
 
 def test_multidimensional_attention_dimension_subset_skips_disabled_axes():

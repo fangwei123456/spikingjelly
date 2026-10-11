@@ -11,4 +11,4 @@ SpikingJelly's **forward functions** provide multi-step forward propagation logi
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr, jit_*
+   :exclude-members: extra_repr, jit_*

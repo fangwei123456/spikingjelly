@@ -9,9 +9,9 @@ from spikingjelly.activation_based import lynxi_exchange
 from spikingjelly.activation_based.examples import conv_fashion_mnist
 
 """
-python w1.py -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -cupy -opt sgd -lr 0.1 -j 8
+python w1.py -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -opt sgd -lr 0.1 -j 8
 
-Namespace(T=4, device='cuda:0', b=128, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=False, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128, save_es=None)
+Namespace(T=4, device='cuda:0', b=128, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=False, opt='sgd', momentum=0.9, lr=0.1, channels=128, save_es=None)
 ./logs/T4_b128_sgd_lr0.1_c128_cupy
 epoch = 63, train_loss = 0.0041, train_acc = 0.9836, test_loss = 0.0110, test_acc = 0.9312, max_test_acc = 0.9330
 train speed = 8056.0318 images/s, test speed = 11152.5812 images/s

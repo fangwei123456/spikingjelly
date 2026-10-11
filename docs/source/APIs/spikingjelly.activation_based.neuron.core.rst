@@ -40,7 +40,6 @@ Integrate-and-fire (IF) Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends
 
 Leaky Integrate-and-fire (LIF) Neurons
 ------------------------------------------------
@@ -49,7 +48,6 @@ Leaky Integrate-and-fire (LIF) Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends
 
 Parametric Leaky Integrate-and-fire (PLIF) Neurons
 ----------------------------------------------------------
@@ -58,7 +56,7 @@ Parametric Leaky Integrate-and-fire (PLIF) Neurons
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 Parallel Spiking Neuron Family
 --------------------------------------------
@@ -67,13 +65,19 @@ Parallel Spiking Neuron Family
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr
+   :exclude-members: extra_repr
 
 FlexSN
 -------------
+
+FlexSN automatically uses its Torch implementation on CPU. On CUDA it selects
+the fused Triton implementation for supported cores and uses the Torch/HOP path
+for supported compositions that cannot be fused. Its constructor has no backend
+parameter.
+
 
 .. automodule:: spikingjelly.activation_based.neuron.flexsn
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: supported_backends, extra_repr, store_state_seqs
+   :exclude-members: extra_repr, store_state_seqs

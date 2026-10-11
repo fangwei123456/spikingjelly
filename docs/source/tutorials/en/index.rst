@@ -1,10 +1,16 @@
 英文教程 | English Tutorials
 ========================================
 
+See :doc:`./install`, then :doc:`./basic_concept` and :doc:`./neuron`.
+See :doc:`./triton_backend`
+for GPU execution/compilation and :doc:`./precision` for numerical policies.
+Use :doc:`./flexsn` for custom dynamics and :doc:`./migrate_from_legacy` for old code.
+
 .. toctree::
     :maxdepth: 1
     :caption: Basics
 
+    /tutorials/en/install
     /tutorials/en/basic_concept
     /tutorials/en/container
     /tutorials/en/neuron
@@ -28,7 +34,6 @@
     :maxdepth: 1
     :caption: Advanced
 
-    /tutorials/en/cupy_neuron
     /tutorials/en/triton_backend
     /tutorials/en/flexsn
     /tutorials/en/memopt

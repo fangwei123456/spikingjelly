@@ -172,3 +172,5 @@ benchmark/**/*.sqlite
 results/fp8-blackwell-5090/
 ocr.*
 /logs/plasticity/
+ops/*/_native_build.json
+*.pyd

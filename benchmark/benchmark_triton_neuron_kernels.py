@@ -23,26 +23,26 @@ try:
 except ModuleNotFoundError:
     from fp8_efficiency import assess_triton_efficiency, percentile, require_efficiency
 from spikingjelly.activation_based import surrogate
-from spikingjelly.activation_based.triton_kernel.fp8_capability import (
+from spikingjelly._ops.fp8_capability import (
     triton_fp8_neuron_capability_report,
 )
-from spikingjelly.activation_based.triton_kernel.neuron_kernel.integrate_and_fire import (
+from spikingjelly._ops.if_.triton_precision import (
     multistep_if,
     _multistep_if_mp_with_plan,
 )
-from spikingjelly.activation_based.triton_kernel.neuron_kernel.lif import (
+from spikingjelly._ops.lif.triton_precision import (
     multistep_lif,
     _multistep_lif_mp_with_plan,
 )
-from spikingjelly.activation_based.triton_kernel.neuron_kernel.plif import (
+from spikingjelly._ops.plif.triton_precision import (
     multistep_plif,
     _multistep_plif_mp_with_plan,
 )
-from spikingjelly.activation_based.triton_kernel.neuron_kernel.utils import (
+from spikingjelly._ops.triton_layout import (
     _TritonNeuronExecutionPlan,
     _prepare_triton_neuron_execution_plan,
 )
-from spikingjelly.activation_based.triton_kernel.triton_utils import (
+from spikingjelly._ops.triton_runtime import (
     normalize_triton_compute_dtype_name,
 )
 

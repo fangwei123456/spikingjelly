@@ -69,7 +69,10 @@ pathlib.Path(f"{prefix}.manifest.json").write_text(
             "nsys_version": pathlib.Path(f"{prefix}.nsys-version.txt").read_text().strip(),
             "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
             "source_revision": os.environ.get("SJ_BENCH_COMMIT"),
-            "sj_use_triton_op": os.environ.get("SJ_USE_TRITON_OP"),
+            "implementation_environment": {
+                key: value for key, value in os.environ.items()
+                if key.startswith("SJ_") and key.endswith("_CUDA_IMPLEMENTATION")
+            },
             "control": control,
             "session": session,
             "capture_range": "cudaProfilerApi" if control == "api" else "none",

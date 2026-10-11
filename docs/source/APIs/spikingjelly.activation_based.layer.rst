@@ -395,3 +395,8 @@ SpikingJelly's **miscellaneous module** provides auxiliary layers and other util
    :hidden:
 
    misc <spikingjelly.activation_based.layer.misc>
+
+Binary Spike Layers / 二值脉冲层
+++++++++++++++++++++++++++++++++
+
+.. toctree::

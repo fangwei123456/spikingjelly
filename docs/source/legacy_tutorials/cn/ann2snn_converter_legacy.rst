@@ -344,7 +344,7 @@ snn_model就是输出的SNN模型。查看snn_model的网络结构（BatchNorm2d
         (0): Module(
           (0): VoltageScaler(0.240048)
           (1): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
             (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
           )
           (2): VoltageScaler(4.165831)
@@ -352,7 +352,7 @@ snn_model就是输出的SNN模型。查看snn_model的网络结构（BatchNorm2d
         (1): Module(
           (0): VoltageScaler(0.307485)
           (1): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
             (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
           )
           (2): VoltageScaler(3.252196)
@@ -360,7 +360,7 @@ snn_model就是输出的SNN模型。查看snn_model的网络结构（BatchNorm2d
         (2): Module(
           (0): VoltageScaler(0.141659)
           (1): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
             (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
           )
           (2): VoltageScaler(7.059210)
@@ -368,7 +368,7 @@ snn_model就是输出的SNN模型。查看snn_model的网络结构（BatchNorm2d
         (3): Module(
           (0): VoltageScaler(0.060785)
           (1): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
             (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
           )
           (2): VoltageScaler(16.451399)

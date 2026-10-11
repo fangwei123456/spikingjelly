@@ -35,54 +35,34 @@ V2 版本更新记录见 :doc:`./changelog`。
 安装
 ----------------
 
-SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。最新版的 SpikingJelly 要求 ``torch>=2.6.0`` ，并在 ``torch==2.7.1`` 上测试。
+在已激活的虚拟环境中使用 uv；V2 要求 Python >= 3.11、Torch >= 2.6。请先安装适合设备的
+`PyTorch <https://pytorch.org/get-started/locally/>`__。
 
-从 SpikingJelly V2 起，发布版本采用兼容 PEP 440 的语义化版本号。V2 之前使用历史遗留的 ``0.0.0.0.X`` 版本方案，其中奇数 ``X`` 对应 GitHub/OpenI 上的开发版，偶数 ``X`` 对应 PyPI 稳定版。
+.. list-table::
+    :header-rows: 1
+    :widths: 25 75
 
-**从 PyPI 安装最新的稳定版本：**
+    * - 安装方式
+      - 命令
+    * - PyPI 发布版
+      - ``uv pip install spikingjelly``
+    * - PyPI 先行版
+      - ``uv pip install --pre spikingjelly``
+    * - 可选 Triton（缺少时）
+      - ``uv pip install "spikingjelly[triton]"``
+    * - 最新源码开发版
+      - ``uv pip install git+https://github.com/fangwei123456/spikingjelly.git``
 
-.. code-block:: bash
-
-    pip install spikingjelly
-
-**从源代码安装最新的开发版：**
-
-通过 `GitHub <https://github.com/fangwei123456/spikingjelly>`_：
-
-.. code-block:: bash
-
-    git clone https://github.com/fangwei123456/spikingjelly.git
-    cd spikingjelly
-    pip install .
-
-通过 `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_ ：
+原生 CUDA（需要工具链，对应 V2 版本发布到 PyPI 后可用）：
 
 .. code-block:: bash
 
-    git clone https://git.openi.org.cn/OpenI/spikingjelly.git
-    cd spikingjelly
-    pip install .
+    SJ_BUILD_NATIVE_CUDA=1 uv pip install \
+      --no-build-isolation --no-binary spikingjelly \
+      --reinstall-package spikingjelly --no-cache "spikingjelly>=2.0.0"
 
-**可选依赖**
-
-若想使用 CuPy 后端，需安装 `CuPy <https://docs.cupy.dev/en/stable/install.html#installing-cupy>`_ 。
-
-.. code:: bash
-
-    pip install cupy-cuda12x # for CUDA 12.x
-    pip install cupy-cuda11x # for CUDA 11.x
-
-若想使用 Triton 后端，请确保安装了 `Triton <https://github.com/triton-lang/triton>`_。
-
-.. code:: bash
-
-    pip install triton==3.3.1 # spikingjelly is tested with triton==3.3.1
-
-若想使用 ``nir_exchange`` 功能，请安装 `NIR <https://github.com/neuromorphs/NIR>`_ 和 `NIRTorch <https://github.com/neuromorphs/NIRTorch>`_ 。
-
-.. code:: bash
-
-    pip install nir nirtorch
+前置条件、决策图、其他可选依赖及排查方法见 :doc:`/tutorials/cn/install`。
+尚未发布的改动请安装源码开发版。
 
 上手教程
 ----------------------
@@ -182,54 +162,35 @@ Docs for different versions (`latest` is the developing version):
 Installation
 ----------------
 
-Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly. The latest version of SpikingJelly requires ``torch>=2.6.0`` and is tested on ``torch==2.7.1`` .
+Use uv in an activated virtual environment. V2 requires Python >= 3.11 and
+Torch >= 2.6. First install the appropriate
+`PyTorch <https://pytorch.org/get-started/locally/>`__ for your device.
 
-Starting from SpikingJelly V2, release versions use PEP 440 compatible SemVer-style version numbers. Before V2, SpikingJelly used the legacy ``0.0.0.0.X`` scheme: odd ``X`` tracked the development version on GitHub/OpenI, and even ``X`` tracked the stable PyPI release.
+.. list-table::
+    :header-rows: 1
+    :widths: 25 75
 
-**Install the last stable version from PyPI:**
+    * - Install
+      - Command
+    * - PyPI release
+      - ``uv pip install spikingjelly``
+    * - PyPI pre-release
+      - ``uv pip install --pre spikingjelly``
+    * - Optional Triton (if missing)
+      - ``uv pip install "spikingjelly[triton]"``
+    * - Latest development source
+      - ``uv pip install git+https://github.com/fangwei123456/spikingjelly.git``
+
+Native CUDA (requires a toolchain; available after the corresponding V2 PyPI release):
 
 .. code-block:: bash
 
-    pip install spikingjelly
+    SJ_BUILD_NATIVE_CUDA=1 uv pip install \
+      --no-build-isolation --no-binary spikingjelly \
+      --reinstall-package spikingjelly --no-cache "spikingjelly>=2.0.0"
 
-**Install the latest developing version from the source codes:**
-
-From `GitHub <https://github.com/fangwei123456/spikingjelly>`_:
-
-.. code-block:: bash
-
-    git clone https://github.com/fangwei123456/spikingjelly.git
-    cd spikingjelly
-    pip install .
-
-From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
-
-.. code-block:: bash
-
-    git clone https://git.openi.org.cn/OpenI/spikingjelly.git
-    cd spikingjelly
-    pip install .
-
-**Optional Dependencies**
-
-To enable CuPy backend, install `CuPy <https://docs.cupy.dev/en/stable/install.html#installing-cupy>`_ .
-
-.. code:: bash
-
-    pip install cupy-cuda12x # for CUDA 12.x
-    pip install cupy-cuda11x # for CUDA 11.x
-
-To enable Triton backend, make sure that `Triton <https://github.com/triton-lang/triton>`_ is installed.
-
-.. code:: bash
-
-    pip install triton==3.3.1 # spikingjelly is tested with triton==3.3.1
-
-To enable ``nir_exchange`` , install `NIR <https://github.com/neuromorphs/NIR>`_ and `NIRTorch <https://github.com/neuromorphs/NIRTorch>`_ .
-
-.. code:: bash
-
-    pip install nir nirtorch
+See :doc:`/tutorials/en/install` for prerequisites, decision diagrams, other
+extras and troubleshooting. Unreleased changes require the development source.
 
 Tutorials
 ------------------------
