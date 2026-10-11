@@ -67,6 +67,26 @@ def test_forward_matches_scalar_dynamics(kind, reset, decay_input, dtype):
     torch.testing.assert_close(actual_spikes, expected_spikes)
     torch.testing.assert_close(node.v_seq, expected_voltages)
     torch.testing.assert_close(node.v, expected_voltages[-1])
+
+    step = functional.ternary_if_step if kind == "if" else functional.ternary_lif_step
+    voltage = torch.full_like(x_seq[0], 0.0 if reset is None else reset)
+    for current, expected_spike, expected_voltage in zip(
+        x_seq, expected_spikes, expected_voltages, strict=True
+    ):
+        current_before, voltage_before = current.clone(), voltage.clone()
+        spike, next_voltage = step(
+            current,
+            voltage,
+            v_threshold=0.8,
+            v_reset=reset,
+            surrogate_function=surrogate.Sigmoid(),
+            **kwargs,
+        )
+        torch.testing.assert_close(spike, expected_spike)
+        torch.testing.assert_close(next_voltage, expected_voltage)
+        torch.testing.assert_close(current, current_before)
+        torch.testing.assert_close(voltage, voltage_before)
+        voltage = next_voltage
     assert actual_spikes.dtype == dtype
     assert actual_spikes.device == x_seq.device
     assert set(actual_spikes.flatten().tolist()) <= {-1.0, 0.0, 1.0}
@@ -131,16 +151,19 @@ def test_zero_rest_dynamics_are_sign_symmetric(kind, reset):
 
 @pytest.mark.parametrize("kind", ["if", "lif"])
 @pytest.mark.parametrize("reset", [None, 0.2])
-def test_single_multi_and_functional_forward_and_gradients(kind, reset):
+@pytest.mark.parametrize("detach_reset", [False, True])
+def test_single_multi_and_functional_forward_and_gradients(kind, reset, detach_reset):
     x = torch.tensor(
         [[0.9, -0.7], [2.2, -2.0], [-1.7, 1.5], [0.3, -0.2]], dtype=torch.float64
     )
     x_single = x.clone().requires_grad_()
     x_multi = x.clone().requires_grad_()
     x_functional = x.clone().requires_grad_()
-    single = _node(kind, v_reset=reset, store_v_seq=True)
-    multi = _node(kind, v_reset=reset, store_v_seq=True, step_mode="m")
-    pure = _node(kind, v_reset=reset, store_v_seq=True, step_mode="m")
+    x_steps = x.clone().requires_grad_()
+    options = dict(v_reset=reset, store_v_seq=True, detach_reset=detach_reset)
+    single = _node(kind, **options)
+    multi = _node(kind, step_mode="m", **options)
+    pure = _node(kind, step_mode="m", **options)
     original_memories = tuple(pure._memories.values())
 
     (out_functional,), (state_functional,) = pure.functional_forward(
@@ -153,9 +176,27 @@ def test_single_multi_and_functional_forward_and_gradients(kind, reset):
     assert pure.v_seq is None
     out_single = torch.stack([single(current) for current in x_single])
     out_multi = multi(x_multi)
+    step = functional.ternary_if_step if kind == "if" else functional.ternary_lif_step
+    voltage = torch.full_like(x[0], 0.0 if reset is None else reset)
+    step_outputs = []
+    step_options = {"tau": 2.0, "decay_input": True} if kind == "lif" else {}
+    for current in x_steps:
+        spike, voltage = step(
+            current,
+            voltage,
+            v_threshold=1.0,
+            v_reset=reset,
+            surrogate_function=surrogate.Sigmoid(),
+            detach_reset=detach_reset,
+            **step_options,
+        )
+        step_outputs.append(spike)
+    out_steps = torch.stack(step_outputs)
 
     torch.testing.assert_close(out_single, out_multi)
     torch.testing.assert_close(out_functional, out_multi)
+    torch.testing.assert_close(out_steps, out_multi)
+    torch.testing.assert_close(voltage, multi.v)
     torch.testing.assert_close(single.v_seq, multi.v_seq)
     torch.testing.assert_close(state_functional, multi.v)
     weights = x.new_tensor([[0.5, 0.8], [1.0, -0.3], [0.9, 0.2], [-0.7, 1.1]])
@@ -163,10 +204,12 @@ def test_single_multi_and_functional_forward_and_gradients(kind, reset):
         (out_single, single.v),
         (out_multi, multi.v),
         (out_functional, state_functional),
+        (out_steps, voltage),
     ]:
         ((output * weights).sum() + 0.4 * state.sum()).backward()
     torch.testing.assert_close(x_single.grad, x_multi.grad)
     torch.testing.assert_close(x_functional.grad, x_multi.grad)
+    torch.testing.assert_close(x_steps.grad, x_multi.grad)
 
 
 @pytest.mark.parametrize("kind", ["if", "lif"])

@@ -25,29 +25,6 @@ def _validate_ternary_parameters(
         raise TypeError("detach_reset must be a bool.")
 
 
-def _ternary_fire_and_reset(
-    h: torch.Tensor,
-    v_threshold: float,
-    v_reset: Optional[float],
-    surrogate_function: surrogate.SurrogateFunctionBase,
-    detach_reset: bool,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    positive = surrogate_function(h - v_threshold)
-    negative = surrogate_function(-h - v_threshold)
-    spike = positive - negative
-    if v_reset is None:
-        spike_reset = spike.detach() if detach_reset else spike
-        v = BaseNode.apply_soft_reset(h, spike_reset, v_threshold)
-    else:
-        # The two branch decisions retain their surrogate gradients when silent.
-        # abs(spike) has the same discrete value but a different gradient at zero.
-        reset_mask = positive + negative
-        if detach_reset:
-            reset_mask = reset_mask.detach()
-        v = BaseNode.apply_hard_reset(h, reset_mask, v_reset)
-    return spike, v
-
-
 class TernaryIFNode(BaseNode):
     def __init__(
         self,
@@ -251,9 +228,9 @@ class TernaryIFNode(BaseNode):
             input shape, dtype and device.
         :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
         """
-        h = states[0] + inputs[0]
-        spike, v = _ternary_fire_and_reset(
-            h,
+        spike, v = functional.ternary_if_step(
+            inputs[0],
+            states[0],
             self.v_threshold,
             self.v_reset,
             self.surrogate_function,
@@ -539,11 +516,11 @@ class TernaryLIFNode(BaseNode):
             input shape, dtype and device.
         :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
         """
-        h = functional.lif_charge(
-            inputs[0], states[0], self.tau, self.decay_input, self.v_reset
-        )
-        spike, v = _ternary_fire_and_reset(
-            h,
+        spike, v = functional.ternary_lif_step(
+            inputs[0],
+            states[0],
+            self.tau,
+            self.decay_input,
             self.v_threshold,
             self.v_reset,
             self.surrogate_function,

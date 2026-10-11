@@ -55,6 +55,8 @@ __all__ = [
     "neuron_implementation",
     "lava_cuba_lif_step",
     "if_step",
+    "ternary_if_step",
+    "ternary_lif_step",
     "qif_step",
     "eif_step",
     "lif_charge",
@@ -417,6 +419,185 @@ def if_step(
         (spikes[0, 0], voltage.reshape_as(v).clone())
         if scalar
         else (spikes[0], voltage)
+    )
+
+
+def _ternary_fire_and_reset(
+    h: torch.Tensor,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    positive = surrogate_function(h - v_threshold)
+    negative = surrogate_function(-h - v_threshold)
+    spike = positive - negative
+    # The hard-reset event keeps branch gradients even when the signed spike is zero.
+    reset_event = spike if v_reset is None else positive + negative
+    return spike, voltage_reset(h, reset_event, v_threshold, v_reset, detach_reset)
+
+
+def ternary_if_step(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <ternary_if_step-cn>` | :ref:`English <ternary_if_step-en>`
+
+    ----
+
+    .. _ternary_if_step-cn:
+
+    * **中文**
+
+    用显式电位执行一个三值 IF 时间步，不修改输入或模块状态。
+    充电为 ``h = v + x``。两侧阈值均包含等号，输出为 ``-1``、``0`` 或 ``1``；
+    硬重置使用两侧阈值事件之和，有符号软重置减去 ``v_threshold * spike``。
+    硬重置保留两侧事件的替代梯度；连续 surrogate 模式下输出和重置也连续。
+
+    :param x: 单步浮点输入，形状为 ``[N, *]``；使用输入设备上的 PyTorch 运算。
+    :type x: torch.Tensor
+    :param v: 当前电位张量，形状、dtype 和 device 与 ``x`` 相同。
+    :type v: torch.Tensor
+    :param v_threshold: 对称阈值的正幅值，必须为有限正浮点数。
+    :type v_threshold: float
+    :param v_reset: 两侧共用的有限硬重置电位，必须严格位于阈值之间；
+        ``None`` 使用有符号软重置。
+    :type v_reset: Optional[float]
+    :param surrogate_function: 两侧共用的替代函数。离散前向必须为二值
+        Heaviside，且 :math:`\Theta(0)=1`；连续模式使用其原函数。
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否仅分离重置分支的事件梯度，默认 ``False``。
+    :type detach_reset: bool
+    :return: ``(spike, v_next)``，形状、dtype 和 device 与输入相同。
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _ternary_if_step-en:
+
+    * **English**
+
+    Run one ternary IF time step with explicit voltage, without mutating
+    inputs or module state.
+    Charging is ``h = v + x``. Both thresholds are inclusive and emit ``-1``,
+    ``0`` or ``1``. Hard reset uses the sum of both threshold events; signed soft
+    reset subtracts ``v_threshold * spike``. Hard reset retains both event
+    surrogate gradients. Continuous surrogate mode gives continuous outputs and reset.
+
+    :param x: Single-step floating-point input of shape ``[N, *]``;
+        uses PyTorch operations on the input device.
+    :type x: torch.Tensor
+    :param v: Current voltage tensor matching ``x`` in shape, dtype and device.
+    :type v: torch.Tensor
+    :param v_threshold: Positive symmetric threshold magnitude; a finite positive float.
+    :type v_threshold: float
+    :param v_reset: Common finite hard-reset voltage strictly between the thresholds;
+        ``None`` selects signed soft reset.
+    :type v_reset: Optional[float]
+    :param surrogate_function: Shared surrogate. Discrete forward must be binary
+        Heaviside with :math:`\Theta(0)=1`; continuous mode uses its primitive.
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach event gradients only in reset;
+        defaults to ``False``.
+    :type detach_reset: bool
+    :return: ``(spike, v_next)`` matching the input shape, dtype and device.
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    """
+    h = v + x
+    return _ternary_fire_and_reset(
+        h, v_threshold, v_reset, surrogate_function, detach_reset
+    )
+
+
+def ternary_lif_step(
+    x: torch.Tensor,
+    v: torch.Tensor,
+    tau: float,
+    decay_input: bool,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <ternary_lif_step-cn>` | :ref:`English <ternary_lif_step-en>`
+
+    ----
+
+    .. _ternary_lif_step-cn:
+
+    * **中文**
+
+    用显式电位执行一个三值 LIF 时间步，不修改输入或模块状态。
+    泄漏充电使用 :func:`lif_charge`。两侧阈值均包含等号，输出为 ``-1``、``0`` 或 ``1``；
+    硬重置使用两侧阈值事件之和，有符号软重置减去 ``v_threshold * spike``。
+    硬重置保留两侧事件的替代梯度；连续 surrogate 模式下输出和重置也连续。
+
+    :param x: 单步浮点输入，形状为 ``[N, *]``；使用输入设备上的 PyTorch 运算。
+    :type x: torch.Tensor
+    :param v: 当前电位张量，形状、dtype 和 device 与 ``x`` 相同。
+    :type v: torch.Tensor
+    :param tau: 以时间步为单位的时间常数，必须为大于 ``1.0`` 的有限浮点数。
+    :type tau: float
+    :param decay_input: 是否将输入也乘以 ``1/tau``。
+    :type decay_input: bool
+    :param v_threshold: 对称阈值的正幅值，必须为有限正浮点数。
+    :type v_threshold: float
+    :param v_reset: 两侧共用的有限硬重置电位，必须严格位于阈值之间；
+        ``None`` 使用有符号软重置。
+    :type v_reset: Optional[float]
+    :param surrogate_function: 两侧共用的替代函数。离散前向必须为二值
+        Heaviside，且 :math:`\Theta(0)=1`；连续模式使用其原函数。
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否仅分离重置分支的事件梯度，默认 ``False``。
+    :type detach_reset: bool
+    :return: ``(spike, v_next)``，形状、dtype 和 device 与输入相同。
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _ternary_lif_step-en:
+
+    * **English**
+
+    Run one ternary LIF time step with explicit voltage, without mutating
+    inputs or module state.
+    Leaky charging uses :func:`lif_charge`. Both thresholds are inclusive and emit ``-1``,
+    ``0`` or ``1``. Hard reset uses the sum of both threshold events; signed soft
+    reset subtracts ``v_threshold * spike``. Hard reset retains both event
+    surrogate gradients. Continuous surrogate mode gives continuous outputs and reset.
+
+    :param x: Single-step floating-point input of shape ``[N, *]``;
+        uses PyTorch operations on the input device.
+    :type x: torch.Tensor
+    :param v: Current voltage tensor matching ``x`` in shape, dtype and device.
+    :type v: torch.Tensor
+    :param tau: Time constant in time steps; a finite float greater than ``1.0``.
+    :type tau: float
+    :param decay_input: Whether input is also scaled by ``1/tau``.
+    :type decay_input: bool
+    :param v_threshold: Positive symmetric threshold magnitude; a finite positive float.
+    :type v_threshold: float
+    :param v_reset: Common finite hard-reset voltage strictly between the thresholds;
+        ``None`` selects signed soft reset.
+    :type v_reset: Optional[float]
+    :param surrogate_function: Shared surrogate. Discrete forward must be binary
+        Heaviside with :math:`\Theta(0)=1`; continuous mode uses its primitive.
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach event gradients only in reset;
+        defaults to ``False``.
+    :type detach_reset: bool
+    :return: ``(spike, v_next)`` matching the input shape, dtype and device.
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    """
+    h = lif_charge(x, v, tau, decay_input, v_reset)
+    return _ternary_fire_and_reset(
+        h, v_threshold, v_reset, surrogate_function, detach_reset
     )
 
 
