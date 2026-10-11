@@ -1,6 +1,13 @@
 spikingjelly.timing\_based package
 ######################################
 
+Functional
+++++++++++
+
+.. automodule:: spikingjelly.timing_based.functional
+   :members:
+   :undoc-members:
+
 Encoding
 +++++++++++
 

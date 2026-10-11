@@ -1,8 +1,7 @@
-import math
-
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from torch import nn
+
+from . import functional
 
 __all__ = ["Tempotron"]
 
@@ -12,181 +11,165 @@ class Tempotron(nn.Module):
         self,
         in_features: int,
         out_features: int,
-        T: int,
+        duration: float,
         tau: float = 15.0,
-        tau_s: float = 15.0 / 4,
+        tau_s: float = 3.75,
         v_threshold: float = 1.0,
     ) -> None:
         r"""
-        **API Language** - :ref:`中文 <Tempotron.__init__-cn>` | :ref:`English <Tempotron.__init__-en>`
+        **API Language** - :ref:`中文 <timing-Tempotron-init-cn>` | :ref:`English <timing-Tempotron-init-en>`
 
         ----
 
-        .. _Tempotron.__init__-cn:
+        .. _timing-Tempotron-init-cn:
 
         * **中文**
 
-        实现 Tempotron 脉冲时序分类神经元。输入中的每个值表示对应输入神经元
-        的脉冲时刻，负值表示未发放。
+        拥有可训练突触权重的连续事件 Tempotron。每条连接允许多个输入事件。
+        首次上穿阈值后屏蔽同刻及更晚输入，已有 PSP 继续演化，不硬重置。
+        无跨调用时间状态；loss 和沉默恢复由调用方定义。
 
-        :param in_features: 输入神经元数量
+        权重形状为 ``[out_features,in_features]``，以均值 0、标准差 0.001
+        的正态分布初始化，checkpoint 键为 ``weight``。使用普通 nn.Module
+        的 ``to`` 管理设备与 dtype。支持 CPU/CUDA FP32/FP64 及一阶梯度。
+        时间单位由调用方选择，各时刻、duration 和时间常数必须一致。
+
+        :param in_features: 正整数输入连接数量。
         :type in_features: int
-        :param out_features: 输出神经元数量
+        :param out_features: 正整数输出神经元数量。
         :type out_features: int
-        :param T: 仿真时间窗口
-        :type T: int
-        :param tau: 膜电位时间常数
+        :param duration: 正且有限的观察窗终点，窗口为 ``[0,duration]``。
+        :type duration: float
+        :param tau: 正且有限的膜时间常数，默认 15。
         :type tau: float
-        :param tau_s: 突触电流时间常数
+        :param tau_s: 正且有限的突触时间常数，默认 3.75；可大于 tau，但不能相等。
         :type tau_s: float
-        :param v_threshold: 发放阈值
+        :param v_threshold: 正且有限的阈值，默认 1；不改变单位峰值 PSP。
         :type v_threshold: float
-        :raises ValueError: 数量、时间常数或阈值非正，或两个时间常数相等
+        :raises ValueError: 数量、时间窗、时间常数或阈值非法，或时间常数不可表示。
+        :raises TypeError: 时间超参数或阈值不是固定实数标量。
 
         ----
 
-        .. _Tempotron.__init__-en:
+        .. _timing-Tempotron-init-en:
 
         * **English**
 
-        Implement a Tempotron neuron for spike-timing classification. Each input
-        value is the spike time of one input neuron; a negative value means that
-        neuron did not spike.
+        Continuous-event Tempotron owning trainable synaptic weights. Connections
+        accept multiple events. The first upward threshold crossing shunts
+        simultaneous and later inputs; existing PSPs continue without a hard reset.
+        No temporal state persists between calls. Callers choose losses and recovery.
 
-        :param in_features: Number of input neurons
+        Weights have shape ``[out_features,in_features]``, normal initialization
+        with mean 0 and standard deviation 0.001, and checkpoint key ``weight``.
+        Standard nn.Module ``to`` controls device/dtype. CPU/CUDA FP32/FP64 and
+        first-order gradients are supported. Callers choose time units, consistently
+        for all event times, duration and time constants.
+
+        :param in_features: Positive number of input connections.
         :type in_features: int
-        :param out_features: Number of output neurons
+        :param out_features: Positive number of output neurons.
         :type out_features: int
-        :param T: Simulation time window
-        :type T: int
-        :param tau: Membrane-potential time constant
+        :param duration: Finite positive endpoint of ``[0,duration]``.
+        :type duration: float
+        :param tau: Finite positive membrane time constant, default 15.
         :type tau: float
-        :param tau_s: Synaptic-current time constant
+        :param tau_s: Finite positive synaptic time constant, default 3.75;
+            may exceed tau but must differ from it.
         :type tau_s: float
-        :param v_threshold: Firing threshold
+        :param v_threshold: Finite positive threshold, default 1;
+            independent of unit-peak PSP normalization.
         :type v_threshold: float
-        :raises ValueError: If a size, time constant, or threshold is not positive,
-            or if the two time constants are equal
+        :raises ValueError: For invalid sizes, window, time constants or threshold,
+            or unrepresentable time constants.
+        :raises TypeError: If time hyperparameters or threshold are not fixed real scalars.
         """
         super().__init__()
-        if in_features <= 0 or out_features <= 0 or T <= 0:
-            raise ValueError("in_features, out_features, and T must be positive.")
-        if tau <= 0 or tau_s <= 0 or v_threshold <= 0 or tau == tau_s:
-            raise ValueError(
-                "tau and tau_s must be positive and different; v_threshold must be positive."
-            )
-
+        if (
+            not isinstance(in_features, int)
+            or not isinstance(out_features, int)
+            or min(in_features, out_features) <= 0
+        ):
+            raise ValueError("in_features and out_features must be positive integers.")
+        functional._parameters(duration, tau, tau_s, v_threshold)
         self.in_features = in_features
         self.out_features = out_features
-        self.T = T
+        self.duration = duration
         self.tau = tau
         self.tau_s = tau_s
         self.v_threshold = v_threshold
-        # Preserve the public checkpoint key ``model.summation_layer.weight``.
-        self.model = nn.Module()
-        self.model.summation_layer = nn.Linear(in_features, out_features, bias=False)
+        self.weight = nn.Parameter(torch.empty(out_features, in_features))
+        nn.init.normal_(self.weight, mean=0.0, std=0.001)
 
-        t_max = tau * tau_s * math.log(tau / tau_s) / (tau - tau_s)
-        self.v0 = v_threshold / (math.exp(-t_max / tau) - math.exp(-t_max / tau_s))
-
-    @staticmethod
-    def _psp_kernel(t: torch.Tensor, tau: float, tau_s: float) -> torch.Tensor:
-        t = t.clamp_min(0)
-        return torch.exp(-t / tau) - torch.exp(-t / tau_s)
-
-    def mse_loss(self, v_max: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        spike_times: torch.Tensor,
+        input_indices: torch.Tensor,
+        batch_offsets: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         r"""
-        **API Language** - :ref:`中文 <Tempotron.mse_loss-cn>` | :ref:`English <Tempotron.mse_loss-en>`
+        **API Language** - :ref:`中文 <timing-Tempotron-forward-cn>` | :ref:`English <timing-Tempotron-forward-en>`
 
         ----
 
-        .. _Tempotron.mse_loss-cn:
+        .. _timing-Tempotron-forward-cn:
 
         * **中文**
 
-        :param v_max: 各输出神经元在时间窗口内的最大电压，形状为
-            ``[batch_size, out_features]``
-        :type v_max: torch.Tensor
-        :param label: 分类标签，形状为 ``[batch_size]``
-        :type label: torch.Tensor
-        :return: 仅计算错误发放神经元的均方误差
-        :rtype: torch.Tensor
+        使用本模块权重执行 :func:`spikingjelly.timing_based.functional.tempotron`。
+        支持重复连接、无序及空样本，窗外输入梯度为零。内部 FP64 事件求解仅
+        支持一阶反向；峰值并列选择最早分支，奇异的被使用时间导数报错。
+        无 loss、替代梯度或跨调用状态。
+
+        :param spike_times: 有限 FP32/FP64 时刻 ``[E]``，单位与 duration 一致。
+        :type spike_times: torch.Tensor
+        :param input_indices: int64 ``[E]``，范围 ``[0,in_features)``。
+        :type input_indices: torch.Tensor
+        :param batch_offsets: 同设备 int64 ``[B+1]``，从 0 到 E 的非递减分段。
+        :type batch_offsets: torch.Tensor
+        :return: 同输入 dtype/device 的 ``(v_max,t_peak,t_spike)``，各为
+            ``[B,out_features]``；峰值属于 shunting 响应，未发放为 inf，空样本
+            为 ``(0,0,inf)``。时刻与权重必须同 dtype/device。
+        :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        :raises TypeError: 张量 dtype 不受支持。
+        :raises ValueError: 张量形状、设备、有限性、索引、分段或超参数非法。
+        :raises RuntimeError: 数值状态、求根或被请求的导数不可表示。
 
         ----
 
-        .. _Tempotron.mse_loss-en:
+        .. _timing-Tempotron-forward-en:
 
         * **English**
 
-        :param v_max: Maximum voltage of each output neuron with shape
-            ``[batch_size, out_features]``
-        :type v_max: torch.Tensor
-        :param label: Class labels with shape ``[batch_size]``
-        :type label: torch.Tensor
-        :return: Mean squared error over incorrectly firing neurons
-        :rtype: torch.Tensor
+        Evaluate :func:`spikingjelly.timing_based.functional.tempotron` with this
+        module's weights. Repeated connections, unordered events and empty trials
+        are supported; out-of-window inputs have zero gradient. FP64 event solving
+        supports first-order backward only. Equal peaks select the earliest branch;
+        singular requested time derivatives raise. No loss, surrogate or temporal
+        state is built in.
+
+        :param spike_times: Finite FP32/FP64 times ``[E]`` in duration's units.
+        :type spike_times: torch.Tensor
+        :param input_indices: int64 ``[E]`` in ``[0,in_features)``.
+        :type input_indices: torch.Tensor
+        :param batch_offsets: Same-device int64 ``[B+1]``, nondecreasing from 0 to E.
+        :type batch_offsets: torch.Tensor
+        :return: ``(v_max,t_peak,t_spike)``, each ``[B,out_features]`` with input
+            dtype/device. Peaks follow shunting; non-firing times are inf; empty
+            trials yield ``(0,0,inf)``. Times and weights must share dtype/device.
+        :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        :raises TypeError: For unsupported tensor dtypes.
+        :raises ValueError: For invalid shapes, devices, finite values, indices,
+            offsets or hyperparameters.
+        :raises RuntimeError: For unrepresentable states, roots or requested derivatives.
         """
-        wrong = (
-            (v_max >= self.v_threshold).to(v_max.dtype)
-            != F.one_hot(label, self.out_features)
-        ).to(v_max.dtype)
-        return ((v_max - self.v_threshold) * wrong).square().sum() / label.shape[0]
-
-    def forward(self, in_spikes: torch.Tensor, ret_type: str) -> torch.Tensor:
-        r"""
-        **API Language** - :ref:`中文 <Tempotron.forward-cn>` | :ref:`English <Tempotron.forward-en>`
-
-        ----
-
-        .. _Tempotron.forward-cn:
-
-        * **中文**
-
-        :param in_spikes: 输入脉冲时刻，形状为 ``[batch_size, in_features]``
-        :type in_spikes: torch.Tensor
-        :param ret_type: ``"v"``、``"v_max"`` 或 ``"spikes"``
-        :type ret_type: str
-        :return: 完整电压轨迹、最大电压或输出脉冲时刻
-        :rtype: torch.Tensor
-        :raises ValueError: ``ret_type`` 不受支持
-
-        ----
-
-        .. _Tempotron.forward-en:
-
-        * **English**
-
-        :param in_spikes: Input spike times with shape
-            ``[batch_size, in_features]``
-        :type in_spikes: torch.Tensor
-        :param ret_type: ``"v"``, ``"v_max"``, or ``"spikes"``
-        :type ret_type: str
-        :return: Full voltage trace, maximum voltage, or output spike times
-        :rtype: torch.Tensor
-        :raises ValueError: If ``ret_type`` is unsupported
-        """
-        times = torch.arange(self.T, device=in_spikes.device).view(1, 1, self.T)
-        spike_times = in_spikes.unsqueeze(-1)
-        voltage = (
-            self.v0
-            * self._psp_kernel(times - spike_times, self.tau, self.tau_s)
-            * (spike_times >= 0).float()
-        )
-        voltage = self.model.summation_layer(voltage.permute(0, 2, 1)).permute(0, 2, 1)
-
-        if ret_type == "v":
-            return voltage
-        if ret_type == "v_max":
-            return voltage.max(dim=2).values
-        if ret_type == "spikes":
-            max_index = voltage.argmax(dim=2)
-            times = times.expand(in_spikes.shape[0], self.out_features, -1)
-            soft_index = (F.softmax(voltage * self.T, dim=2) * times).sum(dim=2)
-            fired = (voltage.max(dim=2).values >= self.v_threshold).to(voltage.dtype)
-            sign = fired * 2 - 1
-            max_index = max_index * sign
-            soft_index = soft_index * sign
-            return soft_index + (max_index - soft_index).detach()
-        raise ValueError(
-            f"Invalid out_voltage_type: {ret_type}. Must be 'v', 'v_max', or 'spikes'"
+        return functional.tempotron(
+            spike_times,
+            input_indices,
+            batch_offsets,
+            self.weight,
+            self.duration,
+            self.tau,
+            self.tau_s,
+            self.v_threshold,
         )
