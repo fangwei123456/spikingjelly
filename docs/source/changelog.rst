@@ -63,7 +63,7 @@ Features
 Plasticity Learning Example
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Module: ``spikingjelly.activation_based.examples.stdp_mnist``.
+Module: ``spikingjelly.activation_based.examples.plasticity.stdp_mnist``.
 
 - Added a shallow STDP-only MNIST recipe using classic current LIF, own-spike
   adaptation, slow local rate-error excitability, negative recurrent feedback
@@ -505,10 +505,18 @@ Module: ``spikingjelly.activation_based.neuron``.
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Plasticity Example Paths
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+- Moved ``stdp_trace``, ``mstdp``, ``mstdpet``, and ``stdp_mnist`` into
+  ``spikingjelly.activation_based.examples.plasticity``. Update module commands
+  and imports to ``examples.plasticity.<name>``; old paths are removed without
+  forwarding modules.
+
 Plasticity MNIST Example Migration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Module: ``spikingjelly.activation_based.examples.stdp_mnist``.
+Module: ``spikingjelly.activation_based.examples.plasticity.stdp_mnist``.
 
 - Replaced the provisional conductance example with the validated current
   recipe. Use native-current ``--homeostasis-gain`` and ``--bias-initial`` instead

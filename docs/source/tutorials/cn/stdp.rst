@@ -1,111 +1,436 @@
-局部突触可塑性与 STDP
-==========================
+STDP学习
+=======================================
+
+本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 English version: :doc:`../en/stdp`
 
-定位与支持范围
-----------------------
-
-``learning`` 提供局部突触权重更新工具。STDP 的活动相关性更新不是分类损失的梯度，
-把更新量写入 ``weight.grad`` 是借用优化器的更新通道，不保证任务正确率提升。
-编码、竞争、稳态、初始化和读出仍是训练方法的一部分。
-
-支持范围、时间常数、张量布局、奖励对齐和迁移见
+本页介绍局部突触可塑性，并演示其与任务梯度的组合；最后给出经过验证的 MNIST 配方。
+支持范围、时间单位、奖励对齐和接口迁移见
 :doc:`../../APIs/spikingjelly.activation_based.learning`。
-普通 STDP 使用 ``1-1/tau`` 衰减；MSTDP/MSTDPET 使用 ``exp(-1/tau)``。
-它们保留各自离散定义，不应仅为公式统一而替换。
 
-规则更新与状态
-----------------------
+生物可解释性的学习规则一直备受SNN研究者的关注。在SpikingJelly中提供了STDP(Spike Timing Dependent Plasticity) \
+学习器，可以用于卷积或全连接层的权重学习。
 
-设当前 pre/post 脉冲为 ``p[t]``、``q[t]``，普通 STDP 更新为：
+
+STDP(Spike Timing Dependent Plasticity)
+-----------------------------------------------------
+
+STDP(Spike Timing Dependent Plasticity)的经典实验见 [#STDP]_，是在生物实验中发现的一种突触可塑性机制。实验发现，突触权重 \
+受到突触连接的前神经元(pre)和后神经元(post)的脉冲发放的影响，具体而言是：
+
+如果pre神经元先发放脉冲，post神经元后发放脉冲，则突触的权重会增大；
+如果pre神经元后发放脉冲，post神经元先发放脉冲，则突触的权重会减小。
+
+生理实验数据拟合的曲线如下图 [#STDP_figure]_ 所示：
+
+.. image:: ../../_static/tutorials/stdp/stdp.*
+    :width: 100%
+
+
+STDP可以使用如下公式进行拟合：
 
 .. math::
 
-   a_t &= (1-1/\tau_{pre})a_{t-1}+p_t \\
-   b_t &= (1-1/\tau_{post})b_{t-1}+q_t \\
-   \Delta W_t &= F_{post}(W)(q_t\otimes a_t)-F_{pre}(W)(b_t\otimes p_t)
+    \begin{align}
+	\begin{split}
+	\Delta w_{ij} =
+	\begin{cases}
+		A\exp(\frac{-|t_{i}-t_{j}|}{\tau_{+}}) , t_{i} \leq t_{j}, A > 0\\
+		B\exp(\frac{-|t_{i}-t_{j}|}{\tau_{-}}) , t_{i} > t_{j}, B < 0
+	\end{cases}
+    \end{split}
+    \end{align}
 
-batch 和卷积空间位置求和；多步模式还对时间求和。改变 batch 或空间大小会改变
-更新尺度，需要调用者显式调整学习率或 ``scale``。当前脉冲先进入 trace；
-同一步发放仅在调制函数合适时抵消。固定权重下的多步累计不等价于逐步改权重。
+其中 :math:`A, B` 是突触权重变化的最大值，:math:`\tau_{+}, \tau_{-}` 是时间常数。
 
-下面直接使用更新量，不使用梯度或优化器：
+上述标准的STDP公式在实践中使用较为繁琐，因其需要记录前后神经元所有的脉冲发放时刻。实践中通常使用迹 [#Trace]_ 的方式来实现STDP。
+
+对于pre神经元 :math:`i` 和post神经元 :math:`j`，分别使用迹 :math:`tr_{pre}[i]` 和 :math:`tr_{post}[j]` 来记录其脉冲发放。迹的更新类似于LIF神经元：
+
+.. math::
+
+    tr_{pre}[i][t] = tr_{pre}[i][t-1] -\frac{tr_{pre}[i][t-1]}{\tau_{pre}} + s[i][t]
+
+    tr_{post}[j][t] = tr_{post}[j][t-1] -\frac{tr_{post}[j][t-1]}{\tau_{post}} + s[j][t]
+
+其中 :math:`\tau_{pre}, \tau_{post}` 是pre和post迹的时间常数，:math:`s[i][t], s[j][t]` 是在 :math:`t` 时刻pre神经元 :math:`i` 和post神经元 :math:`j` \
+发放的脉冲，取值仅为0或1。
+
+突触权重的更新按照：
+
+.. math::
+
+    \Delta W[i][j][t] = F_{post}(w[i][j][t]) \cdot tr_{pre}[i][t] \cdot s[j][t] - F_{pre}(w[i][j][t]) \cdot tr_{post}[j][t] \cdot s[i][t]
+
+其中 :math:`F_{pre}, F_{post}` 是控制突触改变量的函数。
+
+实现中的权重布局为 ``W[post, pre]``；上式的生物记号使用 pre=i、post=j。
+STDP 采用 ``1-1/tau`` 衰减，要求有限 ``tau>=1``；当前脉冲先加入 trace 再计算更新。
+更新按 batch、卷积空间位置和多步时间求和，调用者需要显式调整 ``scale``。
+同时发放是否抵消取决于权重调制函数；固定权重的序列累计不等于逐步改权重。
+
+STDP学习器
+-----------------------------------------------------
+:class:`spikingjelly.activation_based.learning.STDPLearner` 提供了STDP学习器的实现，支持卷积和全连接层，请读者先阅读其API文档以获取使用方法。
+
+我们使用 ``STDPLearner`` 搭建一个简单的 ``4x3`` 网络，并且将权重设置为 ``0.4``：
 
 .. code-block:: python
 
     import torch
-    from torch import nn
-    from spikingjelly.activation_based import learning, neuron
+    import torch.nn as nn
+    from spikingjelly.activation_based import neuron, layer, learning
+    from matplotlib import pyplot as plt
 
-    fc = nn.Linear(4, 3, bias=False)
-    sn = neuron.IFNode()
-    learner = learning.STDPLearner("s", fc, sn, 20., 20.)
-    try:
-        with torch.no_grad():
-            sn(fc((torch.rand(2, 4) > 0.7).float()))
-            delta_w = learner.step(on_grad=False, scale=1 / 2)
-            fc.weight.add_(delta_w, alpha=0.01)
-        learner.reset()
-        sn.reset()
-    finally:
+    def f_weight(x):
+        return torch.clamp(x, -1, 1.)
+
+    torch.manual_seed(0)
+
+    w_min, w_max = -1., 1.
+    tau_pre, tau_post = 2., 2.
+    N_in, N_out = 4, 3
+    T = 128
+    batch_size = 2
+    lr = 0.01
+    net = nn.Sequential(
+        layer.Linear(N_in, N_out, bias=False),
+        neuron.IFNode()
+    )
+    nn.init.constant_(net[0].weight.data, 0.4)
+
+``STDPLearner`` 可以将负的权重的更新量 ``- delta_w * scale`` 叠加到参数的梯度上，这只是借用优化器更新通道，不是任务损失梯度，也不保证任务正确率提高。
+
+我们可以将其和优化器、学习率调节器等深度学习中的模块一起使用。这里我们使用最简单的权重更新策略：
+
+.. math::
+
+    W = W - lr \cdot \nabla W
+
+其中 :math:`\nabla W` 是使用STDP得到的权重更新量取负后的 ``- delta_w * scale``。因而借助优化器可以实现 ``weight.data = weight.data - lr * weight.grad = weight.data + lr * delta_w * scale``。
+
+
+这可以使用最朴素的 :class:`torch.optim.SGD` 实现，只需要设置 ``momentum=0.``：
+
+.. code-block:: python
+
+    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.)
+
+接下来生成输入脉冲，设置 ``STDPLearner``：
+
+.. code-block:: python
+
+    in_spike = (torch.rand([T, batch_size, N_in]) > 0.7).float()
+    learner = learning.STDPLearner(step_mode='s', synapse=net[0], sn=net[1],
+                                   tau_pre=tau_pre, tau_post=tau_post,
+                                   f_pre=f_weight, f_post=f_weight)
+
+接下来送入数据计算。需要注意的是，为了便于画图，我们对数据与权重进行切片，这样使得 ``shape = [T, *, *]`` 变为 ``shape = [T]``：
+
+.. code-block:: python
+
+    out_spike = []
+    trace_pre = []
+    trace_post = []
+    weight = []
+    with torch.no_grad():
+        for t in range(T):
+            optimizer.zero_grad()
+            out_spike.append(net(in_spike[t]))
+            learner.step(on_grad=True)
+            optimizer.step()
+            net[0].weight.data.clamp_(w_min, w_max)
+            weight.append(net[0].weight.data.clone())
+            trace_pre.append(learner.trace_pre)
+            trace_post.append(learner.trace_post)
+
+    out_spike = torch.stack(out_spike)   # [T, batch_size, N_out]
+    trace_pre = torch.stack(trace_pre)   # [T, batch_size, N_in]
+    trace_post = torch.stack(trace_post) # [T, batch_size, N_out]
+    weight = torch.stack(weight)         # [T, N_out, N_in]
+
+    in_spike = in_spike[:, 0, 0]
+    out_spike = out_spike[:, 0, 0]
+    trace_pre = trace_pre[:, 0, 0]
+    trace_post = trace_post[:, 0, 0]
+    weight = weight[:, 0, 0]
+
+    learner.close()
+
+完整的代码位于 ``spikingjelly/activation_based/examples/plasticity/stdp_trace.py``。
+
+将 ``in_spike, out_spike, trace_pre, trace_post, weight`` 画出，得到下图：
+
+.. image:: ../../_static/tutorials/stdp/stdp_trace.*
+    :width: 100%
+
+这与 [#Trace]_ 中的Fig.3是一致的（注意下图中使用 `j` 表示pre神经元，`i` 表示后神经元，与我们相反）：
+
+.. image:: ../../_static/tutorials/stdp/trace_paper_fig3.*
+    :width: 100%
+
+
+这里的随机数据只演示按层分工的调用流程，不是有效任务训练配方。
+按层分工需在 backward 后清除 STDP 层的任务梯度；同参数叠加则保留该梯度。
+``sn`` 必须指向实际 post 活动模块；无 momentum、无 weight decay 的 SGD 才对应上述直接更新。
+``step()`` 消费活动记录并保留 trace；``reset()`` 清学习状态与记录。
+评估需显式 ``disable()``，``net.eval()`` 不会停止记录；结束时用 ``close()`` 释放 hook。
+
+与梯度下降混合使用
+-----------------------------------------------------
+在SNN中一种广泛使用STDP的做法是，使用STDP和梯度下降分别训练网路中的不同层。下面介绍如何使用 ``STDPLearner`` 实现这一做法。
+
+我们的目标是搭建一个深度卷积SNN，使用STDP训练卷积层，使用梯度下降法训练全连接层。首先定义超参数：
+
+.. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    from torch.optim import SGD, Adam
+    from spikingjelly.activation_based import learning, layer, neuron, functional
+
+    T = 8
+    N = 2
+    C = 3
+    H = 32
+    W = 32
+    lr = 0.1
+    tau_pre = 2.
+    tau_post = 100.
+    step_mode = 'm'
+
+我们使用 ``shape = [T, N, C, H, W] = [8, 2, 3, 32, 32]`` 的输入。
+
+
+接下来定义STDP的权重函数以及网络，这里我们搭建的是一个简单的卷积SNN，且使用多步模式：
+
+.. code-block:: python
+
+    def f_weight(x):
+        return torch.clamp(x, -1, 1.)
+
+
+    net = nn.Sequential(
+        layer.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False),
+        neuron.IFNode(),
+        layer.MaxPool2d(2, 2),
+        layer.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False),
+        neuron.IFNode(),
+        layer.MaxPool2d(2, 2),
+        layer.Flatten(),
+        layer.Linear(16 * 8 * 8, 64, bias=False),
+        neuron.IFNode(),
+        layer.Linear(64, 10, bias=False),
+        neuron.IFNode(),
+    )
+
+    functional.set_step_mode(net, step_mode)
+
+我们希望使用STDP训练 ``layer.Conv2d``，其他层使用梯度下降训练。首先定义使用STDP训练的层类型：
+
+.. code-block:: python
+
+    instances_stdp = (layer.Conv2d, )
+
+对于每个类型为 ``instances_stdp`` 的层，我们都使用一个STDP学习器：
+
+.. code-block:: python
+
+    stdp_learners = []
+
+    for i in range(net.__len__()):
+        if isinstance(net[i], instances_stdp):
+            stdp_learners.append(
+                learning.STDPLearner(step_mode=step_mode, synapse=net[i], sn=net[i+1], tau_pre=tau_pre, tau_post=tau_post,
+                                    f_pre=f_weight, f_post=f_weight)
+            )
+
+接下来进行参数分组，将类型为 ``instances_stdp`` 的层参数和其他类型的层的参数，分别放置到不同的优化器中。\
+这里我们使用 ``Adam`` 作为梯度下降训练的参数的优化器，使用 ``SGD`` 作为STDP训练的参数的优化器：
+
+
+.. code-block:: python
+
+    params_stdp = []
+    for m in net.modules():
+        if isinstance(m, instances_stdp):
+            for p in m.parameters():
+                params_stdp.append(p)
+
+    params_stdp_set = set(params_stdp)
+    params_gradient_descent = []
+    for p in net.parameters():
+        if p not in params_stdp_set:
+            params_gradient_descent.append(p)
+
+    optimizer_gd = Adam(params_gradient_descent, lr=lr)
+    optimizer_stdp = SGD(params_stdp, lr=lr, momentum=0.)
+
+在实际任务中，输入和输出应该是从数据集中抽样得到的，我们这里仅仅是做示例，因此手动生成：
+
+.. code-block:: python
+
+    x_seq = (torch.rand([T, N, C, H, W]) > 0.5).float()
+    target = torch.randint(low=0, high=10, size=[N])
+
+接下来就是参数优化的主要步骤了，在实际任务中下面的代码通常会放到训练的主循环中。我们的代码与纯梯度下降会略有不同。
+
+首先清零所有梯度，进行前向传播，计算出损失，反向传播：
+
+.. code-block:: python
+
+    optimizer_gd.zero_grad()
+    optimizer_stdp.zero_grad()
+    y = net(x_seq).mean(0)
+    loss = F.cross_entropy(y, target)
+    loss.backward()
+
+需要注意的是，尽管 ``optimizer_gd`` 只会对 ``params_gradient_descent`` 中的参数进行梯度下降，但调用 ``loss.backward()`` \
+后整个网络中所有的参数都会计算出梯度，包括那些我们只想使用STDP进行优化的参数。
+
+因此，我们需要将使用梯度下降得到的 ``params_stdp`` 的梯度进行清零：
+
+.. code-block:: python
+
+    optimizer_stdp.zero_grad()
+
+接下来就是使用STDP学习器计算出参数更新量，然后使用2个优化器，对整个网络的参数进行更新：
+
+
+.. code-block:: python
+
+    for i in range(stdp_learners.__len__()):
+        stdp_learners[i].step(on_grad=True)
+
+    optimizer_gd.step()
+    optimizer_stdp.step()
+
+
+以 ``STDPLearner`` 为代表的所有学习器都是 ``MemoryModule`` 的子类，其内部记忆状态包括了突触前后神经元的迹 ``trace_pre, trace_post`` ；\
+另外，学习器内部用于记录神经元活动的监视器存储了突触前后神经元的发放历史；这些发放历史也可以视作学习器的内部记忆状态。因此，必须及时调用学习器的 ``reset()`` 方法，\
+来清空其学习状态。``step()`` 已消费活动记录；未消费的记录才会继续积累。通常的做法是：在每个batch结束后，将学习器和网络一起重制：
+
+.. code-block:: python
+
+    functional.reset_net(net)
+    for i in range(stdp_learners.__len__()):
+        stdp_learners[i].reset()
+
+
+完整的示例代码如下：
+
+.. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    from torch.optim import SGD, Adam
+    from spikingjelly.activation_based import learning, layer, neuron, functional
+
+    T = 8
+    N = 2
+    C = 3
+    H = 32
+    W = 32
+    lr = 0.1
+    tau_pre = 2.
+    tau_post = 100.
+    step_mode = 'm'
+
+    def f_weight(x):
+        return torch.clamp(x, -1, 1.)
+
+
+    net = nn.Sequential(
+        layer.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False),
+        neuron.IFNode(),
+        layer.MaxPool2d(2, 2),
+        layer.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False),
+        neuron.IFNode(),
+        layer.MaxPool2d(2, 2),
+        layer.Flatten(),
+        layer.Linear(16 * 8 * 8, 64, bias=False),
+        neuron.IFNode(),
+        layer.Linear(64, 10, bias=False),
+        neuron.IFNode(),
+    )
+
+    functional.set_step_mode(net, step_mode)
+
+    instances_stdp = (layer.Conv2d, )
+
+    stdp_learners = []
+
+    for i in range(net.__len__()):
+        if isinstance(net[i], instances_stdp):
+            stdp_learners.append(
+                learning.STDPLearner(step_mode=step_mode, synapse=net[i], sn=net[i+1], tau_pre=tau_pre, tau_post=tau_post,
+                                    f_pre=f_weight, f_post=f_weight)
+            )
+
+
+    params_stdp = []
+    for m in net.modules():
+        if isinstance(m, instances_stdp):
+            for p in m.parameters():
+                params_stdp.append(p)
+
+    params_stdp_set = set(params_stdp)
+    params_gradient_descent = []
+    for p in net.parameters():
+        if p not in params_stdp_set:
+            params_gradient_descent.append(p)
+
+    optimizer_gd = Adam(params_gradient_descent, lr=lr)
+    optimizer_stdp = SGD(params_stdp, lr=lr, momentum=0.)
+
+
+
+    x_seq = (torch.rand([T, N, C, H, W]) > 0.5).float()
+    target = torch.randint(low=0, high=10, size=[N])
+
+    optimizer_gd.zero_grad()
+    optimizer_stdp.zero_grad()
+
+    y = net(x_seq).mean(0)
+    loss = F.cross_entropy(y, target)
+    loss.backward()
+
+
+
+    optimizer_stdp.zero_grad()
+
+    for i in range(stdp_learners.__len__()):
+        stdp_learners[i].step(on_grad=True)
+
+    optimizer_gd.step()
+    optimizer_stdp.step()
+
+    functional.reset_net(net)
+    for i in range(stdp_learners.__len__()):
+        stdp_learners[i].reset()
+
+    for learner in stdp_learners:
         learner.close()
 
-
-``step`` 已消费记录，但保留 trace。独立样本或 episode 之间调用 ``reset``；
-连续活动学习中保留 trace。更换 batch 大小前同时重置神经元与学习器。
-评估前显式 ``disable``，因为 ``net.eval()`` 不会停用活动记录；结束后 ``close``。
-不发放的 post 神经元在零 post trace 下可能完全不更新，不能靠 loss 显示训练状态。
-
-机制演示
+可塑性机制演示
 ----------------------
 
-以下脚本演示 trace、活动和权重变化，默认无 GUI，输出到未跟踪目录。
-它们不是任务训练 benchmark；``--show`` 可打开窗口，``--output-dir`` 可改变目录。
+三个脚本分别演示 STDP trace、reward 调制和 eligibility trace，不是任务 benchmark。
+默认无 GUI，保存到 ``logs/plasticity``；可用 ``--show`` 和 ``--output-dir``。
 
 .. code-block:: bash
 
-    uv run python -m spikingjelly.activation_based.examples.stdp_trace
-    uv run python -m spikingjelly.activation_based.examples.mstdp
-    uv run python -m spikingjelly.activation_based.examples.mstdpet
+    uv run --no-sync python -m spikingjelly.activation_based.examples.plasticity.stdp_trace
+    uv run --no-sync python -m spikingjelly.activation_based.examples.plasticity.mstdp
+    uv run --no-sync python -m spikingjelly.activation_based.examples.plasticity.mstdpet
 
-
-奖励学习器每步只接受一对活动；``reward[t]`` 作用于 ``eligibility[t-1]``。
-初始更新为零，最终活动之后的奖励需后续前向推进；无记录的 step 不推进时间。
-MSTDP 支持标量或 ``[N]`` reward，MSTDPET 支持标量。
-创建 MSTDP 时不再传 ``batch_size``；如原来积累多个前向，应改为每步前向后调用 step。
-
-与梯度训练组合
-----------------------
-
-按层分工和同参数叠加是不同实验。按层分工时，反传后清除只用 STDP 的参数梯度，
-再注入 STDP 更新；叠加时保留任务梯度。不要 detach loss 后尝试反传。
-``sn`` 必须是实际产生 post 脉冲的模块，不能按下标把 BatchNorm 等中间层误传进去。
-只有无 momentum、无 weight decay 的 SGD 对应简单的 ``W += lr * delta_w``；
-其他优化器会改变更新动力学。下面只演示同参数叠加的调用流程，不证明效果：
-
-.. code-block:: python
-
-    import torch
-    from torch import nn
-    from spikingjelly.activation_based import learning, neuron
-
-    fc = nn.Linear(4, 3, bias=False)
-    sn = neuron.IFNode()
-    learner = learning.STDPLearner("s", fc, sn, 20., 20.)
-    optimizer = torch.optim.SGD(fc.parameters(), lr=0.01)
-    try:
-        optimizer.zero_grad()
-        output = sn(fc((torch.rand(2, 4) > 0.5).float()))
-        loss = (output - 1).square().mean()
-        loss.backward()
-        learner.step(on_grad=True, scale=0.01)
-        optimizer.step()
-        learner.reset()
-        sn.reset()
-    finally:
-        learner.close()
-
+MSTDP/MSTDPET 使用 ``exp(-1/tau)``，不是普通 STDP 的离散衰减。
+每次前向后立即调用 reward step；``reward[t]`` 调制上一时刻 eligibility，首次更新为零。
+无记录不推进时间，最终活动后的 reward 需后续前向。MSTDP 接受标量或 ``[M]`` reward，
+MSTDPET 接受标量；创建 MSTDP 不再传 ``batch_size``。
 
 完整 MNIST 实例
 ----------------------
@@ -136,7 +461,7 @@ MSTDP 支持标量或 ``[N]`` reward，MSTDPET 支持标量。
 
 .. math::
 
-    A_j[t] &= \exp(-1/200)A_j[t-1]+0.01s_j[t],\\
+    A_{nj}[t] &= \exp(-1/200)A_{nj}[t-1]+0.01s_{nj}[t],\\
     B_j[t] &= B_j[t-1]+\eta_B\left(\frac{120}{NT}
         -\frac{1}{M}\sum_{n=1}^{M}s_{nj}[t]\right).
 
@@ -184,10 +509,10 @@ STDP pre/post trace 均为 20 步，使用当前脉冲加入后的 trace。
 
 .. code-block:: bash
 
-    uv run --no-sync python -m spikingjelly.activation_based.examples.stdp_mnist \
+    uv run --no-sync python -m spikingjelly.activation_based.examples.plasticity.stdp_mnist \
         --device cuda:0 --seed 0 --data-dir logs/plasticity/data --download \
         --output-dir logs/plasticity/current/seed-0
-    uv run --no-sync python -m spikingjelly.activation_based.examples.stdp_mnist \
+    uv run --no-sync python -m spikingjelly.activation_based.examples.plasticity.stdp_mnist \
         --device cuda:0 --checkpoint logs/plasticity/current/seed-0/selected.pt \
         --data-dir logs/plasticity/data --output-dir logs/plasticity/current/seed-0
 
@@ -195,19 +520,18 @@ STDP pre/post trace 均为 20 步，使用当前脉冲加入后的 trace。
 ``--checkpoint`` 使用已保存配置和映射，不重新指派或训练；重放结果不要求重新训练。
 小样本选项用于运行检查，不能证明完整测试效果。
 
-迁移与实测结果
+实测结果
 ^^^^^^^^^^^^^^^^^^^^^^
-
-本实例替换此前电导形式。``--theta-plus`` 和 ``--theta-initial`` 改为原生电流单位的
-``--homeostasis-gain`` 与 ``--bias-initial``；不自动读取旧电导或硬竞争 checkpoint。
-旧实验使用归档源码；当前电流实验的旧字段仅通过单次显式配置转换生成新格式，所有张量和映射保持不变。
-没有长期兼容分支。新输出目录为 ``logs/plasticity/current``，与旧电导实验分离；重复试验请用独立目录。
 
 配方与一轮训练由独立验证选择：同规模随机编码完整训练验证 88.76%，
 冻结该模型仅改 IF 评估编码为 89.16%，IF 从头短训练为 86.72%/冻结对照 82.94%，
 IF 从头完整训练为 89.58%/对照 83.04%。这些是不同阶段，不能互相冒充同一次训练。
 随后固定相同配方、轮数，seed 1、2 从头训练；全部三个模型和映射固定后才进行官方测试。
 不根据测试分数改配方，也不忽略低分种子。
+
+冻结前馈对照保留相同初始化和逐位相同的输入脉冲，只关闭 STDP 权重更新；
+训练期间仍适应 B，保留相同快动力学，并独立进行训练后的类别指派。
+因此它不是完全不学习的网络。验收门槛是三种子平均至少 90%，而非每种子至少 90%。
 
 .. list-table:: 普通 IF 编码、电流 LIF 的完整 MNIST 测试
    :header-rows: 1
@@ -235,9 +559,11 @@ IF 从头完整训练为 89.58%/对照 83.04%。这些是不同阶段，不能�
 这些测得的浅层配方结果不是 Diehl–Cook 原论文复现，也不支持任意深层网络的纯 STDP 性能声明。
 原始 JSON、配置、checkpoint、源码哈希和命令均保留；代码迁移必须通过同 checkpoint 的数值及完整评估复核。
 
+.. [#STDP] Bi, Guo-qiang, and Mu-ming Poo. "Synaptic modifications in cultured hippocampal neurons: dependence on spike timing, synaptic strength, and postsynaptic cell type." Journal of neuroscience 18.24 (1998): 10464-10472.
 
-参考
-----------------------
+.. [#STDP_figure] Froemke, Robert C., et al. "Contribution of individual spikes in burst-induced long-term synaptic modification." Journal of neurophysiology (2006).
+
+.. [#Trace] Morrison, Abigail, Markus Diesmann, and Wulfram Gerstner. "Phenomenological models of synaptic plasticity based on spike timing." Biological cybernetics 98.6 (2008): 459-478.
 
 * `Diehl and Cook (2015) <https://www.frontiersin.org/journals/computational-neuroscience/articles/10.3389/fncom.2015.00099/full>`_
 * `Florian (2007) <https://florian.io/papers/2007_Florian_Modulated_STDP.pdf>`_

@@ -796,7 +796,7 @@ def test_unsupported_constructors_and_time_lengths():
 
 
 def test_mnist_competition_mapping_and_checkpoint(tmp_path):
-    from spikingjelly.activation_based.examples.stdp_mnist import (
+    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import (
         _SNN,
         _assign_labels,
         _predict,
@@ -1021,7 +1021,7 @@ def test_stdp_batch_sum_independent_oracle():
 
 
 def test_mnist_recurrent_inhibition_delay_and_reset():
-    from spikingjelly.activation_based.examples.stdp_mnist import _SNN
+    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import _SNN
 
     model = _SNN(
         3,
@@ -1058,7 +1058,7 @@ def test_mnist_recurrent_inhibition_delay_and_reset():
 
 
 def test_recurrent_mnist_preserves_feedforward_seed_initialization():
-    from spikingjelly.activation_based.examples.stdp_mnist import _SNN
+    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import _SNN
 
     torch.manual_seed(0)
     expected = nn.Linear(784, 4, bias=False)
@@ -1071,7 +1071,7 @@ def test_recurrent_mnist_preserves_feedforward_seed_initialization():
 
 
 def test_mnist_cli_inhibition_and_refractory_contract():
-    from spikingjelly.activation_based.examples.stdp_mnist import _SNN, _parser
+    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import _SNN, _parser
 
     args = _parser().parse_args(
         ["--inhibition", "5", "--inhibition-tau", "2", "--bias-initial", "0"]
@@ -1100,7 +1100,7 @@ def test_mnist_cli_inhibition_and_refractory_contract():
 
 
 def test_mnist_frozen_evaluation_preserves_model_and_records():
-    from spikingjelly.activation_based.examples.stdp_mnist import _SNN, _run_batch
+    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import _SNN, _run_batch
 
     model = _SNN(4, 0.5, 1.0, steps=100, covariance=torch.eye(784), device="cpu").eval()
     learner = learning.STDPLearner("s", model.synapse, model.sn, 20.0, 20.0)
@@ -1123,7 +1123,7 @@ def test_mnist_frozen_evaluation_preserves_model_and_records():
 
 def test_mnist_intrinsic_current_independent_state_oracle():
     import math
-    from spikingjelly.activation_based.examples.stdp_mnist import _AdaptiveLIFNode
+    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import _AdaptiveLIFNode
 
     node = _AdaptiveLIFNode(3, 0.0004, 0.01, 5, 0.0, 700).double()
     voltage = torch.zeros(2, 3, dtype=torch.float64)
@@ -1157,7 +1157,7 @@ def test_mnist_intrinsic_current_independent_state_oracle():
 
 
 def test_mnist_covariance_and_gain_constraint():
-    from spikingjelly.activation_based.examples.stdp_mnist import (
+    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import (
         _SNN,
         _training_covariance,
     )
@@ -1186,7 +1186,7 @@ def test_mnist_covariance_and_gain_constraint():
 
 
 def test_mnist_regular_input_counts_and_legacy_checkpoint_rejection():
-    from spikingjelly.activation_based.examples.stdp_mnist import (
+    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import (
         _SNN,
         _run_batch,
         _load_models,
