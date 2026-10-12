@@ -34,7 +34,7 @@ def _evaluate(response, time, piece, parameters):
 
 class _FirstSpike(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, response, boundaries, stationary, *parameters):
+    def forward(ctx, response, boundaries, extrema, *parameters):
         ctx.set_materialize_grads(False)
         knots = boundaries.double()
         state = tuple(p.double() if p.is_floating_point() else p for p in parameters)
@@ -44,49 +44,16 @@ class _FirstSpike(torch.autograd.Function):
         right, right_slope = _evaluate(response, upper, pieces, state)
         eps = torch.finfo(torch.float64).eps
         roundoff = 64 * eps * (1 + left.abs() + right.abs())
-        reaches = torch.where(
-            stationary[..., 1],
-            right > roundoff,
-            (right > 0) | ((right == 0) & (right_slope > 0)),
-        )
-        stationary_crossing = torch.zeros_like(reaches)
-        touching = (
-            stationary[..., 1]
-            & (right.abs() <= roundoff)
-            & (left < 0)
-            & (upper > lower)
-        )
-        if bool(touching.any()):
-            count = lower.shape[-1]
-            next_piece = torch.where(upper > lower, pieces, count)
-            next_piece = next_piece.flip(-1).cummin(-1).values.flip(-1)
-            next_piece = torch.cat(
-                (next_piece[..., 1:], torch.full_like(next_piece[..., :1], count)), -1
-            )
-            next_index = next_piece.clamp_max(count - 1)
-            next_roundoff = roundoff.gather(-1, next_index)
-            stationary_crossing = (
-                touching
-                & (next_piece < count)
-                & (lower.gather(-1, next_index) == upper)
-                & (left.gather(-1, next_index).abs() <= next_roundoff)
-                & (right.gather(-1, next_index) > next_roundoff)
-            )
-            reaches = reaches | stationary_crossing
+        reaches = torch.where(extrema[..., 1], right > roundoff, right >= 0)
         bracket = (upper > lower) & (
-            ((left < 0) & reaches)
-            | ((left == 0) & (left_slope > 0) & ~stationary[..., 0])
+            ((left < 0) & reaches) | ((left == 0) & (right > 0) & ~extrema[..., 0])
         )
         firing = bracket.any(-1, keepdim=True)
         chosen = bracket.to(torch.int8).argmax(-1, keepdim=True)
         lo, hi = lower.gather(-1, chosen), upper.gather(-1, chosen)
         start, end = lo.clone(), hi.clone()
         f_start = left.gather(-1, chosen)
-        endpoint = (
-            (f_start == 0)
-            | (right.gather(-1, chosen) == 0)
-            | stationary_crossing.gather(-1, chosen)
-        )
+        endpoint = (f_start == 0) | (right.gather(-1, chosen) == 0)
         exact = torch.where(f_start == 0, lo, hi)
         moving_root = firing & ~endpoint
         absolute = math.ulp(0.0)
@@ -192,7 +159,7 @@ def first_spike_time(
     response: _Response,
     boundaries: torch.Tensor,
     parameters: Tuple[torch.Tensor, ...],
-    stationary: Optional[torch.Tensor] = None,
+    extrema: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     r"""
     **API Language** - :ref:`中文 <timing-first-spike-cn>` | :ref:`English <timing-first-spike-en>`
@@ -219,7 +186,8 @@ def first_spike_time(
     包括可微的历史发放时刻。分段位置/类型仅负责选分支，不求导。
     未发放返回 inf，其梯度为零。相切不发放；窗口终点上穿计入。
     水平拐点上穿仍发放；只有请求时刻梯度时才拒绝其奇异导数。
-    驻点残差在 ``64*eps*(1+abs(F_left)+abs(F_right))`` 内视为相切，
+    已认证极值的残差在
+    ``64*eps*(1+abs(F_left)+abs(F_right))`` 内视为相切，
     小于该数值分辨率的超阈峰不保证可辨。折点选择较早区间的左侧分支。
     不保证拓扑切换处唯一导数；不含 reset、shunting、容量管理或替代梯度。
 
@@ -231,9 +199,10 @@ def first_spike_time(
     :param parameters: 响应的显式张量依赖元组，与 boundaries 同设备且有限；
         浮点仅支持 FP32/FP64，内部转 FP64，返回梯度恢复各自 dtype。
     :type parameters: Tuple[torch.Tensor, ...]
-    :param stationary: 同设备 bool、形状 ``[...,K,2]`` 的区间左/右侧驻点标记；默认
-        None 表示无驻点。真实驻点必须标记；折点两侧独立标记，普通窗口/输入端点不标记。
-    :type stationary: Optional[torch.Tensor]
+    :param extrema: 同设备 bool、形状 ``[...,K,2]`` 的区间左/右侧局部极值/平台端点标记；默认
+        None 表示调用方认证所有端点都非极值。相切点及平台端点必须标记，
+        水平拐点不标记；窗口端点也须由核实现认证类型，折点两侧独立。
+    :type extrema: Optional[torch.Tensor]
     :return: ``[...]`` 最早上穿时刻，与 boundaries 同 dtype/device，未发放 inf。
     :rtype: torch.Tensor
     :raises TypeError: 参数类型或 dtype 不受支持。
@@ -267,7 +236,7 @@ def first_spike_time(
     Partition positions/types select branches and receive no gradient. Silence
     returns inf with zero gradient. Grazing does not fire; endpoint upcrossings
     count. Horizontal inflection crossings still fire; singular derivatives raise
-    only when requested. A stationary residual within
+    only when requested. A certified-extremum residual within
     ``64*eps*(1+abs(F_left)+abs(F_right))`` is treated as grazing; smaller peak
     overshoots cannot be guaranteed distinguishable. Knots select the earlier
     interval's left-sided branch. Topology changes need not have unique
@@ -283,11 +252,11 @@ def first_spike_time(
         device. Floating tensors must be FP32/FP64, internally promoted to FP64;
         gradients return in each parameter's dtype.
     :type parameters: Tuple[torch.Tensor, ...]
-    :param stationary: Same-device bool left/right stationary flags ``[...,K,2]``.
-        None means none; sides of knots are independent; actual stationary points
-        must be flagged, ordinary
-        window/input endpoints must not.
-    :type stationary: Optional[torch.Tensor]
+    :param extrema: Same-device bool local-extremum/plateau-end flags ``[...,K,2]``.
+        None certifies every endpoint is non-extremal. Flag grazing and plateau
+        endpoints, not horizontal inflections; the kernel must certify window
+        endpoint types too. Sides of knots are independent.
+    :type extrema: Optional[torch.Tensor]
     :return: Earliest upcrossing ``[...]`` matching boundaries' dtype/device;
         silence returns inf.
     :rtype: torch.Tensor
@@ -318,14 +287,14 @@ def first_spike_time(
         if p.device != boundaries.device or not bool(torch.isfinite(p).all()):
             raise ValueError("parameters must be finite on the boundaries' device.")
     flag_shape = (*boundaries.shape[:-1], boundaries.shape[-1] - 1, 2)
-    if stationary is None:
-        stationary = torch.zeros(flag_shape, dtype=torch.bool, device=boundaries.device)
-    if not isinstance(stationary, torch.Tensor):
-        raise TypeError("stationary must be a tensor or None.")
+    if extrema is None:
+        extrema = torch.zeros(flag_shape, dtype=torch.bool, device=boundaries.device)
+    if not isinstance(extrema, torch.Tensor):
+        raise TypeError("extrema must be a tensor or None.")
     if (
-        stationary.dtype != torch.bool
-        or stationary.shape != flag_shape
-        or stationary.device != boundaries.device
+        extrema.dtype != torch.bool
+        or extrema.shape != flag_shape
+        or extrema.device != boundaries.device
     ):
-        raise ValueError("stationary must be matching same-device bool flags.")
-    return _FirstSpike.apply(response, boundaries.detach(), stationary, *parameters)
+        raise ValueError("extrema must be matching same-device bool flags.")
+    return _FirstSpike.apply(response, boundaries.detach(), extrema, *parameters)

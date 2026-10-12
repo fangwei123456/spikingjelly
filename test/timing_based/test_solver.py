@@ -142,7 +142,7 @@ def test_knot_has_independent_one_sided_stationary_flags():
         response,
         torch.tensor([0.0, 1.0, 2.0], dtype=torch.float64),
         (p,),
-        torch.tensor([[False, True], [False, False]]),
+        torch.zeros(2, 2, dtype=torch.bool),
     )
     assert root.item() == 1.0
     with pytest.raises(RuntimeError, match="not transverse"):
@@ -333,7 +333,7 @@ def test_horizontal_upcrossing_emits_but_rejects_singular_gradient():
         lambda t, i, p: ((t - p).pow(3), 3 * (t - p).square()),
         torch.tensor([0.0, 1.0, 1.0, 2.0], dtype=torch.float64),
         (p,),
-        torch.tensor([[False, True], [True, True], [True, False]]),
+        torch.zeros(3, 2, dtype=torch.bool),
     )
     assert root.item() == 1.0
     with pytest.raises(RuntimeError, match="not transverse"):
@@ -398,3 +398,46 @@ def test_general_solver_reports_cast_gradient_overflow():
     )
     with pytest.raises(RuntimeError, match="overflow"):
         root.backward()
+
+
+def test_horizontal_upcrossing_at_window_endpoint_uses_certified_type():
+    p = torch.tensor([1.0], dtype=torch.float64, requires_grad=True)
+    root = solver.first_spike_time(
+        lambda t, i, p: ((t - p).pow(3), 3 * (t - p).square()),
+        torch.tensor([0.0, 1.0], dtype=torch.float64),
+        (p,),
+        extrema=torch.tensor([[False, False]]),
+    )
+    assert root.item() == 1.0
+    with pytest.raises(RuntimeError, match="not transverse"):
+        root.backward()
+
+
+def test_cubic_knot_crossing_uses_earlier_branch_with_zero_slope():
+    times = torch.tensor([0.0, 1 / 3], dtype=torch.float64, requires_grad=True)
+    output = functional.cubic_srm(
+        times,
+        torch.tensor([0, 1]),
+        torch.tensor([0, 2]),
+        torch.ones(1, 2, dtype=torch.float64),
+        2.0,
+        support=1.0,
+    )[0]
+    torch.testing.assert_close(
+        output, torch.tensor([1 / 3], dtype=torch.float64), atol=1e-14, rtol=1e-14
+    )
+    with pytest.raises(RuntimeError, match="not transverse"):
+        output.sum().backward()
+
+
+@pytest.mark.parametrize("support", [1.0, 4.0])
+def test_cubic_unrepresentable_relative_support_or_stationary_time_raises(support):
+    with pytest.raises(RuntimeError, match="representable"):
+        functional.cubic_srm(
+            torch.tensor([2e16], dtype=torch.float64),
+            torch.tensor([0]),
+            torch.tensor([0, 1]),
+            torch.tensor([[2.0]], dtype=torch.float64),
+            2e16 + 8,
+            support=support,
+        )

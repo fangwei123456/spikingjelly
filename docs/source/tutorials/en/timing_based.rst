@@ -242,8 +242,9 @@ interface accepts a callable, complete monotone boundaries and explicit tensor
 parameters. The callable receives FP64 query times and original piece indices,
 and returns ``(F, partial_F/partial_t)``. Each leading index is an independent
 time axis; the last dimension contains either all interval queries or one
-selected query. Left/right stationary flags are separate for every interval,
-so a knot can have different one-sided derivatives.
+selected query. Left/right local-extremum/plateau-end flags are separate for every interval,
+so a knot can have different one-sided derivatives. The kernel must certify
+window endpoint types too; horizontal inflections are not extrema.
 
 A value/derivative callable alone cannot prove that no hidden peak crosses the
 threshold. The caller must supply all stationary points of the weighted total

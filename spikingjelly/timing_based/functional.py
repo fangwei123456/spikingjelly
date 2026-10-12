@@ -1063,8 +1063,7 @@ def _cubic_response(time, piece, coefficients, origins, duration):
 
 def _cubic_partition(times, coefficients, duration):
     with torch.no_grad():
-        left = times[:, None, :-1].expand(coefficients.shape[:-1])
-        right = times[:, None, 1:].expand_as(left)
+        origins = times[:, None, :].expand(coefficients.shape[:-1])
         a, b, c = (
             3 * coefficients[..., 3],
             2 * coefficients[..., 2],
@@ -1081,9 +1080,8 @@ def _cubic_partition(times, coefficients, duration):
         first = q / torch.where(quadratic, a, 1)
         second = c / torch.where(quadratic & (q != 0), q, 1)
         linear = (a == 0) & (b != 0)
-        first = torch.where(linear, -c / torch.where(linear, b, 1), first)
-        first = torch.where(quadratic | linear, left + first * duration, right)
-        second = torch.where(quadratic, left + second * duration, right)
+        first = torch.where(linear, -c / torch.where(linear, b, 1), first) * duration
+        second = second * duration
         valid_first, valid_second = quadratic | linear, quadratic
         if bool(
             (
@@ -1095,37 +1093,83 @@ def _cubic_partition(times, coefficients, duration):
                 "Cubic SRM stationary roots are not representable in FP64."
             )
         tolerance = 8 * torch.finfo(torch.float64).eps * duration
-        stationary_left = (valid_first & ((first - left).abs() <= tolerance)) | (
-            valid_second & ((second - left).abs() <= tolerance)
+        critical_start = (valid_first & (first.abs() <= tolerance)) | (
+            valid_second & (second.abs() <= tolerance)
         )
-        stationary_right = (valid_first & ((first - right).abs() <= tolerance)) | (
-            valid_second & ((second - right).abs() <= tolerance)
+        width = (times[:, 1:] - times[:, :-1])[:, None, :]
+        critical_end = (
+            valid_first[..., :-1] & ((first[..., :-1] - width).abs() <= tolerance)
+        ) | (valid_second[..., :-1] & ((second[..., :-1] - width).abs() <= tolerance))
+        double_root = quadratic & (discriminant == 0)
+        local = width / duration
+        c1, c2, c3 = (
+            coefficients[..., :-1, 1],
+            coefficients[..., :-1, 2],
+            coefficients[..., :-1, 3],
         )
-        inside_first = valid_first & (first > left) & (first < right)
-        inside_second = valid_second & (second > left) & (second < right)
+        end_first = torch.where(critical_end, 0, (3 * c3 * local + 2 * c2) * local + c1)
+        end_second = torch.where(
+            critical_end & double_root[..., :-1], 0, c2 + 3 * c3 * local
+        )
+        start_first = torch.where(critical_start, 0, coefficients[..., 1])
+        start_second = torch.where(
+            critical_start & double_root, 0, coefficients[..., 2]
+        )
+
+        def side_sign(first, second, third):
+            return torch.where(
+                first != 0, first, torch.where(second != 0, second, third)
+            ).sign()
+
+        left_sign = side_sign(-end_first, end_second, -c3)
+        right_sign = side_sign(start_first, start_second, coefficients[..., 3])
+        knot_extrema = left_sign * right_sign[..., 1:] >= 0
+        extremum_left = torch.cat(
+            (torch.ones_like(knot_extrema[..., :1]), knot_extrema[..., :-1]), -1
+        )
+        extremum_right = knot_extrema
+        is_extremum = linear[..., :-1] | (
+            quadratic[..., :-1] & (discriminant[..., :-1] > 0)
+        )
+        inside_first = (
+            valid_first[..., :-1] & (first[..., :-1] > 0) & (first[..., :-1] < width)
+        )
+        inside_second = (
+            valid_second[..., :-1] & (second[..., :-1] > 0) & (second[..., :-1] < width)
+        )
+        left, right = origins[..., :-1], origins[..., 1:]
+        if bool(
+            (
+                (inside_first & (left + first[..., :-1] <= left))
+                | (inside_second & (left + second[..., :-1] <= left))
+            ).any()
+        ):
+            raise RuntimeError(
+                "Cubic SRM stationary time is not representable relative to arrival time."
+            )
         points = torch.stack(
             (
                 left,
-                torch.where(inside_first, first, right),
-                torch.where(inside_second, second, right),
+                torch.where(inside_first, left + first[..., :-1], right),
+                torch.where(inside_second, left + second[..., :-1], right),
                 right,
             ),
             -1,
         )
         flags = torch.stack(
             (
-                stationary_left,
-                inside_first | stationary_right,
-                inside_second | stationary_right,
-                stationary_right,
+                extremum_left,
+                torch.where(inside_first, is_extremum, extremum_right),
+                torch.where(inside_second, is_extremum, extremum_right),
+                extremum_right,
             ),
             -1,
         )
         points, order = points.sort(dim=-1, stable=True)
         flags = flags.gather(-1, order)
         boundaries = torch.cat((points[..., 0, :1], points[..., 1:].flatten(-2)), -1)
-        stationary = torch.stack((flags[..., :-1], flags[..., 1:]), -1).flatten(-3, -2)
-    return boundaries, stationary
+        extrema = torch.stack((flags[..., :-1], flags[..., 1:]), -1).flatten(-3, -2)
+    return boundaries, extrema
 
 
 def cubic_srm(
@@ -1241,6 +1285,10 @@ def cubic_srm(
             batch_offsets.new_zeros(batch_count + 1),
         )
     length = arrivals.new_tensor(ratio)
+    if bool((arrivals + support <= arrivals).any()):
+        raise RuntimeError(
+            "Cubic SRM support endpoint is not representable relative to arrival time."
+        )
     ending = arrivals + support <= duration
     anchors = torch.arange(batch_count, device=rows.device)
     marker_rows = torch.cat((anchors, anchors, rows, rows[ending]))
@@ -1355,16 +1403,16 @@ def cubic_srm(
         + previous(quadratic) * step.square()
         + previous(cubic) * step.pow(3)
     )
-    coefficients = torch.stack((voltage, current, quadratic, cubic), -1)[..., :-1, :]
+    coefficients = torch.stack((voltage, current, quadratic, cubic), -1)
     if not bool(torch.isfinite(coefficients).all()):
         raise RuntimeError("Cubic SRM coefficients are not representable in FP64.")
-    origins = knots[:, None, :-1].expand(coefficients.shape[:-1])
-    boundaries, stationary = _cubic_partition(knots, coefficients, duration)
+    origins = knots[:, None, :].expand(coefficients.shape[:-1])
+    boundaries, extrema = _cubic_partition(knots, coefficients, duration)
     roots = solver.first_spike_time(
         _cubic_response,
         boundaries,
         (coefficients, origins, arrivals.new_tensor(duration)),
-        stationary,
+        extrema,
     )
     firing = torch.isfinite(roots)
     output_times = roots[firing].to(spike_times.dtype)
