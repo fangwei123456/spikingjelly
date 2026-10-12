@@ -1,11 +1,12 @@
 import copy
+from typing import Callable, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Callable, Tuple
 
 from .. import base
-from .net_config import detach_net
+from ..functional.net_config import detach_net
 
 
 __all__ = [
@@ -161,7 +162,14 @@ def fptt_online_training(
 
     .. code-block:: python
 
-        from spikingjelly.activation_based import neuron
+        import torch
+        from torch import nn
+        from torch.nn import functional as F
+        from spikingjelly.activation_based import functional, neuron
+        from spikingjelly.activation_based.learning.online_learning import (
+            fptt_online_training,
+            fptt_online_training_init_w_ra,
+        )
 
         net = nn.Sequential(
             nn.Linear(8, 4), neuron.IFNode(), nn.Linear(4, 2), neuron.IFNode()
@@ -337,7 +345,11 @@ def ottt_online_training(
 
     .. code-block:: python
 
-        from spikingjelly.activation_based import neuron, layer, functional
+        import torch
+        from torch import nn
+        from torch.nn import functional as F
+        from spikingjelly.activation_based import functional, neuron, layer
+        from spikingjelly.activation_based.learning import online_learning
 
         net = layer.OTTTSequential(
             nn.Linear(8, 4), neuron.OTTTLIFNode(), nn.Linear(4, 2), neuron.LIFNode()
@@ -352,7 +364,7 @@ def ottt_online_training(
             x_seq = torch.rand([N, T, 8])
             target_seq = torch.rand([N, T, 2])
 
-            functional.ottt_online_training(
+            online_learning.ottt_online_training(
                 model=net,
                 optimizer=optimizer,
                 x_seq=x_seq,

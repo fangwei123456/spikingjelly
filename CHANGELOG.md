@@ -52,6 +52,14 @@ and the archived documentation linked from the project README.
 
 ### Features
 
+#### Plasticity MNIST Example
+
+Module: `spikingjelly.activation_based.examples.plasticity.stdp_mnist`.
+
+- Added a shallow current-LIF STDP MNIST example with recurrent inhibition and
+  statistical class assignment. The validation-selected recipe averages 90.2233%
+  over full tests for seeds 0, 1 and 2; see the tutorial for parameters and results.
+
 #### Signed Ternary Neurons
 
 Modules: ``spikingjelly.activation_based.neuron``,
@@ -313,6 +321,11 @@ Modules: `spikingjelly.activation_based.distributed.vision`,
 
 ### Improvements
 
+#### Recurrent Container State Validation
+
+- Reset `LinearRecurrentContainer` with `functional.reset_net(container)` before
+  changing batch/leading shape; mismatched state now raises `ValueError`.
+
 #### Contributor Guidance
 
 - Added repository-wide agent instructions with a required bilingual Sphinx
@@ -345,6 +358,10 @@ Module: `spikingjelly.activation_based.learning`.
 
 - Made `MSTDPLearner` eligibility and reward-derived weight updates follow the
   synapse device and dtype.
+- Validate supported configurations and activity/state shapes before updates.
+- Learner updates no longer retain modulation or reward autograd graphs.
+- Added `close()` to release learner hooks, records and learning state permanently.
+- Mechanism demos now use deterministic rewards, headless plots and explicit output paths.
 
 #### DSpike Search Network
 
@@ -445,6 +462,21 @@ Module: `spikingjelly.activation_based.neuron`.
   precision instead of being promoted to `float32`.
 
 ### Breaking Changes and Notices
+
+#### Learning Interfaces and Example Paths
+
+- `learning` is now a package; the three existing learner imports still work.
+- Removed the six layer-object single/multi-step helpers. Use `functional.learning`
+  tensor rules or a learner; see the API migration table for state and padding setup.
+- Import FPTT and OTTT/SLTT training functions from `learning.online_learning`;
+  `functional.online_learning` and direct `functional` exports are removed.
+- Move example imports/commands to `examples.plasticity.{stdp_trace,mstdp,mstdpet,stdp_mnist}`.
+  Old paths have no forwarding modules.
+- Remove `MSTDPLearner(batch_size=...)`; reset before changing the activity batch size.
+- Call reward `step()` after each forward: it consumes one activity pair and
+  continues to modulate the previous eligibility.
+- STDP time constants must be finite and >=1 step; reward-rule constants must be
+  finite and positive.
 
 #### Timing-Based Event Interfaces
 
