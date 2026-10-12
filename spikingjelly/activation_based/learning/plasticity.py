@@ -1036,26 +1036,22 @@ class STDPLearner(base.MemoryModule):
             _check_records(self)
         delta_w = None
 
-        if self.step_mode == "s":
-            if isinstance(self.synapse, nn.Linear):
-                stdp_f = stdp_linear_single_step
-            elif isinstance(self.synapse, nn.Conv2d):
-                stdp_f = stdp_conv2d_single_step
-            elif isinstance(self.synapse, nn.Conv1d):
-                stdp_f = stdp_conv1d_single_step
-            else:
-                raise NotImplementedError(self.synapse)
-        elif self.step_mode == "m":
-            if isinstance(self.synapse, (nn.Linear, nn.Conv1d, nn.Conv2d)):
-                stdp_f = stdp_multi_step
-            else:
-                raise NotImplementedError(self.synapse)
-        else:
+        if self.step_mode == "m":
+            stdp_f = stdp_multi_step
+        elif self.step_mode != "s":
             raise ValueError(self.step_mode)
+        elif isinstance(self.synapse, nn.Linear):
+            stdp_f = stdp_linear_single_step
+        elif isinstance(self.synapse, nn.Conv2d):
+            stdp_f = stdp_conv2d_single_step
+        elif isinstance(self.synapse, nn.Conv1d):
+            stdp_f = stdp_conv1d_single_step
+        else:
+            raise NotImplementedError(self.synapse)
 
         for i in range(length):
-            in_spike = self.in_spike_monitor.records[i]  # [batch_size, N_in]
-            out_spike = self.out_spike_monitor.records[i]  # [batch_size, N_out]
+            in_spike = self.in_spike_monitor.records[i]
+            out_spike = self.out_spike_monitor.records[i]
 
             self.trace_pre, self.trace_post, dw = stdp_f(
                 self.synapse,
@@ -1071,7 +1067,7 @@ class STDPLearner(base.MemoryModule):
             if scale != 1.0:
                 dw *= scale
 
-            delta_w = dw if (delta_w is None) else (delta_w + dw)
+            delta_w = dw if delta_w is None else delta_w + dw
 
         if on_grad:
             _accumulate_weight_gradient(self.synapse, delta_w)

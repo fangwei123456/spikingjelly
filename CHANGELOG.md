@@ -52,22 +52,13 @@ and the archived documentation linked from the project README.
 
 ### Features
 
-#### Plasticity Learning Example
+#### Plasticity MNIST Example
 
 Module: `spikingjelly.activation_based.examples.plasticity.stdp_mnist`.
 
-- Added a shallow STDP-only MNIST recipe using classic current LIF, own-spike
-  adaptation, slow local rate-error excitability, negative recurrent feedback
-  through `ElementWiseRecurrentContainer`, training-only covariance gain and
-  regular IF input coding. Multiple neurons can fire together, with no hard
-  winner selection or global neighbor reset. Labels only provide post-training
-  statistical class assignment. Weights and persistent neuronal/gain states
-  freeze during evaluation; fast state resets at batch boundaries.
-- The validation-selected 3,200-neuron, 700-step, one-epoch recipe achieves
-  90.63%, 89.98% and 90.06% on full MNIST tests for seeds 0, 1 and 2
-  (mean 90.2233%). Checkpoints contain all required covariance/gain states and
-  fixed class maps for independent evaluation. This is a measured teaching
-  recipe, not a Diehl–Cook paper reproduction or a general deep-STDP claim.
+- Added a shallow current-LIF STDP MNIST example with recurrent inhibition and
+  statistical class assignment. The validation-selected recipe averages 90.2233%
+  over full tests for seeds 0, 1 and 2; see the tutorial for parameters and results.
 
 #### Signed Ternary Neurons
 
@@ -323,11 +314,8 @@ Modules: `spikingjelly.activation_based.distributed.vision`,
 
 #### Recurrent Container State Validation
 
-Module: `spikingjelly.activation_based.layer.container`.
-
-- `LinearRecurrentContainer` rejects changed batch/leading state shapes with a
-  clear error before forwarding; reset it and its stateful child with
-  `functional.reset_net(container)` before changing batch shape.
+- Reset `LinearRecurrentContainer` with `functional.reset_net(container)` before
+  changing batch/leading shape; mismatched state now raises `ValueError`.
 
 #### Contributor Guidance
 
@@ -361,16 +349,12 @@ Module: `spikingjelly.activation_based.learning`.
 
 - Made `MSTDPLearner` eligibility and reward-derived weight updates follow the
   synapse device and dtype.
-- Validate plasticity configurations and activity/state shapes before updates.
-- Convolution STDP helpers accept scalar initial traces, including nonzero traces
-  on padded inputs. `functional.mstdpet_reward_step` retains PyTorch reward and
-  eligibility broadcasting; the scalar-reward restriction applies to the learner.
-- Plasticity learners compute without retaining modulation or reward autograd graphs.
-- Added `close()` to plasticity learners to permanently remove hooks and clear
-  learning states. Closed learners cannot be stepped or enabled again.
-- Restored the STDP/MSTDP/MSTDPET mechanism demos with deterministic rewards,
-  headless plotting, explicit output directories, and correctly bound modulation
-  functions.
+- Validate supported configurations and activity/state shapes before updates.
+- Accept scalar initial traces in convolution STDP helpers.
+- Preserve reward and eligibility broadcasting in `functional.mstdpet_reward_step`.
+- Learner updates no longer retain modulation or reward autograd graphs.
+- Added `close()` to release learner hooks, records and learning state permanently.
+- Mechanism demos now use deterministic rewards, headless plots and explicit output paths.
 
 #### DSpike Search Network
 
@@ -472,35 +456,18 @@ Module: `spikingjelly.activation_based.neuron`.
 
 ### Breaking Changes and Notices
 
-#### Learning Method Organization
+#### Learning Interfaces and Example Paths
 
-- `spikingjelly.activation_based.learning` is now a package. Local learners
-  and layer-object helpers live in `learning.plasticity` and remain available
-  directly through `learning`, including `learning.STDPLearner`.
-- Moved FPTT and OTTT/SLTT training functions from `functional.online_learning`
-  to `learning.online_learning`. Import that module and call its functions;
-  the old module and direct `functional` exports are removed without forwarders.
-  Tensor-only plasticity functions, online neurons and online layers retain
-  their existing locations.
-
-#### Plasticity Example Paths
-
-- Moved `stdp_trace`, `mstdp`, `mstdpet`, and `stdp_mnist` into
-  `spikingjelly.activation_based.examples.plasticity`. Update module commands
-  and imports to `examples.plasticity.<name>`; old paths are removed without
-  forwarding modules.
-
-#### Plasticity Learner Interfaces
-
-Module: `spikingjelly.activation_based.learning`.
-
-- Removed `MSTDPLearner(batch_size=...)`; batch size comes from activity.
-  Remove that constructor argument and reset before changing batch size.
-- Reward learners require one forward activity pair per `step(reward)`.
-  Call it immediately after every forward instead of reusing one reward for
-  multiple recorded pairs. Timing continues to use the previous step's eligibility.
-- STDP trace time constants must be finite and at least one simulated step;
-  reward-rule time constants must be finite and positive.
+- `learning` is now a package; existing learner and helper imports still work.
+- Import FPTT and OTTT/SLTT training functions from `learning.online_learning`;
+  `functional.online_learning` and direct `functional` exports are removed.
+- Move example imports/commands to `examples.plasticity.{stdp_trace,mstdp,mstdpet,stdp_mnist}`.
+  Old paths have no forwarding modules.
+- Remove `MSTDPLearner(batch_size=...)`; reset before changing the activity batch size.
+- Call reward `step()` after each forward: it consumes one activity pair and
+  continues to modulate the previous eligibility.
+- STDP time constants must be finite and >=1 step; reward-rule constants must be
+  finite and positive.
 
 #### Timing-Based Event Interfaces
 
