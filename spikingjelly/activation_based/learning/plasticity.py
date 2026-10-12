@@ -351,8 +351,8 @@ class STDPLearner(base.MemoryModule):
         :type scale: float
         :return: on_grad=False 且有记录时返回更新量，否则 None。
         :rtype: Optional[torch.Tensor]
-        :raises RuntimeError: 已关闭、记录数量不一致，或 reward 学习器积压多对记录。
-        :raises ValueError: 活动、状态或奖励形状不合法。
+        :raises RuntimeError: 已关闭或记录数量不一致。
+        :raises ValueError: 活动、状态形状或 step_mode 不合法。
 
         ----
 
@@ -375,8 +375,8 @@ class STDPLearner(base.MemoryModule):
         :type scale: float
         :return: Update if on_grad=False and records exist; otherwise None.
         :rtype: Optional[torch.Tensor]
-        :raises RuntimeError: Closed, mismatched counts, or multiple pending reward activity pairs.
-        :raises ValueError: Invalid activity, state or reward shape.
+        :raises RuntimeError: Closed or mismatched record counts.
+        :raises ValueError: Invalid activity/state shape or step_mode.
         """
 
         _check_open(self)
