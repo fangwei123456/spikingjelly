@@ -285,7 +285,7 @@ class SRM(nn.Module):
         :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         :raises TypeError: 输入 dtype 不受支持。
         :raises ValueError: 输入形状、设备、有限性、索引或分段非法。
-        :raises RuntimeError: 状态/根不可表示或超出事件容量。
+        :raises RuntimeError: 状态/根不可表示、超出事件容量或输入时刻/权重梯度非有限。
 
         ----
 
@@ -312,7 +312,8 @@ class SRM(nn.Module):
         :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         :raises TypeError: For unsupported dtypes.
         :raises ValueError: For invalid shapes, devices, finite values, indices or offsets.
-        :raises RuntimeError: For unrepresentable states/roots or capacity overflow.
+        :raises RuntimeError: For unrepresentable states/roots, capacity overflow
+            or non-finite input-time/weight gradients.
         """
         return functional.srm(
             spike_times,

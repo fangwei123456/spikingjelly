@@ -826,6 +826,20 @@ def _srm_parameters(duration, threshold, max_spikes):
         raise ValueError("The output capacity is not representable in FP64.")
 
 
+class _SRMInputs(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, times, weight):
+        ctx.set_materialize_grads(False)
+        return times, weight
+
+    @staticmethod
+    def backward(ctx, grad_times, grad_weight):
+        for gradient in (grad_times, grad_weight):
+            if gradient is not None and not bool(torch.isfinite(gradient).all()):
+                raise RuntimeError("SRM input gradients overflow their dtype.")
+        return grad_times, grad_weight
+
+
 def srm(
     spike_times: torch.Tensor,
     input_indices: torch.Tensor,
@@ -877,7 +891,7 @@ def srm(
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises TypeError: 参数类型或输入 dtype 不受支持。
     :raises ValueError: 参数、形状、设备、有限性、索引或 CSR 边界非法。
-    :raises RuntimeError: 超出事件容量，或状态/所选根不可表示。
+    :raises RuntimeError: 超出事件容量，状态/所选根不可表示，或输入时刻/权重梯度非有限。
 
     ----
 
@@ -924,10 +938,12 @@ def srm(
     :raises TypeError: For unsupported parameter types or dtypes.
     :raises ValueError: For invalid parameters, shapes, devices, finite values,
         indices or CSR boundaries.
-    :raises RuntimeError: For capacity overflow or unrepresentable states/selected roots.
+    :raises RuntimeError: For capacity overflow, unrepresentable states/selected roots,
+        or non-finite input-time/weight gradients.
     """
     _srm_parameters(duration, v_threshold, max_spikes)
     _validate_events(spike_times, input_indices, batch_offsets, weight)
+    spike_times, weight = _SRMInputs.apply(spike_times, weight)
     batch_count, output_count = batch_offsets.numel() - 1, weight.shape[0]
     batches = torch.repeat_interleave(
         torch.arange(batch_count, device=spike_times.device),

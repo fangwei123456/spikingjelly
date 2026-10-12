@@ -220,3 +220,20 @@ def test_root_smaller_than_fp64_time_resolution_raises():
             torch.ones(1, 1, dtype=torch.float64),
             2e16 + 8,
         )
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_finite_spike_with_overflowing_weight_gradient_raises(device):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA unavailable")
+    weight = torch.tensor([[1e-38]], device=device, requires_grad=True)
+    times = functional.srm(
+        torch.tensor([0.0], device=device),
+        torch.tensor([0], device=device),
+        torch.tensor([0, 1], device=device),
+        weight,
+        1.1e38,
+    )[0]
+    assert torch.isfinite(times).all()
+    with pytest.raises(RuntimeError, match="gradients overflow"):
+        times.sum().backward()

@@ -74,8 +74,9 @@ Modules: `spikingjelly.timing_based.functional`,
 - Added an experimental fixed-kernel ``SRM`` with linear-ramp input responses,
   step reset responses, multiple input/output spikes and composable compact event
   tensors. CPU/CUDA FP32/FP64 execution solves continuous times in FP64 and uses
-  differentiable selected branches; output-capacity overflow raises rather than
-  truncating. No dedicated kernels or arbitrary response kernels are provided.
+  differentiable selected branches; output-capacity overflow and non-finite
+  input-time/weight gradients raise rather than truncating or clipping.
+  No dedicated kernels or arbitrary response kernels are provided.
 - Added a two-layer event-time SRM MNIST example with Adam, differentiable positive
   row-weight parametrization and an external filtered-event readout. Checkpoint
   selection and early stopping use a validation split; test evaluation is final.
