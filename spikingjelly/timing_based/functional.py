@@ -1260,6 +1260,13 @@ def cubic_srm(
             -incoming[ending],
         )
     )
+    marker_changes = torch.cat(
+        (
+            rows.new_zeros(2 * batch_count),
+            torch.ones_like(rows),
+            -torch.ones_like(rows[ending]),
+        )
+    )
     marker_delays = torch.cat(
         (
             torch.zeros(
@@ -1296,6 +1303,10 @@ def cubic_srm(
         -1,
     )
     marker_deltas = marker_weights[order][..., None] * polynomials[:, None, :]
+    groups = new_group.to(torch.int64).cumsum(0) - 1
+    active_changes = rows.new_zeros(starts.numel()).index_add(
+        0, groups, marker_changes[order]
+    )
     marker_deltas = torch.segment_reduce(marker_deltas, "sum", lengths=lengths)
     marker_rows = marker_rows[starts]
     counts = torch.bincount(marker_rows, minlength=batch_count)
@@ -1312,22 +1323,38 @@ def cubic_srm(
         / duration
     )
 
+    activity = rows.new_zeros((batch_count, width))
+    activity[marker_rows, columns] = active_changes
+    inactive = activity.cumsum(-1) == 0
+    clears = (
+        torch.where(inactive, torch.arange(width, device=rows.device) + 1, 0)
+        .cummax(-1)
+        .values
+    )
+
     def previous(value):
         return torch.cat((value[..., :1] * 0, value[..., :-1]), -1)
 
-    cubic = deltas[..., 3].cumsum(-1)
-    quadratic = (deltas[..., 2] + 3 * previous(cubic) * step).cumsum(-1)
-    current = (
+    def prefix(increment):
+        value = increment.cumsum(-1)
+        baseline = value.gather(
+            -1, (clears - 1).clamp_min(0)[:, None, :].expand_as(value)
+        )
+        return value - torch.where(clears[:, None, :] > 0, baseline, 0)
+
+    cubic = prefix(deltas[..., 3])
+    quadratic = prefix(deltas[..., 2] + 3 * previous(cubic) * step)
+    current = prefix(
         deltas[..., 1]
         + 2 * previous(quadratic) * step
         + 3 * previous(cubic) * step.square()
-    ).cumsum(-1)
-    voltage = (
+    )
+    voltage = prefix(
         deltas[..., 0]
         + previous(current) * step
         + previous(quadratic) * step.square()
         + previous(cubic) * step.pow(3)
-    ).cumsum(-1)
+    )
     coefficients = torch.stack((voltage, current, quadratic, cubic), -1)[..., :-1, :]
     if not bool(torch.isfinite(coefficients).all()):
         raise RuntimeError("Cubic SRM coefficients are not representable in FP64.")

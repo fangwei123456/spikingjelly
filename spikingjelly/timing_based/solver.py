@@ -49,6 +49,30 @@ class _FirstSpike(torch.autograd.Function):
             right > roundoff,
             (right > 0) | ((right == 0) & (right_slope > 0)),
         )
+        stationary_crossing = torch.zeros_like(reaches)
+        touching = (
+            stationary[..., 1]
+            & (right.abs() <= roundoff)
+            & (left < 0)
+            & (upper > lower)
+        )
+        if bool(touching.any()):
+            count = lower.shape[-1]
+            next_piece = torch.where(upper > lower, pieces, count)
+            next_piece = next_piece.flip(-1).cummin(-1).values.flip(-1)
+            next_piece = torch.cat(
+                (next_piece[..., 1:], torch.full_like(next_piece[..., :1], count)), -1
+            )
+            next_index = next_piece.clamp_max(count - 1)
+            next_roundoff = roundoff.gather(-1, next_index)
+            stationary_crossing = (
+                touching
+                & (next_piece < count)
+                & (lower.gather(-1, next_index) == upper)
+                & (left.gather(-1, next_index).abs() <= next_roundoff)
+                & (right.gather(-1, next_index) > next_roundoff)
+            )
+            reaches = reaches | stationary_crossing
         bracket = (upper > lower) & (
             ((left < 0) & reaches)
             | ((left == 0) & (left_slope > 0) & ~stationary[..., 0])
@@ -58,29 +82,43 @@ class _FirstSpike(torch.autograd.Function):
         lo, hi = lower.gather(-1, chosen), upper.gather(-1, chosen)
         start, end = lo.clone(), hi.clone()
         f_start = left.gather(-1, chosen)
-        endpoint = (f_start == 0) | (right.gather(-1, chosen) == 0)
+        endpoint = (
+            (f_start == 0)
+            | (right.gather(-1, chosen) == 0)
+            | stationary_crossing.gather(-1, chosen)
+        )
         exact = torch.where(f_start == 0, lo, hi)
         moving_root = firing & ~endpoint
-        absolute = (8 * eps * (hi - lo)).clamp_min(math.ulp(0.0))
-        for _ in range(52):
+        absolute = math.ulp(0.0)
+        residual_tolerance = (
+            64
+            * eps
+            * (1 + torch.minimum(f_start.abs(), right.gather(-1, chosen).abs()))
+        )
+        # Covers the full FP64 exponent range, including roots near zero.
+        iterations = (
+            math.ceil(math.log2(torch.finfo(torch.float64).max) - math.log2(absolute))
+            + 2
+        )
+        for _ in range(iterations):
             middle = lo + (hi - lo) / 2
             tolerance = absolute + 8 * eps * torch.maximum(lo.abs(), hi.abs())
-            moving = moving_root & (hi - lo > tolerance) & (middle > lo) & (middle < hi)
+            moving = (
+                moving_root & ((hi - lo) > tolerance) & (middle > lo) & (middle < hi)
+            )
             if not bool(moving.any()):
                 break
             value, _ = _evaluate(response, middle, chosen, state)
-            lo = torch.where(moving & (value < 0), middle, lo)
-            hi = torch.where(moving & (value >= 0), middle, hi)
+            exact_middle = moving & (value == 0)
+            lo = torch.where(exact_middle | (moving & (value < 0)), middle, lo)
+            hi = torch.where(exact_middle | (moving & (value >= 0)), middle, hi)
         tolerance = absolute + 8 * eps * torch.maximum(lo.abs(), hi.abs())
         if bool((moving_root & (hi - lo > tolerance)).any()):
             raise RuntimeError("The first-spike root did not converge.")
         root = torch.where(endpoint, exact, hi)
         root = torch.where(firing, root, start)
         value, slope = _evaluate(response, root, chosen, state)
-        residual_tolerance = (
-            64 * eps * (1 + f_start.abs() + right.gather(-1, chosen).abs())
-            + slope.abs() * tolerance
-        )
+        residual_tolerance = residual_tolerance + slope.abs() * tolerance
         if bool(
             (
                 firing
@@ -172,7 +210,7 @@ def first_spike_time(
 
     ``response(time,piece,*parameters)`` 返回残差 ``F`` 和偏导 ``F_t``，
     两者须为同设备、与 time 同形状的有限 FP64 张量。time/piece 的形状为
-    ``[...,Q]``（Q 为 K 或 1），piece 是对应原分段的 int64 索引。
+    ``[...,Q]`` （Q 为 K 或 1），piece 是对应原分段的 int64 索引。
     必须支持单侧端点求值；piece 决定折点采用哪一侧。每个前导索引是一条
     独立时间轴，禁止在响应中耦合不同时间轴的查询时刻。函数必须无状态、
     可重复执行，所有可微依赖须显式放入 parameters，不能隐藏在闭包内。
@@ -180,6 +218,7 @@ def first_spike_time(
     FP64 二分只用于前向；一阶反向重算 ``-F_p/F_t``，传播到显式参数，
     包括可微的历史发放时刻。分段位置/类型仅负责选分支，不求导。
     未发放返回 inf，其梯度为零。相切不发放；窗口终点上穿计入。
+    水平拐点上穿仍发放；只有请求时刻梯度时才拒绝其奇异导数。
     驻点残差在 ``64*eps*(1+abs(F_left)+abs(F_right))`` 内视为相切，
     小于该数值分辨率的超阈峰不保证可辨。折点选择较早区间的左侧分支。
     不保证拓扑切换处唯一导数；不含 reset、shunting、容量管理或替代梯度。
@@ -227,7 +266,8 @@ def first_spike_time(
     for explicit parameters, including differentiable previous spike times.
     Partition positions/types select branches and receive no gradient. Silence
     returns inf with zero gradient. Grazing does not fire; endpoint upcrossings
-    count. A stationary residual within
+    count. Horizontal inflection crossings still fire; singular derivatives raise
+    only when requested. A stationary residual within
     ``64*eps*(1+abs(F_left)+abs(F_right))`` is treated as grazing; smaller peak
     overshoots cannot be guaranteed distinguishable. Knots select the earlier
     interval's left-sided branch. Topology changes need not have unique

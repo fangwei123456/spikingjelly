@@ -202,7 +202,7 @@ Adam（默认 lr=0.01）训练原始参数，示例通过 PyTorch parametrizatio
 ``cpu``；CUDA 使用相同 PyTorch 数学，无专用 SRM kernel，不声称普遍提速。
 
 完整分段与第三种 PSP 模型
-------------------------
+--------------------------------
 
 :func:`spikingjelly.timing_based.solver.first_spike_time` 求连续总阈值残差的最早
 上穿零点。接口接收响应函数、完整单调分段及显式张量参数。响应函数接收

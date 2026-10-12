@@ -145,8 +145,8 @@ def test_knot_has_independent_one_sided_stationary_flags():
         torch.tensor([[False, True], [False, False]]),
     )
     assert root.item() == 1.0
-    root.backward()
-    assert p.grad.item() == 0.0
+    with pytest.raises(RuntimeError, match="not transverse"):
+        root.backward()
 
 
 def test_cubic_simultaneous_events_keep_individual_time_gradients():
@@ -325,3 +325,76 @@ def test_cubic_translation_does_not_turn_tangent_into_spike(shift):
     torch.testing.assert_close(shifted - shift, baseline, atol=1e-9, rtol=1e-9)
     shifted.sum().backward()
     torch.testing.assert_close(times.grad, torch.ones_like(times), atol=1e-9, rtol=1e-9)
+
+
+def test_horizontal_upcrossing_emits_but_rejects_singular_gradient():
+    p = torch.tensor([1.0], dtype=torch.float64, requires_grad=True)
+    root = solver.first_spike_time(
+        lambda t, i, p: ((t - p).pow(3), 3 * (t - p).square()),
+        torch.tensor([0.0, 1.0, 1.0, 2.0], dtype=torch.float64),
+        (p,),
+        torch.tensor([[False, True], [True, True], [True, False]]),
+    )
+    assert root.item() == 1.0
+    with pytest.raises(RuntimeError, match="not transverse"):
+        root.backward()
+
+
+def test_small_representable_root_has_relative_time_and_gradient_accuracy():
+    weight = torch.tensor([1e38], dtype=torch.float64, requires_grad=True)
+    root = solver.first_spike_time(
+        lambda t, i, w: (t * w - 1, w.expand_as(t)),
+        torch.tensor([0.0, 1.0], dtype=torch.float64),
+        (weight,),
+    )
+    torch.testing.assert_close(root, weight[0].reciprocal(), atol=0, rtol=1e-14)
+    root.backward()
+    torch.testing.assert_close(
+        weight.grad, -weight.detach().pow(-2), atol=0, rtol=1e-14
+    )
+
+
+def test_expired_cubic_support_has_exact_zero_state_in_long_empty_tail():
+    for n, duration in ((40, 1e8), (1000, 1e6)):
+        times = torch.arange(n, dtype=torch.float64) * 1.2 + 0.123
+        output = functional.cubic_srm(
+            times,
+            torch.zeros(n, dtype=torch.int64),
+            torch.tensor([0, n]),
+            torch.tensor([[0.9]], dtype=torch.float64),
+            duration,
+            support=1.0,
+        )
+        assert output[0].numel() == 0
+
+
+def test_separated_supports_restart_gradients_without_expired_history():
+    times = torch.tensor([0.1, 5.2], dtype=torch.float64, requires_grad=True)
+    weight = torch.tensor([[0.9, 1.3]], dtype=torch.float64, requires_grad=True)
+    indices, offsets = torch.tensor([0, 1]), torch.tensor([0, 2])
+    assert torch.autograd.gradcheck(
+        lambda t, w: functional.cubic_srm(t, indices, offsets, w, 7.0, support=1.0)[0],
+        (times, weight),
+        atol=1e-6,
+        rtol=1e-4,
+    )
+    functional.cubic_srm(times, indices, offsets, weight, 7.0, support=1.0)[
+        0
+    ].sum().backward()
+    torch.testing.assert_close(
+        times.grad[:1], torch.zeros(1, dtype=torch.float64), atol=1e-12, rtol=0
+    )
+    torch.testing.assert_close(
+        weight.grad[:, :1], torch.zeros(1, 1, dtype=torch.float64), atol=1e-12, rtol=0
+    )
+
+
+def test_general_solver_reports_cast_gradient_overflow():
+    weight = torch.tensor([1e-38], requires_grad=True)
+    root = solver.first_spike_time(
+        lambda t, i, w: (t * w - 1, w.expand_as(t)),
+        torch.tensor([0.0, 1.1e38], dtype=torch.float64),
+        (weight,),
+    )
+    with pytest.raises(RuntimeError, match="overflow"):
+        root.backward()
