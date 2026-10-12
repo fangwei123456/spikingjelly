@@ -1339,14 +1339,14 @@ def cubic_srm(
                 -torch.ones_like(rows[ending]),
             )
         )
-        marker_delays = torch.cat(
+        ending_marker = torch.cat(
             (
                 torch.zeros(
                     2 * batch_count + arrivals.numel(),
                     device=rows.device,
-                    dtype=torch.float64,
+                    dtype=torch.bool,
                 ),
-                length.expand_as(arrivals[ending]),
+                torch.ones_like(rows[ending], dtype=torch.bool),
             )
         )
         order = torch.argsort(marker_times, stable=True)
@@ -1359,23 +1359,27 @@ def cubic_srm(
         starts = new_group.nonzero().flatten()
         lengths = torch.cat((starts[1:], starts.new_tensor([order.numel()]))) - starts
         group_times = marker_times[starts]
-        delay = marker_delays[order]
-        z = delay / length
-        polynomials = (27 / 4) * torch.stack(
-            (
-                z * (1 - z).square(),
-                (1 - 4 * z + 3 * z.square()) / length,
-                (-2 + 3 * z) / length.square(),
-                torch.ones_like(z) / length.pow(3),
-            ),
-            -1,
-        )
-        marker_deltas = marker_weights[order][..., None] * polynomials[:, None, :]
         groups = new_group.to(torch.int64).cumsum(0) - 1
         active_changes = rows.new_zeros(starts.numel()).index_add(
             0, groups, marker_changes[order]
         )
-        marker_deltas = torch.segment_reduce(marker_deltas, "sum", lengths=lengths)
+        # Stable order puts starts before ends within each equal-time group.
+        split_counts = torch.bincount(
+            2 * groups + ending_marker[order].long(), minlength=2 * starts.numel()
+        )
+        grouped = torch.segment_reduce(
+            marker_weights[order], "sum", lengths=split_counts
+        ).reshape(-1, 2, output_count)
+        start_weights, end_weights = grouped[:, 0], grouped[:, 1]
+        marker_deltas = (27 / 4) * torch.stack(
+            (
+                torch.zeros_like(start_weights),
+                start_weights / length,
+                (-2 * start_weights + end_weights) / length.square(),
+                (start_weights + end_weights) / length.pow(3),
+            ),
+            -1,
+        )
         marker_rows = marker_rows[starts]
         counts = torch.bincount(marker_rows, minlength=batch_count)
         offsets = torch.cat((counts.new_zeros(1), counts.cumsum(0)))
