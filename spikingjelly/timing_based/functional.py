@@ -1052,13 +1052,22 @@ def _cubic_parameters(duration, support, threshold):
     return ratio
 
 
-def _cubic_response(time, piece, coefficients, origins, duration):
+def _cubic_response(
+    time, piece, coefficients, origins, duration, input_times, incoming, support
+):
     interval = piece // 3
     x = (time - origins.gather(-1, interval)) / duration
-    c0, c1, c2, c3 = (coefficients[..., k].gather(-1, interval) for k in range(4))
-    value = ((c3 * x + c2) * x + c1) * x + c0 - 1
+    c1, c2, c3 = (coefficients[..., k].gather(-1, interval) for k in (1, 2, 3))
     slope = ((3 * c3 * x + 2 * c2) * x + c1) / duration
-    return value, slope
+    if torch.is_grad_enabled():
+        # Recompute event partials; retain the certified polynomial's one-sided slope.
+        delay = time - input_times[:, None, :]
+        valid = (delay > 0) & (delay < support)
+        z = torch.where(valid, delay, 0) / support
+        value = torch.where(valid, (27 / 4) * z * (1 - z).square(), 0)
+        return (incoming * value).sum(-1, keepdim=True) - 1, slope
+    c0 = coefficients[..., 0].gather(-1, interval)
+    return ((c3 * x + c2) * x + c1) * x + c0 - 1, slope
 
 
 def _cubic_partition(times, coefficients, duration):
@@ -1198,7 +1207,8 @@ def cubic_srm(
     在输入及支撑终点间累加三次多项式系数，解析求加权总响应导数的所有
     实根，形成完整单调分段；调用通用 :func:`~spikingjelly.timing_based.solver.first_spike_time`
     求根及一阶隐式梯度。不是均匀时间采样，也不使用单核驻点并集。
-    内部 FP64；事件/分段拓扑切换处不保证唯一导数。局部时间按 duration
+    内部 FP64；前向缓存局部系数，反向在原输入事件重算偏导，不保留前缀扫描图。
+    事件/分段拓扑切换处不保证唯一导数。局部时间按 duration
     归一化，用电压/导数前缀推进而非全局时刻幂。极端支撑比例仍受浮点分辨率限制。
 
     :param spike_times: 有限 FP32/FP64 ``[E]``；窗外事件忽略且梯度为零。
@@ -1240,7 +1250,9 @@ def cubic_srm(
     find every real derivative root of the weighted total response, then call
     :func:`~spikingjelly.timing_based.solver.first_spike_time` for roots and first-order
     implicit gradients. There is no uniform time sampling or union of individual
-    kernel stationary points. Internals use FP64; topology boundaries need not
+    kernel stationary points. Internals use FP64; forward caches local coefficients
+    and backward recomputes event partials without retaining the prefix graph.
+    Topology boundaries need not
     have unique derivatives. Local time uses duration-normalized voltage/derivative prefix transitions,
     avoiding global time powers. Extreme support ratios remain subject to floating resolution.
 
@@ -1284,134 +1296,151 @@ def cubic_srm(
             input_indices[:0],
             batch_offsets.new_zeros(batch_count + 1),
         )
-    length = arrivals.new_tensor(ratio)
-    if bool((arrivals + support <= arrivals).any()):
-        raise RuntimeError(
-            "Cubic SRM support endpoint is not representable relative to arrival time."
-        )
-    ending = arrivals + support <= duration
-    anchors = torch.arange(batch_count, device=rows.device)
-    marker_rows = torch.cat((anchors, anchors, rows, rows[ending]))
-    marker_times = torch.cat(
-        (
-            arrivals.new_zeros(batch_count),
-            arrivals.new_full((batch_count,), duration),
-            arrivals,
-            arrivals[ending] + support,
-        )
+    input_counts = torch.bincount(rows, minlength=batch_count)
+    input_offsets = torch.cat((input_counts.new_zeros(1), input_counts.cumsum(0)))
+    input_columns = (
+        torch.arange(arrivals.numel(), device=rows.device) - input_offsets[rows]
     )
+    input_width = int(input_counts.max())
+    input_times = arrivals.new_full((batch_count, input_width), duration)
+    input_times[rows, input_columns] = arrivals
     incoming = weight.double()[:, input_indices[accepted]].T / v_threshold
-    marker_weights = torch.cat(
-        (
-            incoming.new_zeros((2 * batch_count, output_count)),
-            incoming,
-            -incoming[ending],
+    input_weights = incoming.new_zeros((batch_count, input_width, output_count))
+    input_weights[rows, input_columns] = incoming
+    input_weights = input_weights.permute(0, 2, 1)
+    with torch.no_grad():
+        length = arrivals.new_tensor(ratio)
+        if bool((arrivals + support <= arrivals).any()):
+            raise RuntimeError(
+                "Cubic SRM support endpoint is not representable relative to arrival time."
+            )
+        ending = arrivals + support <= duration
+        anchors = torch.arange(batch_count, device=rows.device)
+        marker_rows = torch.cat((anchors, anchors, rows, rows[ending]))
+        marker_times = torch.cat(
+            (
+                arrivals.new_zeros(batch_count),
+                arrivals.new_full((batch_count,), duration),
+                arrivals,
+                arrivals[ending] + support,
+            )
         )
-    )
-    marker_changes = torch.cat(
-        (
-            rows.new_zeros(2 * batch_count),
-            torch.ones_like(rows),
-            -torch.ones_like(rows[ending]),
+        marker_weights = torch.cat(
+            (
+                incoming.new_zeros((2 * batch_count, output_count)),
+                incoming,
+                -incoming[ending],
+            )
         )
-    )
-    marker_delays = torch.cat(
-        (
-            torch.zeros(
-                2 * batch_count + arrivals.numel(),
-                device=rows.device,
-                dtype=torch.float64,
+        marker_changes = torch.cat(
+            (
+                rows.new_zeros(2 * batch_count),
+                torch.ones_like(rows),
+                -torch.ones_like(rows[ending]),
+            )
+        )
+        marker_delays = torch.cat(
+            (
+                torch.zeros(
+                    2 * batch_count + arrivals.numel(),
+                    device=rows.device,
+                    dtype=torch.float64,
+                ),
+                length.expand_as(arrivals[ending]),
+            )
+        )
+        order = torch.argsort(marker_times, stable=True)
+        order = order[torch.argsort(marker_rows[order], stable=True)]
+        marker_times, marker_rows = marker_times[order], marker_rows[order]
+        new_group = torch.ones(order.numel(), dtype=torch.bool, device=rows.device)
+        new_group[1:] = (marker_times[1:] != marker_times[:-1]) | (
+            marker_rows[1:] != marker_rows[:-1]
+        )
+        starts = new_group.nonzero().flatten()
+        lengths = torch.cat((starts[1:], starts.new_tensor([order.numel()]))) - starts
+        group_times = marker_times[starts]
+        delay = marker_delays[order]
+        z = delay / length
+        polynomials = (27 / 4) * torch.stack(
+            (
+                z * (1 - z).square(),
+                (1 - 4 * z + 3 * z.square()) / length,
+                (-2 + 3 * z) / length.square(),
+                torch.ones_like(z) / length.pow(3),
             ),
-            length.expand_as(arrivals[ending]),
+            -1,
         )
-    )
-    order = torch.argsort(marker_times, stable=True)
-    order = order[torch.argsort(marker_rows[order], stable=True)]
-    marker_times, marker_rows = marker_times[order], marker_rows[order]
-    new_group = torch.ones(order.numel(), dtype=torch.bool, device=rows.device)
-    new_group[1:] = (marker_times[1:] != marker_times[:-1]) | (
-        marker_rows[1:] != marker_rows[:-1]
-    )
-    starts = new_group.nonzero().flatten()
-    lengths = torch.cat((starts[1:], starts.new_tensor([order.numel()]))) - starts
-    group_times = marker_times[starts]
-    origins_per_event = torch.repeat_interleave(
-        group_times, lengths, output_size=order.numel()
-    )
-    # Zero forward displacement still carries each original event's time derivative.
-    delay = marker_delays[order] + (origins_per_event - marker_times) / duration
-    z = delay / length
-    polynomials = (27 / 4) * torch.stack(
-        (
-            z * (1 - z).square(),
-            (1 - 4 * z + 3 * z.square()) / length,
-            (-2 + 3 * z) / length.square(),
-            torch.ones_like(z) / length.pow(3),
-        ),
-        -1,
-    )
-    marker_deltas = marker_weights[order][..., None] * polynomials[:, None, :]
-    groups = new_group.to(torch.int64).cumsum(0) - 1
-    active_changes = rows.new_zeros(starts.numel()).index_add(
-        0, groups, marker_changes[order]
-    )
-    marker_deltas = torch.segment_reduce(marker_deltas, "sum", lengths=lengths)
-    marker_rows = marker_rows[starts]
-    counts = torch.bincount(marker_rows, minlength=batch_count)
-    offsets = torch.cat((counts.new_zeros(1), counts.cumsum(0)))
-    width = int(counts.max())
-    columns = torch.arange(starts.numel(), device=rows.device) - offsets[marker_rows]
-    knots = arrivals.new_full((batch_count, width), duration)
-    knots[marker_rows, columns] = group_times
-    deltas = marker_deltas.new_zeros((batch_count, width, output_count, 4))
-    deltas[marker_rows, columns] = marker_deltas
-    deltas = deltas.permute(0, 2, 1, 3)
-    step = (
-        torch.cat((knots.new_zeros((batch_count, 1)), knots.diff()), -1)[:, None, :]
-        / duration
-    )
-
-    activity = rows.new_zeros((batch_count, width))
-    activity[marker_rows, columns] = active_changes
-    inactive = activity.cumsum(-1) == 0
-    clears = (
-        torch.where(inactive, torch.arange(width, device=rows.device) + 1, 0)
-        .cummax(-1)
-        .values
-    )
-
-    def previous(value):
-        return torch.cat((value[..., :1] * 0, value[..., :-1]), -1)
-
-    def prefix(increment):
-        value = increment.cumsum(-1)
-        baseline = value.gather(
-            -1, (clears - 1).clamp_min(0)[:, None, :].expand_as(value)
+        marker_deltas = marker_weights[order][..., None] * polynomials[:, None, :]
+        groups = new_group.to(torch.int64).cumsum(0) - 1
+        active_changes = rows.new_zeros(starts.numel()).index_add(
+            0, groups, marker_changes[order]
         )
-        return value - torch.where(clears[:, None, :] > 0, baseline, 0)
+        marker_deltas = torch.segment_reduce(marker_deltas, "sum", lengths=lengths)
+        marker_rows = marker_rows[starts]
+        counts = torch.bincount(marker_rows, minlength=batch_count)
+        offsets = torch.cat((counts.new_zeros(1), counts.cumsum(0)))
+        width = int(counts.max())
+        columns = (
+            torch.arange(starts.numel(), device=rows.device) - offsets[marker_rows]
+        )
+        knots = arrivals.new_full((batch_count, width), duration)
+        knots[marker_rows, columns] = group_times
+        deltas = marker_deltas.new_zeros((batch_count, width, output_count, 4))
+        deltas[marker_rows, columns] = marker_deltas
+        deltas = deltas.permute(0, 2, 1, 3)
+        step = (
+            torch.cat((knots.new_zeros((batch_count, 1)), knots.diff()), -1)[:, None, :]
+            / duration
+        )
 
-    cubic = prefix(deltas[..., 3])
-    quadratic = prefix(deltas[..., 2] + 3 * previous(cubic) * step)
-    current = prefix(
-        deltas[..., 1]
-        + 2 * previous(quadratic) * step
-        + 3 * previous(cubic) * step.square()
-    )
-    voltage = prefix(
-        deltas[..., 0]
-        + previous(current) * step
-        + previous(quadratic) * step.square()
-        + previous(cubic) * step.pow(3)
-    )
-    coefficients = torch.stack((voltage, current, quadratic, cubic), -1)
-    if not bool(torch.isfinite(coefficients).all()):
-        raise RuntimeError("Cubic SRM coefficients are not representable in FP64.")
-    origins = knots[:, None, :].expand(coefficients.shape[:-1])
-    boundaries, extrema = _cubic_partition(knots, coefficients, duration)
+        activity = rows.new_zeros((batch_count, width))
+        activity[marker_rows, columns] = active_changes
+        inactive = activity.cumsum(-1) == 0
+        clears = (
+            torch.where(inactive, torch.arange(width, device=rows.device) + 1, 0)
+            .cummax(-1)
+            .values
+        )
+
+        def previous(value):
+            return torch.cat((value[..., :1] * 0, value[..., :-1]), -1)
+
+        def prefix(increment):
+            value = increment.cumsum(-1)
+            baseline = value.gather(
+                -1, (clears - 1).clamp_min(0)[:, None, :].expand_as(value)
+            )
+            return value - torch.where(clears[:, None, :] > 0, baseline, 0)
+
+        cubic = prefix(deltas[..., 3])
+        quadratic = prefix(deltas[..., 2] + 3 * previous(cubic) * step)
+        current = prefix(
+            deltas[..., 1]
+            + 2 * previous(quadratic) * step
+            + 3 * previous(cubic) * step.square()
+        )
+        voltage = prefix(
+            deltas[..., 0]
+            + previous(current) * step
+            + previous(quadratic) * step.square()
+            + previous(cubic) * step.pow(3)
+        )
+        coefficients = torch.stack((voltage, current, quadratic, cubic), -1)
+        if not bool(torch.isfinite(coefficients).all()):
+            raise RuntimeError("Cubic SRM coefficients are not representable in FP64.")
+        origins = knots[:, None, :].expand(coefficients.shape[:-1])
+        boundaries, extrema = _cubic_partition(knots, coefficients, duration)
     roots = solver.first_spike_time(
         _cubic_response,
         boundaries,
-        (coefficients, origins, arrivals.new_tensor(duration)),
+        (
+            coefficients,
+            origins,
+            arrivals.new_tensor(duration),
+            input_times,
+            input_weights,
+            arrivals.new_tensor(support),
+        ),
         extrema,
     )
     firing = torch.isfinite(roots)

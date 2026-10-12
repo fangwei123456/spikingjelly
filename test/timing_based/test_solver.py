@@ -467,3 +467,29 @@ def test_inactive_rows_do_not_evaluate_nonfinite_dummy_midpoints():
     torch.testing.assert_close(
         weight.grad, torch.tensor([[0.0], [-0.25]], dtype=torch.float64)
     )
+
+
+def test_safeguarded_newton_handles_flat_and_outside_bracket_proposals():
+    for response, parameter, expected, derivative in (
+        (lambda t, i, p: (t.pow(5) - p, 5 * t.pow(4)), 1e-10, 0.01, 2e7),
+        (
+            lambda t, i, p: (1 / (2 - t) - p, 1 / (2 - t).square()),
+            200.0,
+            1.995,
+            1 / 40000,
+        ),
+    ):
+        p = torch.tensor([parameter], dtype=torch.float64, requires_grad=True)
+        root = solver.first_spike_time(
+            response, torch.tensor([0.0, 1.999], dtype=torch.float64), (p,)
+        )
+        torch.testing.assert_close(
+            root, torch.tensor(expected, dtype=torch.float64), rtol=1e-10, atol=1e-12
+        )
+        root.backward()
+        torch.testing.assert_close(
+            p.grad,
+            torch.tensor([derivative], dtype=torch.float64),
+            rtol=1e-9,
+            atol=1e-12,
+        )

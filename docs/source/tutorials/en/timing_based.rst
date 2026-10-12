@@ -250,7 +250,7 @@ A value/derivative callable alone cannot prove that no hidden peak crosses the
 threshold. The caller must supply all stationary points of the weighted total
 response, not just the union of individual PSP extrema. The solver trusts this
 mathematical contract; format checks cannot certify a black-box partition.
-It chooses the earliest valid interval, runs FP64 bisection, checks convergence
+It chooses the earliest valid interval, runs FP64 bracketed Newton/bisection, checks convergence
 and residuals, and returns inf for silence. Grazing is excluded and an endpoint
 upcrossing counts. Its first-order backward recomputes
 ``dt/dp=-F_p/F_t``; bisection is not differentiated. Differentiable previous output
@@ -301,9 +301,9 @@ does not replace these optimized paths.
        --hidden-features 64 --batch-size 128 --epochs 10 --seed 0
 
 The example uses 784→hidden→10 CubicSRM layers, pixel times ``1-pixel``, window 4,
-support 2 and threshold 1. Differentiable ``2*softmax(weight)`` row constraints
+support 2 and threshold 1. Differentiable ``gain*softmax(weight)`` row constraints (hidden/output gains 8/2)
 belong to the example. Earlier class spikes score higher: logits are
-``10*(4-time)``; silence scores zero. Train with cross-entropy and Adam, using the
+``50*(4-time)``; silence scores zero. Train with cross-entropy and Adam, using the
 same validation-only checkpoint/early-stopping workflow as the ramp SRM example.
 The complete 55000/5000/10000 split and source hashes are recorded. Default hidden
 width is 128 and batch size 32; the command above uses width 64 and batch 128.
