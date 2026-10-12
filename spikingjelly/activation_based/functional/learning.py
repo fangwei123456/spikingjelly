@@ -114,7 +114,7 @@ def stdp_linear_step(
     Time constants are in simulated time steps, finite and >= 1. Activity and trace
     shapes must match exactly; state broadcasting cannot adapt batch size. Matching
     floating dtypes are recommended for activity, state and weight; devices must
-    match.Uses Euler decay 1-1/tau and sums updates over batch and spatial positions.
+    match. Uses Euler decay 1-1/tau and sums updates over batch and spatial positions.
 
     Run one STDP update for a linear weight. ``trace`` is
     ``(trace_pre, trace_post)``. The function updates both traces first, computes
@@ -439,7 +439,7 @@ def stdp_conv2d_step(
     Time constants are in simulated time steps, finite and >= 1. Activity and trace
     shapes must match exactly; state broadcasting cannot adapt batch size. Matching
     floating dtypes are recommended for activity, state and weight; devices must
-    match.Uses Euler decay 1-1/tau and sums updates over batch and spatial positions.
+    match. Uses Euler decay 1-1/tau and sums updates over batch and spatial positions.
 
     Run one STDP update for a 2D convolution weight. ``trace`` is
     ``(trace_pre, trace_post)``. ``in_spike`` must already include the synaptic
@@ -574,7 +574,7 @@ def stdp_conv1d_step(
     Time constants are in simulated time steps, finite and >= 1. Activity and trace
     shapes must match exactly; state broadcasting cannot adapt batch size. Matching
     floating dtypes are recommended for activity, state and weight; devices must
-    match.Uses Euler decay 1-1/tau and sums updates over batch and spatial positions.
+    match. Uses Euler decay 1-1/tau and sums updates over batch and spatial positions.
 
     Run one STDP update for a 1D convolution weight. ``trace`` is
     ``(trace_pre, trace_post)``. ``in_spike`` must already include the synaptic

@@ -5,8 +5,8 @@ Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 中文版： :doc:`../cn/stdp`
 
-This page explains local synaptic plasticity and its combination with task gradients,
-then presents a validated MNIST recipe. For supported scope, time units, reward
+STDP updates synaptic weights from neuronal activity. This tutorial covers traces,
+gradient training and a MNIST example. For supported scope, time units, reward
 alignment and interface migration, see :doc:`../../APIs/spikingjelly.activation_based.learning`.
 
 Researchers of SNNs are always interested in biological learning rules. In SpikingJelly, STDP(Spike Timing Dependent Plasticity) \
@@ -103,8 +103,9 @@ Now let us use ``STDPLearner`` to build a ``4x3`` network, initializing weights 
     )
     nn.init.constant_(net[0].weight.data, 0.4)
 
-``STDPLearner`` adds ``-delta_w*scale`` to ``weight.grad``. This is an optimizer
-update channel, not a task-loss gradient or a guarantee of task improvement. Plain SGD
+``STDPLearner`` adds ``-delta_w*scale`` to ``weight.grad`` for the optimizer to apply.
+The update comes from activity correlations and differs from a task-loss gradient;
+task performance needs separate evaluation. Plain SGD
 without momentum or weight decay implements:
 
 .. math::
@@ -170,7 +171,7 @@ This figure is similar to Fig.3 in [#Trace]_  (note that they use `j` as the pre
     :width: 100%
 
 
-Random data below demonstrate layer-wise update wiring, not an effective task recipe.
+The random data below illustrate layer-wise updates without measuring classification performance.
 Layer-wise separation clears task gradients on STDP layers after backward; additive
 updates on the same parameter retain them. ``sn`` must produce actual post activity.
 ``step()`` consumes activity records and keeps traces; ``reset()`` clears learning
@@ -426,8 +427,8 @@ The complete codes are as follows:
 Plasticity mechanism demonstrations
 -------------------------------------
 
-These scripts demonstrate STDP traces, reward modulation and eligibility traces,
-not task benchmarks. They run without a GUI and save to ``logs/plasticity`` by default;
+These scripts show STDP traces, reward modulation and eligibility traces.
+They run without a GUI and save to ``logs/plasticity`` by default;
 use ``--show`` and ``--output-dir`` to change this.
 
 .. code-block:: bash
@@ -436,7 +437,7 @@ use ``--show`` and ``--output-dir`` to change this.
     uv run --no-sync python -m spikingjelly.activation_based.examples.plasticity.mstdp
     uv run --no-sync python -m spikingjelly.activation_based.examples.plasticity.mstdpet
 
-MSTDP/MSTDPET use ``exp(-1/tau)``, retaining their distinct discretization.
+MSTDP/MSTDPET use ``exp(-1/tau)`` decay; ordinary STDP uses ``1-1/tau``.
 Call reward step immediately after each forward. ``reward[t]`` modulates previous
 eligibility; the first update is zero. An empty step does not advance time; reward
 after final activity needs another forward. MSTDP accepts scalar or ``[M]`` reward;
@@ -449,7 +450,7 @@ Complete MNIST example
 and ``ElementWiseRecurrentContainer``. Feedforward weights start randomly and use the
 existing ``STDPLearner`` plus explicit weight constraints, without gradients, pretraining
 or a trainable readout. Fixed negative recurrent currents provide soft competition.
-Multiple neurons can fire together; there is no single-winner filter or neighbor reset.
+Each neuron fires independently and resets only itself. Multiple neurons can fire in the same step.
 
 Model and local adaptation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -466,7 +467,7 @@ For input spikes x and feedforward current z=Wx:
 This is ordinary SJ ``SimpleLIFNode(tau=100, decay_input=True)`` current integration.
 The base threshold is 0.01, own reset is zero, and own refractory period is five steps;
 only the neuron's own voltage is held during its refractory period. Signed currents
-can produce negative voltage; no voltage floor or conductance denominator is used.
+can produce negative voltage. Integration has no voltage floor or conductance denominator.
 Population-mean subtraction suppresses common drive within each sample. Recurrent
 inhibition depends only on other neurons' previous-step spikes.
 
@@ -481,10 +482,10 @@ Every neuron has the same parameters; its history produces different adaptive st
 A is fast own-spike adaptation current, reducing repeated responses. B is a slow signed
 intrinsic excitability current, using unlabeled local rate error to adjust participation.
 M is actual batch size, N neuron count, and T sample duration. B starts uniformly in
-[-0.01,0] and freezes after training. This is engineering homeostasis, not an exact
-biophysical channel model, global stability theorem, or guarantee of exact target rate
-while weights change. Positive B may permit spontaneous activity; sparsity and balanced
-mean rates do not substitute for task accuracy.
+[-0.01,0] and freezes after training. This rate controller does not guarantee the target
+while weights change; its biophysical accuracy and global stability have not been verified.
+Positive B may cause spontaneous activity. Sparsity and mean rates are diagnostic
+measures; accuracy measures task performance.
 
 Input gain updates at the end of each training batch. C is the pixel sample covariance
 of the fixed split-seed42 learning 50,000 images, without labels. With
@@ -498,7 +499,8 @@ of the fixed split-seed42 learning 50,000 images, without labels. With
 This preserves each initial random projected-current variance scale, reducing operating
 point drift from weight learning. Degenerate/nonfinite variance fails explicitly. C,
 initial reference variance and gain are saved in the checkpoint and frozen in evaluation.
-This is an unlabeled training-data constraint, not task gradients or test-statistic adaptation.
+The gain constraint uses only unlabeled learning-set statistics, without task gradients
+or test-set statistics.
 
 Encoding, plasticity and readout
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -506,15 +508,15 @@ Encoding, plasticity and readout
 Input uses ordinary ``SimpleIFNode(v_threshold=1, v_reset=None)`` with an independent
 uniform initial phase in [0,1) per sample/pixel. Each step adds ``pixel*0.064`` and applies
 own soft reset. Across 700 steps, pixel counts differ from expectation by at most about
-one spike. Regular firing reduces count noise and changes temporal correlations; mean
-rate preservation does not imply identical Poisson learning trajectories.
+one spike. Regular firing reduces count noise and changes temporal correlations,
+so its learning trajectories differ from Poisson coding.
 
 Pre/post STDP traces both use 20 steps and include the current events.
 ``f_pre=nu*weight`` and ``f_post=nu*(1-weight)``, with default nu=0.00229619779275505.
 Each step returns ``step(on_grad=False, scale=1/actual_batch_size)`` and directly adds
 its delta to weights, without averaging time. Weights are clipped to [0,1], normalized
-to row sum 78.4, then clipped again. Writing ``.grad`` elsewhere remains an optimizer
-delivery channel; this example does not use it.
+to row sum 78.4, then clipped again. This example adds updates directly without
+writing ``.grad``.
 
 Batches clear voltage, A, refractory/filter state, recurrent output and STDP traces,
 retaining B, weights and gain. Assignment/evaluation freeze every persistent learning
@@ -540,8 +542,8 @@ simulation steps; current-filter tau is at least one.
 
 Use the same defaults and one epoch with ``--seed`` 1/2 and separate directories.
 ``--checkpoint`` uses saved dynamics/mapping without reassignment or training;
-replaying results does not require retraining. Small sample-count options are smoke
-checks, not evidence of complete-test performance.
+replaying results does not require retraining. Small sample-count options check the
+workflow; use the full test set when reporting performance.
 
 Measured results
 ^^^^^^^^^^^^^^^^
@@ -549,15 +551,15 @@ Measured results
 Independent validation selected the recipe and one epoch: same-width Poisson full
 training gave 88.76%; IF evaluation of that frozen model gave 89.16%; fresh IF short
 training gave 86.72%/control 82.94%; fresh IF full training gave 89.58%/control 83.04%.
-These are distinct stages, not interchangeable descriptions of one run. Seeds 1/2
-then trained from scratch with the same frozen recipe/epoch count. All three models/maps
-were fixed before official testing; test scores did not tune the recipe or exclude seeds.
+These four measurements come from separate training or evaluation stages. Seeds 1/2
+then trained from scratch with the selected recipe and epoch count. All three models/maps
+were fixed before official testing. Test scores did not select the recipe, and all seeds
+are included in the report.
 
 The frozen feedforward control receives identical initial weights and input spikes,
 disabling only STDP weight updates. Its B still adapts during training, its fast
 dynamics remain active, and its neuron classes are assigned independently afterwards.
-It is not a network without learning. Acceptance requires a three-seed mean of at
-least 90%, not at least 90% for every seed.
+The example targets a three-seed mean of at least 90%; individual seeds may fall below 90%.
 
 .. list-table:: Full MNIST tests: regular IF input and current LIF
    :header-rows: 1
@@ -579,14 +581,13 @@ least 90%, not at least 90% for every seed.
      - 84.06%
      - +6.00
 
-Mean accuracy is **90.2233%**, population standard deviation **0.2894 percentage points**,
-and mean paired improvement **6.4667 percentage points**. Every seed uses all 10,000 test
+Mean accuracy is 90.2233%, population standard deviation is 0.2894 percentage points,
+and mean paired improvement is 6.4667 percentage points. Every seed uses all 10,000 test
 samples. One silent seed 0 sample is counted as an error. Environment: Python 3.11.14,
 PyTorch 2.7.1+cu118, torchvision 0.22.1+cu118, V100S-PCIE-32GB testing.
-These measured shallow-recipe results are not a Diehl–Cook paper reproduction or a
-claim about arbitrary deep pure-STDP networks. Raw JSON/config/checkpoints/source hashes
-and commands are retained. Migration requires same-checkpoint numerical and full
-evaluation verification.
+These results apply to this shallow recipe. Arbitrary deep networks have not been
+verified, and the model does not reproduce the original Diehl/Cook network. The experiment
+retains raw JSON, configurations, checkpoints, source hashes and commands.
 
 .. [#STDP] Bi, Guo-qiang, and Mu-ming Poo. "Synaptic modifications in cultured hippocampal neurons: dependence on spike timing, synaptic strength, and postsynaptic cell type." Journal of neuroscience 18.24 (1998): 10464-10472.
 

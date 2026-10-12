@@ -525,19 +525,6 @@ Plasticity Example Paths
   and imports to ``examples.plasticity.<name>``; old paths are removed without
   forwarding modules.
 
-Plasticity MNIST Example Migration
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Module: ``spikingjelly.activation_based.examples.plasticity.stdp_mnist``.
-
-- Replaced the provisional conductance example with the validated current
-  recipe. Use native-current ``--homeostasis-gain`` and ``--bias-initial`` instead
-  of ``--theta-plus`` and ``--theta-initial``; the native base threshold is 0.01.
-  Old conductance or hard-winner checkpoints require archived source. The
-  measured current-experiment checkpoints use an explicit one-off parameter
-  conversion that preserves every tensor and class map; no automatic legacy
-  loader or permanent compatibility branch is included.
-
 Plasticity Learner Interfaces
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

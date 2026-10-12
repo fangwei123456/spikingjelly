@@ -15,9 +15,9 @@ live in ``learning.online_learning``; their neurons and layers remain in
 已有 ``learning.STDPLearner``、奖励学习器及接收层对象的 helper 继续直接导出同一实现；
 纯张量规则保留在 ``functional.learning``。FPTT、OTTT/SLTT 梯度训练流程位于
 ``learning.online_learning``，对应神经元和层仍位于 ``neuron.online_learning``、
-``layer.online_learning``。两类方法不共用通用 Learner 或训练循环。
+``layer.online_learning``。两类方法分别管理自己的更新流程。
 
-**Migration / 迁移：** replace ``functional.ottt_online_training(...)`` and
+Migration / 迁移： replace ``functional.ottt_online_training(...)`` and
 ``functional.fptt_online_training(...)`` with calls from
 ``from spikingjelly.activation_based.learning import online_learning``.
 Move direct imports from ``functional.online_learning`` to
@@ -32,12 +32,11 @@ there are no forwarding modules. ``fptt_online_training_init_w_ra`` moves likewi
 Local synaptic plasticity / 局部突触可塑性
 --------------------------------------------------------------------------------
 
-These are weight-update tools, not general-purpose deep-network trainers.
-The caller supplies actual pre/post activity, encoding, competition, homeostasis
-and a task readout. Only synaptic weights are updated, not biases.
+The learners compute synaptic weight updates from pre/post activity. The caller
+chooses the encoding, competition, homeostasis and readout. Biases are unchanged.
 
-这些工具实现局部权重更新，不是通用深层网络训练器。调用者提供实际 pre/post
-活动、编码、竞争、稳态控制和任务读出。只更新突触权重，不更新 bias。
+学习器根据 pre/post 活动计算突触权重更新。编码、竞争、稳态控制和读出由调用者提供，
+bias 保持不变。
 
 .. list-table:: Supported scope / 支持范围
    :header-rows: 1
@@ -123,14 +122,14 @@ and :doc:`../tutorials/cn/stdp`.
    :undoc-members:
    :show-inheritance:
 
-Online Learning Pipelines
+Online learning pipelines
 +++++++++++++++++++++++++++++++
 
-**在线学习** 的辅助函数。
+基于梯度的在线训练函数，执行前向、反传和优化器更新。
 
 ----
 
-Auxiliary functions for **online learning** .
+Gradient-based online training functions that run forward, backward and optimizer updates.
 
 .. list-table::
 
