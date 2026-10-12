@@ -908,7 +908,7 @@ class STDPLearner(base.MemoryModule):
         Clears all learning states and activity records without changing weights,
         gradients, recording enablement or closed status.
         """
-        super(STDPLearner, self).reset()
+        super().reset()
         self.in_spike_monitor.clear_recorded_data()
         self.out_spike_monitor.clear_recorded_data()
 
@@ -1172,7 +1172,7 @@ class MSTDPLearner(base.MemoryModule):
         """
 
         functional_learning._check_time_constants(tau_pre, tau_post, exponential=True)
-        if step_mode not in ("s",):
+        if step_mode != "s":
             raise ValueError("Unsupported step_mode: " + str(step_mode))
         if not isinstance(synapse, nn.Linear):
             raise NotImplementedError(
@@ -1218,7 +1218,7 @@ class MSTDPLearner(base.MemoryModule):
         Clears all learning states and activity records without changing weights,
         gradients, recording enablement or closed status.
         """
-        super(MSTDPLearner, self).reset()
+        super().reset()
         self.in_spike_monitor.clear_recorded_data()
         self.out_spike_monitor.clear_recorded_data()
 
@@ -1497,7 +1497,7 @@ class MSTDPETLearner(base.MemoryModule):
         """
 
         functional_learning._check_time_constants(tau_pre, tau_post, exponential=True)
-        if step_mode not in ("s",):
+        if step_mode != "s":
             raise ValueError("Unsupported step_mode: " + str(step_mode))
         if not isinstance(synapse, nn.Linear):
             raise NotImplementedError(
@@ -1548,7 +1548,7 @@ class MSTDPETLearner(base.MemoryModule):
         Clears all learning states and activity records without changing weights,
         gradients, recording enablement or closed status.
         """
-        super(MSTDPETLearner, self).reset()
+        super().reset()
         self.in_spike_monitor.clear_recorded_data()
         self.out_spike_monitor.clear_recorded_data()
 

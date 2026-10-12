@@ -204,8 +204,6 @@ def _run_batch(model, images, steps, generator, learner=None, baseline=None):
             weight.clamp_(0, 1)
     if learner is not None:
         model.refresh_gain()
-        if baseline is not None:
-            baseline.refresh_gain()
         learner.reset()
     functional.reset_net(model.sn)
     if baseline is not None:

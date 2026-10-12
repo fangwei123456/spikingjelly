@@ -1071,7 +1071,10 @@ def test_recurrent_mnist_preserves_feedforward_seed_initialization():
 
 
 def test_mnist_cli_inhibition_and_refractory_contract():
-    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import _SNN, _parser
+    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import (
+        _SNN,
+        _parser,
+    )
 
     args = _parser().parse_args(
         ["--inhibition", "5", "--inhibition-tau", "2", "--bias-initial", "0"]
@@ -1100,7 +1103,10 @@ def test_mnist_cli_inhibition_and_refractory_contract():
 
 
 def test_mnist_frozen_evaluation_preserves_model_and_records():
-    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import _SNN, _run_batch
+    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import (
+        _SNN,
+        _run_batch,
+    )
 
     model = _SNN(4, 0.5, 1.0, steps=100, covariance=torch.eye(784), device="cpu").eval()
     learner = learning.STDPLearner("s", model.synapse, model.sn, 20.0, 20.0)
@@ -1121,9 +1127,52 @@ def test_mnist_frozen_evaluation_preserves_model_and_records():
         learner.close()
 
 
+def test_mnist_control_keeps_weights_and_gain_while_bias_adapts():
+    import copy
+
+    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import (
+        _SNN,
+        _run_batch,
+    )
+
+    torch.manual_seed(3)
+    model = _SNN(8, 0.01, 0.1, steps=100, covariance=torch.eye(784), device="cpu")
+    baseline = copy.deepcopy(model)
+    weights = baseline.synapse.weight.clone()
+    gain = baseline.sn.element_wise_function.input_gain.clone()
+    bias = baseline.sn.sub_module[1].bias_current.clone()
+    learner = learning.STDPLearner(
+        "s",
+        model.synapse,
+        model.sn,
+        20.0,
+        20.0,
+        f_pre=lambda w: 0.001 * w,
+        f_post=lambda w: 0.001 * (1 - w),
+    )
+    try:
+        _run_batch(
+            model,
+            torch.rand(2, 28, 28),
+            100,
+            torch.Generator().manual_seed(4),
+            learner,
+            baseline,
+        )
+        assert torch.equal(baseline.synapse.weight, weights)
+        assert torch.equal(baseline.sn.element_wise_function.input_gain, gain)
+        assert not torch.equal(baseline.sn.sub_module[1].bias_current, bias)
+        assert baseline.sn.y is None
+        assert all(parameter.grad is None for parameter in baseline.parameters())
+    finally:
+        learner.close()
+
+
 def test_mnist_intrinsic_current_independent_state_oracle():
     import math
-    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import _AdaptiveLIFNode
+    from spikingjelly.activation_based.examples.plasticity.stdp_mnist import (
+        _AdaptiveLIFNode,
+    )
 
     node = _AdaptiveLIFNode(3, 0.0004, 0.01, 5, 0.0, 700).double()
     voltage = torch.zeros(2, 3, dtype=torch.float64)
