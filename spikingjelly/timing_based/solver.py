@@ -74,7 +74,9 @@ class _FirstSpike(torch.autograd.Function):
             )
             if not bool(moving.any()):
                 break
-            value, _ = _evaluate(response, middle, chosen, state)
+            value, _ = _evaluate(
+                response, torch.where(moving, middle, lo), chosen, state
+            )
             exact_middle = moving & (value == 0)
             lo = torch.where(exact_middle | (moving & (value < 0)), middle, lo)
             hi = torch.where(exact_middle | (moving & (value >= 0)), middle, hi)

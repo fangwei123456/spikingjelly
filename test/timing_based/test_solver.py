@@ -451,3 +451,19 @@ def test_composite_parameters_cannot_silently_return_partial_second_derivative()
     )
     with pytest.raises(RuntimeError, match="first-order"):
         torch.autograd.grad(root, weight, create_graph=True)
+
+
+def test_inactive_rows_do_not_evaluate_nonfinite_dummy_midpoints():
+    weight = torch.tensor([[0.0], [2.0]], dtype=torch.float64, requires_grad=True)
+    roots = solver.first_spike_time(
+        _linear,
+        torch.tensor([[-1e308, 1e308], [0.0, 1.0]], dtype=torch.float64),
+        (torch.zeros_like(weight), weight),
+    )
+    torch.testing.assert_close(
+        roots, torch.tensor([torch.inf, 0.5], dtype=torch.float64)
+    )
+    roots.sum().backward()
+    torch.testing.assert_close(
+        weight.grad, torch.tensor([[0.0], [-0.25]], dtype=torch.float64)
+    )
