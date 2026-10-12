@@ -1357,7 +1357,6 @@ def cubic_srm(
             marker_rows[1:] != marker_rows[:-1]
         )
         starts = new_group.nonzero().flatten()
-        lengths = torch.cat((starts[1:], starts.new_tensor([order.numel()]))) - starts
         group_times = marker_times[starts]
         groups = new_group.to(torch.int64).cumsum(0) - 1
         active_changes = rows.new_zeros(starts.numel()).index_add(
