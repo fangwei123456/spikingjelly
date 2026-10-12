@@ -133,7 +133,7 @@ def stdp_linear_single_step(
 
     * **中文**
 
-    活动张量 dtype/device 应与权重一致；输出 dtype/device
+    活动张量须使用与权重相同的浮点 dtype 和 device；输出 dtype/device
     与权重一致。先加入当前脉冲再计算更新，同一步脉冲是否抵消取决于调制函数。输入张量状态不被原地修改。
 
     对单步脉冲输入执行全连接层的 STDP 更新，返回更新后的 pre/post trace 与权重增量。
@@ -167,7 +167,7 @@ def stdp_linear_single_step(
 
     * **English**
 
-    Activity dtype/device should match the weight; outputs match its dtype/device.
+    Activity must use the weight's floating dtype and device; outputs match them.
     Current spikes enter traces before the update, so simultaneous-spike cancellation
     depends on modulation functions. Tensor input states are not mutated in place.
 
@@ -233,7 +233,7 @@ def mstdp_linear_single_step(
 
     * **中文**
 
-    活动张量 dtype/device 应与权重一致；输出 dtype/device
+    活动张量须使用与权重相同的浮点 dtype 和 device；输出 dtype/device
     与权重一致。先加入当前脉冲再计算更新，同一步脉冲是否抵消取决于调制函数。输入张量状态不被原地修改。
 
     对单步脉冲输入执行全连接层的 reward-modulated STDP eligibility 计算。
@@ -268,7 +268,7 @@ def mstdp_linear_single_step(
 
     * **English**
 
-    Activity dtype/device should match the weight; outputs match its dtype/device.
+    Activity must use the weight's floating dtype and device; outputs match them.
     Current spikes enter traces before the update, so simultaneous-spike cancellation
     depends on modulation functions. Tensor input states are not mutated in place.
 
@@ -334,7 +334,7 @@ def mstdpet_linear_single_step(
 
     * **中文**
 
-    活动张量 dtype/device 应与权重一致；输出 dtype/device
+    活动张量须使用与权重相同的浮点 dtype 和 device；输出 dtype/device
     与权重一致。先加入当前脉冲再计算更新，同一步脉冲是否抵消取决于调制函数。输入张量状态不被原地修改。
 
     对单步脉冲输入执行全连接层的 mSTDP-ET eligibility 计算。
@@ -368,7 +368,7 @@ def mstdpet_linear_single_step(
 
     * **English**
 
-    Activity dtype/device should match the weight; outputs match its dtype/device.
+    Activity must use the weight's floating dtype and device; outputs match them.
     Current spikes enter traces before the update, so simultaneous-spike cancellation
     depends on modulation functions. Tensor input states are not mutated in place.
 
@@ -434,7 +434,7 @@ def stdp_conv2d_single_step(
 
     * **中文**
 
-    活动张量 dtype/device 应与权重一致；输出 dtype/device
+    活动张量须使用与权重相同的浮点 dtype 和 device；输出 dtype/device
     与权重一致。先加入当前脉冲再计算更新，同一步脉冲是否抵消取决于调制函数。输入张量状态不被原地修改。
 
     对单步脉冲输入执行二维卷积层的 STDP 更新。
@@ -473,7 +473,7 @@ def stdp_conv2d_single_step(
 
     * **English**
 
-    Activity dtype/device should match the weight; outputs match its dtype/device.
+    Activity must use the weight's floating dtype and device; outputs match them.
     Current spikes enter traces before the update, so simultaneous-spike cancellation
     depends on modulation functions. Tensor input states are not mutated in place.
 
@@ -554,7 +554,7 @@ def stdp_conv1d_single_step(
 
     * **中文**
 
-    活动张量 dtype/device 应与权重一致；输出 dtype/device
+    活动张量须使用与权重相同的浮点 dtype 和 device；输出 dtype/device
     与权重一致。先加入当前脉冲再计算更新，同一步脉冲是否抵消取决于调制函数。输入张量状态不被原地修改。
 
     对单步脉冲输入执行一维卷积层的 STDP 更新。
@@ -593,7 +593,7 @@ def stdp_conv1d_single_step(
 
     * **English**
 
-    Activity dtype/device should match the weight; outputs match its dtype/device.
+    Activity must use the weight's floating dtype and device; outputs match them.
     Current spikes enter traces before the update, so simultaneous-spike cancellation
     depends on modulation functions. Tensor input states are not mutated in place.
 
@@ -676,7 +676,7 @@ def stdp_multi_step(
 
     * **中文**
 
-    活动张量 dtype/device 应与权重一致；输出 dtype/device
+    活动张量须使用与权重相同的浮点 dtype 和 device；输出 dtype/device
     与权重一致。先加入当前脉冲再计算更新，同一步脉冲是否抵消取决于调制函数。输入张量状态不被原地修改。
 
     对线性层、一维卷积层或二维卷积层执行多步 STDP 更新。
@@ -713,7 +713,7 @@ def stdp_multi_step(
 
     * **English**
 
-    Activity dtype/device should match the weight; outputs match its dtype/device.
+    Activity must use the weight's floating dtype and device; outputs match them.
     Current spikes enter traces before the update, so simultaneous-spike cancellation
     depends on modulation functions. Tensor input states are not mutated in place.
 
@@ -1012,7 +1012,7 @@ class STDPLearner(base.MemoryModule):
         negative scaled update to weight.grad and returns None; otherwise returns the
         scaled update. Neither form changes weights directly. Updates match the weight
         shape/dtype/device and have no graph. Count/shape errors fail before
-        advancement; correct modulation failures and reset().Sums over batch,
+        advancement; correct modulation failures and reset(). Sums over batch,
         convolution space and time without averaging; multi-step fixed-weight
         accumulation is not equivalent to updating weights each step.
 
@@ -1331,9 +1331,9 @@ class MSTDPLearner(base.MemoryModule):
         negative scaled update to weight.grad and returns None; otherwise returns the
         scaled update. Neither form changes weights directly. Updates match the weight
         shape/dtype/device and have no graph. Count/shape errors fail before
-        advancement; correct modulation failures and reset().Exactly one pair per call.
+        advancement; correct modulation failures and reset(). Exactly one pair per call.
         reward[t] acts on eligibility[t-1]; the first update is zero. Reward after final
-        activity needs a subsequent forward step.Sums over batch; reset() before
+        activity needs a subsequent forward step. Sums over batch; reset() before
         changing batch size.
 
         :param reward: Scalar or [N] reward; scalars apply to every sample.
@@ -1663,9 +1663,9 @@ class MSTDPETLearner(base.MemoryModule):
         negative scaled update to weight.grad and returns None; otherwise returns the
         scaled update. Neither form changes weights directly. Updates match the weight
         shape/dtype/device and have no graph. Count/shape errors fail before
-        advancement; correct modulation failures and reset().Exactly one pair per call.
+        advancement; correct modulation failures and reset(). Exactly one pair per call.
         reward[t] acts on eligibility[t-1]; the first update is zero. Reward after final
-        activity needs a subsequent forward step.First computes
+        activity needs a subsequent forward step. First computes
         trace_e[t]=exp(-1/tau_trace)*trace_e[t-1]+eligibility[t-1]/tau_trace, multiplies
         by reward[t], then computes current eligibility.
 
