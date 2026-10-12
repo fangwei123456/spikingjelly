@@ -6,7 +6,7 @@ from torch.autograd.function import once_differentiable
 from .._ops.tempotron import _roots, _states, _weight_gradient
 from .._ops.tempotron.reference import _phi, _psp, _stationary, _voltage
 
-__all__ = ["tempotron"]
+__all__ = ["tempotron", "srm"]
 
 _EVENT_BLOCK_SIZE = {"cpu": 128, "cuda": 512}
 _BACKWARD_BLOCK_SIZE = 16384
@@ -759,6 +759,20 @@ def tempotron(
         time derivatives or gradients.
     """
     _parameters(duration, tau, tau_s, v_threshold)
+    _validate_events(spike_times, input_indices, batch_offsets, weight)
+    return _Tempotron.apply(
+        spike_times,
+        input_indices,
+        batch_offsets,
+        weight,
+        duration,
+        tau,
+        tau_s,
+        v_threshold,
+    )
+
+
+def _validate_events(spike_times, input_indices, batch_offsets, weight):
     tensors = (spike_times, input_indices, batch_offsets, weight)
     if any(
         t.device != spike_times.device for t in tensors
@@ -792,13 +806,233 @@ def tempotron(
         raise ValueError("Offsets must start at 0, be nondecreasing, and end at E.")
     if bool(((input_indices < 0) | (input_indices >= weight.shape[1])).any()):
         raise ValueError("Input indices must be in [0,in_features).")
-    return _Tempotron.apply(
-        spike_times,
-        input_indices,
-        batch_offsets,
-        weight,
-        duration,
-        tau,
-        tau_s,
-        v_threshold,
+
+
+def _srm_parameters(duration, threshold, max_spikes):
+    if any(
+        not isinstance(value, (int, float)) or isinstance(value, bool)
+        for value in (duration, threshold)
+    ):
+        raise TypeError("duration and v_threshold must be fixed real scalars.")
+    if not all(math.isfinite(value) and value > 0 for value in (duration, threshold)):
+        raise ValueError("duration and v_threshold must be finite and positive.")
+    if not isinstance(max_spikes, int) or isinstance(max_spikes, bool):
+        raise TypeError("max_spikes must be a positive integer.")
+    if max_spikes < 1:
+        raise ValueError("max_spikes must be a positive integer.")
+    if not math.isfinite(threshold * max_spikes):
+        raise ValueError("The output capacity is not representable in FP64.")
+
+
+class _SRMInputs(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, times, weight):
+        ctx.set_materialize_grads(False)
+        constants = tuple(value for value in (times, weight) if not value.requires_grad)
+        if constants:
+            ctx.mark_non_differentiable(*constants)
+        return times, weight
+
+    @staticmethod
+    def backward(ctx, grad_times, grad_weight):
+        for gradient in (grad_times, grad_weight):
+            if gradient is not None and not bool(torch.isfinite(gradient).all()):
+                raise RuntimeError("SRM input gradients overflow their dtype.")
+        return grad_times, grad_weight
+
+
+def srm(
+    spike_times: torch.Tensor,
+    input_indices: torch.Tensor,
+    batch_offsets: torch.Tensor,
+    weight: torch.Tensor,
+    duration: float,
+    v_threshold: float = 1.0,
+    max_spikes: int = 64,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <timing-functional-srm-cn>` | :ref:`English <timing-functional-srm-en>`
+
+    ----
+
+    .. _timing-functional-srm-cn:
+
+    * **中文**
+
+    连续事件 SRM，输入核为 ``epsilon(u)=max(u,0)``，历史输出核为
+    ``eta(u)=-v_threshold*H(u)``。电压上穿阈值时发放并归零，输入电流
+    保留，继续接收输入；每条连接及每个输出允许多个脉冲。静息电位为零，
+    每次调用是独立试次。同刻输出优先于输入，相切不发放，窗口终点上穿计入。
+
+    对未复位响应的第 k 个阈值 ``k*v_threshold`` 找到首次上穿区间，解析
+    求时刻，不展开时间网格。内部 FP64，返回时刻/权重的所选分支由 PyTorch
+    自动微分；事件创建、删除或排序切换处不保证唯一导数。没有 loss、替代
+    梯度或沉默恢复。容量不足报错，不截断输出。该固定核模型不含泄漏或
+    绝对不应期，也不支持任意响应核。
+
+    :param spike_times: 有限 FP32/FP64 时刻 ``[E]``，窗外事件忽略且梯度为零。
+    :type spike_times: torch.Tensor
+    :param input_indices: int64 ``[E]``，范围 ``[0,I)``，可重复或无序。
+    :type input_indices: torch.Tensor
+    :param batch_offsets: int64 ``[B+1]``，从 0 到 E 的非递减边界，支持空段。
+    :type batch_offsets: torch.Tensor
+    :param weight: 有限 ``[O,I]`` 权重，与时刻同 dtype/device，单位为电压/时间。
+        所有输入须在同一 CPU/CUDA 设备，I、O 均为正。
+    :type weight: torch.Tensor
+    :param duration: 有限正数观察窗终点，窗口 ``[0,duration]``，单位与时刻一致。
+    :type duration: float
+    :param v_threshold: 有限正数阈值与复位幅度，默认 1，单位为电压。
+    :type v_threshold: float
+    :param max_spikes: 每样本每输出的最大事件容量，默认 64，正整数。
+    :type max_spikes: int
+    :return: 紧凑输出 ``(times,indices,offsets)``，形状 ``[S]``、``[S]``、
+        ``[B+1]``，同输入设备；时刻同输入浮点 dtype，元数据为 int64。
+        按样本、输出索引、发放次序排列，样本内不保证全局时间有序。
+        静息/空样本无事件，可直接作为下一 SRM 层输入。
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises TypeError: 参数类型或输入 dtype 不受支持。
+    :raises ValueError: 参数、形状、设备、有限性、索引或 CSR 边界非法。
+    :raises RuntimeError: 超出事件容量，状态/所选根不可表示，或输入时刻/权重梯度非有限。
+
+    ----
+
+    .. _timing-functional-srm-en:
+
+    * **English**
+
+    Continuous-event SRM with input kernel ``epsilon(u)=max(u,0)`` and output
+    history kernel ``eta(u)=-v_threshold*H(u)``. An upward threshold crossing
+    emits a spike and resets voltage to zero, retaining input current and
+    accepting further inputs. Connections and outputs allow multiple spikes.
+    Rest is zero and calls are independent trials. Outputs precede simultaneous
+    inputs; grazing does not fire; upward crossings at the window endpoint count.
+
+    Locate the first upward crossing of each level ``k*v_threshold`` in the
+    unreset response and solve its time analytically without a time grid.
+    Internals use FP64; PyTorch differentiates the selected time/weight branch.
+    Event creation, deletion and ordering boundaries need not have unique
+    derivatives. No loss, surrogate or silent-neuron recovery is built in.
+    Capacity overflow raises instead of truncating. This fixed-kernel model has
+    no leak or absolute refractory period and does not accept arbitrary kernels.
+
+    :param spike_times: Finite FP32/FP64 times ``[E]``. Out-of-window events are
+        ignored with zero gradient.
+    :type spike_times: torch.Tensor
+    :param input_indices: int64 ``[E]`` in ``[0,I)``; repetitions and disorder allowed.
+    :type input_indices: torch.Tensor
+    :param batch_offsets: Nondecreasing int64 ``[B+1]`` from 0 to E; empty segments allowed.
+    :type batch_offsets: torch.Tensor
+    :param weight: Finite ``[O,I]`` weights matching time dtype/device, in voltage/time
+        units. All inputs share a CPU/CUDA device; I and O are positive.
+    :type weight: torch.Tensor
+    :param duration: Finite positive endpoint of ``[0,duration]``, in the times' units.
+    :type duration: float
+    :param v_threshold: Finite positive voltage threshold and reset amplitude, default 1.
+    :type v_threshold: float
+    :param max_spikes: Positive per-trial, per-output event capacity, default 64.
+    :type max_spikes: int
+    :return: Compact ``(times,indices,offsets)`` of shapes ``[S]``, ``[S]``, ``[B+1]``
+        on the input device. Times share the input floating dtype; metadata is int64.
+        Ordered by trial, output index and spike number, not globally by time within
+        trials. Resting/empty trials emit nothing. Directly usable by another SRM.
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises TypeError: For unsupported parameter types or dtypes.
+    :raises ValueError: For invalid parameters, shapes, devices, finite values,
+        indices or CSR boundaries.
+    :raises RuntimeError: For capacity overflow, unrepresentable states/selected roots,
+        or non-finite input-time/weight gradients.
+    """
+    _srm_parameters(duration, v_threshold, max_spikes)
+    _validate_events(spike_times, input_indices, batch_offsets, weight)
+    spike_times, weight = _SRMInputs.apply(spike_times, weight)
+    batch_count, output_count = batch_offsets.numel() - 1, weight.shape[0]
+    batches = torch.repeat_interleave(
+        torch.arange(batch_count, device=spike_times.device),
+        batch_offsets.diff(),
+        output_size=spike_times.numel(),
     )
+    order = ((spike_times >= 0) & (spike_times <= duration)).nonzero().flatten()
+    order = order[torch.argsort(spike_times[order], stable=True)]
+    order = order[torch.argsort(batches[order], stable=True)]
+    counts = torch.bincount(batches[order], minlength=batch_count)
+    width = int(counts.max()) if batch_count else 0
+    empty_times = spike_times[:0] + weight.reshape(-1)[0] * 0
+    empty_indices = input_indices[:0]
+    empty_offsets = batch_offsets.new_zeros(batch_count + 1)
+    if not width:
+        return empty_times, empty_indices, empty_offsets
+
+    offsets = torch.cat((counts.new_zeros(1), counts.cumsum(0)))
+    rows = batches[order]
+    columns = torch.arange(order.numel(), device=order.device) - offsets[rows]
+    times = spike_times.double().new_full((batch_count, width), duration)
+    times[rows, columns] = spike_times[order].double()
+    indices = input_indices.new_zeros((batch_count, width))
+    indices[rows, columns] = input_indices[order]
+    valid = torch.arange(width, device=order.device)[None, :] < counts[:, None]
+    incoming = torch.where(
+        valid[:, None, :], weight.double()[:, indices].permute(1, 0, 2), 0
+    )
+    current = incoming.cumsum(-1)
+    left_voltage = torch.cat(
+        (
+            current.new_zeros((batch_count, output_count, 1)),
+            (current[..., :-1] * times.diff()[:, None, :]).cumsum(-1),
+        ),
+        dim=-1,
+    )
+    right_times = torch.cat(
+        (times[:, 1:], times.new_full((batch_count, 1), duration)), 1
+    )
+    right_voltage = left_voltage + current * (right_times - times)[:, None, :]
+    if not bool(torch.isfinite(current).all() & torch.isfinite(right_voltage).all()):
+        raise RuntimeError("SRM state is not representable in FP64.")
+    # A constant reset subtracts one threshold: spike k crosses raw level k*threshold.
+    running_max = right_voltage.cummax(-1).values.clamp_min(0)
+    spike_counts = torch.floor(running_max[..., -1] / v_threshold)
+    if bool((spike_counts > max_spikes).any()):
+        raise RuntimeError("SRM exceeded max_spikes; increase the output capacity.")
+    spike_counts = spike_counts.to(torch.int64)
+    capacity = int(spike_counts.max())
+    if not capacity:
+        return empty_times, empty_indices, empty_offsets
+    levels = (
+        torch.arange(1, capacity + 1, device=order.device, dtype=torch.float64)
+        * v_threshold
+    ).expand(batch_count, output_count, capacity)
+    active = (
+        torch.arange(capacity, device=order.device)[None, None, :]
+        < spike_counts[..., None]
+    )
+    interval = torch.searchsorted(running_max.contiguous(), levels.contiguous())
+    interval = interval.clamp_max(width - 1)
+    slope = current.gather(-1, interval)
+    if bool((active & (slope <= 0)).any()):
+        raise RuntimeError("SRM selected a non-rising threshold crossing.")
+    voltage = torch.where(active, left_voltage.gather(-1, interval), 0)
+    slope = torch.where(active, slope, 1)
+    selected_times = times[:, None, :].expand_as(current).gather(-1, interval)
+    roots = selected_times + (levels - voltage) / slope
+    endpoints = right_times[:, None, :].expand_as(current).gather(-1, interval)
+    tolerance = 8 * torch.finfo(torch.float64).eps * duration
+    if bool(
+        (
+            active
+            & (
+                ~torch.isfinite(roots)
+                | (roots <= selected_times)
+                | (roots > endpoints + tolerance)
+            )
+        ).any()
+    ):
+        raise RuntimeError("SRM selected root is not representable in its interval.")
+    output_times = roots[active]
+    output_times = output_times.to(spike_times.dtype)
+    if not bool(torch.isfinite(output_times).all()):
+        raise RuntimeError("SRM output times overflow their dtype.")
+    output_indices = torch.arange(output_count, device=order.device)[
+        None, :, None
+    ].expand_as(active)[active]
+    totals = spike_counts.sum(1)
+    output_offsets = torch.cat((totals.new_zeros(1), totals.cumsum(0)))
+    return output_times, output_indices, output_offsets

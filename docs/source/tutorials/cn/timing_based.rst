@@ -1,5 +1,5 @@
-连续事件 Tempotron
-==================
+连续事件神经元
+==============
 
 ``timing_based`` 使用显式事件时刻作为接口。TTFS 是编码约束，不意味着实现一定
 使用时间戳；按时间步传递 01 激活的 TTFS 网络仍属于 ``activation_based``。
@@ -145,3 +145,58 @@ GaussianTuning.encode；当前用法以上述接口为准。
 Gütig R, Sompolinsky H. The tempotron: a neuron that learns spike timing–based
 decisions. Nature Neuroscience 9, 420–428 (2006).
 `原文 <https://www.nature.com/articles/nn1643>`_。
+
+多发 SRM 与两层 MNIST
+------------------------------------------
+
+:class:`spikingjelly.timing_based.neuron.SRM` 是实验性固定核模型：
+
+.. math::
+
+   u_j(t)=\sum_i w_{ji}\sum_e (t-t_{ie})_+
+          -\vartheta\sum_{f:s_{jf}<t}1.
+
+输入响应是线性上升 PSP，发放后加入阶跃复位响应：电压归零，电流保留。
+模型无泄漏和绝对不应期，允许多输入及多输出脉冲，继续接收发放后输入。
+这是不同于双指数 Tempotron 的 SRM 核族，不是其等价加速。
+未复位响应首次上穿 ``k*threshold`` 对应第 k 次发放。排序后通过前缀和、
+端点累积最大值和解析根求解，内部 FP64，不展开时间网格；所选解析分支
+通过 PyTorch 对权重和输入时刻求导。事件创建/删除和排序边界不保证唯一导数。
+
+SRM 接受同样的 CSR 输入，输出也是 ``(times,indices,offsets)``，可直接串联。
+输出按样本、神经元索引和发放次序排列；下一层内部排序。空样本无事件，
+窗口端点上穿计入，同刻输出优先。每样本每输出的 ``max_spikes`` 默认 64，
+容量不足明确报错，不截断事件。使用普通 ``nn.Module.to`` 和 ``state_dict``。
+
+.. code-block:: python
+
+   import torch
+   from spikingjelly.timing_based.neuron import SRM
+
+   first = SRM(2, 3, duration=2.0).double()
+   second = SRM(3, 1, duration=2.0).double()
+   with torch.no_grad():
+       first.weight.fill_(1.0)
+       second.weight.fill_(0.5)
+   times = torch.tensor([0.1, 0.4], dtype=torch.float64, requires_grad=True)
+   events = first(times, torch.tensor([0, 1]), torch.tensor([0, 2]))
+   output_times, _, _ = second(*events)
+   output_times.sum().backward()
+
+MNIST 示例使用 784→128→10 两个可训练 SRM 层，像素时刻为 ``1-pixel``，
+观察窗终点为 2。隐藏层可多发，事件直接进入第二层。每个输出事件对类别
+分数贡献 ``2-time``，logits 为累积贡献的 5 倍，loss 是交叉熵。
+Adam（默认 lr=0.01）训练原始参数，示例通过 PyTorch parametrization 使用
+``gain*softmax(weight)``，两层行增益固定为 8、2，以保持发放并控制事件数量。
+约束和读出均在示例，神经元支持负权重，不含 loss、替代梯度或恢复规则。
+
+.. code-block:: bash
+
+   uv run python -m spikingjelly.timing_based.examples.srm_mnist \
+       --device cuda:0 --dataset-dir ./data --output-dir ./srm-mnist \
+       --batch-size 128 --epochs 10 --seed 0
+
+使用完整 MNIST：55000/5000 训练/验证划分，验证集选择 checkpoint 和早停
+（默认 patience=3），最终仅评估完整 10000 测试样本。保存配置、源码指纹、
+逐轮指标、``best.pt`` 和包含测试正确数的 ``result.json``。CPU 可将设备改为
+``cpu``；CUDA 使用相同 PyTorch 数学，无专用 SRM kernel，不声称普遍提速。
