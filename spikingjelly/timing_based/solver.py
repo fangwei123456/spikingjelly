@@ -2,7 +2,6 @@ import math
 from typing import Callable, Optional, Tuple
 
 import torch
-from torch.autograd.function import once_differentiable
 
 __all__ = ["first_spike_time"]
 
@@ -103,8 +102,9 @@ class _FirstSpike(torch.autograd.Function):
         return result
 
     @staticmethod
-    @once_differentiable
     def backward(ctx, gradient):
+        if torch.is_grad_enabled():
+            raise RuntimeError("first_spike_time supports first-order backward only.")
         root, chosen, firing, *parameters = ctx.saved_tensors
         if gradient is None:
             return (None,) * (3 + len(parameters))
@@ -182,6 +182,7 @@ def first_spike_time(
     独立时间轴，禁止在响应中耦合不同时间轴的查询时刻。函数必须无状态、
     可重复执行，所有可微依赖须显式放入 parameters，不能隐藏在闭包内。
 
+    仅支持一阶反向；create_graph=True 明确报错，包括参数来自可微变换的情况。
     FP64 二分只用于前向；一阶反向重算 ``-F_p/F_t``，传播到显式参数，
     包括可微的历史发放时刻。分段位置/类型仅负责选分支，不求导。
     未发放返回 inf，其梯度为零。相切不发放；窗口终点上穿计入。
@@ -231,6 +232,8 @@ def first_spike_time(
     repeatable. All differentiable dependencies must be explicit parameters,
     including output history, rather than hidden in a closure.
 
+    Only first-order backward is supported; create_graph=True raises, including
+    when parameters come from differentiable transformations.
     FP64 bisection is forward-only. First-order backward recomputes ``-F_p/F_t``
     for explicit parameters, including differentiable previous spike times.
     Partition positions/types select branches and receive no gradient. Silence

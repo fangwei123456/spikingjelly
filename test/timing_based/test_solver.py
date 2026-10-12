@@ -85,9 +85,8 @@ def test_first_spike_second_backward_is_rejected():
     root = solver.first_spike_time(
         _linear, torch.tensor([0.0, 1.0], dtype=torch.float64), (p * 0, p)
     )
-    derivative = torch.autograd.grad(root, p, create_graph=True)[0]
-    with pytest.raises(RuntimeError):
-        torch.autograd.grad(derivative, p)
+    with pytest.raises(RuntimeError, match="first-order"):
+        torch.autograd.grad(root, p, create_graph=True)
 
 
 def test_invalid_partition_and_nonfinite_response():
@@ -441,3 +440,14 @@ def test_cubic_unrepresentable_relative_support_or_stationary_time_raises(suppor
             2e16 + 8,
             support=support,
         )
+
+
+def test_composite_parameters_cannot_silently_return_partial_second_derivative():
+    weight = torch.tensor([2.0], dtype=torch.float64, requires_grad=True)
+    root = solver.first_spike_time(
+        lambda t, i, p: (t * p - 1, p.expand_as(t)),
+        torch.tensor([0.0, 1.0], dtype=torch.float64),
+        (weight.square(),),
+    )
+    with pytest.raises(RuntimeError, match="first-order"):
+        torch.autograd.grad(root, weight, create_graph=True)
