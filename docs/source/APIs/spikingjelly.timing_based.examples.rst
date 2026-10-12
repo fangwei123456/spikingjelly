@@ -15,3 +15,9 @@ MNIST Classification with Two SRM Layers
 .. automodule:: spikingjelly.timing_based.examples.srm_mnist
    :members:
    :undoc-members:
+
+MNIST Classification with Cubic PSPs
+------------------------------------
+
+.. automodule:: spikingjelly.timing_based.examples.cubic_srm_mnist
+   :members:

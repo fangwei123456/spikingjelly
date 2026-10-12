@@ -1,6 +1,12 @@
 spikingjelly.timing\_based package
 ######################################
 
+Continuous threshold solver
++++++++++++++++++++++++++++
+
+.. automodule:: spikingjelly.timing_based.solver
+   :members:
+
 Functional
 ++++++++++
 

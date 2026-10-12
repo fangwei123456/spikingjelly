@@ -3,7 +3,7 @@ from torch import nn
 
 from . import functional
 
-__all__ = ["Tempotron", "SRM"]
+__all__ = ["Tempotron", "SRM", "CubicSRM"]
 
 
 class Tempotron(nn.Module):
@@ -323,4 +323,145 @@ class SRM(nn.Module):
             self.duration,
             self.v_threshold,
             self.max_spikes,
+        )
+
+
+class CubicSRM(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        duration: float,
+        support: float = 2.0,
+        v_threshold: float = 1.0,
+    ) -> None:
+        r"""
+        **API Language** - :ref:`中文 <timing-CubicSRM-cn>` | :ref:`English <timing-CubicSRM-en>`
+
+        ----
+
+        .. _timing-CubicSRM-cn:
+
+        * **中文**
+
+        实验性有限支撑三次 PSP 的单发 SRM。模型定义与边界见
+        :func:`spikingjelly.timing_based.functional.cubic_srm`。模块仅持有权重
+        与固定超参数；每次调用独立、无持久膜状态。权重默认 N(0,0.001²)，
+        state_dict 使用 weight 键。标准 .to 可转换 CPU/CUDA、FP32/FP64。
+
+        :param in_features: 正整数输入连接数，每连接允许多个事件。
+        :type in_features: int
+        :param out_features: 正整数输出数，每输出每试次至多一次发放。
+        :type out_features: int
+        :param duration: 有限正数观察窗终点，与输入时刻同单位。
+        :type duration: float
+        :param support: 有限正数 PSP 支撑长度，默认 2，与输入时刻同单位。
+        :type support: float
+        :param v_threshold: 有限正数电压阈值，默认 1。
+        :type v_threshold: float
+        :raises TypeError: 连接数量或超参数类型非法。
+        :raises ValueError: 非正连接数量或非法超参数。
+
+        ----
+
+        .. _timing-CubicSRM-en:
+
+        * **English**
+
+        Experimental single-spike SRM with a finite-support cubic PSP. See
+        :func:`spikingjelly.timing_based.functional.cubic_srm` for dynamics and
+        boundaries. Owns only weights and fixed hyperparameters; calls are
+        independent with no persistent membrane state. Weights default to
+        N(0,0.001²); state_dict uses the weight key. Standard .to supports
+        CPU/CUDA and FP32/FP64.
+
+        :param in_features: Positive input count; each connection allows multiple events.
+        :type in_features: int
+        :param out_features: Positive output count; at most one spike per output per trial.
+        :type out_features: int
+        :param duration: Finite positive observation endpoint in input-time units.
+        :type duration: float
+        :param support: Finite positive PSP support length, default 2, in input-time units.
+        :type support: float
+        :param v_threshold: Finite positive voltage threshold, default 1.
+        :type v_threshold: float
+        :raises TypeError: For invalid feature or hyperparameter types.
+        :raises ValueError: For nonpositive feature counts or invalid hyperparameters.
+        """
+        super().__init__()
+        if any(
+            not isinstance(n, int) or isinstance(n, bool)
+            for n in (in_features, out_features)
+        ):
+            raise TypeError("Feature counts must be integers.")
+        if min(in_features, out_features) < 1:
+            raise ValueError("Feature counts must be positive.")
+        functional._cubic_parameters(duration, support, v_threshold)
+        self.in_features, self.out_features = in_features, out_features
+        self.duration, self.support, self.v_threshold = duration, support, v_threshold
+        self.weight = nn.Parameter(torch.empty(out_features, in_features))
+        nn.init.normal_(self.weight, mean=0.0, std=0.001)
+
+    def forward(
+        self,
+        spike_times: torch.Tensor,
+        input_indices: torch.Tensor,
+        batch_offsets: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        r"""
+        **API Language** - :ref:`中文 <timing-CubicSRM-forward-cn>` | :ref:`English <timing-CubicSRM-forward-en>`
+
+        ----
+
+        .. _timing-CubicSRM-forward-cn:
+
+        * **中文**
+
+        使用模块权重调用 :func:`spikingjelly.timing_based.functional.cubic_srm`。
+        每试次独立；最早上穿输出紧凑事件，沉默无事件，可直接串联下一层。
+
+        :param spike_times: 有限 FP32/FP64 ``[E]``，与权重同 dtype/device。
+        :type spike_times: torch.Tensor
+        :param input_indices: 同设备 int64 ``[E]``，索引输入列，可重复/无序。
+        :type input_indices: torch.Tensor
+        :param batch_offsets: 同设备 int64 ``[B+1]``，从 0 到 E 非递减。
+        :type batch_offsets: torch.Tensor
+        :return: CSR ``(times,indices,offsets)``，时刻同输入 dtype/device，
+            元数据 int64；按样本/输出排列，每输出至多一个事件。
+        :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        :raises TypeError: 不支持的 dtype。
+        :raises ValueError: 非法事件、设备或 CSR。
+        :raises RuntimeError: 状态、根或梯度不可表示。
+
+        ----
+
+        .. _timing-CubicSRM-forward-en:
+
+        * **English**
+
+        Call :func:`spikingjelly.timing_based.functional.cubic_srm` with module
+        weights. Independent trials emit compact earliest-upcrossing events;
+        silence emits nothing. Directly composable with the next layer.
+
+        :param spike_times: Finite FP32/FP64 ``[E]`` matching weight dtype/device.
+        :type spike_times: torch.Tensor
+        :param input_indices: Same-device int64 ``[E]`` input columns; repeated/unordered allowed.
+        :type input_indices: torch.Tensor
+        :param batch_offsets: Same-device nondecreasing int64 ``[B+1]`` from 0 to E.
+        :type batch_offsets: torch.Tensor
+        :return: CSR ``(times,indices,offsets)`` matching input time dtype/device
+            and int64 metadata, ordered by trial/output, at most one event per output.
+        :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        :raises TypeError: For unsupported dtypes.
+        :raises ValueError: For invalid events, devices or CSR.
+        :raises RuntimeError: For unrepresentable states, roots or gradients.
+        """
+        return functional.cubic_srm(
+            spike_times,
+            input_indices,
+            batch_offsets,
+            self.weight,
+            self.duration,
+            self.support,
+            self.v_threshold,
         )

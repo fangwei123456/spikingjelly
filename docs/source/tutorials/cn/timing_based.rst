@@ -200,3 +200,66 @@ Adam（默认 lr=0.01）训练原始参数，示例通过 PyTorch parametrizatio
 （默认 patience=3），最终仅评估完整 10000 测试样本。保存配置、源码指纹、
 逐轮指标、``best.pt`` 和包含测试正确数的 ``result.json``。CPU 可将设备改为
 ``cpu``；CUDA 使用相同 PyTorch 数学，无专用 SRM kernel，不声称普遍提速。
+
+完整分段与第三种 PSP 模型
+------------------------
+
+:func:`spikingjelly.timing_based.solver.first_spike_time` 求连续总阈值残差的最早
+上穿零点。接口接收响应函数、完整单调分段及显式张量参数。响应函数接收
+FP64 查询时刻及原分段索引，返回 ``(F, partial_F/partial_t)``。每个前导
+索引是一条独立时间轴，最后一维是全部区间查询或一个选中查询。每段左右
+两侧分别标记驻点，因此折点可具有不同单侧导数。
+
+只有函数值和导数不能证明两个检查点间没有隐藏的超阈峰。调用方必须给出
+加权总响应的全部驻点，不能只取各 PSP 驻点的并集。求解器依赖这一数学
+契约；格式校验无法认证黑盒分段。它选择最早有效区间，进行 FP64 二分，
+检查收敛及残差，沉默返回 inf。相切不发放，窗口终点上穿计入。一阶反向
+重算 ``dt/dp=-F_p/F_t``，不对二分求导。可微历史输出时刻必须作为显式参数
+传入，从而保留历史链式梯度。求解器不拥有神经元历史、reset/shunting 或
+事件容量。二阶反向不支持；被请求的奇异导数明确报错，不裁剪。
+分段只选择分支，不对分段位置求导。
+
+.. code-block:: python
+
+   import torch
+   from spikingjelly.timing_based.solver import first_spike_time
+
+   def response(time, piece, arrival, weight):
+       return weight * (time - arrival) - 1, weight.expand_as(time)
+
+   arrival = torch.tensor([[0.1]], dtype=torch.float64, requires_grad=True)
+   weight = torch.tensor([[2.0]], dtype=torch.float64, requires_grad=True)
+   # 残差在整个区间内线性，因此此分段完整。
+   root = first_spike_time(response, torch.tensor([[0., 2.]], dtype=torch.float64),
+                           (arrival, weight))
+   root.sum().backward()  # root=0.6，arrival.grad=1，weight.grad=-0.25
+
+:class:`spikingjelly.timing_based.neuron.CubicSRM` 是第三个具体模型：
+
+.. math::
+
+   h(u)=\begin{cases}\frac{27}{4}z(1-z)^2,&0<z=u/L<1,\\0,&\text{otherwise},\end{cases}
+   \qquad V_j(t)=\sum_e w_{j,i_e}h(t-t_e).
+
+每输出至多发一次，时刻为最早上穿阈值的时刻，没有输出历史核或 reset。
+支持重复输入及负权重。在输入到达与支撑终点划分的区间内，总响应是三次
+多项式；解析求一阶导数（二次多项式）的全部实根，得到完整单调分段，包括移位
+输入造成的多个峰。局部电压/导数前缀推进避免全局事件时刻幂；聚合同刻
+更新时仍保留各原事件的时刻梯度。共享求解器负责数值根及隐式梯度。
+这是参考实现，没有专用 CUDA 核或均匀时间网格。Tempotron 保留双指数求解、
+shunting 与峰值输出；ramp SRM 保留解析多水平扫描与阶跃复位。通用求解器
+不替换这两条已优化路径。
+
+.. code-block:: bash
+
+   uv run python -m spikingjelly.timing_based.examples.cubic_srm_mnist \
+       --device cuda:0 --dataset-dir ./data --output-dir ./cubic-srm-mnist \
+       --hidden-features 64 --batch-size 128 --epochs 10 --seed 0
+
+示例为 784→hidden→10 两层 CubicSRM，像素时刻 ``1-pixel``、窗口 4、支撑 2、
+阈值 1。可微的 ``2*softmax(weight)`` 行约束属于示例。类别越早发放得分
+越高：logits 为 ``10*(4-time)``，沉默得分零。使用交叉熵与 Adam，复用
+ramp SRM 示例的验证选 checkpoint/早停流程，记录完整 55000/5000/10000
+划分与源码哈希。默认隐藏宽度 128、batch 32，上述命令使用宽度 64、batch 128。
+驻点超阈幅度小于求解器文档所述 FP64 舍入界时无法与相切区分。极端支撑
+比例仍受浮点分辨率限制。没有替代梯度或沉默恢复。

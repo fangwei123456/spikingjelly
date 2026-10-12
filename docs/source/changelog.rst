@@ -78,8 +78,17 @@ Modules: ```spikingjelly.activation_based.neuron```,
 Continuous Timing-Based Neurons
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Modules: ``spikingjelly.timing_based.functional``,
+Modules: ``spikingjelly.timing_based.solver``, ``spikingjelly.timing_based.functional``,
 ``spikingjelly.timing_based.neuron``, and ``spikingjelly.timing_based.encoding``.
+
+- Added an experimental ```first_spike_time``` solver for caller-certified complete
+  monotone partitions of continuous total threshold residuals. FP64 bracketed
+  roots use first-order implicit gradients, including explicit output-history
+  parameters. Arbitrary black-box kernels without complete partitions are not supported.
+- Added an experimental single-spike ```CubicSRM``` with finite-support, unit-peak
+  cubic PSPs, complete weighted-response stationary partitions and compact CSR
+  outputs, plus a two-layer MNIST example classified by spike times. Existing
+  Tempotron and ramp-SRM fast paths retain their dynamics and implementations.
 
 - Added an experimental fixed-kernel ```SRM``` with linear-ramp input responses,
   step reset responses, multiple input/output spikes and composable compact event

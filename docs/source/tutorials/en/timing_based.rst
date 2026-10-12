@@ -232,3 +232,80 @@ evaluation on all 10000 test examples. Save configuration, source fingerprints,
 epoch metrics, ``best.pt`` and ``result.json`` with test correct counts. Use
 ``--device cpu`` for CPU. CUDA runs the same PyTorch mathematics without dedicated
 SRM kernels; no general speed advantage is claimed.
+
+Complete partitions and a third PSP model
+-----------------------------------------
+
+:func:`spikingjelly.timing_based.solver.first_spike_time` solves the earliest
+upward zero crossing of a continuous total threshold residual. Its small
+interface accepts a callable, complete monotone boundaries and explicit tensor
+parameters. The callable receives FP64 query times and original piece indices,
+and returns ``(F, partial_F/partial_t)``. Each leading index is an independent
+time axis; the last dimension contains either all interval queries or one
+selected query. Left/right stationary flags are separate for every interval,
+so a knot can have different one-sided derivatives.
+
+A value/derivative callable alone cannot prove that no hidden peak crosses the
+threshold. The caller must supply all stationary points of the weighted total
+response, not just the union of individual PSP extrema. The solver trusts this
+mathematical contract; format checks cannot certify a black-box partition.
+It chooses the earliest valid interval, runs FP64 bisection, checks convergence
+and residuals, and returns inf for silence. Grazing is excluded and an endpoint
+upcrossing counts. Its first-order backward recomputes
+``dt/dp=-F_p/F_t``; bisection is not differentiated. Differentiable previous output
+times must be explicit parameters, so their chain rule is preserved. The solver
+owns neither neuron history nor reset/shunting or event capacity. Higher-order
+backward is unsupported; singular requested derivatives raise, without clipping.
+Partitions select branches and receive no derivative.
+
+.. code-block:: python
+
+   import torch
+   from spikingjelly.timing_based.solver import first_spike_time
+
+   def response(time, piece, arrival, weight):
+       return weight * (time - arrival) - 1, weight.expand_as(time)
+
+   arrival = torch.tensor([[0.1]], dtype=torch.float64, requires_grad=True)
+   weight = torch.tensor([[2.0]], dtype=torch.float64, requires_grad=True)
+   # The residual is linear on this entire interval: the partition is complete.
+   root = first_spike_time(response, torch.tensor([[0., 2.]], dtype=torch.float64),
+                           (arrival, weight))
+   root.sum().backward()  # root=0.6, arrival.grad=1, weight.grad=-0.25
+
+:class:`spikingjelly.timing_based.neuron.CubicSRM` provides a third concrete model:
+
+.. math::
+
+   h(u)=\begin{cases}\frac{27}{4}z(1-z)^2,&0<z=u/L<1,\\0,&\text{otherwise},\end{cases}
+   \qquad V_j(t)=\sum_e w_{j,i_e}h(t-t_e).
+
+Each output emits at most once, at its earliest upcrossing of the threshold.
+There is no output-history kernel or reset. Repeated inputs and signed weights
+are supported. On intervals delimited by input arrivals and support endpoints,
+the total response is cubic. Analytic quadratic derivative roots yield the
+complete monotone partition, including multiple peaks caused by shifted inputs.
+Local voltage/derivative prefix transitions avoid global powers of event times;
+simultaneous updates are grouped while preserving individual time gradients.
+The shared solver supplies numerical roots and implicit gradients. This is a
+reference implementation, with no dedicated CUDA kernel or uniform time grid.
+Tempotron retains its double-exponential solver, shunting and peak outputs;
+ramp SRM retains its analytic multi-level scan and step reset. The general solver
+does not replace these optimized paths.
+
+.. code-block:: bash
+
+   uv run python -m spikingjelly.timing_based.examples.cubic_srm_mnist \
+       --device cuda:0 --dataset-dir ./data --output-dir ./cubic-srm-mnist \
+       --hidden-features 64 --batch-size 128 --epochs 10 --seed 0
+
+The example uses 784→hidden→10 CubicSRM layers, pixel times ``1-pixel``, window 4,
+support 2 and threshold 1. Differentiable ``2*softmax(weight)`` row constraints
+belong to the example. Earlier class spikes score higher: logits are
+``10*(4-time)``; silence scores zero. Train with cross-entropy and Adam, using the
+same validation-only checkpoint/early-stopping workflow as the ramp SRM example.
+The complete 55000/5000/10000 split and source hashes are recorded. Default hidden
+width is 128 and batch size 32; the command above uses width 64 and batch 128.
+Stationary overshoots smaller than the solver's documented FP64 roundoff bound
+are indistinguishable from grazing. Extreme support ratios remain limited by
+floating-point resolution. No surrogate or silent-neuron recovery is built in.
