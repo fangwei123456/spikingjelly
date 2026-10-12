@@ -40,8 +40,8 @@ class _FirstSpike(torch.autograd.Function):
         state = tuple(p.double() if p.is_floating_point() else p for p in parameters)
         lower, upper = knots[..., :-1], knots[..., 1:]
         pieces = torch.arange(lower.shape[-1], device=knots.device).expand_as(lower)
-        left, left_slope = _evaluate(response, lower, pieces, state)
-        right, right_slope = _evaluate(response, upper, pieces, state)
+        left, _ = _evaluate(response, lower, pieces, state)
+        right, _ = _evaluate(response, upper, pieces, state)
         eps = torch.finfo(torch.float64).eps
         roundoff = 64 * eps * (1 + left.abs() + right.abs())
         reaches = torch.where(extrema[..., 1], right > roundoff, right >= 0)
