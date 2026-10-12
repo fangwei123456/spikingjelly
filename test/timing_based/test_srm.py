@@ -237,3 +237,27 @@ def test_finite_spike_with_overflowing_weight_gradient_raises(device):
     assert torch.isfinite(times).all()
     with pytest.raises(RuntimeError, match="gradients overflow"):
         times.sum().backward()
+
+
+@pytest.mark.parametrize(
+    "capacity,error",
+    [
+        (1.5, TypeError),
+        (None, TypeError),
+        (False, TypeError),
+        (0, ValueError),
+        (-1, ValueError),
+    ],
+)
+def test_invalid_output_capacity_exception_contract(capacity, error):
+    with pytest.raises(error):
+        neuron.SRM(1, 1, 2, max_spikes=capacity)
+    with pytest.raises(error):
+        functional.srm(
+            torch.tensor([0.0]),
+            torch.tensor([0]),
+            torch.tensor([0, 1]),
+            torch.ones(1, 1),
+            2,
+            max_spikes=capacity,
+        )

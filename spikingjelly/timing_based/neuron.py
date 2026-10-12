@@ -209,7 +209,7 @@ class SRM(nn.Module):
         :type v_threshold: float
         :param max_spikes: 每样本每输出事件容量，正整数，默认 64；超出报错。
         :type max_spikes: int
-        :raises TypeError: 时间窗或阈值类型不受支持。
+        :raises TypeError: 时间窗、阈值或事件容量类型不受支持。
         :raises ValueError: 参数非法或事件容量无法表示。
 
         ----
@@ -236,7 +236,7 @@ class SRM(nn.Module):
         :param max_spikes: Positive per-trial, per-output capacity, default 64;
             overflow raises.
         :type max_spikes: int
-        :raises TypeError: For unsupported window or threshold types.
+        :raises TypeError: For unsupported window, threshold or event-capacity types.
         :raises ValueError: For invalid parameters or unrepresentable capacity.
         """
         super().__init__()

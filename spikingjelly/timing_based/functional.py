@@ -816,11 +816,9 @@ def _srm_parameters(duration, threshold, max_spikes):
         raise TypeError("duration and v_threshold must be fixed real scalars.")
     if not all(math.isfinite(value) and value > 0 for value in (duration, threshold)):
         raise ValueError("duration and v_threshold must be finite and positive.")
-    if (
-        not isinstance(max_spikes, int)
-        or isinstance(max_spikes, bool)
-        or max_spikes < 1
-    ):
+    if not isinstance(max_spikes, int) or isinstance(max_spikes, bool):
+        raise TypeError("max_spikes must be a positive integer.")
+    if max_spikes < 1:
         raise ValueError("max_spikes must be a positive integer.")
     if not math.isfinite(threshold * max_spikes):
         raise ValueError("The output capacity is not representable in FP64.")
