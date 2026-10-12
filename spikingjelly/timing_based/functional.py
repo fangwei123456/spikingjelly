@@ -830,6 +830,9 @@ class _SRMInputs(torch.autograd.Function):
     @staticmethod
     def forward(ctx, times, weight):
         ctx.set_materialize_grads(False)
+        constants = tuple(value for value in (times, weight) if not value.requires_grad)
+        if constants:
+            ctx.mark_non_differentiable(*constants)
         return times, weight
 
     @staticmethod
