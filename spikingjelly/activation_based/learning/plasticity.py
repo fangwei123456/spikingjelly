@@ -9,12 +9,6 @@ from ..functional import learning as functional_learning
 
 
 __all__ = [
-    "stdp_linear_single_step",
-    "mstdp_linear_single_step",
-    "mstdpet_linear_single_step",
-    "stdp_conv2d_single_step",
-    "stdp_conv1d_single_step",
-    "stdp_multi_step",
     "STDPLearner",
     "MSTDPLearner",
     "MSTDPETLearner",
@@ -44,27 +38,28 @@ def _check_records(learner) -> None:
                 )
             if pre.shape[0] != post.shape[0]:
                 raise ValueError("Input and output time lengths differ.")
-            if not pre.shape[0]:
-                continue
-            pre, post = pre[0], post[0]
-        if pre.ndim != ndim or post.ndim != ndim:
-            raise ValueError("Spike dimensions do not match the synapse.")
+            pre_shape, post_shape = pre.shape[1:], post.shape[1:]
+        else:
+            if pre.ndim != ndim or post.ndim != ndim:
+                raise ValueError("Spike dimensions do not match the synapse.")
+            pre_shape, post_shape = pre.shape, post.shape
         channel = 0 if ndim == 1 else 1
         if (
-            pre.shape[channel] != synapse.weight.shape[1]
-            or post.shape[channel] != synapse.weight.shape[0]
-            or (ndim > 1 and pre.shape[0] != post.shape[0])
+            pre_shape[channel] != synapse.weight.shape[1]
+            or post_shape[channel] != synapse.weight.shape[0]
+            or (ndim > 1 and pre_shape[0] != post_shape[0])
         ):
             raise ValueError("Spike shapes do not match weight or batch dimensions.")
-        pre_shape = pre.shape
+        if learner.step_mode == "m" and not pre.shape[0]:
+            continue
         if isinstance(synapse, (nn.Conv1d, nn.Conv2d)):
             pre_shape = (
-                *pre.shape[:2],
+                *pre_shape[:2],
                 *(
                     size
                     + sum(synapse._reversed_padding_repeated_twice[index : index + 2])
                     for size, index in zip(
-                        pre.shape[2:],
+                        pre_shape[2:],
                         range(
                             len(synapse._reversed_padding_repeated_twice) - 2, -1, -2
                         ),
@@ -77,17 +72,17 @@ def _check_records(learner) -> None:
                     pre_shape[2:], synapse.kernel_size, synapse.stride
                 )
             )
-            if post.shape[2:] != expected:
+            if post_shape[2:] != expected:
                 raise ValueError("Output spatial shape does not match the synapse.")
         for expected, shape in (
             (expected_pre, pre_shape),
-            (expected_post, post.shape),
+            (expected_post, post_shape),
         ):
             if expected is not None and expected != shape:
                 raise ValueError(
                     "Trace shape differs; reset before changing batch size."
                 )
-        expected_pre, expected_post = pre_shape, post.shape
+        expected_pre, expected_post = pre_shape, post_shape
         if pre.device != synapse.weight.device or post.device != synapse.weight.device:
             raise ValueError("Spikes and weight must be on the same device.")
 
@@ -111,680 +106,6 @@ def _accumulate_weight_gradient(synapse, delta_w):
         synapse.weight.grad = -delta_w
     else:
         synapse.weight.grad = synapse.weight.grad - delta_w
-
-
-def stdp_linear_single_step(
-    fc: nn.Linear,
-    in_spike: torch.Tensor,
-    out_spike: torch.Tensor,
-    trace_pre: Union[float, torch.Tensor, None],
-    trace_post: Union[float, torch.Tensor, None],
-    tau_pre: float,
-    tau_post: float,
-    f_pre: Callable = lambda x: x,
-    f_post: Callable = lambda x: x,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    r"""
-    **API Language** - :ref:`中文 <stdp_linear_single_step-cn>` | :ref:`English <stdp_linear_single_step-en>`
-
-    ----
-
-    .. _stdp_linear_single_step-cn:
-
-    * **中文**
-
-    活动张量须使用与权重相同的浮点 dtype 和 device；输出 dtype/device
-    与权重一致。先加入当前脉冲再计算更新，同一步脉冲是否抵消取决于调制函数。输入张量状态不被原地修改。
-
-    对单步脉冲输入执行全连接层的 STDP 更新，返回更新后的 pre/post trace 与权重增量。
-
-    :param fc: 需要执行 STDP 的全连接层
-    :type fc: torch.nn.Linear
-    :param in_spike: 输入脉冲，``shape = [batch_size, in_features]``
-    :type in_spike: torch.Tensor
-    :param out_spike: 输出脉冲，``shape = [batch_size, out_features]``
-    :type out_spike: torch.Tensor
-    :param trace_pre: pre-synaptic trace。若为 ``None``，则使用标量 ``0.0`` 初始化
-    :type trace_pre: Union[float, torch.Tensor, None]
-    :param trace_post: post-synaptic trace。若为 ``None``，则使用标量 ``0.0`` 初始化
-    :type trace_post: Union[float, torch.Tensor, None]
-    :param tau_pre: 单位为时间步，有限且 >= 1； pre trace 的时间常数，要求为正数
-    :type tau_pre: float
-    :param tau_post: 单位为时间步，有限且 >= 1； post trace 的时间常数，要求为正数
-    :type tau_post: float
-    :param f_pre: 作用在当前权重上的 pre-update 调制函数
-    :type f_pre: Callable
-    :param f_post: 作用在当前权重上的 post-update 调制函数
-    :type f_post: Callable
-    :return: ``(trace_pre, trace_post, delta_w)``，其中 ``delta_w`` 的形状与 ``fc.weight`` 相同
-    :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
-
-    :raises ValueError: 参数、活动或状态形状违反支持范围。
-
-    ----
-
-    .. _stdp_linear_single_step-en:
-
-    * **English**
-
-    Activity must use the weight's floating dtype and device; outputs match them.
-    Current spikes enter traces before the update, so simultaneous-spike cancellation
-    depends on modulation functions. Tensor input states are not mutated in place.
-
-    Apply one STDP update step to a linear layer driven by single-step spike
-    inputs, and return the updated pre/post traces together with the weight
-    increment.
-
-    :param fc: Linear layer updated by STDP
-    :type fc: torch.nn.Linear
-    :param in_spike: Input spikes with ``shape = [batch_size, in_features]``
-    :type in_spike: torch.Tensor
-    :param out_spike: Output spikes with ``shape = [batch_size, out_features]``
-    :type out_spike: torch.Tensor
-    :param trace_pre: Pre-synaptic trace. If ``None``, it is initialized as scalar ``0.0``
-    :type trace_pre: Union[float, torch.Tensor, None]
-    :param trace_post: Post-synaptic trace. If ``None``, it is initialized as scalar ``0.0``
-    :type trace_post: Union[float, torch.Tensor, None]
-    :param tau_pre: In time steps, finite and >= 1;  Time constant of the pre trace. Expected to be positive
-    :type tau_pre: float
-    :param tau_post: In time steps, finite and >= 1;  Time constant of the post trace. Expected to be positive
-    :type tau_post: float
-    :param f_pre: Pre-update modulation function applied to the current weight
-    :type f_pre: Callable
-    :param f_post: Post-update modulation function applied to the current weight
-    :type f_post: Callable
-    :return: ``(trace_pre, trace_post, delta_w)``, where ``delta_w`` has the same shape as ``fc.weight``
-    :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
-    :raises ValueError: Parameters or activity/state shapes violate the supported range.
-    """
-    delta_w, (trace_pre, trace_post) = functional_learning.stdp_linear_step(
-        in_spike,
-        out_spike,
-        (
-            _materialize_trace(trace_pre, in_spike),
-            _materialize_trace(trace_post, out_spike),
-        ),
-        fc.weight.data,
-        tau_pre=tau_pre,
-        tau_post=tau_post,
-        f_pre=f_pre,
-        f_post=f_post,
-    )
-    return trace_pre, trace_post, delta_w
-
-
-def mstdp_linear_single_step(
-    fc: nn.Linear,
-    in_spike: torch.Tensor,
-    out_spike: torch.Tensor,
-    trace_pre: Union[float, torch.Tensor, None],
-    trace_post: Union[float, torch.Tensor, None],
-    tau_pre: float,
-    tau_post: float,
-    f_pre: Callable = lambda x: x,
-    f_post: Callable = lambda x: x,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    r"""
-    **API Language** - :ref:`中文 <mstdp_linear_single_step-cn>` | :ref:`English <mstdp_linear_single_step-en>`
-
-    ----
-
-    .. _mstdp_linear_single_step-cn:
-
-    * **中文**
-
-    活动张量须使用与权重相同的浮点 dtype 和 device；输出 dtype/device
-    与权重一致。先加入当前脉冲再计算更新，同一步脉冲是否抵消取决于调制函数。输入张量状态不被原地修改。
-
-    对单步脉冲输入执行全连接层的 reward-modulated STDP eligibility 计算。
-
-    :param fc: 需要执行 mSTDP 的全连接层
-    :type fc: torch.nn.Linear
-    :param in_spike: 输入脉冲，``shape = [batch_size, in_features]``
-    :type in_spike: torch.Tensor
-    :param out_spike: 输出脉冲，``shape = [batch_size, out_features]``
-    :type out_spike: torch.Tensor
-    :param trace_pre: pre-synaptic trace。若为 ``None``，则使用标量 ``0.0`` 初始化
-    :type trace_pre: Union[float, torch.Tensor, None]
-    :param trace_post: post-synaptic trace。若为 ``None``，则使用标量 ``0.0`` 初始化
-    :type trace_post: Union[float, torch.Tensor, None]
-    :param tau_pre: 单位为时间步，有限且 > 0； pre trace 的时间常数
-    :type tau_pre: float
-    :param tau_post: 单位为时间步，有限且 > 0； post trace 的时间常数
-    :type tau_post: float
-    :param f_pre: pre 分支的权重调制函数
-    :type f_pre: Callable
-    :param f_post: post 分支的权重调制函数
-    :type f_post: Callable
-    :return: ``(trace_pre, trace_post, eligibility)``，其中 ``eligibility`` 的形状为
-        ``[batch_size, out_features, in_features]``
-    :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
-
-    :raises ValueError: 参数、活动或状态形状违反支持范围。
-
-    ----
-
-    .. _mstdp_linear_single_step-en:
-
-    * **English**
-
-    Activity must use the weight's floating dtype and device; outputs match them.
-    Current spikes enter traces before the update, so simultaneous-spike cancellation
-    depends on modulation functions. Tensor input states are not mutated in place.
-
-    Compute the reward-modulated STDP eligibility tensor for a linear layer
-    under single-step spike inputs.
-
-    :param fc: Linear layer updated by mSTDP
-    :type fc: torch.nn.Linear
-    :param in_spike: Input spikes with ``shape = [batch_size, in_features]``
-    :type in_spike: torch.Tensor
-    :param out_spike: Output spikes with ``shape = [batch_size, out_features]``
-    :type out_spike: torch.Tensor
-    :param trace_pre: Pre-synaptic trace. If ``None``, it is initialized as scalar ``0.0``
-    :type trace_pre: Union[float, torch.Tensor, None]
-    :param trace_post: Post-synaptic trace. If ``None``, it is initialized as scalar ``0.0``
-    :type trace_post: Union[float, torch.Tensor, None]
-    :param tau_pre: In time steps, finite and > 0;  Time constant of the pre trace
-    :type tau_pre: float
-    :param tau_post: In time steps, finite and > 0;  Time constant of the post trace
-    :type tau_post: float
-    :param f_pre: Weight modulation function for the pre branch
-    :type f_pre: Callable
-    :param f_post: Weight modulation function for the post branch
-    :type f_post: Callable
-    :return: ``(trace_pre, trace_post, eligibility)``, where ``eligibility`` has
-        shape ``[batch_size, out_features, in_features]``
-    :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
-    :raises ValueError: Parameters or activity/state shapes violate the supported range.
-    """
-    eligibility, (trace_pre, trace_post) = functional_learning.mstdp_linear_step(
-        in_spike,
-        out_spike,
-        (
-            _materialize_trace(trace_pre, in_spike),
-            _materialize_trace(trace_post, out_spike),
-        ),
-        fc.weight.data,
-        tau_pre=tau_pre,
-        tau_post=tau_post,
-        f_pre=f_pre,
-        f_post=f_post,
-    )
-    return trace_pre, trace_post, eligibility
-
-
-def mstdpet_linear_single_step(
-    fc: nn.Linear,
-    in_spike: torch.Tensor,
-    out_spike: torch.Tensor,
-    trace_pre: Union[float, torch.Tensor, None],
-    trace_post: Union[float, torch.Tensor, None],
-    tau_pre: float,
-    tau_post: float,
-    f_pre: Callable = lambda x: x,
-    f_post: Callable = lambda x: x,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    r"""
-    **API Language** - :ref:`中文 <mstdpet_linear_single_step-cn>` | :ref:`English <mstdpet_linear_single_step-en>`
-
-    ----
-
-    .. _mstdpet_linear_single_step-cn:
-
-    * **中文**
-
-    活动张量须使用与权重相同的浮点 dtype 和 device；输出 dtype/device
-    与权重一致。先加入当前脉冲再计算更新，同一步脉冲是否抵消取决于调制函数。输入张量状态不被原地修改。
-
-    对单步脉冲输入执行全连接层的 mSTDP-ET eligibility 计算。
-
-    :param fc: 需要执行 mSTDP-ET 的全连接层
-    :type fc: torch.nn.Linear
-    :param in_spike: 输入脉冲，``shape = [in_features]``
-    :type in_spike: torch.Tensor
-    :param out_spike: 输出脉冲，``shape = [out_features]``
-    :type out_spike: torch.Tensor
-    :param trace_pre: pre-synaptic trace。若为 ``None``，则使用标量 ``0.0`` 初始化
-    :type trace_pre: Union[float, torch.Tensor, None]
-    :param trace_post: post-synaptic trace。若为 ``None``，则使用标量 ``0.0`` 初始化
-    :type trace_post: Union[float, torch.Tensor, None]
-    :param tau_pre: 单位为时间步，有限且 > 0； pre trace 的时间常数
-    :type tau_pre: float
-    :param tau_post: 单位为时间步，有限且 > 0； post trace 的时间常数
-    :type tau_post: float
-    :param f_pre: pre 分支的权重调制函数
-    :type f_pre: Callable
-    :param f_post: post 分支的权重调制函数
-    :type f_post: Callable
-    :return: ``(trace_pre, trace_post, eligibility)``，其中 ``eligibility`` 的形状与 ``fc.weight`` 相同
-    :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
-
-    :raises ValueError: 参数、活动或状态形状违反支持范围。
-
-    ----
-
-    .. _mstdpet_linear_single_step-en:
-
-    * **English**
-
-    Activity must use the weight's floating dtype and device; outputs match them.
-    Current spikes enter traces before the update, so simultaneous-spike cancellation
-    depends on modulation functions. Tensor input states are not mutated in place.
-
-    Compute the mSTDP-ET eligibility update for a linear layer under single-step
-    spike inputs.
-
-    :param fc: Linear layer updated by mSTDP-ET
-    :type fc: torch.nn.Linear
-    :param in_spike: Input spikes with ``shape = [in_features]``
-    :type in_spike: torch.Tensor
-    :param out_spike: Output spikes with ``shape = [out_features]``
-    :type out_spike: torch.Tensor
-    :param trace_pre: Pre-synaptic trace. If ``None``, it is initialized as scalar ``0.0``
-    :type trace_pre: Union[float, torch.Tensor, None]
-    :param trace_post: Post-synaptic trace. If ``None``, it is initialized as scalar ``0.0``
-    :type trace_post: Union[float, torch.Tensor, None]
-    :param tau_pre: In time steps, finite and > 0;  Time constant of the pre trace
-    :type tau_pre: float
-    :param tau_post: In time steps, finite and > 0;  Time constant of the post trace
-    :type tau_post: float
-    :param f_pre: Weight modulation function for the pre branch
-    :type f_pre: Callable
-    :param f_post: Weight modulation function for the post branch
-    :type f_post: Callable
-    :return: ``(trace_pre, trace_post, eligibility)``, where ``eligibility`` has
-        the same shape as ``fc.weight``
-    :rtype: tuple[Union[float, torch.Tensor], Union[float, torch.Tensor], torch.Tensor]
-    :raises ValueError: Parameters or activity/state shapes violate the supported range.
-    """
-    eligibility, (trace_pre, trace_post) = functional_learning.mstdpet_linear_step(
-        in_spike,
-        out_spike,
-        (
-            _materialize_trace(trace_pre, in_spike),
-            _materialize_trace(trace_post, out_spike),
-        ),
-        fc.weight.data,
-        tau_pre=tau_pre,
-        tau_post=tau_post,
-        f_pre=f_pre,
-        f_post=f_post,
-    )
-    return trace_pre, trace_post, eligibility
-
-
-def stdp_conv2d_single_step(
-    conv: nn.Conv2d,
-    in_spike: torch.Tensor,
-    out_spike: torch.Tensor,
-    trace_pre: Union[float, torch.Tensor, None],
-    trace_post: Union[float, torch.Tensor, None],
-    tau_pre: float,
-    tau_post: float,
-    f_pre: Callable = lambda x: x,
-    f_post: Callable = lambda x: x,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    r"""
-    **API Language** - :ref:`中文 <stdp_conv2d_single_step-cn>` | :ref:`English <stdp_conv2d_single_step-en>`
-
-    ----
-
-    .. _stdp_conv2d_single_step-cn:
-
-    * **中文**
-
-    活动张量须使用与权重相同的浮点 dtype 和 device；输出 dtype/device
-    与权重一致。先加入当前脉冲再计算更新，同一步脉冲是否抵消取决于调制函数。输入张量状态不被原地修改。
-
-    对单步脉冲输入执行二维卷积层的 STDP 更新。
-
-    当前仅支持 ``dilation == (1, 1)`` 且 ``groups == 1`` 的卷积。
-
-    :param conv: 需要执行 STDP 的二维卷积层
-    :type conv: torch.nn.Conv2d
-    :param in_spike: 输入脉冲，``shape = [batch_size, C_in, H_in, W_in]``
-    :type in_spike: torch.Tensor
-    :param out_spike: 输出脉冲，``shape = [batch_size, C_out, H_out, W_out]``
-    :type out_spike: torch.Tensor
-    :param trace_pre: pre-synaptic trace；float 填充 padding 后输入形状，
-        ``None`` 使用零；Tensor 须同形状
-    :type trace_pre: Union[float, torch.Tensor, None]
-    :param trace_post: post-synaptic trace；float 填充 ``out_spike`` 形状，
-        ``None`` 使用零；Tensor 须同形状
-    :type trace_post: Union[float, torch.Tensor, None]
-    :param tau_pre: 单位为时间步，有限且 >= 1； pre trace 的时间常数
-    :type tau_pre: float
-    :param tau_post: 单位为时间步，有限且 >= 1； post trace 的时间常数
-    :type tau_post: float
-    :param f_pre: pre 分支的权重调制函数
-    :type f_pre: Callable
-    :param f_post: post 分支的权重调制函数
-    :type f_post: Callable
-    :return: ``(trace_pre, trace_post, delta_w)``，其中 ``delta_w`` 的形状与 ``conv.weight`` 相同
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises NotImplementedError: 当 ``conv.dilation != (1, 1)`` 或 ``conv.groups != 1`` 时抛出
-
-    :raises ValueError: 参数、活动或状态形状违反支持范围。
-
-    ----
-
-    .. _stdp_conv2d_single_step-en:
-
-    * **English**
-
-    Activity must use the weight's floating dtype and device; outputs match them.
-    Current spikes enter traces before the update, so simultaneous-spike cancellation
-    depends on modulation functions. Tensor input states are not mutated in place.
-
-    Apply one STDP update step to a 2D convolution layer driven by single-step
-    spike inputs.
-
-    Only convolutions with ``dilation == (1, 1)`` and ``groups == 1`` are
-    currently supported.
-
-    :param conv: 2D convolution layer updated by STDP
-    :type conv: torch.nn.Conv2d
-    :param in_spike: Input spikes with ``shape = [batch_size, C_in, H_in, W_in]``
-    :type in_spike: torch.Tensor
-    :param out_spike: Output spikes with ``shape = [batch_size, C_out, H_out, W_out]``
-    :type out_spike: torch.Tensor
-    :param trace_pre: Pre-synaptic trace; float fills the padded input shape,
-        ``None`` uses zeros; tensors must match that shape
-    :type trace_pre: Union[float, torch.Tensor, None]
-    :param trace_post: Post-synaptic trace; float fills the ``out_spike`` shape,
-        ``None`` uses zeros; tensors must match that shape
-    :type trace_post: Union[float, torch.Tensor, None]
-    :param tau_pre: In time steps, finite and >= 1;  Time constant of the pre trace
-    :type tau_pre: float
-    :param tau_post: In time steps, finite and >= 1;  Time constant of the post trace
-    :type tau_post: float
-    :param f_pre: Weight modulation function for the pre branch
-    :type f_pre: Callable
-    :param f_post: Weight modulation function for the post branch
-    :type f_post: Callable
-    :return: ``(trace_pre, trace_post, delta_w)``, where ``delta_w`` has the same shape as ``conv.weight``
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises NotImplementedError: Raised when ``conv.dilation != (1, 1)`` or ``conv.groups != 1``
-    :raises ValueError: Parameters or activity/state shapes violate the supported range.
-    """
-    if conv.dilation != (1, 1):
-        raise NotImplementedError(
-            "STDP with dilation != 1 for Conv2d has not been implemented!"
-        )
-    if conv.groups != 1:
-        raise NotImplementedError(
-            "STDP with groups != 1 for Conv2d has not been implemented!"
-        )
-    in_spike = _padded_conv_input(conv, in_spike)
-    delta_w, (trace_pre, trace_post) = functional_learning.stdp_conv2d_step(
-        in_spike,
-        out_spike,
-        (
-            _materialize_trace(trace_pre, in_spike),
-            _materialize_trace(trace_post, out_spike),
-        ),
-        conv.weight.data,
-        stride=conv.stride,
-        tau_pre=tau_pre,
-        tau_post=tau_post,
-        f_pre=f_pre,
-        f_post=f_post,
-    )
-    return trace_pre, trace_post, delta_w
-
-
-def stdp_conv1d_single_step(
-    conv: nn.Conv1d,
-    in_spike: torch.Tensor,
-    out_spike: torch.Tensor,
-    trace_pre: Union[float, torch.Tensor, None],
-    trace_post: Union[float, torch.Tensor, None],
-    tau_pre: float,
-    tau_post: float,
-    f_pre: Callable = lambda x: x,
-    f_post: Callable = lambda x: x,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    r"""
-    **API Language** - :ref:`中文 <stdp_conv1d_single_step-cn>` | :ref:`English <stdp_conv1d_single_step-en>`
-
-    ----
-
-    .. _stdp_conv1d_single_step-cn:
-
-    * **中文**
-
-    活动张量须使用与权重相同的浮点 dtype 和 device；输出 dtype/device
-    与权重一致。先加入当前脉冲再计算更新，同一步脉冲是否抵消取决于调制函数。输入张量状态不被原地修改。
-
-    对单步脉冲输入执行一维卷积层的 STDP 更新。
-
-    当前仅支持 ``dilation == (1,)`` 且 ``groups == 1`` 的卷积。
-
-    :param conv: 需要执行 STDP 的一维卷积层
-    :type conv: torch.nn.Conv1d
-    :param in_spike: 输入脉冲，``shape = [batch_size, C_in, L_in]``
-    :type in_spike: torch.Tensor
-    :param out_spike: 输出脉冲，``shape = [batch_size, C_out, L_out]``
-    :type out_spike: torch.Tensor
-    :param trace_pre: pre-synaptic trace；float 填充 padding 后输入形状，
-        ``None`` 使用零；Tensor 须同形状
-    :type trace_pre: Union[float, torch.Tensor, None]
-    :param trace_post: post-synaptic trace；float 填充 ``out_spike`` 形状，
-        ``None`` 使用零；Tensor 须同形状
-    :type trace_post: Union[float, torch.Tensor, None]
-    :param tau_pre: 单位为时间步，有限且 >= 1； pre trace 的时间常数
-    :type tau_pre: float
-    :param tau_post: 单位为时间步，有限且 >= 1； post trace 的时间常数
-    :type tau_post: float
-    :param f_pre: pre 分支的权重调制函数
-    :type f_pre: Callable
-    :param f_post: post 分支的权重调制函数
-    :type f_post: Callable
-    :return: ``(trace_pre, trace_post, delta_w)``，其中 ``delta_w`` 的形状与 ``conv.weight`` 相同
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises NotImplementedError: 当 ``conv.dilation != (1,)`` 或 ``conv.groups != 1`` 时抛出
-
-    :raises ValueError: 参数、活动或状态形状违反支持范围。
-
-    ----
-
-    .. _stdp_conv1d_single_step-en:
-
-    * **English**
-
-    Activity must use the weight's floating dtype and device; outputs match them.
-    Current spikes enter traces before the update, so simultaneous-spike cancellation
-    depends on modulation functions. Tensor input states are not mutated in place.
-
-    Apply one STDP update step to a 1D convolution layer driven by single-step
-    spike inputs.
-
-    Only convolutions with ``dilation == (1,)`` and ``groups == 1`` are
-    currently supported.
-
-    :param conv: 1D convolution layer updated by STDP
-    :type conv: torch.nn.Conv1d
-    :param in_spike: Input spikes with ``shape = [batch_size, C_in, L_in]``
-    :type in_spike: torch.Tensor
-    :param out_spike: Output spikes with ``shape = [batch_size, C_out, L_out]``
-    :type out_spike: torch.Tensor
-    :param trace_pre: Pre-synaptic trace; float fills the padded input shape,
-        ``None`` uses zeros; tensors must match that shape
-    :type trace_pre: Union[float, torch.Tensor, None]
-    :param trace_post: Post-synaptic trace; float fills the ``out_spike`` shape,
-        ``None`` uses zeros; tensors must match that shape
-    :type trace_post: Union[float, torch.Tensor, None]
-    :param tau_pre: In time steps, finite and >= 1;  Time constant of the pre trace
-    :type tau_pre: float
-    :param tau_post: In time steps, finite and >= 1;  Time constant of the post trace
-    :type tau_post: float
-    :param f_pre: Weight modulation function for the pre branch
-    :type f_pre: Callable
-    :param f_post: Weight modulation function for the post branch
-    :type f_post: Callable
-    :return: ``(trace_pre, trace_post, delta_w)``, where ``delta_w`` has the same shape as ``conv.weight``
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises NotImplementedError: Raised when ``conv.dilation != (1,)`` or ``conv.groups != 1``
-    :raises ValueError: Parameters or activity/state shapes violate the supported range.
-    """
-    if conv.dilation != (1,):
-        raise NotImplementedError(
-            "STDP with dilation != 1 for Conv1d has not been implemented!"
-        )
-    if conv.groups != 1:
-        raise NotImplementedError(
-            "STDP with groups != 1 for Conv1d has not been implemented!"
-        )
-    in_spike = _padded_conv_input(conv, in_spike)
-    delta_w, (trace_pre, trace_post) = functional_learning.stdp_conv1d_step(
-        in_spike,
-        out_spike,
-        (
-            _materialize_trace(trace_pre, in_spike),
-            _materialize_trace(trace_post, out_spike),
-        ),
-        conv.weight.data,
-        stride=conv.stride,
-        tau_pre=tau_pre,
-        tau_post=tau_post,
-        f_pre=f_pre,
-        f_post=f_post,
-    )
-    return trace_pre, trace_post, delta_w
-
-
-def stdp_multi_step(
-    layer: Union[nn.Linear, nn.Conv1d, nn.Conv2d],
-    in_spike: torch.Tensor,
-    out_spike: torch.Tensor,
-    trace_pre: Union[float, torch.Tensor, None],
-    trace_post: Union[float, torch.Tensor, None],
-    tau_pre: float,
-    tau_post: float,
-    f_pre: Callable = lambda x: x,
-    f_post: Callable = lambda x: x,
-) -> tuple[
-    Union[float, torch.Tensor, None], Union[float, torch.Tensor, None], torch.Tensor
-]:
-    r"""
-    **API Language** - :ref:`中文 <stdp_multi_step-cn>` | :ref:`English <stdp_multi_step-en>`
-
-    ----
-
-    .. _stdp_multi_step-cn:
-
-    * **中文**
-
-    活动张量须使用与权重相同的浮点 dtype 和 device；输出 dtype/device
-    与权重一致。先加入当前脉冲再计算更新，同一步脉冲是否抵消取决于调制函数。输入张量状态不被原地修改。
-
-    对线性层、一维卷积层或二维卷积层执行多步 STDP 更新。
-
-    该函数沿时间维遍历 ``in_spike`` 与 ``out_spike``，并在每个时间步调用对应的
-    单步 STDP 规则，最终累加得到整段序列的权重增量。
-
-    :param layer: 支持的突触层，目前为 ``nn.Linear``、``nn.Conv1d`` 或 ``nn.Conv2d``
-    :type layer: Union[torch.nn.Linear, torch.nn.Conv1d, torch.nn.Conv2d]
-    :param in_spike: 输入脉冲序列，时间维位于第 0 维
-    :type in_spike: torch.Tensor
-    :param out_spike: 输出脉冲序列，时间维位于第 0 维
-    :type out_spike: torch.Tensor
-    :param trace_pre: pre-synaptic trace 的初始值
-    :type trace_pre: Union[float, torch.Tensor, None]
-    :param trace_post: post-synaptic trace 的初始值
-    :type trace_post: Union[float, torch.Tensor, None]
-    :param tau_pre: 单位为时间步，有限且 >= 1； pre trace 的时间常数
-    :type tau_pre: float
-    :param tau_post: 单位为时间步，有限且 >= 1； post trace 的时间常数
-    :type tau_post: float
-    :param f_pre: pre 分支的权重调制函数
-    :type f_pre: Callable
-    :param f_post: post 分支的权重调制函数
-    :type f_post: Callable
-    :return: ``(trace_pre, trace_post, delta_w)``，其中 ``delta_w`` 的形状与 ``layer.weight`` 相同
-    :rtype: tuple[Union[float, torch.Tensor, None], Union[float, torch.Tensor, None], torch.Tensor]
-
-    :raises ValueError: 参数、活动或状态形状违反支持范围。
-
-    ----
-
-    .. _stdp_multi_step-en:
-
-    * **English**
-
-    Activity must use the weight's floating dtype and device; outputs match them.
-    Current spikes enter traces before the update, so simultaneous-spike cancellation
-    depends on modulation functions. Tensor input states are not mutated in place.
-
-    Apply multi-step STDP updates to a linear layer, a 1D convolution layer, or
-    a 2D convolution layer.
-
-    The function iterates over the time dimension of ``in_spike`` and
-    ``out_spike``, applies the matching single-step STDP rule at each time step,
-    and accumulates the weight increment over the whole sequence.
-
-    :param layer: Supported synaptic layer. Currently ``nn.Linear``, ``nn.Conv1d`` or ``nn.Conv2d``
-    :type layer: Union[torch.nn.Linear, torch.nn.Conv1d, torch.nn.Conv2d]
-    :param in_spike: Input spike sequence with the time axis at dimension 0
-    :type in_spike: torch.Tensor
-    :param out_spike: Output spike sequence with the time axis at dimension 0
-    :type out_spike: torch.Tensor
-    :param trace_pre: Initial value of the pre-synaptic trace
-    :type trace_pre: Union[float, torch.Tensor, None]
-    :param trace_post: Initial value of the post-synaptic trace
-    :type trace_post: Union[float, torch.Tensor, None]
-    :param tau_pre: In time steps, finite and >= 1;  Time constant of the pre trace
-    :type tau_pre: float
-    :param tau_post: In time steps, finite and >= 1;  Time constant of the post trace
-    :type tau_post: float
-    :param f_pre: Weight modulation function for the pre branch
-    :type f_pre: Callable
-    :param f_post: Weight modulation function for the post branch
-    :type f_post: Callable
-    :return: ``(trace_pre, trace_post, delta_w)``, where ``delta_w`` has the same shape as ``layer.weight``
-    :rtype: tuple[Union[float, torch.Tensor, None], Union[float, torch.Tensor, None], torch.Tensor]
-    :raises ValueError: Parameters or activity/state shapes violate the supported range.
-    """
-    functional_learning._check_time_constants(tau_pre=tau_pre, tau_post=tau_post)
-    if isinstance(layer, nn.Linear):
-        stdp_single_step = stdp_linear_single_step
-    elif isinstance(layer, nn.Conv1d):
-        stdp_single_step = stdp_conv1d_single_step
-    elif isinstance(layer, nn.Conv2d):
-        stdp_single_step = stdp_conv2d_single_step
-    else:
-        raise NotImplementedError(layer)
-
-    ndim = 3 if isinstance(layer, nn.Linear) else layer.weight.ndim + 1
-    if in_spike.ndim != ndim or out_spike.ndim != ndim:
-        raise ValueError("Multi-step spikes require a time dimension.")
-    if in_spike.shape[0] != out_spike.shape[0]:
-        raise ValueError("Input and output time lengths differ.")
-    if (
-        in_spike.shape[1] != out_spike.shape[1]
-        or in_spike.shape[2] != layer.weight.shape[1]
-        or out_spike.shape[2] != layer.weight.shape[0]
-    ):
-        raise ValueError("Sequence shapes do not match weight or batch dimensions.")
-    if in_spike.shape[0] == 0:
-        return trace_pre, trace_post, torch.zeros_like(layer.weight)
-
-    delta_w = torch.zeros_like(layer.weight)
-    for t in range(in_spike.shape[0]):
-        trace_pre, trace_post, dw = stdp_single_step(
-            layer,
-            in_spike[t],
-            out_spike[t],
-            trace_pre,
-            trace_post,
-            tau_pre,
-            tau_post,
-            f_pre,
-            f_post,
-        )
-        delta_w += dw
-    return trace_pre, trace_post, delta_w
 
 
 class STDPLearner(base.MemoryModule):
@@ -976,6 +297,38 @@ class STDPLearner(base.MemoryModule):
         self.in_spike_monitor.enable()
         self.out_spike_monitor.enable()
 
+    def _single_step(self, pre: torch.Tensor, post: torch.Tensor) -> torch.Tensor:
+        if isinstance(self.synapse, nn.Linear):
+            rule = functional_learning.stdp_linear_step
+            kwargs = {}
+        elif isinstance(self.synapse, (nn.Conv1d, nn.Conv2d)):
+            if self.synapse.groups != 1 or any(d != 1 for d in self.synapse.dilation):
+                raise NotImplementedError("STDP requires groups=1 and dilation=1.")
+            pre = _padded_conv_input(self.synapse, pre)
+            rule = (
+                functional_learning.stdp_conv1d_step
+                if isinstance(self.synapse, nn.Conv1d)
+                else functional_learning.stdp_conv2d_step
+            )
+            kwargs = {"stride": self.synapse.stride}
+        else:
+            raise NotImplementedError(self.synapse)
+        delta, (self.trace_pre, self.trace_post) = rule(
+            pre,
+            post,
+            (
+                _materialize_trace(self.trace_pre, pre),
+                _materialize_trace(self.trace_post, post),
+            ),
+            self.synapse.weight.detach(),
+            tau_pre=self.tau_pre,
+            tau_post=self.tau_post,
+            f_pre=self.f_pre,
+            f_post=self.f_post,
+            **kwargs,
+        )
+        return delta
+
     @torch.no_grad()
     def step(self, on_grad: bool = True, scale: float = 1.0) -> Optional[torch.Tensor]:
         r"""
@@ -1032,38 +385,20 @@ class STDPLearner(base.MemoryModule):
             raise RuntimeError("Input and output monitor record counts differ.")
         if length == 0:
             return None
-        if length > 1:
+        if self.step_mode not in ("s", "m"):
+            raise ValueError(self.step_mode)
+        if length > 1 or self.step_mode == "m":
             _check_records(self)
         delta_w = None
-
-        if self.step_mode == "m":
-            stdp_f = stdp_multi_step
-        elif self.step_mode != "s":
-            raise ValueError(self.step_mode)
-        elif isinstance(self.synapse, nn.Linear):
-            stdp_f = stdp_linear_single_step
-        elif isinstance(self.synapse, nn.Conv2d):
-            stdp_f = stdp_conv2d_single_step
-        elif isinstance(self.synapse, nn.Conv1d):
-            stdp_f = stdp_conv1d_single_step
-        else:
-            raise NotImplementedError(self.synapse)
-
-        for i in range(length):
-            in_spike = self.in_spike_monitor.records[i]
-            out_spike = self.out_spike_monitor.records[i]
-
-            self.trace_pre, self.trace_post, dw = stdp_f(
-                self.synapse,
-                in_spike,
-                out_spike,
-                self.trace_pre,
-                self.trace_post,
-                self.tau_pre,
-                self.tau_post,
-                self.f_pre,
-                self.f_post,
-            )
+        for pre, post in zip(
+            self.in_spike_monitor.records, self.out_spike_monitor.records
+        ):
+            if self.step_mode == "m":
+                dw = torch.zeros_like(self.synapse.weight)
+                for pre_t, post_t in zip(pre, post):
+                    dw += self._single_step(pre_t, post_t)
+            else:
+                dw = self._single_step(pre, post)
             if scale != 1.0:
                 dw *= scale
 
@@ -1358,16 +693,18 @@ class MSTDPLearner(base.MemoryModule):
             raise ValueError("Reward learners only support single-step mode.")
         pre = self.in_spike_monitor.records[0]
         post = self.out_spike_monitor.records[0]
-        trace_pre, trace_post, eligibility = mstdp_linear_single_step(
-            self.synapse,
+        eligibility, (trace_pre, trace_post) = functional_learning.mstdp_linear_step(
             pre,
             post,
-            self.trace_pre,
-            self.trace_post,
-            self.tau_pre,
-            self.tau_post,
-            self.f_pre,
-            self.f_post,
+            (
+                _materialize_trace(self.trace_pre, pre),
+                _materialize_trace(self.trace_post, post),
+            ),
+            self.synapse.weight.detach(),
+            tau_pre=self.tau_pre,
+            tau_post=self.tau_post,
+            f_pre=self.f_pre,
+            f_post=self.f_post,
         )
         reward = torch.as_tensor(
             reward, device=self.synapse.weight.device, dtype=self.synapse.weight.dtype
@@ -1691,16 +1028,18 @@ class MSTDPETLearner(base.MemoryModule):
             raise ValueError("Reward learners only support single-step mode.")
         pre = self.in_spike_monitor.records[0]
         post = self.out_spike_monitor.records[0]
-        trace_pre, trace_post, eligibility = mstdpet_linear_single_step(
-            self.synapse,
+        eligibility, (trace_pre, trace_post) = functional_learning.mstdpet_linear_step(
             pre,
             post,
-            self.trace_pre,
-            self.trace_post,
-            self.tau_pre,
-            self.tau_post,
-            self.f_pre,
-            self.f_post,
+            (
+                _materialize_trace(self.trace_pre, pre),
+                _materialize_trace(self.trace_post, post),
+            ),
+            self.synapse.weight.detach(),
+            tau_pre=self.tau_pre,
+            tau_post=self.tau_post,
+            f_pre=self.f_pre,
+            f_post=self.f_post,
         )
         reward = torch.as_tensor(
             reward, device=self.synapse.weight.device, dtype=self.synapse.weight.dtype

@@ -8,12 +8,6 @@ from .plasticity import (
     MSTDPETLearner,
     MSTDPLearner,
     STDPLearner,
-    mstdp_linear_single_step,
-    mstdpet_linear_single_step,
-    stdp_conv1d_single_step,
-    stdp_conv2d_single_step,
-    stdp_linear_single_step,
-    stdp_multi_step,
 )
 
 __all__ = [
@@ -22,10 +16,4 @@ __all__ = [
     "STDPLearner",
     "MSTDPLearner",
     "MSTDPETLearner",
-    "stdp_linear_single_step",
-    "mstdp_linear_single_step",
-    "mstdpet_linear_single_step",
-    "stdp_conv1d_single_step",
-    "stdp_conv2d_single_step",
-    "stdp_multi_step",
 ]

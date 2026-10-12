@@ -29,6 +29,16 @@ def test_learning_public_locations_preserve_plasticity_and_remove_old_training_p
 
     for name in learning.plasticity.__all__:
         assert getattr(learning, name) is getattr(learning.plasticity, name)
+    for name in (
+        "stdp_linear_single_step",
+        "mstdp_linear_single_step",
+        "mstdpet_linear_single_step",
+        "stdp_conv1d_single_step",
+        "stdp_conv2d_single_step",
+        "stdp_multi_step",
+    ):
+        assert not hasattr(learning, name)
+        assert not hasattr(learning.plasticity, name)
     for name in learning.online_learning.__all__:
         assert not hasattr(functional, name)
     assert (

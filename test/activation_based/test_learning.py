@@ -107,8 +107,15 @@ def test_stdp_learner_matches_functional_update():
 
     delta_w = learner.step(on_grad=False)
 
-    _trace_pre, _trace_post, expected = learning.stdp_linear_single_step(
-        fc, in_spike, out_spike.detach(), None, None, 2.0, 2.0, f_weight, f_weight
+    expected, _ = functional.stdp_linear_step(
+        in_spike,
+        out_spike.detach(),
+        (torch.zeros_like(in_spike), torch.zeros_like(out_spike)),
+        fc.weight.detach(),
+        tau_pre=2.0,
+        tau_post=2.0,
+        f_pre=f_weight,
+        f_post=f_weight,
     )
     assert torch.allclose(delta_w, expected)
     assert delta_w.grad_fn is None
@@ -315,135 +322,6 @@ def test_mstdp_learners_free_tensors_with_graph_connected_reward():
     assert _count_alive_tensors() <= baseline + 5
 
 
-def test_functional_learning_linear_helpers_match_legacy_helpers():
-    fc = layer.Linear(4, 3, bias=False)
-    in_spike = (torch.rand(2, 4) > 0.5).float()
-    out_spike = (torch.rand(2, 3) > 0.5).float()
-
-    expected = learning.stdp_linear_single_step(
-        fc, in_spike, out_spike, None, None, 2.0, 3.0, f_weight, f_weight
-    )
-    delta_w, (trace_pre, trace_post) = functional.stdp_linear_step(
-        in_spike,
-        out_spike,
-        (torch.zeros_like(in_spike), torch.zeros_like(out_spike)),
-        fc.weight.data,
-        tau_pre=2.0,
-        tau_post=3.0,
-        f_pre=f_weight,
-        f_post=f_weight,
-    )
-    actual = trace_pre, trace_post, delta_w
-    for a, b in zip(actual, expected, strict=True):
-        assert torch.allclose(a, b)
-
-    expected = learning.mstdp_linear_single_step(
-        fc, in_spike, out_spike, None, None, 2.0, 3.0, f_weight, f_weight
-    )
-    eligibility, (trace_pre, trace_post) = functional.mstdp_linear_step(
-        in_spike,
-        out_spike,
-        (torch.zeros_like(in_spike), torch.zeros_like(out_spike)),
-        fc.weight.data,
-        tau_pre=2.0,
-        tau_post=3.0,
-        f_pre=f_weight,
-        f_post=f_weight,
-    )
-    actual = trace_pre, trace_post, eligibility
-    for a, b in zip(actual, expected, strict=True):
-        assert torch.allclose(a, b)
-
-    expected = learning.mstdpet_linear_single_step(
-        fc, in_spike[0], out_spike[0], None, None, 2.0, 3.0, f_weight, f_weight
-    )
-    eligibility, (trace_pre, trace_post) = functional.mstdpet_linear_step(
-        in_spike[0],
-        out_spike[0],
-        (torch.zeros_like(in_spike[0]), torch.zeros_like(out_spike[0])),
-        fc.weight.data,
-        tau_pre=2.0,
-        tau_post=3.0,
-        f_pre=f_weight,
-        f_post=f_weight,
-    )
-    actual = trace_pre, trace_post, eligibility
-    for a, b in zip(actual, expected, strict=True):
-        assert torch.allclose(a, b)
-
-
-def test_functional_learning_conv_helpers_match_legacy_helpers():
-    conv1 = layer.Conv1d(2, 3, kernel_size=3, padding=1, bias=False)
-    in_spike1 = (torch.rand(2, 2, 5) > 0.5).float()
-    out_spike1 = (torch.rand(2, 3, 5) > 0.5).float()
-    expected1 = learning.stdp_conv1d_single_step(
-        conv1, in_spike1, out_spike1, None, None, 2.0, 3.0, f_weight, f_weight
-    )
-    padded_in_spike1 = nn.functional.pad(in_spike1, (1, 1))
-    delta_w1, (trace_pre1, trace_post1) = functional.stdp_conv1d_step(
-        padded_in_spike1,
-        out_spike1,
-        (torch.zeros_like(padded_in_spike1), torch.zeros_like(out_spike1)),
-        conv1.weight.data,
-        stride=conv1.stride,
-        tau_pre=2.0,
-        tau_post=3.0,
-        f_pre=f_weight,
-        f_post=f_weight,
-    )
-    actual1 = trace_pre1, trace_post1, delta_w1
-    for a, b in zip(actual1, expected1, strict=True):
-        assert torch.allclose(a, b)
-
-    conv2 = layer.Conv2d(2, 3, kernel_size=3, padding=1, bias=False)
-    in_spike2 = (torch.rand(2, 2, 5, 5) > 0.5).float()
-    out_spike2 = (torch.rand(2, 3, 5, 5) > 0.5).float()
-    expected2 = learning.stdp_conv2d_single_step(
-        conv2, in_spike2, out_spike2, None, None, 2.0, 3.0, f_weight, f_weight
-    )
-    padded_in_spike2 = nn.functional.pad(in_spike2, (1, 1, 1, 1))
-    delta_w2, (trace_pre2, trace_post2) = functional.stdp_conv2d_step(
-        padded_in_spike2,
-        out_spike2,
-        (torch.zeros_like(padded_in_spike2), torch.zeros_like(out_spike2)),
-        conv2.weight.data,
-        stride=conv2.stride,
-        tau_pre=2.0,
-        tau_post=3.0,
-        f_pre=f_weight,
-        f_post=f_weight,
-    )
-    actual2 = trace_pre2, trace_post2, delta_w2
-    for a, b in zip(actual2, expected2, strict=True):
-        assert torch.allclose(a, b)
-
-
-def test_stdp_conv_helpers_keep_supported_boundary():
-    conv1 = layer.Conv1d(2, 3, kernel_size=3, dilation=2, bias=False)
-    with pytest.raises(NotImplementedError, match="dilation"):
-        learning.stdp_conv1d_single_step(
-            conv1,
-            torch.zeros(1, 2, 5),
-            torch.zeros(1, 3, 1),
-            None,
-            None,
-            2.0,
-            3.0,
-        )
-
-    conv2 = layer.Conv2d(2, 4, kernel_size=3, groups=2, bias=False)
-    with pytest.raises(NotImplementedError, match="groups"):
-        learning.stdp_conv2d_single_step(
-            conv2,
-            torch.zeros(1, 2, 5, 5),
-            torch.zeros(1, 4, 3, 3),
-            None,
-            None,
-            2.0,
-            3.0,
-        )
-
-
 def test_mstdpet_reward_step_uses_explicit_tensor_state():
     eligibility = torch.arange(6, dtype=torch.float32).view(3, 2)
     trace_e = torch.ones(3, 2)
@@ -459,23 +337,21 @@ def test_mstdpet_reward_step_uses_explicit_tensor_state():
 
 
 def test_stdp_multi_step_preserves_empty_sequence_state():
-    synapse = layer.Linear(3, 4)
+    synapse, sn = layer.Linear(3, 4), nn.Identity()
+    learner = learning.STDPLearner("m", synapse, sn, 2.0, 3.0)
     trace_pre = torch.randn(2, 3)
     trace_post = torch.randn(2, 4)
-
-    trace_pre_next, trace_post_next, delta_w = learning.stdp_multi_step(
-        synapse,
-        torch.empty(0, 2, 3),
-        torch.empty(0, 2, 4),
-        trace_pre,
-        trace_post,
-        tau_pre=2.0,
-        tau_post=3.0,
-    )
-
-    assert trace_pre_next is trace_pre
-    assert trace_post_next is trace_post
-    assert torch.equal(delta_w, torch.zeros_like(synapse.weight))
+    learner.trace_pre, learner.trace_post = trace_pre, trace_post
+    try:
+        synapse(torch.empty(0, 2, 3))
+        sn(torch.empty(0, 2, 4))
+        delta_w = learner.step(on_grad=False)
+        assert learner.trace_pre is trace_pre
+        assert learner.trace_post is trace_post
+        assert torch.equal(delta_w, torch.zeros_like(synapse.weight))
+        assert not learner.in_spike_monitor.records
+    finally:
+        learner.close()
 
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float64])
@@ -652,22 +528,23 @@ def test_conv_scalar_oracle_with_padding_and_stride(ndim):
                 a = padded[(n, in_c, *source)].item()
                 b = post[(n, out_c, *location)].item()
                 expected[(out_c, in_c, *kernel)] += (1 + a) * b - (1.5 + b) * a
-    func = (
-        learning.stdp_conv1d_single_step
-        if ndim == 1
-        else learning.stdp_conv2d_single_step
-    )
-    _, _, dw = func(
+    sn = nn.Identity()
+    learner = learning.STDPLearner(
+        "s",
         conv,
-        pre,
-        post,
-        trace_pre,
-        trace_post,
+        sn,
         2.0,
         2.0,
-        torch.ones_like,
-        torch.ones_like,
+        f_pre=torch.ones_like,
+        f_post=torch.ones_like,
     )
+    learner.trace_pre, learner.trace_post = trace_pre, trace_post
+    try:
+        conv(pre)
+        sn(post)
+        dw = learner.step(on_grad=False)
+    finally:
+        learner.close()
     torch.testing.assert_close(dw, expected, rtol=1e-10, atol=1e-12)
 
 
@@ -676,9 +553,18 @@ def test_stdp_sequence_sum_and_gradient_injection():
     sn = nn.Identity()
     pre = torch.tensor([[[1.0, 0.0]], [[0.0, 1.0]], [[1.0, 1.0]]], dtype=torch.float64)
     post = pre.flip(-1)
-    tr_pre, tr_post, expected = learning.stdp_multi_step(
-        fc, pre, post, None, None, 2.0, 3.0
-    )
+    tr_pre, tr_post = torch.zeros_like(pre[0]), torch.zeros_like(post[0])
+    expected = torch.zeros_like(fc.weight)
+    for pre_t, post_t in zip(pre, post):
+        dw, (tr_pre, tr_post) = functional.stdp_linear_step(
+            pre_t,
+            post_t,
+            (tr_pre, tr_post),
+            fc.weight.detach(),
+            tau_pre=2.0,
+            tau_post=3.0,
+        )
+        expected += dw
     learner = learning.STDPLearner("s", fc, sn, 2.0, 3.0)
     try:
         for x, y in zip(pre, post):
@@ -778,21 +664,27 @@ def test_invalid_stdp_constructor_installs_no_hooks(tau):
 
 
 def test_unsupported_constructors_and_time_lengths():
-    fc, sn = nn.Conv2d(2, 2, 3, groups=2), nn.Identity()
-    with pytest.raises(NotImplementedError, match="groups"):
-        learning.STDPLearner("s", fc, sn, 2.0, 2.0)
+    sn = nn.Identity()
+    for conv_type in (nn.Conv1d, nn.Conv2d):
+        for kwargs, message in (
+            ({"groups": 2}, "groups"),
+            ({"dilation": 2}, "dilation"),
+        ):
+            conv = conv_type(2, 2, 3, **kwargs)
+            with pytest.raises(NotImplementedError, match=message):
+                learning.STDPLearner("s", conv, sn, 2.0, 2.0)
+            assert not conv._forward_pre_hooks and not sn._forward_hooks
     with pytest.raises(ValueError, match="step_mode"):
         learning.MSTDPLearner("m", nn.Linear(2, 2), sn, 2.0, 2.0)
-    with pytest.raises(ValueError, match="time lengths"):
-        learning.stdp_multi_step(
-            nn.Linear(2, 2),
-            torch.zeros(2, 1, 2),
-            torch.zeros(1, 1, 2),
-            None,
-            None,
-            2.0,
-            2.0,
-        )
+    fc = nn.Linear(2, 2)
+    learner = learning.STDPLearner("m", fc, sn, 2.0, 2.0)
+    try:
+        fc(torch.zeros(2, 1, 2))
+        sn(torch.zeros(1, 1, 2))
+        with pytest.raises(ValueError, match="time lengths"):
+            learner.step()
+    finally:
+        learner.close()
 
 
 def test_mnist_competition_mapping_and_checkpoint(tmp_path):
@@ -874,13 +766,25 @@ def test_cuda_learning_reference_and_stable_allocations():
         torch.rand(2, 4, dtype=torch.float64),
         torch.rand(2, 3, dtype=torch.float64),
     )
-    expected = learning.stdp_linear_single_step(cpu_fc, pre, post, None, None, 2.0, 3.0)
+    expected = functional.stdp_linear_step(
+        pre,
+        post,
+        (torch.zeros_like(pre), torch.zeros_like(post)),
+        cpu_fc.weight.detach(),
+        tau_pre=2.0,
+        tau_post=3.0,
+    )
     gpu_fc = nn.Linear(4, 3, bias=False).cuda().double()
     gpu_fc.weight.data.copy_(cpu_fc.weight)
-    actual = learning.stdp_linear_single_step(
-        gpu_fc, pre.cuda(), post.cuda(), None, None, 2.0, 3.0
+    actual = functional.stdp_linear_step(
+        pre.cuda(),
+        post.cuda(),
+        (torch.zeros_like(pre, device="cuda"), torch.zeros_like(post, device="cuda")),
+        gpu_fc.weight.detach(),
+        tau_pre=2.0,
+        tau_post=3.0,
     )
-    for a, b in zip(actual, expected):
+    for a, b in zip((actual[0], *actual[1]), (expected[0], *expected[1])):
         torch.testing.assert_close(a.cpu(), b, rtol=1e-10, atol=1e-12)
     sn = nn.Identity()
     learner = learning.MSTDPLearner("s", gpu_fc, sn, 2.0, 3.0)
@@ -915,14 +819,25 @@ def test_conv_native_padding_metadata(padding, mode, kernel, expected):
     ).double()
     x = torch.tensor([[[1.0, 0.0, 1.0]]], dtype=torch.float64)
     post = torch.ones_like(conv(x))
-    _, _, dw = learning.stdp_conv1d_single_step(
-        conv, x, post, None, None, 2.0, 2.0, torch.zeros_like, torch.ones_like
+    sn = nn.Identity()
+    learner = learning.STDPLearner(
+        "s",
+        conv,
+        sn,
+        2.0,
+        2.0,
+        f_pre=torch.zeros_like,
+        f_post=torch.ones_like,
     )
+    try:
+        conv(x)
+        sn(post)
+        dw = learner.step(on_grad=False)
+    finally:
+        learner.close()
     torch.testing.assert_close(
         dw.flatten(), torch.tensor(expected, dtype=torch.float64)
     )
-    learner = learning.STDPLearner("s", conv, nn.Identity(), 2.0, 2.0)
-    learner.close()
 
 
 def test_stdp_pending_shape_error_is_atomic():
@@ -946,13 +861,23 @@ def test_cuda_conv_and_eligibility_trace_match_cpu():
     conv = nn.Conv2d(1, 2, 3, padding=1, bias=False).double()
     pre = torch.tensor([[[[1.0, 0.0], [0.0, 1.0]]]], dtype=torch.float64)
     post = torch.ones(1, 2, 2, 2, dtype=torch.float64)
-    expected = learning.stdp_conv2d_single_step(conv, pre, post, None, None, 2.0, 3.0)
+    sn = nn.Identity()
+    learner = learning.STDPLearner("s", conv, sn, 2.0, 3.0)
+    try:
+        conv(pre)
+        sn(post)
+        expected = learner.step(on_grad=False)
+    finally:
+        learner.close()
     conv = conv.cuda()
-    actual = learning.stdp_conv2d_single_step(
-        conv, pre.cuda(), post.cuda(), None, None, 2.0, 3.0
-    )
-    for a, b in zip(actual, expected):
-        torch.testing.assert_close(a.cpu(), b, rtol=1e-10, atol=1e-12)
+    learner = learning.STDPLearner("s", conv, sn, 2.0, 3.0)
+    try:
+        conv(pre.cuda())
+        sn(post.cuda())
+        actual = learner.step(on_grad=False)
+        torch.testing.assert_close(actual.cpu(), expected, rtol=1e-10, atol=1e-12)
+    finally:
+        learner.close()
     learners = []
     for device in ("cpu", "cuda"):
         fc = nn.Linear(2, 2, bias=False).to(device).double()
@@ -988,15 +913,20 @@ def test_cuda_conv_and_eligibility_trace_match_cpu():
 
 
 def test_empty_stdp_sequence_still_validates_layout():
-    fc = nn.Linear(2, 3)
-    with pytest.raises(ValueError, match="time dimension"):
-        learning.stdp_multi_step(
-            fc, torch.empty(0, 2), torch.empty(0, 3), None, None, 2.0, 2.0
-        )
-    with pytest.raises(ValueError, match="Sequence shapes"):
-        learning.stdp_multi_step(
-            fc, torch.empty(0, 1, 2), torch.empty(0, 2, 3), None, None, 2.0, 2.0
-        )
+    fc, sn = nn.Linear(2, 3), nn.Identity()
+    learner = learning.STDPLearner("m", fc, sn, 2.0, 2.0)
+    try:
+        fc(torch.empty(0, 2))
+        sn(torch.empty(0, 3))
+        with pytest.raises(ValueError, match="Multi-step"):
+            learner.step()
+        learner.reset()
+        fc(torch.empty(0, 1, 2))
+        sn(torch.empty(0, 2, 3))
+        with pytest.raises(ValueError, match="shapes"):
+            learner.step()
+    finally:
+        learner.close()
 
 
 def test_stdp_batch_sum_independent_oracle():
@@ -1263,51 +1193,42 @@ def test_mnist_regular_input_counts_and_legacy_checkpoint_rejection():
 
 @pytest.mark.parametrize("ndim", [1, 2])
 @pytest.mark.parametrize("initial_pre", [0.0, 0.6])
-def test_convolution_scalar_initial_traces_follow_independent_oracle(ndim, initial_pre):
-    conv_type = nn.Conv1d if ndim == 1 else nn.Conv2d
-    helper = (
-        learning.stdp_conv1d_single_step
-        if ndim == 1
-        else learning.stdp_conv2d_single_step
-    )
+def test_convolution_trace_state_follows_independent_oracle(ndim, initial_pre):
+    conv_type = layer.Conv1d if ndim == 1 else layer.Conv2d
     spatial = (3,) if ndim == 1 else (2, 2)
-    conv = conv_type(1, 1, 2, padding=1, bias=False).double()
+    conv = conv_type(1, 1, 2, padding=1, bias=False, step_mode="m").double()
     pre = torch.zeros(1, 1, *spatial, dtype=torch.float64)
-    post = torch.ones_like(conv(pre))
-    positions = post.numel()
-
-    def modulation(weight):
-        return torch.ones_like(weight)
-
-    args = (conv, pre, post, initial_pre, 0.4, 2.0, 2.0, modulation, modulation)
-    pre_trace, post_trace, delta = helper(*args)
-    torch.testing.assert_close(pre_trace, torch.full_like(pre_trace, initial_pre / 2))
-    torch.testing.assert_close(post_trace, torch.full_like(post, 1.2))
-    torch.testing.assert_close(
-        delta,
-        torch.full_like(conv.weight, initial_pre * positions / 2),
-        rtol=1e-10,
-        atol=1e-12,
-    )
-    pre_trace, post_trace, delta = learning.stdp_multi_step(
+    post = torch.ones(1, 1, *(n + 1 for n in spatial), dtype=torch.float64)
+    sn = nn.Identity()
+    learner = learning.STDPLearner(
+        "m",
         conv,
-        torch.stack([pre, pre]),
-        torch.stack([post, post]),
-        initial_pre,
-        0.4,
+        sn,
         2.0,
         2.0,
-        modulation,
-        modulation,
+        f_pre=torch.ones_like,
+        f_post=torch.ones_like,
     )
-    torch.testing.assert_close(pre_trace, torch.full_like(pre_trace, initial_pre / 4))
-    torch.testing.assert_close(post_trace, torch.full_like(post, 1.6))
-    torch.testing.assert_close(
-        delta,
-        torch.full_like(conv.weight, initial_pre * positions * 0.75),
-        rtol=1e-10,
-        atol=1e-12,
+    learner.trace_pre = torch.full(
+        (1, 1, *(n + 2 for n in spatial)), initial_pre, dtype=torch.float64
     )
+    learner.trace_post = torch.full_like(post, 0.4)
+    try:
+        conv(torch.stack([pre, pre]))
+        sn(torch.stack([post, post]))
+        delta = learner.step(on_grad=False)
+        torch.testing.assert_close(
+            learner.trace_pre, torch.full_like(learner.trace_pre, initial_pre / 4)
+        )
+        torch.testing.assert_close(learner.trace_post, torch.full_like(post, 1.6))
+        torch.testing.assert_close(
+            delta,
+            torch.full_like(conv.weight, initial_pre * post.numel() * 0.75),
+            rtol=1e-10,
+            atol=1e-12,
+        )
+    finally:
+        learner.close()
 
 
 @pytest.mark.parametrize("reward", [torch.tensor([0.25]), torch.tensor([0.25, -0.5])])

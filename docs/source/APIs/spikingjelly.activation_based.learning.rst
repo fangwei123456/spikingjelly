@@ -5,14 +5,13 @@ Learning method organization / 学习方法组织
 --------------------------------------------------------------------------------
 
 ``learning.plasticity`` owns local update records, traces and learner lifecycles.
-The existing ``learning.STDPLearner``, reward learners and layer-object helpers
-remain direct exports of the same implementations. Tensor-only rules stay in
+The three learner classes remain available directly through ``learning``. Tensor-only rules stay in
 ``functional.learning``. Gradient-based FPTT and OTTT/SLTT training pipelines
 live in ``learning.online_learning``; their neurons and layers remain in
 ``neuron.online_learning`` and ``layer.online_learning``.
 
 ``learning.plasticity`` 管理局部更新记录、trace 和学习器生命周期。
-已有 ``learning.STDPLearner``、奖励学习器及接收层对象的 helper 继续直接导出同一实现；
+三个学习器类继续通过 ``learning`` 直接导出同一实现；
 纯张量规则保留在 ``functional.learning``。FPTT、OTTT/SLTT 梯度训练流程位于
 ``learning.online_learning``，对应神经元和层仍位于 ``neuron.online_learning``、
 ``layer.online_learning``。两类方法分别管理自己的更新流程。
@@ -28,6 +27,54 @@ there are no forwarding modules. ``fptt_online_training_init_w_ra`` moves likewi
 改为 ``from spikingjelly.activation_based.learning import online_learning`` 后调用该模块；
 直接导入路径从 ``functional.online_learning`` 改为 ``learning.online_learning``。
 旧模块和 functional 导出已移除，不保留转发；``fptt_online_training_init_w_ra`` 同样迁移。
+
+Removed layer-object helpers / 移除层对象 helper
+--------------------------------------------------------------------------------
+
+Use the tensor rules in ``functional.learning`` or the three learners. The six
+layer-object helpers are removed without aliases. Tensor rules return
+``(delta_or_eligibility, (trace_pre_next, trace_post_next))``. Initialize traces
+explicitly; convolution input and pre traces must include padding. Loop over
+single-step rules for fixed-weight sequence accumulation, or let ``STDPLearner``
+handle recording, padding and temporal state.
+
+使用 ``functional.learning`` 的张量规则或三个学习器。六个层对象 helper 已删除，
+不保留别名。张量规则返回 ``(delta_or_eligibility, (trace_pre_next, trace_post_next))``。
+手动调用时显式初始化 trace，并为卷积输入和 pre trace 添加 padding；固定权重的多步
+累计使用逐步循环。``STDPLearner`` 会处理活动记录、padding 和时间状态。
+
+.. list-table:: Helper migration / helper 迁移
+   :header-rows: 1
+
+   * - Removed / 已移除
+     - Replacement / 替代
+   * - ``stdp_linear_single_step``
+     - ``functional.stdp_linear_step``
+   * - ``mstdp_linear_single_step``
+     - ``functional.mstdp_linear_step``
+   * - ``mstdpet_linear_single_step``
+     - ``functional.mstdpet_linear_step``
+   * - ``stdp_conv1d_single_step``
+     - ``functional.stdp_conv1d_step``
+   * - ``stdp_conv2d_single_step``
+     - ``functional.stdp_conv2d_step``
+   * - ``stdp_multi_step``
+     - ``STDPLearner(step_mode="m")`` or loop / 或逐步循环
+
+Example / 示例：
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import functional
+
+    pre = torch.ones(2, 4)
+    post = torch.ones(2, 3)
+    weight = torch.full((3, 4), 0.1)
+    traces = (torch.zeros_like(pre), torch.zeros_like(post))
+    delta, traces = functional.stdp_linear_step(
+        pre, post, traces, weight, tau_pre=20., tau_post=20.
+    )
 
 Local synaptic plasticity / 局部突触可塑性
 --------------------------------------------------------------------------------

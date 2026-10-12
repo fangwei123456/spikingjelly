@@ -376,8 +376,6 @@ Module: ``spikingjelly.activation_based.learning``.
 - Made ``MSTDPLearner`` eligibility and reward-derived weight updates follow the
   synapse device and dtype.
 - Validate supported configurations and activity/state shapes before updates.
-- Accept scalar initial traces in convolution STDP helpers.
-- Preserve reward and eligibility broadcasting in ``functional.mstdpet_reward_step``.
 - Learner updates no longer retain modulation or reward autograd graphs.
 - Added ``close()`` to release learner hooks, records and learning state permanently.
 - Mechanism demos now use deterministic rewards, headless plots and explicit output paths.
@@ -495,7 +493,9 @@ Breaking Changes and Notices
 Learning Interfaces and Example Paths
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- ``learning`` is now a package; existing learner and helper imports still work.
+- ``learning`` is now a package; the three existing learner imports still work.
+- Removed the six layer-object single/multi-step helpers. Use ``functional.learning``
+  tensor rules or a learner; see the API migration table for state and padding setup.
 - Import FPTT and OTTT/SLTT training functions from ``learning.online_learning``;
   ``functional.online_learning`` and direct ``functional`` exports are removed.
 - Move example imports/commands to ``examples.plasticity.{stdp_trace,mstdp,mstdpet,stdp_mnist}``.
