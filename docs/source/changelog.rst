@@ -505,6 +505,18 @@ Module: ``spikingjelly.activation_based.neuron``.
 Breaking Changes and Notices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Learning Method Organization
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``spikingjelly.activation_based.learning`` is now a package. Local learners
+  and layer-object helpers live in ``learning.plasticity`` and remain available
+  directly through ``learning``, including ``learning.STDPLearner``.
+- Moved FPTT and OTTT/SLTT training functions from ``functional.online_learning``
+  to ``learning.online_learning``. Import that module and call its functions;
+  the old module and direct ``functional`` exports are removed without forwarders.
+  Tensor-only plasticity functions, online neurons and online layers retain
+  their existing locations.
+
 Plasticity Example Paths
 ^^^^^^^^^^^^^^^^^^^^^^^^
 

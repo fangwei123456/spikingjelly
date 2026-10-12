@@ -1,5 +1,33 @@
-spikingjelly.activation_based.learning module
+spikingjelly.activation_based.learning package
 ==========================================================================================
+
+Learning method organization / 学习方法组织
+--------------------------------------------------------------------------------
+
+``learning.plasticity`` owns local update records, traces and learner lifecycles.
+The existing ``learning.STDPLearner``, reward learners and layer-object helpers
+remain direct exports of the same implementations. Tensor-only rules stay in
+``functional.learning``. Gradient-based FPTT and OTTT/SLTT training pipelines
+live in ``learning.online_learning``; their neurons and layers remain in
+``neuron.online_learning`` and ``layer.online_learning``.
+
+``learning.plasticity`` 管理局部更新记录、trace 和学习器生命周期。
+已有 ``learning.STDPLearner``、奖励学习器及接收层对象的 helper 继续直接导出同一实现；
+纯张量规则保留在 ``functional.learning``。FPTT、OTTT/SLTT 梯度训练流程位于
+``learning.online_learning``，对应神经元和层仍位于 ``neuron.online_learning``、
+``layer.online_learning``。两类方法不共用通用 Learner 或训练循环。
+
+**Migration / 迁移：** replace ``functional.ottt_online_training(...)`` and
+``functional.fptt_online_training(...)`` with calls from
+``from spikingjelly.activation_based.learning import online_learning``.
+Move direct imports from ``functional.online_learning`` to
+``learning.online_learning``. The old module and functional exports are removed;
+there are no forwarding modules. ``fptt_online_training_init_w_ra`` moves likewise.
+
+将原来的 ``functional.ottt_online_training(...)``、``functional.fptt_online_training(...)``
+改为 ``from spikingjelly.activation_based.learning import online_learning`` 后调用该模块；
+直接导入路径从 ``functional.online_learning`` 改为 ``learning.online_learning``。
+旧模块和 functional 导出已移除，不保留转发；``fptt_online_training_init_w_ra`` 同样迁移。
 
 Local synaptic plasticity / 局部突触可塑性
 --------------------------------------------------------------------------------
@@ -90,5 +118,30 @@ and :doc:`../tutorials/cn/stdp`.
 
 .. automodule:: spikingjelly.activation_based.learning
    :members:
+   :imported-members:
+   :exclude-members: online_learning, plasticity
    :undoc-members:
    :show-inheritance:
+
+Online Learning Pipelines
++++++++++++++++++++++++++++++++
+
+**在线学习** 的辅助函数。
+
+----
+
+Auxiliary functions for **online learning** .
+
+.. list-table::
+
+   * - :func:`fptt_online_training_init_w_ra <spikingjelly.activation_based.learning.online_learning.fptt_online_training_init_w_ra>`
+     - Initialize weight for FPTT.
+   * - :func:`fptt_online_training <spikingjelly.activation_based.learning.online_learning.fptt_online_training>`
+     - Online training with FPTT.
+   * - :func:`ottt_online_training <spikingjelly.activation_based.learning.online_learning.ottt_online_training>`
+     - Online training with OTTT or SLTT.
+
+.. toctree::
+   :hidden:
+
+   online_learning <spikingjelly.activation_based.learning.online_learning>
