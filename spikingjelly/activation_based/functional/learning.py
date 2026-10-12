@@ -17,9 +17,9 @@ __all__ = [
 
 
 def _check_time_constants(
-    tau_pre: float, tau_post: float, exponential: bool = False
+    *, exponential: bool = False, **time_constants: float
 ) -> None:
-    for name, tau in (("tau_pre", tau_pre), ("tau_post", tau_post)):
+    for name, tau in time_constants.items():
         if not math.isfinite(tau) or tau <= 0 or (not exponential and tau < 1):
             bound = "> 0" if exponential else ">= 1"
             raise ValueError(f"{name} must be finite and {bound} time steps.")
@@ -154,7 +154,7 @@ def stdp_linear_step(
        本函数没有独立多步形式；多步执行由调用者逐步循环。
        This function has no independent multi-step form; callers iterate it.
     """
-    _check_time_constants(tau_pre, tau_post, exponential=False)
+    _check_time_constants(tau_pre=tau_pre, tau_post=tau_post, exponential=False)
     _check_inputs(in_spike, out_spike, trace, weight, 2)
     trace_pre, trace_post = trace
     trace_pre = trace_pre - trace_pre / tau_pre + in_spike
@@ -227,7 +227,7 @@ def mstdp_linear_step(
     Time constants are in simulated time steps, finite and > 0. Activity and trace
     shapes must match exactly; state broadcasting cannot adapt batch size. Matching
     floating dtypes are recommended for activity, state and weight; devices must
-    match.Uses exponential decay exp(-1/tau), preserving the existing discretization.
+    match. Uses exponential decay exp(-1/tau), preserving the existing discretization.
 
     Compute one mSTDP eligibility step for a linear weight. ``trace`` is
     ``(trace_pre, trace_post)``. The returned eligibility retains its batch
@@ -261,7 +261,7 @@ def mstdp_linear_step(
        本函数没有独立多步形式；多步执行由调用者逐步循环。
        This function has no independent multi-step form; callers iterate it.
     """
-    _check_time_constants(tau_pre, tau_post, exponential=True)
+    _check_time_constants(tau_pre=tau_pre, tau_post=tau_post, exponential=True)
     _check_inputs(in_spike, out_spike, trace, weight, 2)
     trace_pre, trace_post = trace
     trace_pre = trace_pre * math.exp(-1 / tau_pre) + in_spike
@@ -331,7 +331,7 @@ def mstdpet_linear_step(
     Time constants are in simulated time steps, finite and > 0. Activity and trace
     shapes must match exactly; state broadcasting cannot adapt batch size. Matching
     floating dtypes are recommended for activity, state and weight; devices must
-    match.Uses exponential decay exp(-1/tau), preserving the existing discretization.
+    match. Uses exponential decay exp(-1/tau), preserving the existing discretization.
 
     Compute one mSTDP-ET eligibility step for unbatched linear spikes. ``trace``
     is ``(trace_pre, trace_post)``. This function only updates the neuronal
@@ -365,7 +365,7 @@ def mstdpet_linear_step(
        本函数没有独立多步形式；多步执行由调用者逐步循环。
        This function has no independent multi-step form; callers iterate it.
     """
-    _check_time_constants(tau_pre, tau_post, exponential=True)
+    _check_time_constants(tau_pre=tau_pre, tau_post=tau_post, exponential=True)
     _check_inputs(in_spike, out_spike, trace, weight, 1)
     trace_pre, trace_post = trace
     trace_pre = trace_pre * math.exp(-1 / tau_pre) + in_spike
@@ -476,7 +476,7 @@ def stdp_conv2d_step(
        本函数没有独立多步形式；多步执行由调用者逐步循环。
        This function has no independent multi-step form; callers iterate it.
     """
-    _check_time_constants(tau_pre, tau_post, exponential=False)
+    _check_time_constants(tau_pre=tau_pre, tau_post=tau_post, exponential=False)
     _check_inputs(in_spike, out_spike, trace, weight, 4)
     if any(value <= 0 for value in stride):
         raise ValueError("Stride must be positive.")
@@ -611,7 +611,7 @@ def stdp_conv1d_step(
        本函数没有独立多步形式；多步执行由调用者逐步循环。
        This function has no independent multi-step form; callers iterate it.
     """
-    _check_time_constants(tau_pre, tau_post, exponential=False)
+    _check_time_constants(tau_pre=tau_pre, tau_post=tau_post, exponential=False)
     _check_inputs(in_spike, out_spike, trace, weight, 3)
     if any(value <= 0 for value in stride):
         raise ValueError("Stride must be positive.")
@@ -660,8 +660,9 @@ def mstdpet_reward_step(
 
     * **中文**
 
-    reward 为标量；eligibility 与 trace_e 同形状、同 device。tau_trace
-    单位为时间步，须为有限正数。本函数只根据传入状态计算，不负责 Learner 的活动时间对齐。
+    reward 和 eligibility 按 PyTorch 规则与 trace_e 广播，dtype/device 遵循 PyTorch 运算规则。
+    tau_trace 单位为时间步，须为有限正数。本函数只计算传入状态，
+    不负责 Learner 的活动时间对齐或标量 reward 限制。
 
     更新 mSTDP-ET eligibility trace，并用 reward 调制更新后的 trace。
 
@@ -681,7 +682,8 @@ def mstdpet_reward_step(
     :return: ``(delta_w, trace_e_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
 
-    :raises ValueError: 时间常数或张量形状/device 不合法。
+    :raises ValueError: tau_trace 非有限或不为正。
+    :raises RuntimeError: 张量广播或 dtype/device 不符合 PyTorch 运算要求。
 
     ----
 
@@ -689,9 +691,9 @@ def mstdpet_reward_step(
 
     * **English**
 
-    Reward is scalar; eligibility and trace_e must have matching shapes and devices.
+    Reward and eligibility broadcast with trace_e under PyTorch dtype/device rules.
     tau_trace is in time steps and must be finite and positive. This function computes
-    from supplied states and does not perform Learner activity alignment.
+    supplied states; activity alignment and scalar-only rewards belong to the Learner.
 
     Update the mSTDP-ET eligibility trace and modulate the updated trace with the
     reward.
@@ -712,19 +714,14 @@ def mstdpet_reward_step(
     :type tau_trace: float
     :return: ``(delta_w, trace_e_next)``
     :rtype: Tuple[torch.Tensor, torch.Tensor]
-    :raises ValueError: Invalid time constants or tensor shapes/devices.
+    :raises ValueError: tau_trace is nonfinite or not positive.
+    :raises RuntimeError: Tensor broadcasting or dtype/device violates PyTorch rules.
 
     .. note::
 
        本函数没有独立多步形式；多步执行由调用者逐步循环。
        This function has no independent multi-step form; callers iterate it.
     """
-    _check_time_constants(tau_trace, tau_trace, exponential=True)
-    if eligibility.shape != trace_e.shape or eligibility.device != trace_e.device:
-        raise ValueError(
-            "Eligibility and eligibility trace must have matching shapes and devices."
-        )
-    if isinstance(reward, torch.Tensor) and reward.ndim != 0:
-        raise ValueError("MSTDPET reward must be scalar.")
+    _check_time_constants(tau_trace=tau_trace, exponential=True)
     trace_e = trace_e * math.exp(-1 / tau_trace) + eligibility / tau_trace
     return reward * trace_e, trace_e

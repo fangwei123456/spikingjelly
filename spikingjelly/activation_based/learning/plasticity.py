@@ -418,8 +418,8 @@ def stdp_conv2d_single_step(
     conv: nn.Conv2d,
     in_spike: torch.Tensor,
     out_spike: torch.Tensor,
-    trace_pre: Union[torch.Tensor, None],
-    trace_post: Union[torch.Tensor, None],
+    trace_pre: Union[float, torch.Tensor, None],
+    trace_post: Union[float, torch.Tensor, None],
     tau_pre: float,
     tau_post: float,
     f_pre: Callable = lambda x: x,
@@ -447,10 +447,12 @@ def stdp_conv2d_single_step(
     :type in_spike: torch.Tensor
     :param out_spike: 输出脉冲，``shape = [batch_size, C_out, H_out, W_out]``
     :type out_spike: torch.Tensor
-    :param trace_pre: pre-synaptic trace。若为 ``None``，则初始化为与 padding 后输入同形状零张量
-    :type trace_pre: Union[torch.Tensor, None]
-    :param trace_post: post-synaptic trace。若为 ``None``，则初始化为与 ``out_spike`` 同形状零张量
-    :type trace_post: Union[torch.Tensor, None]
+    :param trace_pre: pre-synaptic trace；float 填充 padding 后输入形状，
+        ``None`` 使用零；Tensor 须同形状
+    :type trace_pre: Union[float, torch.Tensor, None]
+    :param trace_post: post-synaptic trace；float 填充 ``out_spike`` 形状，
+        ``None`` 使用零；Tensor 须同形状
+    :type trace_post: Union[float, torch.Tensor, None]
     :param tau_pre: 单位为时间步，有限且 >= 1； pre trace 的时间常数
     :type tau_pre: float
     :param tau_post: 单位为时间步，有限且 >= 1； post trace 的时间常数
@@ -487,10 +489,12 @@ def stdp_conv2d_single_step(
     :type in_spike: torch.Tensor
     :param out_spike: Output spikes with ``shape = [batch_size, C_out, H_out, W_out]``
     :type out_spike: torch.Tensor
-    :param trace_pre: Pre-synaptic trace. If ``None``, initialized as zeros with the same shape as the padded input
-    :type trace_pre: Union[torch.Tensor, None]
-    :param trace_post: Post-synaptic trace. If ``None``, initialized as zeros with the same shape as ``out_spike``
-    :type trace_post: Union[torch.Tensor, None]
+    :param trace_pre: Pre-synaptic trace; float fills the padded input shape,
+        ``None`` uses zeros; tensors must match that shape
+    :type trace_pre: Union[float, torch.Tensor, None]
+    :param trace_post: Post-synaptic trace; float fills the ``out_spike`` shape,
+        ``None`` uses zeros; tensors must match that shape
+    :type trace_post: Union[float, torch.Tensor, None]
     :param tau_pre: In time steps, finite and >= 1;  Time constant of the pre trace
     :type tau_pre: float
     :param tau_post: In time steps, finite and >= 1;  Time constant of the post trace
@@ -517,8 +521,8 @@ def stdp_conv2d_single_step(
         in_spike,
         out_spike,
         (
-            torch.zeros_like(in_spike) if trace_pre is None else trace_pre,
-            torch.zeros_like(out_spike) if trace_post is None else trace_post,
+            _materialize_trace(trace_pre, in_spike),
+            _materialize_trace(trace_post, out_spike),
         ),
         conv.weight.data,
         stride=conv.stride,
@@ -534,8 +538,8 @@ def stdp_conv1d_single_step(
     conv: nn.Conv1d,
     in_spike: torch.Tensor,
     out_spike: torch.Tensor,
-    trace_pre: Union[torch.Tensor, None],
-    trace_post: Union[torch.Tensor, None],
+    trace_pre: Union[float, torch.Tensor, None],
+    trace_post: Union[float, torch.Tensor, None],
     tau_pre: float,
     tau_post: float,
     f_pre: Callable = lambda x: x,
@@ -563,10 +567,12 @@ def stdp_conv1d_single_step(
     :type in_spike: torch.Tensor
     :param out_spike: 输出脉冲，``shape = [batch_size, C_out, L_out]``
     :type out_spike: torch.Tensor
-    :param trace_pre: pre-synaptic trace。若为 ``None``，则初始化为与 padding 后输入同形状零张量
-    :type trace_pre: Union[torch.Tensor, None]
-    :param trace_post: post-synaptic trace。若为 ``None``，则初始化为与 ``out_spike`` 同形状零张量
-    :type trace_post: Union[torch.Tensor, None]
+    :param trace_pre: pre-synaptic trace；float 填充 padding 后输入形状，
+        ``None`` 使用零；Tensor 须同形状
+    :type trace_pre: Union[float, torch.Tensor, None]
+    :param trace_post: post-synaptic trace；float 填充 ``out_spike`` 形状，
+        ``None`` 使用零；Tensor 须同形状
+    :type trace_post: Union[float, torch.Tensor, None]
     :param tau_pre: 单位为时间步，有限且 >= 1； pre trace 的时间常数
     :type tau_pre: float
     :param tau_post: 单位为时间步，有限且 >= 1； post trace 的时间常数
@@ -603,10 +609,12 @@ def stdp_conv1d_single_step(
     :type in_spike: torch.Tensor
     :param out_spike: Output spikes with ``shape = [batch_size, C_out, L_out]``
     :type out_spike: torch.Tensor
-    :param trace_pre: Pre-synaptic trace. If ``None``, initialized as zeros with the same shape as the padded input
-    :type trace_pre: Union[torch.Tensor, None]
-    :param trace_post: Post-synaptic trace. If ``None``, initialized as zeros with the same shape as ``out_spike``
-    :type trace_post: Union[torch.Tensor, None]
+    :param trace_pre: Pre-synaptic trace; float fills the padded input shape,
+        ``None`` uses zeros; tensors must match that shape
+    :type trace_pre: Union[float, torch.Tensor, None]
+    :param trace_post: Post-synaptic trace; float fills the ``out_spike`` shape,
+        ``None`` uses zeros; tensors must match that shape
+    :type trace_post: Union[float, torch.Tensor, None]
     :param tau_pre: In time steps, finite and >= 1;  Time constant of the pre trace
     :type tau_pre: float
     :param tau_post: In time steps, finite and >= 1;  Time constant of the post trace
@@ -633,8 +641,8 @@ def stdp_conv1d_single_step(
         in_spike,
         out_spike,
         (
-            torch.zeros_like(in_spike) if trace_pre is None else trace_pre,
-            torch.zeros_like(out_spike) if trace_post is None else trace_post,
+            _materialize_trace(trace_pre, in_spike),
+            _materialize_trace(trace_post, out_spike),
         ),
         conv.weight.data,
         stride=conv.stride,
@@ -738,7 +746,7 @@ def stdp_multi_step(
     :rtype: tuple[Union[float, torch.Tensor, None], Union[float, torch.Tensor, None], torch.Tensor]
     :raises ValueError: Parameters or activity/state shapes violate the supported range.
     """
-    functional_learning._check_time_constants(tau_pre, tau_post)
+    functional_learning._check_time_constants(tau_pre=tau_pre, tau_post=tau_post)
     if isinstance(layer, nn.Linear):
         stdp_single_step = stdp_linear_single_step
     elif isinstance(layer, nn.Conv1d):
@@ -853,7 +861,9 @@ class STDPLearner(base.MemoryModule):
         :raises NotImplementedError: Unsupported synapse type or convolution configuration.
         """
 
-        functional_learning._check_time_constants(tau_pre, tau_post, exponential=False)
+        functional_learning._check_time_constants(
+            tau_pre=tau_pre, tau_post=tau_post, exponential=False
+        )
         if step_mode not in ("s", "m"):
             raise ValueError("Unsupported step_mode: " + str(step_mode))
         if not isinstance(synapse, (nn.Linear, nn.Conv1d, nn.Conv2d)):
@@ -1171,7 +1181,9 @@ class MSTDPLearner(base.MemoryModule):
         :raises NotImplementedError: Unsupported synapse type or convolution configuration.
         """
 
-        functional_learning._check_time_constants(tau_pre, tau_post, exponential=True)
+        functional_learning._check_time_constants(
+            tau_pre=tau_pre, tau_post=tau_post, exponential=True
+        )
         if step_mode != "s":
             raise ValueError("Unsupported step_mode: " + str(step_mode))
         if not isinstance(synapse, nn.Linear):
@@ -1496,16 +1508,16 @@ class MSTDPETLearner(base.MemoryModule):
         :raises NotImplementedError: Unsupported synapse type or convolution configuration.
         """
 
-        functional_learning._check_time_constants(tau_pre, tau_post, exponential=True)
+        functional_learning._check_time_constants(
+            tau_pre=tau_pre, tau_post=tau_post, exponential=True
+        )
         if step_mode != "s":
             raise ValueError("Unsupported step_mode: " + str(step_mode))
         if not isinstance(synapse, nn.Linear):
             raise NotImplementedError(
                 "Unsupported plasticity synapse: " + str(type(synapse))
             )
-        functional_learning._check_time_constants(
-            tau_trace, tau_trace, exponential=True
-        )
+        functional_learning._check_time_constants(tau_trace=tau_trace, exponential=True)
         super().__init__()
         self.step_mode = step_mode
         self.tau_pre = tau_pre

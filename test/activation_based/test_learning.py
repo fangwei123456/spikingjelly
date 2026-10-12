@@ -1259,3 +1259,112 @@ def test_mnist_regular_input_counts_and_legacy_checkpoint_rejection():
     assert incoming[:, 0].eq(0).all()
     with pytest.raises(ValueError, match="archived"):
         _load_models({"config": {"inhibition_kind": "conductance"}}, "cpu")
+
+
+@pytest.mark.parametrize("ndim", [1, 2])
+@pytest.mark.parametrize("initial_pre", [0.0, 0.6])
+def test_convolution_scalar_initial_traces_follow_independent_oracle(ndim, initial_pre):
+    conv_type = nn.Conv1d if ndim == 1 else nn.Conv2d
+    helper = (
+        learning.stdp_conv1d_single_step
+        if ndim == 1
+        else learning.stdp_conv2d_single_step
+    )
+    spatial = (3,) if ndim == 1 else (2, 2)
+    conv = conv_type(1, 1, 2, padding=1, bias=False).double()
+    pre = torch.zeros(1, 1, *spatial, dtype=torch.float64)
+    post = torch.ones_like(conv(pre))
+    positions = post.numel()
+
+    def modulation(weight):
+        return torch.ones_like(weight)
+
+    args = (conv, pre, post, initial_pre, 0.4, 2.0, 2.0, modulation, modulation)
+    pre_trace, post_trace, delta = helper(*args)
+    torch.testing.assert_close(pre_trace, torch.full_like(pre_trace, initial_pre / 2))
+    torch.testing.assert_close(post_trace, torch.full_like(post, 1.2))
+    torch.testing.assert_close(
+        delta,
+        torch.full_like(conv.weight, initial_pre * positions / 2),
+        rtol=1e-10,
+        atol=1e-12,
+    )
+    pre_trace, post_trace, delta = learning.stdp_multi_step(
+        conv,
+        torch.stack([pre, pre]),
+        torch.stack([post, post]),
+        initial_pre,
+        0.4,
+        2.0,
+        2.0,
+        modulation,
+        modulation,
+    )
+    torch.testing.assert_close(pre_trace, torch.full_like(pre_trace, initial_pre / 4))
+    torch.testing.assert_close(post_trace, torch.full_like(post, 1.6))
+    torch.testing.assert_close(
+        delta,
+        torch.full_like(conv.weight, initial_pre * positions * 0.75),
+        rtol=1e-10,
+        atol=1e-12,
+    )
+
+
+@pytest.mark.parametrize("reward", [torch.tensor([0.25]), torch.tensor([0.25, -0.5])])
+@pytest.mark.parametrize("eligibility", [torch.tensor(0.6), torch.tensor([[0.6, 0.2]])])
+def test_reward_functional_preserves_broadcasting_and_autograd(reward, eligibility):
+    reward = reward.double().requires_grad_()
+    eligibility = eligibility.double().requires_grad_()
+    trace = torch.arange(6, dtype=torch.float64).reshape(3, 2).requires_grad_()
+    before = trace.detach().clone()
+    update, next_trace = functional.mstdpet_reward_step(
+        reward,
+        eligibility,
+        trace,
+        tau_trace=2.0,
+    )
+    import math
+
+    expected_trace = trace * math.exp(-0.5) + eligibility / 2
+    torch.testing.assert_close(next_trace, expected_trace, rtol=1e-10, atol=1e-12)
+    torch.testing.assert_close(update, reward * expected_trace, rtol=1e-10, atol=1e-12)
+    update.sum().backward()
+    assert (
+        reward.grad is not None
+        and eligibility.grad is not None
+        and trace.grad is not None
+    )
+    assert torch.equal(trace.detach(), before)
+
+
+@pytest.mark.parametrize("tau_trace", [0.0, -1.0, float("inf"), float("nan")])
+def test_invalid_eligibility_time_constant_names_the_actual_argument(tau_trace):
+    with pytest.raises(ValueError, match="tau_trace"):
+        functional.mstdpet_reward_step(
+            0.5,
+            torch.ones(2, 2),
+            torch.zeros(2, 2),
+            tau_trace=tau_trace,
+        )
+    fc, sn = nn.Linear(2, 2), nn.Identity()
+    with pytest.raises(ValueError, match="tau_trace"):
+        learning.MSTDPETLearner("s", fc, sn, 2.0, 2.0, tau_trace=tau_trace)
+    assert not fc._forward_pre_hooks and not sn._forward_hooks
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_reward_functional_accepts_cpu_scalar_operands_with_cuda_trace():
+    reward = torch.tensor(0.25, dtype=torch.float64)
+    eligibility = torch.tensor(0.6, dtype=torch.float64)
+    trace = torch.arange(6, dtype=torch.float64, device="cuda").reshape(3, 2)
+    update, next_trace = functional.mstdpet_reward_step(
+        reward,
+        eligibility,
+        trace,
+        tau_trace=2.0,
+    )
+    import math
+
+    expected = trace * math.exp(-0.5) + 0.3
+    torch.testing.assert_close(next_trace, expected, rtol=1e-10, atol=1e-12)
+    torch.testing.assert_close(update, 0.25 * expected, rtol=1e-10, atol=1e-12)

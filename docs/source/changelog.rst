@@ -388,6 +388,9 @@ Module: ``spikingjelly.activation_based.learning``.
 - Made ``MSTDPLearner`` eligibility and reward-derived weight updates follow the
   synapse device and dtype.
 - Validate plasticity configurations and activity/state shapes before updates.
+- Convolution STDP helpers accept scalar initial traces, including nonzero traces
+  on padded inputs. ``functional.mstdpet_reward_step`` retains PyTorch reward and
+  eligibility broadcasting; the scalar-reward restriction applies to the learner.
 - Plasticity learners compute without retaining modulation or reward autograd graphs.
 - Added ``close()`` to plasticity learners to permanently remove hooks and clear
   learning states. Closed learners cannot be stepped or enabled again.
