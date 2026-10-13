@@ -354,9 +354,9 @@ are inherited from CubicSRM; spatial convolution does not introduce time samplin
 
 The minimal MNIST network is ``1×28×28 → 8C5/stride2 → 8×12×12 → 1152→10``,
 with two spiking layers and 11720 parameters. Pixels become ``1-pixel`` times;
-all pixels emit, including the black background at time1. Weights use the demo's
-row-softmax gains8/2, logits ``50*(4-time)`` (zero for silence), cross-entropy
-and Adam. The shared trainer uses a55000/5000/10000 split, validation-selected
+all pixels emit, including the black background at time 1. Weights use the demo's
+row-softmax gains 8/2, logits ``50*(4-time)`` (zero for silence), cross-entropy
+and Adam. The shared trainer uses a 55000/5000/10000 split, validation-selected
 checkpoints and one final test; ``--hidden-features`` means convolution channels.
 
 .. code-block:: bash
@@ -371,3 +371,44 @@ channels and local event counts. There is no claim that this execution is faster
 than cuDNN time-step convolution. Compare route alternatives with the same
 network/events/weights and include backward and peak memory. Chunking limits
 some construction intermediates but does not remove autograd's total saved state.
+
+Validation on a Tesla V100S (Torch 2.7.1+cu118, Triton 3.3.1): seed 0, B128,
+five full training epochs selected epoch 5, validation 92.24% and test **93.06%**
+(9306/10000). Final routing/gradient-guard code replayed all 10000 logits exactly,
+with identical finite B128 parameter gradients. This is a single-seed result.
+
+Three independent processes compared the same trained network, checkpoint,
+MNIST first batch and cross-entropy forward+backward, excluding optimizer.
+Three warmups and 10 alternating repeats per process gave the following medians
+of process medians (peak memory is the maximum observed across processes):
+
+.. list-table:: Equivalent routing comparison on dense single-spike inputs
+   :header-rows: 1
+
+   * - Batch
+     - Multi-event CSR route (ms)
+     - Single-spike unfold reference (ms)
+     - CSR peak memory (MiB)
+   * - 1
+     - 40.90
+     - 38.46
+     - 10.10
+   * - 8
+     - 44.79
+     - 42.83
+     - 87.83
+   * - 32
+     - 53.37
+     - 52.77
+     - 361.71
+   * - 128
+     - 104.59
+     - 104.00
+     - 1583.22
+
+The unfold reference is restricted to one event per pixel and uses the same
+cubic solver and output packing; it is not a time-step model. The multi-event
+CSR path is not faster on this dense workload. Isolated routing forward+backward
+at B128 takes 2.14 ms (unfold 1.28 ms); this includes input-time gradients unlike the
+image-input training step, so it is a scale comparison, not an exact subtraction
+from total time. The existing partition/root operations dominate overall cost.
