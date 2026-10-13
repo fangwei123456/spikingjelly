@@ -493,3 +493,85 @@ def test_safeguarded_newton_handles_flat_and_outside_bracket_proposals():
             rtol=1e-9,
             atol=1e-12,
         )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+def test_cuda_newton_matches_torch_on_curved_and_tiny_roots(monkeypatch):
+    from spikingjelly._ops import first_spike
+
+    pytest.importorskip("triton")
+    cases = (
+        (
+            lambda t, i, p: (t.pow(5) - p, 5 * t.pow(4)),
+            [-0.001, 1e-10, 0.2],
+            [-1.0, 2.0],
+        ),
+        (
+            lambda t, i, p: (1 / (2 - t) - p, 1 / (2 - t).square()),
+            [1.0, 20.0, 200.0],
+            [0.0, 1.999],
+        ),
+        (lambda t, i, p: (t * p - 1, p.expand_as(t)), [1e38, 2.0, 0.1], [0.0, 1.0]),
+    )
+    for response, values, window in cases:
+        # Strided parameters and broadcast partitions exercise real public inputs.
+        storage = torch.tensor(values * 2, device="cuda", dtype=torch.float64)
+        p = storage[::2].detach().requires_grad_()
+        knots = torch.tensor(window, device="cuda", dtype=torch.float64).expand(3, 2)
+        actual = solver.first_spike_time(response, knots, (p[:, None],))
+        actual_grad = torch.autograd.grad(actual.sum(), p)[0]
+        with monkeypatch.context() as reference:
+            reference.setattr(first_spike, "triton", None)
+            expected = solver.first_spike_time(response, knots, (p[:, None],))
+            expected_grad = torch.autograd.grad(expected.sum(), p)[0]
+        torch.testing.assert_close(actual, expected, rtol=1e-14, atol=0)
+        torch.testing.assert_close(actual_grad, expected_grad, rtol=1e-13, atol=0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+def test_cuda_cubic_matches_torch_for_shared_signed_events(monkeypatch):
+    from spikingjelly._ops import first_spike
+
+    pytest.importorskip("triton")
+    times = torch.tensor(
+        [0.4, 0.1, 0.1, 0.7, 1.1],
+        device="cuda",
+        dtype=torch.float64,
+        requires_grad=True,
+    )
+    indices = torch.tensor([0, 1, 1, 0, 1], device="cuda")
+    offsets = torch.tensor([0, 3, 3, 5], device="cuda")
+    weights = torch.tensor(
+        [[1.1, 0.8], [-0.4, 1.7], [0.1, -0.3]],
+        device="cuda",
+        dtype=torch.float64,
+        requires_grad=True,
+    )
+    actual = functional.cubic_srm(times, indices, offsets, weights, 4.0)
+    actual_grad = torch.autograd.grad(actual[0].sum(), (times, weights))
+    with monkeypatch.context() as reference:
+        reference.setattr(first_spike, "triton", None)
+        expected = functional.cubic_srm(times, indices, offsets, weights, 4.0)
+        expected_grad = torch.autograd.grad(expected[0].sum(), (times, weights))
+    for a, b in zip(actual, expected):
+        torch.testing.assert_close(a, b, rtol=1e-13, atol=1e-14)
+    for a, b in zip(actual_grad, expected_grad):
+        torch.testing.assert_close(a, b, rtol=1e-12, atol=1e-13)
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_nonfinite_interior_response_is_rejected(device):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA unavailable")
+    knots = torch.tensor([0.0, 1.0], device=device, dtype=torch.float64)
+    for invalid_slope in (False, True):
+
+        def response(time, piece):
+            invalid = torch.where((time > 0) & (time < 1), torch.nan, 0)
+            value, slope = 2 * time - 1, torch.full_like(time, 2)
+            return (
+                (value, slope + invalid) if invalid_slope else (value + invalid, slope)
+            )
+
+        with pytest.raises(RuntimeError, match="non-finite"):
+            solver.first_spike_time(response, knots, ())

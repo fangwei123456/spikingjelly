@@ -3,6 +3,7 @@ import math
 import torch
 from torch.autograd.function import once_differentiable
 
+from .._ops.first_spike import _cubic_value
 from .._ops.tempotron import _roots, _states, _weight_gradient
 from .._ops.tempotron.reference import _phi, _psp, _stationary, _voltage
 
@@ -1055,10 +1056,7 @@ def _cubic_parameters(duration, support, threshold):
 def _cubic_response(
     time, piece, coefficients, origins, duration, input_times, incoming, support
 ):
-    interval = piece // 3
-    x = (time - origins.gather(-1, interval)) / duration
-    c1, c2, c3 = (coefficients[..., k].gather(-1, interval) for k in (1, 2, 3))
-    slope = ((3 * c3 * x + 2 * c2) * x + c1) / duration
+    value, slope = _cubic_value(time, piece, coefficients, origins, duration)
     if torch.is_grad_enabled():
         # Recompute event partials; retain the certified polynomial's one-sided slope.
         delay = time - input_times[:, None, :]
@@ -1066,8 +1064,7 @@ def _cubic_response(
         z = torch.where(valid, delay, 0) / support
         value = torch.where(valid, (27 / 4) * z * (1 - z).square(), 0)
         return (incoming * value).sum(-1, keepdim=True) - 1, slope
-    c0 = coefficients[..., 0].gather(-1, interval)
-    return ((c3 * x + c2) * x + c1) * x + c0 - 1, slope
+    return value, slope
 
 
 def _cubic_partition(times, coefficients, duration):
@@ -1156,28 +1153,22 @@ def _cubic_partition(times, coefficients, duration):
             raise RuntimeError(
                 "Cubic SRM stationary time is not representable relative to arrival time."
             )
-        points = torch.stack(
-            (
-                left,
-                torch.where(inside_first, left + first[..., :-1], right),
-                torch.where(inside_second, left + second[..., :-1], right),
-                right,
-            ),
-            -1,
+        first_point = torch.where(inside_first, left + first[..., :-1], right)
+        second_point = torch.where(inside_second, left + second[..., :-1], right)
+        first_flag = torch.where(inside_first, is_extremum, extremum_right)
+        second_flag = torch.where(inside_second, is_extremum, extremum_right)
+        # Endpoints are already ordered; only the two stationary points can swap.
+        ordered = first_point <= second_point
+        low = torch.minimum(first_point, second_point)
+        high = torch.maximum(first_point, second_point)
+        low_flag = torch.where(ordered, first_flag, second_flag)
+        high_flag = torch.where(ordered, second_flag, first_flag)
+        boundaries = torch.cat(
+            (left[..., :1], torch.stack((low, high, right), -1).flatten(-2)), -1
         )
-        flags = torch.stack(
-            (
-                extremum_left,
-                torch.where(inside_first, is_extremum, extremum_right),
-                torch.where(inside_second, is_extremum, extremum_right),
-                extremum_right,
-            ),
-            -1,
-        )
-        points, order = points.sort(dim=-1, stable=True)
-        flags = flags.gather(-1, order)
-        boundaries = torch.cat((points[..., 0, :1], points[..., 1:].flatten(-2)), -1)
-        extrema = torch.stack((flags[..., :-1], flags[..., 1:]), -1).flatten(-3, -2)
+        left_flags = torch.stack((extremum_left, low_flag, high_flag), -1)
+        right_flags = torch.stack((low_flag, high_flag, extremum_right), -1)
+        extrema = torch.stack((left_flags, right_flags), -1).flatten(-3, -2)
     return boundaries, extrema
 
 
@@ -1208,6 +1199,7 @@ def cubic_srm(
     实根，形成完整单调分段；调用通用 :func:`~spikingjelly.timing_based.solver.first_spike_time`
     求根及一阶隐式梯度。不是均匀时间采样，也不使用单核驻点并集。
     内部 FP64；前向缓存局部系数，反向在原输入事件重算偏导，不保留前缀扫描图。
+    安装 Triton 时 CUDA 融合多项式求值和通用求根更新，否则使用 Torch。
     事件/分段拓扑切换处不保证唯一导数。局部时间按 duration
     归一化，用电压/导数前缀推进而非全局时刻幂。极端支撑比例仍受浮点分辨率限制。
 
@@ -1252,6 +1244,8 @@ def cubic_srm(
     implicit gradients. There is no uniform time sampling or union of individual
     kernel stationary points. Internals use FP64; forward caches local coefficients
     and backward recomputes event partials without retaining the prefix graph.
+    With Triton installed, CUDA fuses polynomial evaluation and general root updates;
+    otherwise it uses Torch.
     Topology boundaries need not
     have unique derivatives. Local time uses duration-normalized voltage/derivative prefix transitions,
     avoiding global time powers. Extreme support ratios remain subject to floating resolution.

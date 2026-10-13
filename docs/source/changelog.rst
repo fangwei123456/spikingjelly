@@ -84,10 +84,12 @@ Modules: ``spikingjelly.timing_based.solver``, ``spikingjelly.timing_based.funct
 - Added an experimental ```first_spike_time``` solver for caller-certified complete
   monotone partitions of continuous total threshold residuals. FP64 bracketed
   roots use safeguarded Newton/bisection and first-order implicit gradients, including explicit output-history
-  parameters. Arbitrary black-box kernels without complete partitions are not supported.
+  parameters. CUDA uses fused root-update arithmetic when Triton is installed.
+  Arbitrary black-box kernels without complete partitions are not supported.
 - Added an experimental single-spike ```CubicSRM``` with finite-support, unit-peak
   cubic PSPs, complete weighted-response stationary partitions and compact CSR
-  outputs, plus a two-layer MNIST example classified by spike times. Existing
+  outputs, fused CUDA polynomial evaluation with optional Triton, and a two-layer
+  MNIST example classified by spike times. Existing
   Tempotron and ramp-SRM fast paths retain their dynamics and implementations.
 
 - Added an experimental fixed-kernel ```SRM``` with linear-ramp input responses,

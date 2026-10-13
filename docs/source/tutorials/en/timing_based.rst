@@ -259,6 +259,10 @@ owns neither neuron history nor reset/shunting or event capacity. Higher-order
 backward is unsupported; singular requested derivatives raise, without clipping.
 Partitions select branches and receive no derivative.
 
+With Triton installed, CUDA fuses general root updates and cubic polynomial
+evaluation; otherwise it uses Torch. Partition ordering compares only the two
+interior stationary points, preserving stable ties.
+
 .. code-block:: python
 
    import torch

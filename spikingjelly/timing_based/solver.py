@@ -3,12 +3,14 @@ from typing import Callable, Optional, Tuple
 
 import torch
 
+from .._ops.first_spike import _newton_finish, _newton_proposal
+
 __all__ = ["first_spike_time"]
 
 _Response = Callable[..., Tuple[torch.Tensor, torch.Tensor]]
 
 
-def _evaluate(response, time, piece, parameters):
+def _evaluate(response, time, piece, parameters, *, check_finite=True):
     result = response(time, piece, *parameters)
     if (
         not isinstance(result, tuple)
@@ -26,7 +28,9 @@ def _evaluate(response, time, piece, parameters):
         or slope.device != time.device
     ):
         raise ValueError("response must return matching FP64 residuals and slopes.")
-    if not bool(torch.isfinite(value).all() & torch.isfinite(slope).all()):
+    if check_finite and not bool(
+        torch.isfinite(value).all() & torch.isfinite(slope).all()
+    ):
         raise RuntimeError("response returned a non-finite residual or slope.")
     return value, slope
 
@@ -73,40 +77,43 @@ class _FirstSpike(torch.autograd.Function):
             moving = moving_root & (hi - lo > tolerance) & (trial > lo) & (trial < hi)
             if not bool(moving.any()):
                 break
+            # Proposal validation shares the same reduction as its probe decision.
             value, slope = _evaluate(
-                response, torch.where(moving, trial, lo), chosen, state
+                response,
+                torch.where(moving, trial, lo),
+                chosen,
+                state,
+                check_finite=False,
             )
-            exact_middle = moving & (value == 0)
-            lo = torch.where(exact_middle | (moving & (value < 0)), trial, lo)
-            hi = torch.where(exact_middle | (moving & (value >= 0)), trial, hi)
-            transverse = moving & (slope > 0)
-            step = torch.where(transverse, value, 0) / torch.where(transverse, slope, 1)
-            proposal = trial - step
-            near = transverse & (step.abs() <= absolute + 8 * eps * trial.abs())
-            if bool(near.any()):
-                radius = (absolute + 8 * eps * proposal.abs()) / 4
-                local_lo = torch.maximum(lo, proposal - radius)
-                local_hi = torch.minimum(hi, proposal + radius)
-                f_lo, _ = _evaluate(
-                    response, torch.where(near, local_lo, lo), chosen, state
-                )
-                f_hi, _ = _evaluate(
-                    response, torch.where(near, local_hi, lo), chosen, state
-                )
-                certified = near & (local_lo <= local_hi) & (f_lo <= 0) & (f_hi >= 0)
-                lo = torch.where(certified, local_lo, lo)
-                hi = torch.where(certified, local_hi, hi)
-            # Newton is accepted only inside the bracket with a contracting step.
-            newton = (
-                transverse
-                & torch.isfinite(proposal)
-                & (proposal > lo)
-                & (proposal < hi)
-                & (proposal != trial)
-                & (step.abs() <= previous_step / 2)
+            (
+                lo,
+                hi,
+                proposal,
+                step,
+                local_lo,
+                local_hi,
+                transverse,
+                near,
+                needs_probes,
+            ) = _newton_proposal(lo, hi, trial, value, slope, moving)
+            f_lo = f_hi = lo
+            if needs_probes:
+                f_lo, _ = _evaluate(response, local_lo, chosen, state)
+                f_hi, _ = _evaluate(response, local_hi, chosen, state)
+            lo, hi, trial, previous_step = _newton_finish(
+                lo,
+                hi,
+                proposal,
+                step,
+                previous_step,
+                trial,
+                transverse,
+                near,
+                local_lo,
+                local_hi,
+                f_lo,
+                f_hi,
             )
-            previous_step = torch.where(newton, step.abs(), (hi - lo) / 2)
-            trial = torch.where(newton, proposal, lo + (hi - lo) / 2)
         tolerance = absolute + 8 * eps * torch.maximum(lo.abs(), hi.abs())
         if bool((moving_root & (hi - lo > tolerance)).any()):
             raise RuntimeError("The first-spike root did not converge.")
@@ -212,6 +219,7 @@ def first_spike_time(
     可重复执行，所有可微依赖须显式放入 parameters，不能隐藏在闭包内。
 
     仅支持一阶反向；create_graph=True 明确报错，包括参数来自可微变换的情况。
+    安装 Triton 时 CUDA 融合求根更新算术，否则使用 Torch；响应函数仍由调用方提供。
     FP64 括区间保护的 Newton/二分只用于前向；一阶反向重算 ``-F_p/F_t``，传播到显式参数，
     包括可微的历史发放时刻。分段位置/类型仅负责选分支，不求导。
     未发放返回 inf，其梯度为零。相切不发放；窗口终点上穿计入。
@@ -263,6 +271,8 @@ def first_spike_time(
 
     Only first-order backward is supported; create_graph=True raises, including
     when parameters come from differentiable transformations.
+    With Triton installed, CUDA fuses root-update arithmetic; otherwise it uses Torch.
+    The caller still provides the response callable.
     FP64 bracketed Newton/bisection is forward-only. First-order backward recomputes ``-F_p/F_t``
     for explicit parameters, including differentiable previous spike times.
     Partition positions/types select branches and receive no gradient. Silence
