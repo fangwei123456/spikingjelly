@@ -117,11 +117,6 @@ def _check_forward_inputs(
 
     device = x_seq.get_device()
     shared_bytes = K * 4 + threads // 8
-    max_shared = torch.cuda.get_device_properties(device).shared_memory_per_block
-    if shared_bytes > max_shared:
-        raise ValueError(
-            f"K={K} requires {shared_bytes} shared bytes, limit is {max_shared}"
-        )
     return T, M, K, N, device, shared_bytes
 
 

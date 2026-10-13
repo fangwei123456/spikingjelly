@@ -927,6 +927,7 @@ def test_mixed_precision_autograd_with_plan_matches_safe_wrapper(kind):
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("kind", ["if", "plif"])
+@pytest.mark.fp8_hardware
 def test_mixed_precision_fp8_storage_backward_fp32_compute_produces_finite_grad(kind):
     dtype_name = "float8_e4m3fn"
     storage_dtype = _fp8_storage_dtype_or_skip(dtype_name, require_backward=True)
@@ -960,6 +961,7 @@ def test_mixed_precision_fp8_storage_backward_fp32_compute_produces_finite_grad(
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
 @pytest.mark.parametrize("v_reset", [0.0, None])
+@pytest.mark.fp8_hardware
 def test_mixed_precision_fp8_storage_matches_quantized_reference(kind, v_reset):
     dtype_name = "float8_e4m3fn"
     storage_dtype = _fp8_storage_dtype_or_skip(dtype_name, require_backward=False)
@@ -1037,6 +1039,7 @@ def test_mixed_precision_fp8_storage_matches_quantized_reference(kind, v_reset):
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
 @pytest.mark.parametrize("dtype_name", ["float8_e4m3fn", "float8_e5m2"])
+@pytest.mark.fp8_hardware
 def test_mixed_precision_fp8_inference_runs_without_saved_intermediates(
     kind, dtype_name
 ):
@@ -1088,6 +1091,7 @@ def test_mixed_precision_fp8_inference_runs_without_saved_intermediates(
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
 @pytest.mark.parametrize("dtype_name", ["float8_e4m3fn", "float8_e5m2"])
+@pytest.mark.fp8_hardware
 def test_mixed_precision_pure_fp8_compute_runs_forward_and_backward(kind, dtype_name):
     storage_dtype = _fp8_storage_dtype_or_skip(
         dtype_name,
@@ -1174,6 +1178,7 @@ def test_mixed_precision_pure_fp8_compute_runs_forward_and_backward(kind, dtype_
         ("float8_e5m2", "bf16", None, False, True, 32),
     ],
 )
+@pytest.mark.fp8_hardware
 def test_mixed_precision_fp8_matrix_meets_numerical_gates(
     kind,
     dtype_name,

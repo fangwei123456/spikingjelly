@@ -98,8 +98,11 @@ The CIFAR-10 variant fixes the official 32×32 input, 4×4 patch stem, 384 chann
 12 attention heads, and 4 transformer blocks while retaining the same TP, PP, and
 FSDP2 implementation. ``mixup_alpha`` enables serializable batch-level mixup;
 ``0`` disables it.
-Rank zero prints one JSON record after every epoch containing the optimizer step,
-train loss, validation loss, and validation accuracy. The returned ``metrics``
+Rank zero logs one JSON record after every epoch containing the optimizer step,
+train loss, validation loss, and validation accuracy. Library callers must enable
+``spikingjelly.logger.logger.enable("spikingjelly")`` and configure an INFO sink;
+``benchmark/vision_distributed.py`` does this and writes progress to stderr.
+The returned ``metrics``
 dictionary contains the final values and throughput statistics.
 
 ``neuron_config`` optionally selects a serializable neuron and surrogate for

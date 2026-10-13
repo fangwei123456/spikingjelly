@@ -26,6 +26,24 @@ def projection_execution(request, monkeypatch):
                 pytest.skip("native extension not built")
         else:
             monkeypatch.setattr(package, "_native_available", lambda *args: False)
+    return request.param
+
+
+@pytest.mark.parametrize("operation", [if_linear, lif_linear])
+def test_projection_shared_memory_limit_is_backend_specific(
+    operation, projection_execution
+):
+    width = 2**20
+    x = torch.zeros(1, 1, width, device="cuda")
+    v = torch.zeros(1, width, device="cuda")
+    weight_t = torch.zeros(width, 1, device="cuda")
+    if projection_execution == "native":
+        with pytest.raises(RuntimeError, match="shared-memory limit"):
+            operation(x, v, weight_t)
+    else:
+        output, state = operation(x, v, weight_t)
+        torch.testing.assert_close(output, torch.zeros_like(output), rtol=0, atol=0)
+        torch.testing.assert_close(state, v, rtol=0, atol=0)
 
 
 def _reference(

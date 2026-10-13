@@ -53,7 +53,8 @@ def test_import_registers_all_families_without_loading_cuda_providers():
 
         torch.cuda._lazy_init = forbidden
         Path.read_bytes = forbidden
-        original_cache_tag = torch.compiler.config.cache_key_tag
+        compiler_config = getattr(torch.compiler, "config", None)
+        original_cache_tag = getattr(compiler_config, "cache_key_tag", None)
         for family in {FAMILIES!r}:
             package = "spikingjelly._ops." + family
             module = importlib.import_module(package)
@@ -66,7 +67,9 @@ def test_import_registers_all_families_without_loading_cuda_providers():
                 for provider in ("native", "triton")
             )
         assert not torch.cuda.is_initialized()
-        assert torch.compiler.config.cache_key_tag == original_cache_tag
+        assert getattr(
+            getattr(torch.compiler, "config", None), "cache_key_tag", None
+        ) == original_cache_tag
     """)
     subprocess.run([sys.executable, "-c", code], check=True, timeout=60)
 
@@ -208,22 +211,28 @@ def test_compiler_cache_distinguishes_cuda_implementations(tmp_path):
         from spikingjelly.activation_based.functional import neuron_implementation
         from unittest.mock import patch
 
-        torch.compiler.config.cache_key_tag = "caller-tag"
+        config = getattr(torch.compiler, "config", None)
+        has_cache_tag = hasattr(config, "cache_key_tag")
+        if has_cache_tag:
+            config.cache_key_tag = "caller-tag"
         provider = os.environ["SJ_LIF_CUDA_IMPLEMENTATION"]
         x = torch.full((3, 2, 5), 0.3, device="cuda", requires_grad=True)
         v = torch.zeros(2, 5, device="cuda", requires_grad=True)
         args = (x, v, 2.0, True, 1.0, 0.0, False, 4.0)
         reference = lif(*args)
         assert neuron_implementation("lif", x.device)["implementation"] == provider
-        bound_tag = torch.compiler.config.cache_key_tag
+        bound_tag = config.cache_key_tag if has_cache_tag else None
         lif(*args)
-        assert torch.compiler.config.cache_key_tag == bound_tag
-        assert bound_tag == "caller-tag"
+        if has_cache_tag:
+            assert config.cache_key_tag == bound_tag
+            assert bound_tag == "caller-tag"
         # User-provided compile scopes must keep the provider fingerprint too.
-        torch.compiler.config.cache_key_tag = "caller-tag"
+        if has_cache_tag:
+            config.cache_key_tag = "caller-tag"
         compiled = torch.compile(lif, fullgraph=True)
         compiled(*args)
-        assert "sj-ops:sj_lif" in torch.compiler.config.cache_key_tag
+        if has_cache_tag:
+            assert "sj-ops:sj_lif" in config.cache_key_tag
         calls = []
         original_call = torch._ops.OpOverload.__call__
         def observe(op, *args, **kwargs):
@@ -237,7 +246,8 @@ def test_compiler_cache_distinguishes_cuda_implementations(tmp_path):
             torch.autograd.grad(output[0].sum() + output[1].sum(), (x, v)),
             torch.autograd.grad(reference[0].sum() + reference[1].sum(), (x, v)),
         )
-        assert torch.compiler.config.cache_key_tag.startswith("caller-tag")
+        if has_cache_tag:
+            assert config.cache_key_tag.startswith("caller-tag")
         if provider == "cuda":
             assert calls == ["sj_lif::native_forward"], calls
         else:

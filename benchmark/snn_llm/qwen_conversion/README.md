@@ -86,3 +86,14 @@ are private benchmark contracts rather than public SpikingJelly APIs.
   or falls back to CPU or one GPU.
 - The final supported conversion evidence covers Qwen2.5 Base 0.5B, 1.5B, and
   3B. It does not claim 7B support or dense-equivalent execution speed.
+
+## Release quick profile
+
+`tools/release/validate.py run --cases qwen --qwen-model-root LOCAL_MODEL
+--qwen-hf-cache LOCAL_DATA_CACHE --output-dir NEW_RUN` runs the fixed 0.5B
+profile in `tools/release/profiles.toml`: BF16/T160/16 levels/q.999,
+train-only calibration (128×512 tokens), bounded test PPL (four windows), then
+conversion, cached decoding and reset checks using that same calibration.
+Local weights are checksum-verified against the locked revision; the evaluation
+runs offline. Quick PPL uses the existing 15% degradation limit. Reports remain
+bounded (`full_evaluation=false`), not full PPL/zero-shot acceptance or speed evidence.

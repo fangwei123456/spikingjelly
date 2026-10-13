@@ -21,7 +21,7 @@ their respective submodules.
 """
 
 from .masnn import AttMSResNet, MASNN, att_ms_resnet18, masnn_dvs128_gesture
-from .maxformer import MaxFormer, maxformer_10_384
+from .maxformer import MaxFormer, maxformer_10_384, maxformer_cifar
 from .ms_resnet import MaxResNet, MSResNet, max_resnet18, ms_resnet18, ms_resnet34
 from .qkformer import QKFormer, qkformer_10_384
 from .spike_driven_transformer import SpikeDrivenTransformer, sdt_8_384
@@ -45,6 +45,7 @@ __all__ = [
     "masnn_dvs128_gesture",
     "max_resnet18",
     "maxformer_10_384",
+    "maxformer_cifar",
     "ms_resnet18",
     "ms_resnet34",
     "qkformer_10_384",

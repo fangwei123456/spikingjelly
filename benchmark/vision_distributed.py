@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import sys
 
 import torch
 from torch.utils.data import Dataset, Subset
@@ -15,6 +16,7 @@ from spikingjelly.activation_based.model.spikformer import (
     SpikformerConfig,
 )
 from spikingjelly.activation_based.precision import PrecisionConfig
+from spikingjelly.logger import logger
 
 
 class _SyntheticImages(Dataset):
@@ -254,6 +256,9 @@ def main() -> None:
         checkpoint_interval=args.checkpoint_interval,
         resume=args.resume,
     )
+    logger.remove()
+    logger.add(sys.stderr, format="{message}", level="INFO")
+    logger.enable("spikingjelly")
     metrics = vision.train_classification(config)
     if int(os.environ.get("RANK", "0")) == 0:
         print(json.dumps(metrics, sort_keys=True))

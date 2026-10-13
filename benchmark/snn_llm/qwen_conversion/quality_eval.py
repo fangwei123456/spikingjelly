@@ -173,13 +173,20 @@ def _load_wikitext(cache_dir: Path, split: str):
     except ImportError as exc:  # pragma: no cover - optional dependency
         raise ImportError("Qwen quality evaluation requires datasets.") from exc
     record = _load_lock()["datasets"]["wikitext"]
-    return datasets.load_dataset(
+    dataset = datasets.load_dataset(
         record["repository"],
         record["config"],
         split=split,
         revision=record["revision"],
         cache_dir=str(cache_dir),
     )
+    # datasets' offline fallback can select the latest cached revision instead.
+    if not dataset.cache_files or any(
+        record["revision"] not in Path(item["filename"]).parts
+        for item in dataset.cache_files
+    ):
+        raise ValueError("WikiText cache does not match the locked revision")
+    return dataset
 
 
 def _token_stream(tokenizer, dataset) -> torch.Tensor:
@@ -612,9 +619,16 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
         calibration_seed=20260719,
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    dataset_provenance = {}
     if args.calibration_artifact is None:
         train = _load_wikitext(args.hf_cache, "train")
         train_tokens = _token_stream(tokenizer, train)
+        dataset_provenance["train"] = {
+            "fingerprint": train._fingerprint,
+            "token_sha256": hashlib.sha256(
+                train_tokens.cpu().numpy().tobytes()
+            ).hexdigest(),
+        }
         batches = _calibration_batches(
             train_tokens, args.device, args.calibration_windows
         )
@@ -640,6 +654,12 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
     if not args.skip_ppl:
         evaluation = _load_wikitext(args.hf_cache, args.wikitext_split)
         evaluation_tokens = _token_stream(tokenizer, evaluation)
+        dataset_provenance[args.wikitext_split] = {
+            "fingerprint": evaluation._fingerprint,
+            "token_sha256": hashlib.sha256(
+                evaluation_tokens.cpu().numpy().tobytes()
+            ).hexdigest(),
+        }
         ppl = _rolling_ppl(
             dense_model=precision.model,
             snn_model=converted,
@@ -683,6 +703,7 @@ def _run(args: argparse.Namespace) -> Dict[str, object]:
             "files": _hash_files(args.model_root),
         },
         "data": lock["datasets"],
+        "dataset_provenance": dataset_provenance,
         "environment": build_environment(args.device),
         "configuration": {
             "precision": args.precision,

@@ -1,0 +1,82 @@
+[policy]
+max_seconds = 86400
+max_cost_usd = 5.0
+performance_tolerance = 0.02
+performance_pairs = 3
+performance_metric = "throughput"
+# Quality is a per-release task menu; select at least one, not every listed recipe.
+required_groups = ["package", "cpu-minimum", "cpu", "cuda", "native", "quality", "performance", "docs", "links", "qwen"]
+
+[cases.cpu]
+kind = "pytest"
+group = "cpu"
+args = ["test/", "-v", "-o", "faulthandler_timeout=60", "-m", "not fp8_hardware"]
+# GPU/extras are separate declared environments. Every skip is retained in JSON.
+allow_skip_reasons = ["*CUDA*", "*cuda*", "*Triton*", "*triton*", "*could not import 'nir'*", "*could not import 'nirtorch'*"]
+
+[cases.cpu-minimum]
+kind = "pytest"
+group = "cpu-minimum"
+python_prefix = "3.11."
+torch_prefix = "2.6."
+args = ["test/", "-v", "-o", "faulthandler_timeout=60", "-m", "not fp8_hardware"]
+allow_skip_reasons = ["*CUDA*", "*cuda*", "*Triton*", "*triton*", "*could not import 'nir'*", "*could not import 'nirtorch'*"]
+
+[cases.cuda]
+kind = "pytest"
+group = "cuda"
+args = ["test/", "-v", "-o", "faulthandler_timeout=60", "-m", "not fp8_hardware"]
+# Do not approve missing providers or optional support silently.
+allow_skip_reasons = []
+
+[cases.package]
+kind = "package"
+group = "package"
+
+[cases.native]
+kind = "native"
+group = "native"
+
+[cases.docs]
+kind = "commands"
+group = "docs"
+commands = [
+  ["uv", "format", "--check", "--version", "0.15.22"],
+  ["uvx", "ruff==0.15.22", "check", "."],
+  ["{python}", "tools/generate_changelog_rst.py", "--check"],
+  ["{python}", "tools/check_logging_policy.py"],
+  ["{python}", "-m", "sphinx", "-M", "html", "docs/source", "{case_dir}/sphinx", "-W", "--keep-going"],
+]
+
+[cases.links]
+kind = "commands"
+group = "links"
+commands = [["{python}", "tools/release/evidence.py", "links", "--repo", "{repo}"]]
+
+[cases.maxformer-quality]
+kind = "vision-quality"
+group = "quality"
+task = "maxformer-cifar100"
+
+[cases.maxresnet-quality]
+kind = "vision-quality"
+group = "quality"
+task = "maxresnet-cifar100"
+
+[cases.clif-quality]
+kind = "vision-quality"
+group = "quality"
+task = "clif-tinyimagenet"
+
+# 2026-10-13: FP8-specific release acceptance is deferred by the maintainer.
+# General precision/API regression tests remain in the ordinary framework suite.
+[cases.qwen]
+kind = "qwen-quick"
+group = "qwen"
+model_key = "0.5b"
+time_steps = 160
+calibration_levels = 16
+calibration_quantile = 0.999
+calibration_windows = 128
+calibration_reservoir_size = 4096
+ppl_windows = 4

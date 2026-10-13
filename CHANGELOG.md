@@ -11,6 +11,15 @@ and the archived documentation linked from the project README.
 
 ### Fixes
 
+- Restored Torch 2.6 spike unpacking registration and rank-local distributed
+  vision checkpoint loading without changing packed bytes or checkpoint formats.
+- Fused neuron–Linear native kernels validate shared-memory capacity in CUDA,
+  avoiding an unavailable Torch 2.6 device property. Capacity violations raise
+  `RuntimeError`; the Torch reference has no kernel shared-memory limit.
+- Distributed vision training emits epoch progress through the SpikingJelly logger
+  instead of direct stdout; library callers must enable the package namespace and
+  configure an INFO sink. The distributed vision CLI configures JSON progress on
+  stderr and retains final metrics on stdout.
 - Removed the private GPT-2 conversion example runners; use the Qwen conversion
   runners for current language-model evaluation.
 - Moved NSYS workloads to `spikingjelly/activation_based/examples/profiling/`
@@ -59,6 +68,28 @@ Module: `spikingjelly.activation_based.examples.plasticity.stdp_mnist`.
 - Added a shallow current-LIF STDP MNIST example with recurrent inhibition and
   statistical class assignment. The validation-selected recipe averages 90.2233%
   over full tests for seeds 0, 1 and 2; see the tutorial for parameters and results.
+
+#### Release Validation
+
+Repository entry points: `tools/release/validate.py`, `package_check.py`,
+`evidence.py` and `profiles.toml`.
+
+- Added reusable installation checks shared with CI, release-profile execution,
+  paired numerical/performance comparison, and source/evidence archives with
+  hashes. Unmet prerequisites and incomplete profiles remain explicit blockers.
+- Added a fixed Qwen2.5-0.5B conversion and quick WikiText evaluation profile,
+  retaining local artifact checksums, dataset fingerprints and shared calibration.
+
+#### Task Benchmarks
+
+Module: `spikingjelly.activation_based.model.maxformer`.
+Repository entry point: `benchmark/benchmark_image_classification.py`.
+
+- Added the official CIFAR MaxFormer-4-384 configuration through `maxformer_cifar`,
+  preserving the existing ImageNet configuration.
+- Added a standalone CIFAR-100 MaxFormer/MaxResNet and Tiny ImageNet CLIF runner
+  for source-derived training, checkpoint evaluation and real-input timing.
+  It records raw measurements and separates CLIF paper/README recipes.
 
 #### Signed Ternary Neurons
 

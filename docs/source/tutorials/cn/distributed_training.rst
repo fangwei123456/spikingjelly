@@ -84,8 +84,11 @@ distributed recipe 从 ``model.sew_resnet`` 和 ``model.spikformer`` 导入，�
 CIFAR-10 变体固定使用官方的 32×32 输入、4×4 patch stem、384 维、12 个 attention
 heads 和 4 个 Transformer blocks，并复用相同的 TP、PP 与 FSDP2 实现。
 ``mixup_alpha`` 配置可序列化的 batch-level mixup；``0`` 表示禁用。
-rank 0 在每个 epoch 后输出一行 JSON，其中包含 optimizer step、train loss、
-validation loss 和 validation accuracy；返回的 ``metrics`` 字典包含最终指标与吞吐统计。
+rank 0 在每个 epoch 后通过日志记录一行 JSON，其中包含 optimizer step、train loss、
+validation loss 和 validation accuracy。直接调用库时须启用
+``spikingjelly.logger.logger.enable("spikingjelly")`` 并配置 INFO sink；
+``benchmark/vision_distributed.py`` 已完成配置，进度输出到 stderr。
+返回的 ``metrics`` 字典包含最终指标与吞吐统计。
 
 ``neuron_config`` 可为 SEW-ResNet34 和两种 Spikformer config 选择可序列化的神经元与
 替代梯度。省略时逐位保留论文默认配置。自定义神经元会替换模型中的所有神经元位置，

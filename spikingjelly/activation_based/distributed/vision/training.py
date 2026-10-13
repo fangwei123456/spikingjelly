@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import importlib
+import inspect
 import json
 import os
 import random
@@ -31,6 +32,7 @@ from spikingjelly.activation_based.precision import (
     PrecisionConfig,
     prepare_model_for_precision,
 )
+from spikingjelly.logger import logger
 from .config import TrainingConfig
 from .execution import (
     _classification_logits,
@@ -238,11 +240,14 @@ def _load_checkpoint(
             "batch_in_epoch": torch.tensor(0, dtype=torch.int64),
         },
     }
-    dcp.load(
-        state,
-        checkpoint_id=path / f"pp_{pp_rank:04d}_tp_{tp_rank:04d}",
-        no_dist=True,
-    )
+    checkpoint_id = path / f"pp_{pp_rank:04d}_tp_{tp_rank:04d}"
+    if "no_dist" in inspect.signature(dcp.load).parameters:
+        dcp.load(state, checkpoint_id=checkpoint_id, no_dist=True)
+    else:
+        # Torch 2.6 requires the older API to avoid rank-local load collectives.
+        dcp.load_state_dict(
+            state, storage_reader=dcp.FileSystemReader(checkpoint_id), no_dist=True
+        )
     if isinstance(model, torch.nn.parallel.DistributedDataParallel):
         from torch.distributed.checkpoint.state_dict import set_optimizer_state_dict
 
@@ -492,7 +497,8 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
     图像分类训练。单步模式显式循环 ``T`` 次，多步模式一次处理完整时间序列；
     ``input_layout`` 显式选择静态 ``[N, C, H, W]`` 或 batch-first 时序
     ``[N, T, C, H, W]`` 输入。每个 batch 后重置 SNN 状态。所有 TP rank 使用
-    同一个 DP sampler rank。rank 0 在每个 epoch 后输出一行 JSON 训练与验证指标。
+    同一个 DP sampler rank。rank 0 在每个 epoch 后通过包级 logger 记录 JSON 训练与
+    验证指标；调用方须启用 ``spikingjelly`` 日志命名空间并配置 INFO sink。
     checkpoint 在 writer rank 上暂存后于后台写入文件系统；每个 writer 最多
     保留一个在途 checkpoint，并在下一次保存或函数返回前完成写入和传播错误。
     暂存会在 writer rank 上临时占用约一份 checkpoint 大小的 CPU 内存。
@@ -521,7 +527,8 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
     complete sequence in one call. ``input_layout`` explicitly selects static
     ``[N, C, H, W]`` or batch-first temporal ``[N, T, C, H, W]`` input. SNN state
     is reset after every batch. TP peers share the same DP sampler rank. Rank zero
-    emits one JSON line of training and validation metrics after every epoch.
+    logs JSON training and validation metrics after every epoch through the package
+    logger; callers must enable the ``spikingjelly`` namespace and configure an INFO sink.
     Checkpoints are staged on each writer rank and uploaded to the filesystem in
     the background. Each writer keeps at most one checkpoint in flight and finishes
     it, propagating errors, before the next save or function return. Staging
@@ -945,7 +952,8 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                 )
                 model.train()
             if rank == 0:
-                print(
+                logger.info(
+                    "{}",
                     json.dumps(
                         {
                             "epoch": epoch + 1,
@@ -956,7 +964,6 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                         },
                         sort_keys=True,
                     ),
-                    flush=True,
                 )
             start_batch = 0
             if stop:

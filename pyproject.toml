@@ -110,6 +110,7 @@ known-first-party = ["benchmark", "spikingjelly", "test"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["test"]
+markers = ["fp8_hardware: dedicated FP8 device numerical/training acceptance"]
 
 [tool.coverage.run]
 branch = true
