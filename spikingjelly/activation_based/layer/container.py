@@ -292,7 +292,7 @@ class LinearRecurrentContainer(base.MemoryModule):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        step_mode="s",
+        step_mode: str = "s",
     ) -> None:
         r"""
         **API Language** - :ref:`中文 <LinearRecurrentContainer.__init__-cn>` | :ref:`English <LinearRecurrentContainer.__init__-en>`
@@ -302,6 +302,11 @@ class LinearRecurrentContainer(base.MemoryModule):
         .. _LinearRecurrentContainer.__init__-cn:
 
         * **中文**
+
+        反馈具有一个时间步延迟；``reset()`` 只清除容器的 ``y``，
+        使用 ``functional.reset_net(container)`` 同时清除子模块的时间状态。
+        batch/前导维度改变前需要 reset；否则前向传播抛出 ``ValueError``。
+        固定 ``rc.weight=[I,R]`` 且 ``bias=False`` 时，子模块接收 ``x[t]+R y[t-1]``。
 
         使用线性层的自连接包装器。记 ``sub_module`` 的输入和输出为 :math:`i[t]` 和 :math:`y[t]` （注意 :math:`y[t]` 也是整个模块的输出），
         整个模块的输入记作 :math:`x[t]` ，则
@@ -338,6 +343,12 @@ class LinearRecurrentContainer(base.MemoryModule):
         .. _LinearRecurrentContainer.__init__-en:
 
         * **English**
+
+        Feedback is delayed by one time step. ``reset()`` clears only the
+        container's ``y``; use ``functional.reset_net(container)`` to also clear
+        temporal states of its child. Reset before changing batch/leading shape;
+        otherwise forward raises ``ValueError``. With fixed ``rc.weight=[I,R]``
+        and ``bias=False``, the child receives ``x[t]+R y[t-1]``.
 
         A container that use a linear recurrent connection. Denote the inputs and outputs of ``sub_module`` as :math:`i[t]`
         and :math:`y[t]` (Note that :math:`y[t]` is also the outputs of this module), and the inputs of this module as
@@ -410,10 +421,61 @@ class LinearRecurrentContainer(base.MemoryModule):
         states: tuple[object, ...],
         step_mode: str,
     ) -> tuple[object, ...]:
+        r"""
+        **API Language** - :ref:`中文 <LinearRecurrentContainer-materialize-cn>` | :ref:`English <LinearRecurrentContainer-materialize-en>`
+
+        ----
+
+        .. _LinearRecurrentContainer-materialize-cn:
+
+        * **中文**
+
+        根据输入确定循环输出状态的形状。状态为 ``None`` 时创建同 dtype/device
+        的零张量；否则检查 batch/前导维度与输出特征数，不改变输入状态或子模块。
+
+        :param inputs: 单步为 ``([N, *, in_features],)``，多步为
+            ``([T, N, *, in_features],)``；多步初始化要求 T>0。
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: ``(y,)``，y 为 None 或与输入具有相同 batch/前导维度、
+            dtype/device 的张量，末维为 out_features。
+        :type states: tuple[object, ...]
+        :param step_mode: ``"s"`` 或 ``"m"``。
+        :type step_mode: str
+        :return: 已初始化或已检查的 ``(y,)``，不原地修改状态。
+        :rtype: tuple[object, ...]
+        :raises ValueError: 非空循环状态的形状与当前输入不匹配。
+
+        ----
+
+        .. _LinearRecurrentContainer-materialize-en:
+
+        * **English**
+
+        Determine the recurrent output state shape from input. A None state creates
+        zeros with input dtype/device; otherwise check batch/leading dimensions and
+        output feature count, without changing input states or the child.
+
+        :param inputs: ``([N, *, in_features],)`` in single-step mode or
+            ``([T, N, *, in_features],)`` in multi-step mode; initialization needs T>0.
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: ``(y,)`` where y is None or a tensor with input batch/leading
+            dimensions and dtype/device, ending in out_features.
+        :type states: tuple[object, ...]
+        :param step_mode: ``"s"`` or ``"m"``.
+        :type step_mode: str
+        :return: Initialized or validated ``(y,)`` without in-place state changes.
+        :rtype: tuple[object, ...]
+        :raises ValueError: A non-None recurrent state shape mismatches current input.
+        """
         x = inputs[0] if step_mode == "s" else inputs[0][0]
         y = states[0]
         if y is None:
             y = x.new_zeros(*x.shape[:-1], self.sub_module_out_features)
+        elif y.shape != (*x.shape[:-1], self.sub_module_out_features):
+            raise ValueError(
+                "Recurrent state shape does not match input; call reset_net(container) "
+                "before changing batch shape."
+            )
         return (y,)
 
     def single_step_functional_forward(

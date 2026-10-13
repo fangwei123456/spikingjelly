@@ -1,4 +1,5 @@
 import copy
+import importlib.util
 
 import pytest
 import torch
@@ -7,7 +8,7 @@ import torch.nn as nn
 from spikingjelly.activation_based import base, layer
 from spikingjelly.activation_based import neuron
 from spikingjelly.activation_based.functional.net_config import reset_net
-from spikingjelly.activation_based.functional.online_learning import (
+from spikingjelly.activation_based.learning.online_learning import (
     fptt_online_training,
     fptt_online_training_init_w_ra,
     ottt_online_training,
@@ -21,6 +22,39 @@ from spikingjelly.activation_based.neuron.online_learning import (
     SLTTLIFNode,
 )
 from spikingjelly.activation_based.model.spiking_vggws_ottt import OTTTSpikingVGG
+
+
+def test_learning_public_locations_preserve_plasticity_and_remove_old_training_paths():
+    from spikingjelly.activation_based import functional, learning
+
+    for name in learning.plasticity.__all__:
+        assert getattr(learning, name) is getattr(learning.plasticity, name)
+    for name in (
+        "stdp_linear_single_step",
+        "mstdp_linear_single_step",
+        "mstdpet_linear_single_step",
+        "stdp_conv1d_single_step",
+        "stdp_conv2d_single_step",
+        "stdp_multi_step",
+    ):
+        assert not hasattr(learning, name)
+        assert not hasattr(learning.plasticity, name)
+    for name in learning.online_learning.__all__:
+        assert not hasattr(functional, name)
+    assert (
+        importlib.util.find_spec(
+            "spikingjelly.activation_based.functional.online_learning"
+        )
+        is None
+    )
+    for name in ("stdp_trace", "mstdp", "mstdpet", "stdp_mnist"):
+        assert (
+            importlib.util.find_spec(f"spikingjelly.activation_based.examples.{name}")
+            is None
+        )
+        assert importlib.util.find_spec(
+            f"spikingjelly.activation_based.examples.plasticity.{name}"
+        )
 
 
 def test_online_lif_nodes_share_spike_dynamics_and_reset_state():

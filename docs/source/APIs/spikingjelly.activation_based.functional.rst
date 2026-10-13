@@ -251,29 +251,6 @@ memory, and do not manage ``step_mode``, ``training/eval``, or gradient writes.
 
    learning <spikingjelly.activation_based.functional.learning>
 
-Online Learning Pipelines
-+++++++++++++++++++++++++++++++
-
-**在线学习** 的辅助函数。
-
-----
-
-Auxiliary functions for **online learning** .
-
-.. list-table::
-
-   * - :func:`fptt_online_training_init_w_ra <spikingjelly.activation_based.functional.online_learning.fptt_online_training_init_w_ra>`
-     - Initialize weight for FPTT.
-   * - :func:`fptt_online_training <spikingjelly.activation_based.functional.online_learning.fptt_online_training>`
-     - Online training with FPTT.
-   * - :func:`ottt_online_training <spikingjelly.activation_based.functional.online_learning.ottt_online_training>`
-     - Online training with OTTT or SLTT.
-
-.. toctree::
-   :hidden:
-
-   online_learning <spikingjelly.activation_based.functional.online_learning>
-
 Miscellaneous
 +++++++++++++++++++++
 

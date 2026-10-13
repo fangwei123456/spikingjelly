@@ -306,3 +306,14 @@ def test_voting_layer_averages_fixed_size_groups_in_both_step_modes():
 
     assert torch.equal(layer.VotingLayer(2)(x), expected)
     assert torch.equal(layer.VotingLayer(2, step_mode="m")(x.unsqueeze(0))[0], expected)
+
+
+def test_linear_recurrent_container_rejects_batch_change_until_reset():
+    module = layer.LinearRecurrentContainer(nn.Identity(), 3, 3, bias=False)
+    module(torch.zeros(1, 3))
+    previous = module.y.clone()
+    with pytest.raises(ValueError, match="reset_net"):
+        module(torch.zeros(2, 3))
+    torch.testing.assert_close(module.y, previous)
+    functional.reset_net(module)
+    assert module(torch.zeros(2, 3)).shape == (2, 3)
