@@ -121,7 +121,7 @@ def _junit(path, allowed):
                 if isinstance(location, tuple)
                 and len(location) == 3
                 and isinstance(location[2], str)
-                else skipped.text
+                else reason
             )
         skips.append(
             {
@@ -1083,6 +1083,12 @@ def _self_check(output):
     )
     assert _junit(junit, [])["status"] == "blocked"
     assert _junit(junit, ["*could not import 'nir'*"])["status"] == "pass"
+    junit.write_text(
+        '<testsuites><testsuite><testcase name="unknown">'
+        '<skipped message="collection skipped">CUDA/path is not a reason tuple'
+        "</skipped></testcase></testsuite></testsuites>"
+    )
+    assert _junit(junit, ["*CUDA*"])["status"] == "blocked"
     _write(
         output,
         {
