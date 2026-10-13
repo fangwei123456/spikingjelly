@@ -1105,14 +1105,28 @@ def _cubic_partition(times, coefficients, duration):
             raise RuntimeError(
                 "Cubic SRM stationary roots are not representable in FP32."
             )
-        tolerance = 8 * torch.finfo(torch.float32).eps * duration
-        critical_start = (valid_first & (first.abs() <= tolerance)) | (
-            valid_second & (second.abs() <= tolerance)
-        )
         width = (times[:, 1:] - times[:, :-1])[:, None, :]
+        spans = torch.cat((width, torch.zeros_like(width[..., :1])), -1)
+        # Only roots that round onto an endpoint may change its Taylor branch.
+        critical_start = (
+            valid_first & (first >= 0) & (first <= spans) & (origins + first == origins)
+        ) | (
+            valid_second
+            & (second >= 0)
+            & (second <= spans)
+            & (origins + second == origins)
+        )
         critical_end = (
-            valid_first[..., :-1] & ((first[..., :-1] - width).abs() <= tolerance)
-        ) | (valid_second[..., :-1] & ((second[..., :-1] - width).abs() <= tolerance))
+            valid_first[..., :-1]
+            & (first[..., :-1] >= 0)
+            & (first[..., :-1] <= width)
+            & (origins[..., :-1] + first[..., :-1] == origins[..., 1:])
+        ) | (
+            valid_second[..., :-1]
+            & (second[..., :-1] >= 0)
+            & (second[..., :-1] <= width)
+            & (origins[..., :-1] + second[..., :-1] == origins[..., 1:])
+        )
         double_root = quadratic & (discriminant == 0)
         local = width / duration
         c1, c2, c3 = (
@@ -1478,9 +1492,7 @@ def cubic_srm(
         extrema,
     )
     firing = torch.isfinite(roots)
-    output_times = roots[firing].to(spike_times.dtype)
-    if not bool(torch.isfinite(output_times).all()):
-        raise RuntimeError("Cubic SRM output times overflow their dtype.")
+    output_times = roots[firing]
     indices = torch.arange(output_count, device=rows.device)[None, :].expand_as(roots)[
         firing
     ]

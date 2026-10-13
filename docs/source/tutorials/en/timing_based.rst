@@ -292,8 +292,8 @@ the total response is cubic. Analytic quadratic derivative roots yield the
 complete monotone partition, including multiple peaks caused by shifted inputs.
 Local voltage/derivative prefix transitions avoid global powers of event times;
 simultaneous updates are grouped while preserving individual time gradients.
-The shared solver supplies numerical roots and implicit gradients. This is a
-reference implementation, with no dedicated CUDA kernel or uniform time grid.
+The shared solver supplies numerical roots and implicit gradients. No uniform time grid is used; CUDA optionally
+uses fused Triton kernels.
 Tempotron retains its double-exponential solver, shunting and peak outputs;
 ramp SRM retains its analytic multi-level scan and step reset. The general solver
 does not replace these optimized paths.

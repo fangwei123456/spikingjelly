@@ -625,3 +625,28 @@ def test_fp32_collapsed_stationary_point_cannot_hide_large_peak():
     coefficients = torch.tensor([[[[0.0, 8e8, -8e16, 0.0], [0.0, 0.0, 0.0, 0.0]]]])
     with pytest.raises(RuntimeError, match="resolvable voltage"):
         functional._cubic_partition(knots, coefficients, 1.0)
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+@pytest.mark.parametrize("support", [1.0, 1e-3, 1e-6])
+def test_small_support_input_knot_remains_an_upcrossing(device, support):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA unavailable")
+    times = torch.tensor([0.0, support / 8], device=device, requires_grad=True)
+    gain = 1 / (27 / 4 * 0.125 * 0.875**2)
+    weight = torch.tensor([[gain, 0.0]], device=device, requires_grad=True)
+    output = functional.cubic_srm(
+        times,
+        torch.tensor([0, 1], device=device),
+        torch.tensor([0, 2], device=device),
+        weight,
+        2.0,
+        support=support,
+    )[0]
+    assert output.numel() == 1
+    assert output.item() / support == pytest.approx(0.125, rel=1e-5, abs=1e-7)
+    output.sum().backward()
+    torch.testing.assert_close(
+        times.grad, torch.tensor([1.0, 0.0], device=device), rtol=1e-5, atol=1e-6
+    )
+    assert torch.isfinite(weight.grad).all() and weight.grad[0, 0] < 0
