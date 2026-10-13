@@ -18,6 +18,8 @@ Unreleased
 Fixes
 ~~~~~
 
+- Restored Torch 2.6 spike unpacking registration and rank-local distributed
+  vision checkpoint loading without changing packed bytes or checkpoint formats.
 - Distributed vision training emits epoch progress through the SpikingJelly logger
   instead of direct stdout; the JSON metric payload is retained in the log message.
 - Removed the private GPT-2 conversion example runners; use the Qwen conversion

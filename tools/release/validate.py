@@ -1,6 +1,7 @@
 """Run selected release profiles, paired benchmarks, and aggregate evidence."""
 
 import argparse
+import ast
 from datetime import datetime, timezone
 import fnmatch
 import hashlib
@@ -104,14 +105,30 @@ def _junit(path, allowed):
     cases = list(root.iter("testcase"))
     if not cases:
         raise ValueError("JUnit contains no test cases")
-    skips = [
-        {
-            "test": c.get("classname", "") + "::" + c.get("name", ""),
-            "reason": c.find("skipped").get("message", ""),
-        }
-        for c in cases
-        if c.find("skipped") is not None
-    ]
+    skips = []
+    for case in cases:
+        skipped = case.find("skipped")
+        if skipped is None:
+            continue
+        reason = skipped.get("message", "")
+        if reason == "collection skipped" and skipped.text:
+            try:
+                location = ast.literal_eval(skipped.text)
+            except (SyntaxError, ValueError):
+                location = None
+            reason = (
+                location[2]
+                if isinstance(location, tuple)
+                and len(location) == 3
+                and isinstance(location[2], str)
+                else skipped.text
+            )
+        skips.append(
+            {
+                "test": case.get("classname", "") + "::" + case.get("name", ""),
+                "reason": reason,
+            }
+        )
     failures = [
         c.get("name")
         for c in cases
@@ -355,7 +372,7 @@ def _package(args, case_dir, deadline, native=False):
                 "--device",
                 "cuda",
                 "--provider",
-                "native",
+                "cuda",
                 "--expected-root",
                 str(outside / "environment"),
                 "--output-dir",
@@ -1058,6 +1075,14 @@ def _self_check(output):
     )
     assert _junit(junit, [])["status"] == "blocked"
     assert _junit(junit, ["CUDA unavailable"])["status"] == "pass"
+    junit.write_text(
+        '<testsuites><testsuite><testcase name="nir">'
+        '<skipped message="collection skipped">'
+        "('test_nir.py', 7, \"Skipped: could not import 'nir'\")"
+        "</skipped></testcase></testsuite></testsuites>"
+    )
+    assert _junit(junit, [])["status"] == "blocked"
+    assert _junit(junit, ["*could not import 'nir'*"])["status"] == "pass"
     _write(
         output,
         {

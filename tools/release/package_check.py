@@ -229,7 +229,7 @@ def _main():
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--device", default="cpu")
     parser.add_argument(
-        "--provider", choices=("auto", "torch", "triton", "native"), default="auto"
+        "--provider", choices=("auto", "torch", "triton", "cuda"), default="auto"
     )
     args = parser.parse_args()
     if args.mode == "provenance":

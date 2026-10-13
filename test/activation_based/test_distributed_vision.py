@@ -1228,7 +1228,11 @@ def test_sew_resnet34_single_step_matches_multi_step():
 
 
 @pytest.mark.parametrize("legacy_precision", [False, True])
-def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch, legacy_precision):
+@pytest.mark.parametrize("legacy_load", [False, True])
+def test_vision_checkpoint_restores_rng(
+    tmp_path, monkeypatch, legacy_precision, legacy_load
+):
+    import torch.distributed.checkpoint as dcp
     from torch.distributed.checkpoint import state_dict as dcp_state_dict
 
     model = nn.Linear(2, 2)
@@ -1278,6 +1282,12 @@ def test_vision_checkpoint_restores_rng(tmp_path, monkeypatch, legacy_precision)
         dp_rank=0,
     )
     future.result()
+    if legacy_load:
+
+        def load_without_no_dist(state_dict, *, checkpoint_id):
+            raise AssertionError("Rank-local load must not use collective loading")
+
+        monkeypatch.setattr(dcp, "load", load_without_no_dist)
     if legacy_precision:
         recipe_path = checkpoint / "config.json"
         recipe = json.loads(recipe_path.read_text(encoding="utf-8"))

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import importlib
+import inspect
 import json
 import os
 import random
@@ -239,11 +240,14 @@ def _load_checkpoint(
             "batch_in_epoch": torch.tensor(0, dtype=torch.int64),
         },
     }
-    dcp.load(
-        state,
-        checkpoint_id=path / f"pp_{pp_rank:04d}_tp_{tp_rank:04d}",
-        no_dist=True,
-    )
+    checkpoint_id = path / f"pp_{pp_rank:04d}_tp_{tp_rank:04d}"
+    if "no_dist" in inspect.signature(dcp.load).parameters:
+        dcp.load(state, checkpoint_id=checkpoint_id, no_dist=True)
+    else:
+        # Torch 2.6 requires the older API to avoid rank-local load collectives.
+        dcp.load_state_dict(
+            state, storage_reader=dcp.FileSystemReader(checkpoint_id), no_dist=True
+        )
     if isinstance(model, torch.nn.parallel.DistributedDataParallel):
         from torch.distributed.checkpoint.state_dict import set_optimizer_state_dict
 

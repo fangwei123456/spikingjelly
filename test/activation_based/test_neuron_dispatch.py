@@ -53,7 +53,8 @@ def test_import_registers_all_families_without_loading_cuda_providers():
 
         torch.cuda._lazy_init = forbidden
         Path.read_bytes = forbidden
-        original_cache_tag = torch.compiler.config.cache_key_tag
+        compiler_config = getattr(torch.compiler, "config", None)
+        original_cache_tag = getattr(compiler_config, "cache_key_tag", None)
         for family in {FAMILIES!r}:
             package = "spikingjelly._ops." + family
             module = importlib.import_module(package)
@@ -66,7 +67,9 @@ def test_import_registers_all_families_without_loading_cuda_providers():
                 for provider in ("native", "triton")
             )
         assert not torch.cuda.is_initialized()
-        assert torch.compiler.config.cache_key_tag == original_cache_tag
+        assert getattr(
+            getattr(torch.compiler, "config", None), "cache_key_tag", None
+        ) == original_cache_tag
     """)
     subprocess.run([sys.executable, "-c", code], check=True, timeout=60)
 

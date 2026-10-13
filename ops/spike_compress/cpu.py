@@ -1,4 +1,5 @@
 import math
+from typing import List
 
 import torch
 
@@ -23,7 +24,7 @@ _pack = torch.library.custom_op(
 @torch.library.custom_op(
     "sj_spike_compress::cpu_unpack", mutates_args=(), device_types=("cpu", "cuda")
 )
-def _unpack(packed: torch.Tensor, shape: list[int], dtype: torch.dtype) -> torch.Tensor:
+def _unpack(packed: torch.Tensor, shape: List[int], dtype: torch.dtype) -> torch.Tensor:
     _check_unpack(packed, shape)
     indices = torch.arange(math.prod(shape), device=packed.device)
     return ((packed[indices // 8] >> (indices % 8)) & 1).to(dtype).reshape(shape)
