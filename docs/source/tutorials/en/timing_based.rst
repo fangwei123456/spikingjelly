@@ -1,9 +1,9 @@
 Timing-based SNNs with continuous events
 ========================================
 
-``timing_based`` exposes explicit event times. TTFS is a coding constraint, not
-an implementation category: TTFS networks passing step-wise binary activations
-still belong to ``activation_based``. The models in this tutorial solve continuous
+``timing_based`` exposes explicit event times. TTFS constrains the code, while the
+representation determines the implementation: a TTFS network that passes step-wise
+binary activations belongs to ``activation_based``. The models here solve continuous
 event responses without constructing a uniform time grid.
 
 Start with the compact event format below. Then choose the section matching the
@@ -354,20 +354,19 @@ CSR routing and unfold
 ~~~~~~~~~~~~~~~~~~~~~~
 
 The public convolution accepts CSR events because one spatial position may be
-silent or carry multiple spikes. Routing starts from each real event, finds every
+silent or carry multiple spikes. Routing starts from each event, finds every
 receptive field that covers its position, and records the corresponding local
-``(channel, kernel_y, kernel_x)`` weight column. It does not copy events per output
-channel. The routed receptive fields become independent CubicSRM trials; standard
-autograd sums gradients back to shared weights and overlapping input events.
+``(channel, kernel_y, kernel_x)`` weight column. Output channels share this routed
+event list. Each receptive field becomes a CubicSRM trial, and standard autograd
+sums gradients into shared weights and input events used by overlapping fields.
 
-For a dense single-spike time map, ``torch.nn.functional.unfold`` can instead
-extract fixed-size time patches. This is simpler and slightly cheaper for that
-specific input, but it is not a second public backend: silence needs an explicit
-validity mask, multiple spikes need a padded event-slot dimension, and zero padding
-must not become a time-zero event. Both organizations still use the same PSP,
-partition and root solver after patch extraction. The library therefore keeps one
-general CSR implementation; the unfold path below is only an equivalent benchmark
-reference for the MNIST input where every pixel emits once.
+For a dense single-spike time map, ``torch.nn.functional.unfold`` can extract
+fixed-size time patches more cheaply. That representation needs an explicit mask
+for silence, padded event slots for multiple spikes, and separate handling so that
+zero padding does not become a time-zero event. Patch extraction does not change
+the PSP, partition, or root solver. The public implementation accepts CSR events;
+the MNIST benchmark uses unfold only as an equivalent reference because every
+pixel emits once.
 
 .. code-block:: python
 
@@ -397,12 +396,12 @@ checkpoints and one final test; ``--hidden-features`` means convolution channels
         --device cuda:0 --batch-size 128 --epochs 5 --hidden-features 8 \
         --dataset-dir ./data --output-dir ./cubic-conv-mnist
 
-Local fan-in is smaller than a dense layer, but convolution adds more output
-neurons, event routing and sorting. Temporary coefficients grow with positions,
-channels and local event counts. There is no claim that this execution is faster
-than cuDNN time-step convolution. Compare route alternatives with the same
-network/events/weights and include backward and peak memory. Chunking limits
-some construction intermediates but does not remove autograd's total saved state.
+Convolution reduces local fan-in and adds output neurons, event routing, and sorting.
+Temporary coefficients grow with positions, channels, and local event counts.
+Performance comparisons must use the same network, events, and weights, and must
+include backward and peak memory. Chunking limits some construction intermediates;
+autograd still retains the tensors needed by every chunk. The measurements below
+do not compare this implementation with cuDNN time-step convolution.
 
 Validation on a Tesla V100S (Torch 2.7.1+cu118, Triton 3.3.1): seed 0, B128,
 five full training epochs selected epoch 5, validation 92.24% and test **93.06%**
