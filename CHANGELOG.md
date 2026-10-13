@@ -76,8 +76,22 @@ Modules: ``spikingjelly.activation_based.neuron``,
 
 #### Continuous Timing-Based Neurons
 
-Modules: `spikingjelly.timing_based.functional`,
+Modules: `spikingjelly.timing_based.solver`, `spikingjelly.timing_based.functional`,
 `spikingjelly.timing_based.neuron`, and `spikingjelly.timing_based.encoding`.
+
+- Added an experimental ``first_spike_time`` solver for caller-certified complete
+  monotone partitions of continuous total threshold residuals. FP32-only bracketed
+  roots use safeguarded Newton/bisection and first-order implicit gradients, including explicit output-history
+  parameters. CUDA uses fused root-update arithmetic when Triton is installed.
+  Floating inputs, callback residuals and slopes must be FP32; FP64 and mixed
+  precision are not supported. Arbitrary black-box kernels without complete
+  partitions are not supported.
+- Added an experimental single-spike ``CubicSRM`` with finite-support, unit-peak
+  cubic PSPs, FP32-only computation, complete weighted-response stationary partitions
+  and compact CSR
+  outputs, fused CUDA polynomial evaluation with optional Triton, and a two-layer
+  MNIST example classified by spike times. Existing
+  Tempotron and ramp-SRM fast paths retain their dynamics and implementations.
 
 - Added an experimental fixed-kernel ``SRM`` with linear-ramp input responses,
   step reset responses, multiple input/output spikes and composable compact event

@@ -1,5 +1,6 @@
 import argparse
 import hashlib
+import inspect
 import json
 import time
 from pathlib import Path
@@ -102,11 +103,15 @@ def main() -> None:
     configuration, JSONL metrics, state_dict, source SHA256 and test correct counts.
     Defaults: 10 epochs, patience 3, seed 0.
     """
+    _train(_SRMNet, "srm-mnist")
+
+
+def _train(model_factory, output_name, batch_size=128):
     parser = argparse.ArgumentParser(description="Two-layer continuous-event SRM MNIST")
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--dataset-dir", default="./data")
-    parser.add_argument("--output-dir", default="./srm-mnist")
-    parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument("--output-dir", default="./" + output_name)
+    parser.add_argument("--batch-size", type=int, default=batch_size)
     parser.add_argument("--hidden-features", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--patience", type=int, default=3)
@@ -131,6 +136,8 @@ def main() -> None:
                 Path(functional.__file__),
                 Path(neuron.__file__),
                 Path(__file__),
+                Path(inspect.getfile(model_factory)),
+                Path(functional.solver.__file__),
             )
         },
     )
@@ -147,7 +154,7 @@ def main() -> None:
     train_loader = DataLoader(train_set, args.batch_size, shuffle=True)
     validation_loader = DataLoader(validation_set, args.batch_size)
     test_loader = DataLoader(test_set, args.batch_size)
-    model = _SRMNet(args.hidden_features).to(device)
+    model = model_factory(args.hidden_features).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     best_accuracy, stale_epochs = -1.0, 0
     with (output_dir / "metrics.jsonl").open("w") as metrics:
