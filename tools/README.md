@@ -18,8 +18,8 @@ Code readiness is separate from acceptance of the final release commit.
 | Step | Runnable code | Remaining code/configuration or acceptance |
 | --- | --- | --- |
 | 1. Fix inputs | `validate.py`, `profiles.toml`: source/config hashes, environment, budget | Select previous formal release/artifacts; finalize supported extras/topologies and skip rules |
-| 2. Build/install | `package_check.py`, `validate.py`: wheel/sdist, isolated installation, native build/load | Run positive native checks on Vast and the minimum-version environment |
-| 3. Framework correctness | `test/`, CPU/minimum/CUDA profiles; JUnit and skip gating | Final-candidate Linux CPU/CUDA runs and declared provider/extras matrix |
+| 2. Build/install | `package_check.py`, `validate.py`: wheel/sdist, isolated installation, native build/load | Native and minimum-version paths exercised; rerun for the final release candidate |
+| 3. Framework correctness | `test/`, CPU/minimum/CUDA profiles; JUnit and skip gating | CPU/CUDA execution exercised; final-candidate rerun and reviewed provider/extras/topology matrix remain |
 | 4. Task quality | Visual classification runner and three quality profiles; Qwen quick profile | Select quality budget/threshold; run real CIFAR/Tiny validation or training; Qwen quick has development evidence |
 | 5. Performance/resources | `validate.py paired`, `evidence.py compare`; visual correctness packets and three paired rounds | Previous-release API adapter; language performance adapter/profile if selected; formal Vast measurements |
 | 6. Documentation/compatibility | Format/Ruff, changelog, logging policy, Sphinx, local Markdown paths | External links/anchors and examples lack a unified entry; bilingual/migration review stays manual |
@@ -43,6 +43,13 @@ benchmark/snn_llm/
 
 Other benchmark scripts remain available for optional diagnosis; they are not
 automatically part of the mandatory release set.
+
+Infrastructure rehearsal (2026-10-13): Linux Torch 2.6 CPU 1765 passed;
+CUDA 3194 passed, five unapproved skips correctly block that profile. Sixty
+dedicated FP8 cases are deselected. Installed native training and archive
+relocation/integrity checks passed; three visual cases passed bounded CPU/CUDA
+checks and Qwen quick PPL/cache/reset passed. These are infrastructure checks,
+not full training convergence, previous-release speed comparison or release signoff.
 
 Profiles: `cpu`, `cpu-minimum` (Python3.11/Torch2.6), `cuda`, `package`, `native`,
 `docs`, `links`, `maxformer-quality`, `maxresnet-quality`, `clif-quality`,
