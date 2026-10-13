@@ -43,16 +43,31 @@ def _command(argv, cwd, log, deadline, env=None, expected_error=None):
         "log": str(log),
     }
     if remaining <= 0:
-        return {**record, "status": "blocked", "reason": "Time budget exhausted"}
+        return {
+            **record,
+            "status": "blocked",
+            "reason": "Time budget exhausted",
+            "ended_utc": datetime.now(timezone.utc).isoformat(),
+        }
     with log.open("w") as stream:
-        process = subprocess.Popen(
-            record["argv"],
-            cwd=cwd,
-            env=env,
-            stdout=stream,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+        try:
+            process = subprocess.Popen(
+                record["argv"],
+                cwd=cwd,
+                env=env,
+                stdout=stream,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        except OSError as error:
+            stream.write(str(error) + "\n")
+            return {
+                **record,
+                "status": "blocked",
+                "reason": str(error),
+                "seconds": time.monotonic() - started,
+                "ended_utc": datetime.now(timezone.utc).isoformat(),
+            }
         try:
             code = process.wait(timeout=remaining)
         except subprocess.TimeoutExpired:
@@ -67,6 +82,7 @@ def _command(argv, cwd, log, deadline, env=None, expected_error=None):
                 "status": "blocked",
                 "reason": "Time budget exhausted; process group terminated",
                 "seconds": time.monotonic() - started,
+                "ended_utc": datetime.now(timezone.utc).isoformat(),
             }
     passed = (
         code == 0
@@ -778,7 +794,9 @@ def _start(args, policy):
             "data_root": str(args.data_root.resolve()) if args.data_root else None,
             "checkpoint_sha256": _hash(args.checkpoint) if args.checkpoint else None,
         },
-        "release_eligible": not dirty and not args.development,
+        "release_eligible": (
+            platform.system() == "Linux" and not dirty and not args.development
+        ),
     }
     (args.output_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n"
