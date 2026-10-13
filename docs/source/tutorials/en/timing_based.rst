@@ -1,10 +1,23 @@
-Continuous-event neurons
-========================
+Timing-based SNNs with continuous events
+========================================
 
 ``timing_based`` exposes explicit event times. TTFS is a coding constraint, not
 an implementation category: TTFS networks passing step-wise binary activations
-still belong to ``activation_based``. This Tempotron solves input-event intervals
-without constructing a uniform time grid.
+still belong to ``activation_based``. The models in this tutorial solve continuous
+event responses without constructing a uniform time grid.
+
+Start with the compact event format below. Then choose the section matching the
+model you need:
+
+* Tempotron: double-exponential PSP, one output spike, shunting and peak outputs.
+* SRM: linear-ramp PSP with reset, allowing multiple output spikes.
+* CubicSRM: finite-support cubic PSP, one output spike and the general root solver.
+* CubicConv2d: shared CubicSRM weights over 2D receptive fields.
+
+All modules are stateless across calls. They expose ordinary PyTorch parameters;
+losses, initialization constraints and recovery rules belong to the task. Event
+creation, deletion and ordering boundaries are nonsmooth, so the documented
+gradients apply while the selected event topology remains unchanged.
 
 Response and outputs
 --------------------
@@ -336,6 +349,25 @@ positions/channels are processed in tensors. Weight gradients accumulate across
 positions, and overlapping fields accumulate gradients to their original input
 times. The earliest-upcrossing, tangent, silence and first-order-only contracts
 are inherited from CubicSRM; spatial convolution does not introduce time sampling.
+
+CSR routing and unfold
+~~~~~~~~~~~~~~~~~~~~~~
+
+The public convolution accepts CSR events because one spatial position may be
+silent or carry multiple spikes. Routing starts from each real event, finds every
+receptive field that covers its position, and records the corresponding local
+``(channel, kernel_y, kernel_x)`` weight column. It does not copy events per output
+channel. The routed receptive fields become independent CubicSRM trials; standard
+autograd sums gradients back to shared weights and overlapping input events.
+
+For a dense single-spike time map, ``torch.nn.functional.unfold`` can instead
+extract fixed-size time patches. This is simpler and slightly cheaper for that
+specific input, but it is not a second public backend: silence needs an explicit
+validity mask, multiple spikes need a padded event-slot dimension, and zero padding
+must not become a time-zero event. Both organizations still use the same PSP,
+partition and root solver after patch extraction. The library therefore keeps one
+general CSR implementation; the unfold path below is only an equivalent benchmark
+reference for the MNIST input where every pixel emits once.
 
 .. code-block:: python
 
