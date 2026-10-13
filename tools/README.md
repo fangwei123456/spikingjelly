@@ -7,7 +7,7 @@ Run in a uv-managed project environment. Release entry points live in
 
 | Entry | Purpose | Status |
 | --- | --- | --- |
-| [validate.py](release/validate.py) + [profiles.toml](release/profiles.toml) | Execute profiles; retain commands/logs/JUnit; enforce time budget; alternate three candidate/baseline benchmark pairs; aggregate attempts | Implemented; formal runs require Linux, clean tracked source/config and fixed inputs |
+| [validate.py](release/validate.py) + [profiles.toml](release/profiles.toml) | Execute profiles; retain commands/logs/JUnit; enforce time budget; alternate three candidate/baseline benchmark pairs; aggregate attempts | Implemented; CI self-check covers startup failure, timeout and skip gating; formal runs require Linux, clean tracked source/config and fixed inputs |
 | [package_check.py](release/package_check.py) | Distribution contents; import provenance; installed IF/LIF/PLIF training, gradients, reset and checkpoint; native prerequisites/provider checks | CI uses the same artifact/import checks; wheel/sdist outside-source checks exercised |
 | [evidence.py](release/evidence.py) | Numerical/performance comparison, Markdown local paths, JSON/Markdown report, source/evidence ZIP and independent integrity verification | Implemented; self-check also covers archive round-trip and tampering |
 
@@ -22,7 +22,7 @@ Code readiness is separate from acceptance of the final release commit.
 | 3. Framework correctness | `test/`, CPU/minimum/CUDA profiles; JUnit and skip gating | Final-candidate Linux CPU/CUDA runs and declared provider/extras matrix |
 | 4. Task quality | Visual classification runner and three quality profiles; Qwen quick profile | Select quality budget/threshold; run real CIFAR/Tiny validation or training; Qwen quick has development evidence |
 | 5. Performance/resources | `validate.py paired`, `evidence.py compare`; visual correctness packets and three paired rounds | Previous-release API adapter; language performance adapter/profile if selected; formal Vast measurements |
-| 6. Documentation/compatibility | Format/Ruff, changelog, logging policy, Sphinx, local Markdown paths | External links/anchors and examples lack a unified entry; bilingual/migration review stays manual; training JSON stdout conflicts with logging policy |
+| 6. Documentation/compatibility | Format/Ruff, changelog, logging policy, Sphinx, local Markdown paths | External links/anchors and examples lack a unified entry; bilingual/migration review stays manual |
 | 7. Signoff/archive | JSON/Markdown aggregation, `archive`, `verify-archive` | Human signoff and actual clean freeze; durable storage/backup location |
 
 ### Organization

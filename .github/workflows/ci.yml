@@ -59,6 +59,11 @@ jobs:
       - name: Check release comparison logic
         run: uv run --no-sync python tools/release/evidence.py self-check
 
+      - name: Check release runner failure handling
+        run: >-
+          uv run --no-sync python tools/release/validate.py self-check
+          --output-dir build/release-runner-self-check
+
       - name: Build documentation without warnings
         run: uv run --no-sync sphinx-build -M html docs/source docs/build -W --keep-going
 

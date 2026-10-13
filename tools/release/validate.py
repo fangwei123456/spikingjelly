@@ -1030,9 +1030,47 @@ def _summary(args, config):
     }
 
 
+def _self_check(output):
+    output.mkdir(parents=True, exist_ok=False)
+    records = []
+    for name, argv, seconds, expected in (
+        ("failure", [sys.executable, "-c", "raise SystemExit(7)"], 5, "fail"),
+        ("missing", [str(output / "missing-executable")], 5, "blocked"),
+        (
+            "timeout",
+            [sys.executable, "-c", "import time; time.sleep(20)"],
+            0.05,
+            "blocked",
+        ),
+        ("expired", [sys.executable, "-c", "raise SystemExit(0)"], -1, "blocked"),
+    ):
+        record = _command(
+            argv, output, output / f"{name}.log", time.monotonic() + seconds
+        )
+        assert record["status"] == expected and record["ended_utc"], record
+        assert record["argv"] == argv, record
+        records.append(record)
+    junit = output / "skip.xml"
+    junit.write_text(
+        '<testsuites><testsuite><testcase name="cpu"/><testcase name="cuda">'
+        '<skipped message="CUDA unavailable"/></testcase></testsuite></testsuites>'
+    )
+    assert _junit(junit, [])["status"] == "blocked"
+    assert _junit(junit, ["CUDA unavailable"])["status"] == "pass"
+    _write(
+        output,
+        {
+            "status": "pass",
+            "commands": records,
+            "scope": "Runner self-check fixtures only; not release evidence",
+        },
+    )
+    print("Runner failure/timeout/skip self-check passed")
+
+
 def _main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("run", "paired", "report"))
+    parser.add_argument("mode", choices=("run", "paired", "report", "self-check"))
     parser.add_argument("--config", type=Path, default=_CONFIG)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument(
@@ -1080,6 +1118,9 @@ def _main():
     )
     parser.add_argument("--runs", nargs="+", type=Path)
     args = parser.parse_args()
+    if args.mode == "self-check":
+        _self_check(args.output_dir.resolve())
+        return
     config = tomllib.loads(args.config.read_text())
     policy = config["policy"]
     if not 0 < args.time_budget <= min(86400, policy["max_seconds"]):
