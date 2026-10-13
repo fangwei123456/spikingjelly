@@ -318,3 +318,56 @@ floating-point resolution. No surrogate or silent-neuron recovery is built in.
 The general solver and CubicSRM accept only FP32 floating tensors, with no
 precision selector or FP64 path. Rebase/rescale extreme absolute times or support
 ratios when intervals cannot be resolved.
+
+Continuous-event spatial convolution
+-------------------------------------
+
+:class:`spikingjelly.timing_based.neuron.CubicConv2d` shares a cubic PSP kernel over
+2D receptive fields. It accepts the same three CSR event tensors as CubicSRM,
+plus an explicit ``(H,W)`` input size. Input indices flatten ``(Cin,H,W)``;
+outputs flatten ``(Cout,Hout,Wout)`` and remain grouped into the original B trials.
+Padding has no events. Multiple events per input location are retained, and both
+spatial axes use integer stride/padding and a square kernel. There is no bias,
+groups, dilation, reset history or cross-call state.
+
+The implementation routes events into local trials, folds positions into batch,
+and calls the existing FP32 cubic solver and optional Triton arithmetic. All
+positions/channels are processed in tensors. Weight gradients accumulate across
+positions, and overlapping fields accumulate gradients to their original input
+times. The earliest-upcrossing, tangent, silence and first-order-only contracts
+are inherited from CubicSRM; spatial convolution does not introduce time sampling.
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.timing_based.neuron import CubicConv2d
+
+    layer = CubicConv2d(1, 2, 3, duration=4.0, stride=2, padding=1)
+    with torch.no_grad():
+        layer.weight.fill_(1.2)
+    times = torch.tensor([0.1, 0.3])
+    indices = torch.tensor([0, 0])  # repeated events at the same input pixel
+    offsets = torch.tensor([0, 2])
+    output_times, output_indices, output_offsets = layer(
+        times, indices, offsets, (4, 4)
+    )
+
+The minimal MNIST network is ``1×28×28 → 8C5/stride2 → 8×12×12 → 1152→10``,
+with two spiking layers and 11720 parameters. Pixels become ``1-pixel`` times;
+all pixels emit, including the black background at time1. Weights use the demo's
+row-softmax gains8/2, logits ``50*(4-time)`` (zero for silence), cross-entropy
+and Adam. The shared trainer uses a55000/5000/10000 split, validation-selected
+checkpoints and one final test; ``--hidden-features`` means convolution channels.
+
+.. code-block:: bash
+
+    python -m spikingjelly.timing_based.examples.cubic_conv_mnist \
+        --device cuda:0 --batch-size 128 --epochs 5 --hidden-features 8 \
+        --dataset-dir ./data --output-dir ./cubic-conv-mnist
+
+Local fan-in is smaller than a dense layer, but convolution adds more output
+neurons, event routing and sorting. Temporary coefficients grow with positions,
+channels and local event counts. There is no claim that this execution is faster
+than cuDNN time-step convolution. Compare route alternatives with the same
+network/events/weights and include backward and peak memory. Chunking limits
+some construction intermediates but does not remove autograd's total saved state.

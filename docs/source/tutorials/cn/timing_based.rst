@@ -270,3 +270,49 @@ ramp SRM 示例的验证选 checkpoint/早停流程，记录完整 55000/5000/10
 
 通用求解器与 CubicSRM 只接受 FP32 浮点张量，无精度选择参数或 FP64 路径。
 极端绝对时刻/支撑比例可能使区间无法解析；应重新设定时间原点或尺度。
+
+连续事件空间卷积
+-------------------
+
+:class:`spikingjelly.timing_based.neuron.CubicConv2d` 在二维感受野间共享三次PSP核。
+输入仍为CubicSRM的三个CSR事件张量，另传显式空间大小 ``(H,W)``。
+输入索引展平 ``(Cin,H,W)``，输出展平 ``(Cout,Hout,Wout)``，仍按原B个样本分段。
+Padding位置无事件，保留同一位置的多个输入事件；支持方形核和两个轴共用的整数
+stride/padding，无bias、groups、dilation、输出复位历史或跨调用状态。
+
+将事件路由成局部试次、空间位置并入batch后，直接调用既有FP32三次核求解器
+及可选Triton算术，所有位置/通道用张量并行。权重梯度跨位置累加，重叠感受野
+的时刻梯度累加回原事件。保留CubicSRM最早上穿、相切、沉默及仅一阶梯度契约；
+空间卷积不引入时间采样。
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.timing_based.neuron import CubicConv2d
+
+    layer = CubicConv2d(1, 2, 3, duration=4.0, stride=2, padding=1)
+    with torch.no_grad():
+        layer.weight.fill_(1.2)
+    times = torch.tensor([0.1, 0.3])
+    indices = torch.tensor([0, 0])  # 同一个输入像素的重复事件
+    offsets = torch.tensor([0, 2])
+    output_times, output_indices, output_offsets = layer(
+        times, indices, offsets, (4, 4)
+    )
+
+最小MNIST网络为 ``1×28×28 → 8C5/stride2 → 8×12×12 → 1152→10``，
+两层脉冲神经元、11720参数。像素时刻 ``1-pixel``，每像素都有事件，黑背景在时刻1发放。
+示例按输出行使用softmax增益8/2，logits为 ``50*(4-time)``（沉默0），CE+Adam。
+共享训练流程使用55000/5000/10000划分、验证选checkpoint、最终一次测试；
+``--hidden-features`` 表示卷积输出通道数。
+
+.. code-block:: bash
+
+    python -m spikingjelly.timing_based.examples.cubic_conv_mnist \
+        --device cuda:0 --batch-size 128 --epochs 5 --hidden-features 8 \
+        --dataset-dir ./data --output-dir ./cubic-conv-mnist
+
+局部fan-in较小，但卷积增加输出神经元、事件路由与排序。临时系数随位置、通道
+及局部事件数增长，不宣称比cuDNN时步卷积更快。路由方案对照必须使用相同网络/
+事件/权重，包含backward和峰值内存。分块只能降低部分构造临时量，不能消除
+全部autograd保存状态。

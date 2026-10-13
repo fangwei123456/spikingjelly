@@ -90,6 +90,13 @@ Continuous Timing-Based Neurons
 Modules: ``spikingjelly.timing_based.solver``, ``spikingjelly.timing_based.functional``,
 ``spikingjelly.timing_based.neuron``, and ``spikingjelly.timing_based.encoding``.
 
+- Added experimental ```CubicConv2d```` and ````functional.cubic_conv2d``` for FP32
+  continuous-event spatial convolution. Repeated input events are routed to local
+  trials sharing one kernel; output CSR indices flatten channel and space.
+  The implementation reuses the existing first-spike solver and Triton/Torch
+  arithmetic, with no bias, groups or dilation. A two-layer MNIST example combines
+  a strided cubic convolution with a cubic fully connected classifier.
+
 - Added an experimental ```first_spike_time``` solver for caller-certified complete
   monotone partitions of continuous total threshold residuals. FP32-only bracketed
   roots use safeguarded Newton/bisection and first-order implicit gradients, including explicit output-history

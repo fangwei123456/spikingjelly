@@ -9,7 +9,7 @@ from .._ops.tempotron.reference import _phi, _psp, _stationary, _voltage
 
 from . import solver
 
-__all__ = ["tempotron", "srm", "cubic_srm"]
+__all__ = ["tempotron", "srm", "cubic_srm", "cubic_conv2d"]
 
 _EVENT_BLOCK_SIZE = {"cpu": 128, "cuda": 512}
 _BACKWARD_BLOCK_SIZE = 16384
@@ -775,7 +775,9 @@ def tempotron(
     )
 
 
-def _validate_events(spike_times, input_indices, batch_offsets, weight):
+def _validate_events(
+    spike_times, input_indices, batch_offsets, weight, in_features=None
+):
     tensors = (spike_times, input_indices, batch_offsets, weight)
     if any(
         t.device != spike_times.device for t in tensors
@@ -807,7 +809,9 @@ def _validate_events(spike_times, input_indices, batch_offsets, weight):
         or bool((batch_offsets[1:] < batch_offsets[:-1]).any())
     ):
         raise ValueError("Offsets must start at 0, be nondecreasing, and end at E.")
-    if bool(((input_indices < 0) | (input_indices >= weight.shape[1])).any()):
+    if in_features is None:
+        in_features = weight.shape[1]
+    if bool(((input_indices < 0) | (input_indices >= in_features)).any()):
         raise ValueError("Input indices must be in [0,in_features).")
 
 
@@ -1514,3 +1518,240 @@ def cubic_srm(
     ]
     totals = firing.sum(1)
     return output_times, indices, torch.cat((totals.new_zeros(1), totals.cumsum(0)))
+
+
+def _conv_parameters(kernel_size, stride, padding):
+    if any(
+        not isinstance(x, int) or isinstance(x, bool)
+        for x in (kernel_size, stride, padding)
+    ):
+        raise TypeError("kernel_size, stride and padding must be integers.")
+    if kernel_size < 1 or stride < 1 or padding < 0:
+        raise ValueError("kernel_size/stride must be positive and padding nonnegative.")
+
+
+def _conv_events(times, indices, offsets, input_size, kernel_size, stride, padding):
+    height, width = input_size
+    output_height = (height + 2 * padding - kernel_size) // stride + 1
+    output_width = (width + 2 * padding - kernel_size) // stride + 1
+    locations = output_height * output_width
+    batch_count = offsets.numel() - 1
+    batches = torch.repeat_interleave(
+        torch.arange(batch_count, device=times.device),
+        offsets.diff(),
+        output_size=times.numel(),
+    )
+    channel = indices // (height * width)
+    y, x = indices // width % height + padding, indices % width + padding
+    # Only kernel offsets congruent to the input coordinate can reach a strided patch.
+    steps = stride * torch.arange(
+        (kernel_size + stride - 1) // stride, device=times.device
+    )
+    ky, kx = y[:, None] % stride + steps, x[:, None] % stride + steps
+    rows, columns = (y[:, None] - ky) // stride, (x[:, None] - kx) // stride
+    valid = (
+        (ky[:, :, None] < kernel_size)
+        & (kx[:, None, :] < kernel_size)
+        & (rows[:, :, None] >= 0)
+        & (rows[:, :, None] < output_height)
+        & (columns[:, None, :] >= 0)
+        & (columns[:, None, :] < output_width)
+    )
+    patches = (
+        batches[:, None, None] * locations
+        + rows[:, :, None] * output_width
+        + columns[:, None, :]
+    )[valid]
+    local = (
+        channel[:, None, None] * kernel_size**2
+        + ky[:, :, None] * kernel_size
+        + kx[:, None, :]
+    )[valid]
+    original = torch.arange(times.numel(), device=times.device)[
+        :, None, None
+    ].expand_as(valid)[valid]
+    order = torch.argsort(patches, stable=True)
+    counts = torch.bincount(patches, minlength=batch_count * locations)
+    return (
+        times[original[order]],
+        local[order],
+        torch.cat((counts.new_zeros(1), counts.cumsum(0))),
+    )
+
+
+def cubic_conv2d(
+    spike_times: torch.Tensor,
+    input_indices: torch.Tensor,
+    batch_offsets: torch.Tensor,
+    weight: torch.Tensor,
+    input_size: tuple[int, int],
+    duration: float,
+    support: float = 2.0,
+    v_threshold: float = 1.0,
+    stride: int = 1,
+    padding: int = 0,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    r"""
+    **API Language** - :ref:`中文 <timing-cubic-conv2d-cn>` | :ref:`English <timing-cubic-conv2d-en>`
+
+    ----
+
+    .. _timing-cubic-conv2d-cn:
+
+    * **中文**
+
+    将每个二维感受野作为独立试次，共享卷积权重并调用 :func:`cubic_srm`。
+    使用 PyTorch Conv2d 的互相关索引；padding 位置没有事件。每个输入位置允许
+    多个无序事件，同刻事件按原模型聚合。每输出位置/通道只输出最早上穿，
+    相切不发放，窗口终点上穿计入；调用间无状态。空间位置并入 batch，
+    CPU/CUDA 复用已有 FP32 求解器与可选 Triton kernel，不展开时间网格。
+    权重梯度跨所有位置累加，输入时刻梯度跨重叠感受野累加，仅支持一阶。
+    临时事件和系数随感受野数与局部事件数增长，不保证比稠密时步卷积更快。
+
+    :param spike_times: 有限 FP32 ``[E]`` 时刻，与权重同设备；窗外事件忽略、梯度为零。
+    :type spike_times: torch.Tensor
+    :param input_indices: 同设备 int64 ``[E]``；按 ``c*H*W+y*W+x`` 展平，可重复。
+    :type input_indices: torch.Tensor
+    :param batch_offsets: 同设备 int64 ``[B+1]``，从0到E非递减，允许空样本。
+    :type batch_offsets: torch.Tensor
+    :param weight: 有限 FP32 ``[Cout,Cin,k,k]``，通道数及方形核大小为正。
+    :type weight: torch.Tensor
+    :param input_size: 正整数输入空间大小 ``(H,W)``，不能由稀疏索引推断。
+    :type input_size: tuple[int, int]
+    :param duration: 有限正数窗口终点，与时刻同单位，窗口 ``[0,duration]``。
+    :type duration: float
+    :param support: 有限正数 PSP 支撑长度，默认2，同时间单位。
+    :type support: float
+    :param v_threshold: 有限正数阈值，默认1，不改变单位峰值 PSP 归一化。
+    :type v_threshold: float
+    :param stride: 两个空间轴共同使用的正整数步长，默认1。
+    :type stride: int
+    :param padding: 两个空间轴共同使用的非负整数边缘宽度，默认0。
+    :type padding: int
+    :return: CSR ``(times,indices,offsets)``，形状 ``[S],[S],[B+1]``。
+        输出空间大小为 ``((H+2*padding-k)//stride+1,(W+2*padding-k)//stride+1)``；
+        输出索引按 ``(Cout,Hout,Wout)`` 展平，按样本/输出索引排序。
+        时刻同输入dtype/device，元数据int64；沉默无事件。无bias、groups或dilation。
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises TypeError: dtype或空间参数类型不支持。
+    :raises ValueError: 事件/CSR/设备/权重/空间形状/超参数非法或输出空间为空。
+    :raises RuntimeError: 原CubicSRM的状态、根或被请求梯度不可表示。
+
+    ----
+
+    .. _timing-cubic-conv2d-en:
+
+    * **English**
+
+    Treat each 2D receptive field as an independent trial, sharing convolution
+    weights and calling :func:`cubic_srm`. Use PyTorch Conv2d's cross-correlation
+    indexing; padded positions have no events. Input positions accept multiple
+    unordered events; simultaneous inputs follow the original aggregation rule.
+    Each output position/channel emits only its earliest upward crossing; tangencies
+    do not fire and window-end upcrossings count. Calls have no persistent state.
+    Fold spatial positions into batch, reusing the FP32 CPU/CUDA solver and optional
+    Triton kernels without a time grid. Weight gradients sum over locations and
+    input-time gradients over overlapping fields; only first-order backward is supported.
+    Temporary events/coefficients grow with field count and local event count;
+    this does not guarantee faster execution than dense time-step convolution.
+
+    :param spike_times: Finite FP32 ``[E]`` times on the weights' device; outside-window events have zero gradient.
+    :type spike_times: torch.Tensor
+    :param input_indices: Same-device int64 ``[E]`` flattened as ``c*H*W+y*W+x``; repeats allowed.
+    :type input_indices: torch.Tensor
+    :param batch_offsets: Same-device nondecreasing int64 ``[B+1]`` from 0 to E; empty trials allowed.
+    :type batch_offsets: torch.Tensor
+    :param weight: Finite FP32 ``[Cout,Cin,k,k]`` with positive channels and square kernel size.
+    :type weight: torch.Tensor
+    :param input_size: Positive integer input spatial size ``(H,W)``, not inferred from sparse indices.
+    :type input_size: tuple[int, int]
+    :param duration: Finite positive window endpoint in input-time units; window ``[0,duration]``.
+    :type duration: float
+    :param support: Finite positive PSP support in the same time units, default 2.
+    :type support: float
+    :param v_threshold: Finite positive threshold, default 1, independent of unit-peak PSP normalization.
+    :type v_threshold: float
+    :param stride: Positive integer stride shared by both spatial axes, default 1.
+    :type stride: int
+    :param padding: Nonnegative integer border width shared by both axes, default 0.
+    :type padding: int
+    :return: CSR ``(times,indices,offsets)`` with shapes ``[S],[S],[B+1]``.
+        Output spatial size is ``((H+2*padding-k)//stride+1,(W+2*padding-k)//stride+1)``;
+        indices flatten ``(Cout,Hout,Wout)`` and are ordered by trial/output index.
+        Times match input dtype/device, metadata are int64, and silence emits nothing.
+        No bias, groups or dilation.
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises TypeError: For unsupported dtypes or spatial parameter types.
+    :raises ValueError: For invalid events/CSR/devices/weights/spatial shapes/hyperparameters or empty output geometry.
+    :raises RuntimeError: For unrepresentable CubicSRM states, roots or requested gradients.
+    """
+    if (
+        weight.ndim != 4
+        or min(weight.shape) < 1
+        or weight.shape[-2] != weight.shape[-1]
+    ):
+        raise ValueError(
+            "weight must have shape [Cout,Cin,k,k] with positive dimensions."
+        )
+    if (
+        not isinstance(input_size, tuple)
+        or len(input_size) != 2
+        or any(not isinstance(x, int) or isinstance(x, bool) for x in input_size)
+    ):
+        raise TypeError("input_size must be an integer (H,W) tuple.")
+    if min(input_size) < 1:
+        raise ValueError("input_size must be positive.")
+    kernel = weight.shape[-1]
+    _conv_parameters(kernel, stride, padding)
+    output_height, output_width = (
+        (x + 2 * padding - kernel) // stride + 1 for x in input_size
+    )
+    if min(output_height, output_width) < 1:
+        raise ValueError("The convolution output spatial size must be positive.")
+    _cubic_parameters(duration, support, v_threshold)
+    if spike_times.dtype != torch.float32 or weight.dtype != torch.float32:
+        raise TypeError("CubicConv2d requires FP32 times and weights.")
+    flat_weight = weight.flatten(1)
+    _validate_events(
+        spike_times,
+        input_indices,
+        batch_offsets,
+        flat_weight,
+        weight.shape[1] * input_size[0] * input_size[1],
+    )
+    batches = torch.repeat_interleave(
+        torch.arange(batch_offsets.numel() - 1, device=spike_times.device),
+        batch_offsets.diff(),
+        output_size=spike_times.numel(),
+    )
+    accepted = (spike_times >= 0) & (spike_times <= duration)
+    counts = torch.bincount(batches[accepted], minlength=batch_offsets.numel() - 1)
+    events = _conv_events(
+        spike_times[accepted],
+        input_indices[accepted],
+        torch.cat((counts.new_zeros(1), counts.cumsum(0))),
+        input_size,
+        kernel,
+        stride,
+        padding,
+    )
+    times, indices, offsets = cubic_srm(
+        *events, flat_weight, duration, support, v_threshold
+    )
+    locations = output_height * output_width
+    patches = torch.repeat_interleave(
+        torch.arange(offsets.numel() - 1, device=times.device),
+        offsets.diff(),
+        output_size=times.numel(),
+    )
+    indices = indices * locations + patches % locations
+    output_batches = patches // locations
+    order = torch.argsort(
+        output_batches * (weight.shape[0] * locations) + indices, stable=True
+    )
+    counts = torch.bincount(output_batches, minlength=batch_offsets.numel() - 1)
+    return (
+        times[order],
+        indices[order],
+        torch.cat((counts.new_zeros(1), counts.cumsum(0))),
+    )
