@@ -1112,10 +1112,10 @@ def _cubic_partition(times, coefficients, duration):
         )
         c0_all, c1_all, c2_all, c3_all = coefficients.unbind(-1)
         local = width / duration
-        end_d1 = (3 * c3_all[..., :-1] * local + 2 * c2_all[..., :-1]) * local + c1_all[
-            ..., :-1
-        ]
-        end_d2 = c2_all[..., :-1] + 3 * c3_all[..., :-1] * local
+        raw_end_first = (
+            3 * c3_all[..., :-1] * local + 2 * c2_all[..., :-1]
+        ) * local + c1_all[..., :-1]
+        raw_end_second = c2_all[..., :-1] + 3 * c3_all[..., :-1] * local
         end_value = (
             (c3_all[..., :-1] * local + c2_all[..., :-1]) * local + c1_all[..., :-1]
         ) * local + c0_all[..., :-1]
@@ -1139,7 +1139,7 @@ def _cubic_partition(times, coefficients, duration):
                 | ((offset[..., :-1] - width).abs() <= 8 * eps * width)
             )
             x = torch.where(near_end, offset[..., :-1] - width, 0) / duration
-            change = ((c3_all[..., :-1] * x + end_d2) * x + end_d1) * x
+            change = ((c3_all[..., :-1] * x + raw_end_second) * x + raw_end_first) * x
             critical_end |= (
                 near_end
                 & torch.isfinite(change)
@@ -1152,9 +1152,9 @@ def _cubic_partition(times, coefficients, duration):
             coefficients[..., :-1, 2],
             coefficients[..., :-1, 3],
         )
-        end_first = torch.where(critical_end, 0, (3 * c3 * local + 2 * c2) * local + c1)
+        end_first = torch.where(critical_end, 0, raw_end_first)
         end_second = torch.where(
-            critical_end & double_root[..., :-1], 0, c2 + 3 * c3 * local
+            critical_end & double_root[..., :-1], 0, raw_end_second
         )
         start_first = torch.where(critical_start, 0, coefficients[..., 1])
         start_second = torch.where(
@@ -1183,9 +1183,7 @@ def _cubic_partition(times, coefficients, duration):
             valid_second[..., :-1] & (second[..., :-1] > 0) & (second[..., :-1] < width)
         )
         left, right = origins[..., :-1], origins[..., 1:]
-        right_value = ((c3 * local + c2) * local + c1) * local + coefficients[
-            ..., :-1, 0
-        ]
+        right_value = end_value
         inside_roots = []
         unresolved = torch.zeros_like(inside_first)
         for offset, inside in (
