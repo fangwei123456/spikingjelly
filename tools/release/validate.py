@@ -246,9 +246,10 @@ def _package(args, case_dir, deadline, native=False):
             "\n".join(
                 sorted(
                     {
-                        f"{d.metadata['Name']}=={d.version}"
+                        f"{name}=={importlib.metadata.version(name)}"
                         for d in importlib.metadata.distributions()
-                        if d.metadata["Name"].lower() != "spikingjelly"
+                        if (name := d.metadata["Name"].lower().replace("_", "-"))
+                        != "spikingjelly"
                     }
                 )
             )
