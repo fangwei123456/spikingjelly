@@ -4,6 +4,7 @@ max_cost_usd = 5.0
 performance_tolerance = 0.02
 performance_pairs = 3
 performance_metric = "throughput"
+# Quality is a per-release task menu; select at least one, not every listed recipe.
 required_groups = ["package", "cpu-minimum", "cpu", "cuda", "native", "quality", "performance", "docs", "links", "qwen"]
 
 [cases.cpu]

@@ -43,6 +43,9 @@ benchmark/snn_llm/
 
 Other benchmark scripts remain available for optional diagnosis; they are not
 automatically part of the mandatory release set.
+Quality profiles are a task menu: choose at least one per release and record the
+selection and thresholds before running. Unselected recipes are not required;
+every included attempt must pass or be superseded by a valid retest.
 
 Infrastructure rehearsal (2026-10-13): Linux Torch 2.6 CPU 1765 passed;
 CUDA 3194 passed, five unapproved skips correctly block that profile. Sixty

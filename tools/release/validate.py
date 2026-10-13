@@ -20,6 +20,9 @@ import time
 import tomllib
 import traceback
 import xml.etree.ElementTree as ET
+import zipfile
+
+from packaging.version import Version
 
 from evidence import _compare, _hash, _read, _write
 
@@ -831,6 +834,46 @@ def _start(args, policy):
     return environment
 
 
+def _verify_wheel_source(repo, wheel, commit):
+    with tempfile.TemporaryDirectory() as directory:
+        source = Path(directory) / "source.zip"
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo),
+                "archive",
+                "--format=zip",
+                f"--output={source}",
+                commit,
+            ],
+            check=True,
+        )
+        with zipfile.ZipFile(source) as checkout, zipfile.ZipFile(wheel) as archive:
+            expected = {
+                name.replace("ops/", "spikingjelly/_ops/", 1)
+                if name.startswith("ops/")
+                else name: name
+                for name in checkout.namelist()
+                if name.startswith(("spikingjelly/", "ops/"))
+                and name.endswith((".py", ".cuh"))
+            }
+            actual = [
+                name
+                for name in archive.namelist()
+                if name.startswith("spikingjelly/") and name.endswith((".py", ".cuh"))
+            ]
+            if len(actual) != len(set(actual)) or set(actual) != set(expected):
+                raise ValueError(
+                    "Wheel source inventory differs from the recorded commit"
+                )
+            for name in actual:
+                if archive.read(name) != checkout.read(expected[name]):
+                    raise ValueError(
+                        f"Wheel source differs from the recorded commit: {name}"
+                    )
+
+
 def _paired(args, policy, deadline):
     if any(
         v is None
@@ -856,9 +899,9 @@ def _paired(args, policy, deadline):
     ]
     if not re.fullmatch(r"\d+(?:\.\d+)+", args.baseline_version):
         raise ValueError("Baseline must be a formal version, not dev/rc/alpha/beta")
-    if tuple(map(int, args.baseline_version.split("."))) >= tuple(
-        map(int, version.split("."))
-    ):
+    if not re.fullmatch(r"\d+(?:\.\d+)+", version):
+        raise ValueError("Candidate must be a formal version, not dev/rc/alpha/beta")
+    if Version(args.baseline_version) >= Version(version):
         raise ValueError("Baseline must precede the candidate version")
     baseline_commit = _git(_ROOT, "rev-parse", args.baseline_ref + "^{commit}")
     manifest = _read(args.output_dir / "manifest.json")
@@ -895,21 +938,11 @@ def _paired(args, policy, deadline):
         commands.append(command)
         if command["status"] != "pass":
             raise ValueError(f"{side} installed package is not the fixed wheel")
-        if side == "candidate":
-            import zipfile
-
-            with zipfile.ZipFile(wheel) as archive:
-                for name in archive.namelist():
-                    if name.startswith("spikingjelly/") and name.endswith(
-                        (".py", ".cuh")
-                    ):
-                        source = _ROOT / name.replace("spikingjelly/_ops/", "ops/")
-                        if not source.is_file() or source.read_bytes() != archive.read(
-                            name
-                        ):
-                            raise ValueError(
-                                "Candidate wheel does not match the recorded source checkout"
-                            )
+        _verify_wheel_source(
+            _ROOT,
+            wheel,
+            manifest["candidate_commit"] if side == "candidate" else baseline_commit,
+        )
         manifest[side + "_wheel_sha256"] = _hash(wheel)
     (args.output_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n"
@@ -1050,6 +1083,54 @@ def _summary(args, config):
 
 def _self_check(output):
     output.mkdir(parents=True, exist_ok=False)
+    with tempfile.TemporaryDirectory() as directory:
+        repo = Path(directory)
+        _git(repo, "init", "-q")
+        (repo / "spikingjelly").mkdir()
+        (repo / "ops").mkdir()
+        source = repo / "spikingjelly/__init__.py"
+        source.write_text("value = 1\n")
+        (repo / "ops/kernel.cuh").write_text("// kernel fixture\n")
+        _git(repo, "add", ".")
+        _git(
+            repo,
+            "-c",
+            "user.name=Self-check",
+            "-c",
+            "user.email=check@example.invalid",
+            "commit",
+            "-qm",
+            "baseline",
+        )
+        baseline = _git(repo, "rev-parse", "HEAD")
+        source.write_text("value = 2\n")
+        _git(repo, "add", ".")
+        _git(
+            repo,
+            "-c",
+            "user.name=Self-check",
+            "-c",
+            "user.email=check@example.invalid",
+            "commit",
+            "-qm",
+            "candidate",
+        )
+        for payload, commit, accepted in (
+            ("value = 1\n", baseline, True),
+            ("value = 1\n", "HEAD", False),
+            (None, baseline, False),
+        ):
+            wheel = repo / "fixture.whl"
+            with zipfile.ZipFile(wheel, "w") as archive:
+                if payload is not None:
+                    archive.writestr("spikingjelly/__init__.py", payload)
+                archive.writestr("spikingjelly/_ops/kernel.cuh", "// kernel fixture\n")
+            try:
+                _verify_wheel_source(repo, wheel, commit)
+            except ValueError:
+                assert not accepted
+            else:
+                assert accepted
     records = []
     for name, argv, seconds, expected in (
         ("failure", [sys.executable, "-c", "raise SystemExit(7)"], 5, "fail"),
@@ -1244,11 +1325,18 @@ def _main():
             if (args.output_dir / "manifest.json").is_file()
             else {}
         )
-        changed = _git(_ROOT, "rev-parse", "HEAD") != manifest.get(
-            "candidate_commit"
-        ) or (
-            hashlib.sha256(_git(_ROOT, "diff", "HEAD", "--binary").encode()).hexdigest()
-            != manifest.get("source_diff_sha256")
+        changed = (
+            _git(_ROOT, "rev-parse", "HEAD") != manifest.get("candidate_commit")
+            or (
+                hashlib.sha256(
+                    _git(_ROOT, "diff", "HEAD", "--binary").encode()
+                ).hexdigest()
+                != manifest.get("source_diff_sha256")
+            )
+            or (
+                not args.development
+                and bool(_git(_ROOT, "status", "--porcelain", "--untracked-files=all"))
+            )
         )
         if changed:
             manifest["release_eligible"] = False

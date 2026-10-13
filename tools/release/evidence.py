@@ -229,13 +229,18 @@ def _archive(repo, ref, run, output):
         ["git", "-C", str(repo), "rev-parse", ref], text=True
     ).strip()
     manifest = _read(run / "manifest.json")
-    if manifest["candidate_commit"] != commit or manifest.get("development"):
-        raise ValueError("Evidence is not bound to this clean candidate commit")
     evidence_roots = [run, *[Path(p).resolve() for p in manifest.get("runs", [])]]
     files = []
     for index, root in enumerate(evidence_roots):
-        if _read(root / "manifest.json")["candidate_commit"] != commit:
-            raise ValueError("Referenced evidence belongs to another source commit")
+        referenced = _read(root / "manifest.json")
+        if (
+            referenced["candidate_commit"] != commit
+            or referenced.get("development")
+            or referenced.get("release_eligible") is not True
+        ):
+            raise ValueError(
+                "Referenced evidence is not release-eligible for this commit"
+            )
         if any(p.is_symlink() for p in root.rglob("*")):
             raise ValueError("Evidence archives do not follow symlinks")
         prefix = "summary" if index == 0 else f"runs/{index:03}"
@@ -310,9 +315,11 @@ def _verify_archive(directory):
                     raise ValueError(f"Evidence member hash differs: {member}")
                 if member.endswith("/manifest.json"):
                     manifest = json.loads(archive.read(member))
-                    if manifest["candidate_commit"] != record[
-                        "candidate_commit"
-                    ] or manifest.get("development"):
+                    if (
+                        manifest["candidate_commit"] != record["candidate_commit"]
+                        or manifest.get("development")
+                        or manifest.get("release_eligible") is not True
+                    ):
                         raise ValueError(f"Evidence source differs: {member}")
     return {
         "status": "pass",
@@ -439,11 +446,22 @@ def _self_check():
         raw = root / "raw"
         raw.mkdir()
         (raw / "manifest.json").write_text(
-            json.dumps({"candidate_commit": commit, "development": False})
+            json.dumps(
+                {
+                    "candidate_commit": commit,
+                    "development": False,
+                    "release_eligible": True,
+                }
+            )
         )
         (run / "manifest.json").write_text(
             json.dumps(
-                {"candidate_commit": commit, "development": False, "runs": [str(raw)]}
+                {
+                    "candidate_commit": commit,
+                    "development": False,
+                    "release_eligible": True,
+                    "runs": [str(raw)],
+                }
             )
         )
         (run / "commands.log").write_text("fixture evidence\n")
@@ -454,6 +472,23 @@ def _self_check():
         else:
             raise AssertionError("Archive output inside linked evidence was accepted")
         output = root / "archive"
+        for folder in (run, raw):
+            path = folder / "manifest.json"
+            original = _read(path)
+            for eligible in (False, None):
+                invalid = dict(original)
+                if eligible is None:
+                    del invalid["release_eligible"]
+                else:
+                    invalid["release_eligible"] = eligible
+                path.write_text(json.dumps(invalid))
+                try:
+                    _archive(repo, commit, run, output)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError("Ineligible evidence was accepted")
+            path.write_text(json.dumps(original))
         _archive(repo, commit, run, output)
         relocated = root / "relocated"
         output.rename(relocated)

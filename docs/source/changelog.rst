@@ -24,7 +24,9 @@ Fixes
   avoiding an unavailable Torch 2.6 device property. Capacity violations raise
   ``RuntimeError``; the Torch reference has no kernel shared-memory limit.
 - Distributed vision training emits epoch progress through the SpikingJelly logger
-  instead of direct stdout; the JSON metric payload is retained in the log message.
+  instead of direct stdout; library callers must enable the package namespace and
+  configure an INFO sink. The distributed vision CLI configures JSON progress on
+  stderr and retains final metrics on stdout.
 - Removed the private GPT-2 conversion example runners; use the Qwen conversion
   runners for current language-model evaluation.
 - Moved NSYS workloads to ``spikingjelly/activation_based/examples/profiling/``
