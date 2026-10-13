@@ -7,7 +7,7 @@ from spikingjelly.logger import logger
 try:
     import triton
     import triton.language as tl
-except ImportError as error:
+except (ImportError, OSError) as error:
     triton = None
     logger.info("First-spike Triton kernels unavailable: {}", error)
 
