@@ -38,8 +38,8 @@ if triton is not None:
         transverse = moving & (slope > 0)
         step = tl.where(transverse, value, 0) / tl.where(transverse, slope, 1)
         proposal = trial - step
-        tiny = tl.full((), 4.9406564584124654e-324, tl.float64)
-        eps = tl.full((), 1.7763568394002505e-15, tl.float64)
+        tiny = tl.full((), 1.401298464324817e-45, tl.float32)
+        eps = tl.full((), 9.5367431640625e-7, tl.float32)
         near = transverse & (lo < hi) & (tl.abs(step) <= tiny + eps * tl.abs(trial))
         radius = (tiny + eps * tl.abs(proposal)) / 4
         lower = tl.where(near, tl.maximum(lo, proposal - radius), lo)
@@ -170,12 +170,10 @@ def _newton_proposal(lo, hi, trial, value, slope, moving):
     transverse = moving & (slope > 0)
     step = torch.where(transverse, value, 0) / torch.where(transverse, slope, 1)
     proposal = trial - step
-    tolerance = (
-        4.9406564584124654e-324 + 8 * torch.finfo(torch.float64).eps * trial.abs()
-    )
+    tolerance = 1.401298464324817e-45 + 8 * torch.finfo(torch.float32).eps * trial.abs()
     near = transverse & (lo < hi) & (step.abs() <= tolerance)
     radius = (
-        4.9406564584124654e-324 + 8 * torch.finfo(torch.float64).eps * proposal.abs()
+        1.401298464324817e-45 + 8 * torch.finfo(torch.float32).eps * proposal.abs()
     ) / 4
     lower = torch.where(near, torch.maximum(lo, proposal - radius), lo)
     upper = torch.where(near, torch.minimum(hi, proposal + radius), lo)

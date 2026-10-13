@@ -347,7 +347,7 @@ class CubicSRM(nn.Module):
         实验性有限支撑三次 PSP 的单发 SRM。模型定义与边界见
         :func:`spikingjelly.timing_based.functional.cubic_srm`。模块仅持有权重
         与固定超参数；每次调用独立、无持久膜状态。权重默认 N(0,0.001²)，
-        state_dict 使用 weight 键。标准 .to 可转换 CPU/CUDA、FP32/FP64。
+        state_dict 使用 weight 键。标准 .to 可转换 CPU/CUDA，时刻与权重仅支持 FP32。
 
         :param in_features: 正整数输入连接数，每连接允许多个事件。
         :type in_features: int
@@ -373,7 +373,7 @@ class CubicSRM(nn.Module):
         boundaries. Owns only weights and fixed hyperparameters; calls are
         independent with no persistent membrane state. Weights default to
         N(0,0.001²); state_dict uses the weight key. Standard .to supports
-        CPU/CUDA and FP32/FP64.
+        CPU/CUDA; times and weights must remain FP32.
 
         :param in_features: Positive input count; each connection allows multiple events.
         :type in_features: int
@@ -399,7 +399,9 @@ class CubicSRM(nn.Module):
         functional._cubic_parameters(duration, support, v_threshold)
         self.in_features, self.out_features = in_features, out_features
         self.duration, self.support, self.v_threshold = duration, support, v_threshold
-        self.weight = nn.Parameter(torch.empty(out_features, in_features))
+        self.weight = nn.Parameter(
+            torch.empty(out_features, in_features, dtype=torch.float32)
+        )
         nn.init.normal_(self.weight, mean=0.0, std=0.001)
 
     def forward(
@@ -420,7 +422,7 @@ class CubicSRM(nn.Module):
         使用模块权重调用 :func:`spikingjelly.timing_based.functional.cubic_srm`。
         每试次独立；最早上穿输出紧凑事件，沉默无事件，可直接串联下一层。
 
-        :param spike_times: 有限 FP32/FP64 ``[E]``，与权重同 dtype/device。
+        :param spike_times: 有限 FP32 ``[E]``，与权重同 dtype/device。
         :type spike_times: torch.Tensor
         :param input_indices: 同设备 int64 ``[E]``，索引输入列，可重复/无序。
         :type input_indices: torch.Tensor
@@ -443,7 +445,7 @@ class CubicSRM(nn.Module):
         weights. Independent trials emit compact earliest-upcrossing events;
         silence emits nothing. Directly composable with the next layer.
 
-        :param spike_times: Finite FP32/FP64 ``[E]`` matching weight dtype/device.
+        :param spike_times: Finite FP32 ``[E]`` matching weight dtype/device.
         :type spike_times: torch.Tensor
         :param input_indices: Same-device int64 ``[E]`` input columns; repeated/unordered allowed.
         :type input_indices: torch.Tensor

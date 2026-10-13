@@ -239,7 +239,7 @@ Complete partitions and a third PSP model
 :func:`spikingjelly.timing_based.solver.first_spike_time` solves the earliest
 upward zero crossing of a continuous total threshold residual. Its small
 interface accepts a callable, complete monotone boundaries and explicit tensor
-parameters. The callable receives FP64 query times and original piece indices,
+parameters. The callable receives FP32 query times and original piece indices,
 and returns ``(F, partial_F/partial_t)``. Each leading index is an independent
 time axis; the last dimension contains either all interval queries or one
 selected query. Left/right local-extremum/plateau-end flags are separate for every interval,
@@ -250,7 +250,7 @@ A value/derivative callable alone cannot prove that no hidden peak crosses the
 threshold. The caller must supply all stationary points of the weighted total
 response, not just the union of individual PSP extrema. The solver trusts this
 mathematical contract; format checks cannot certify a black-box partition.
-It chooses the earliest valid interval, runs FP64 bracketed Newton/bisection, checks convergence
+It chooses the earliest valid interval, runs FP32 bracketed Newton/bisection, checks convergence
 and residuals, and returns inf for silence. Grazing is excluded and an endpoint
 upcrossing counts. Its first-order backward recomputes
 ``dt/dp=-F_p/F_t``; bisection is not differentiated. Differentiable previous output
@@ -271,10 +271,10 @@ interior stationary points, preserving stable ties.
    def response(time, piece, arrival, weight):
        return weight * (time - arrival) - 1, weight.expand_as(time)
 
-   arrival = torch.tensor([[0.1]], dtype=torch.float64, requires_grad=True)
-   weight = torch.tensor([[2.0]], dtype=torch.float64, requires_grad=True)
+   arrival = torch.tensor([[0.1]], dtype=torch.float32, requires_grad=True)
+   weight = torch.tensor([[2.0]], dtype=torch.float32, requires_grad=True)
    # The residual is linear on this entire interval: the partition is complete.
-   root = first_spike_time(response, torch.tensor([[0., 2.]], dtype=torch.float64),
+   root = first_spike_time(response, torch.tensor([[0., 2.]], dtype=torch.float32),
                            (arrival, weight))
    root.sum().backward()  # root=0.6, arrival.grad=1, weight.grad=-0.25
 
@@ -311,6 +311,10 @@ belong to the example. Earlier class spikes score higher: logits are
 same validation-only checkpoint/early-stopping workflow as the ramp SRM example.
 The complete 55000/5000/10000 split and source hashes are recorded. Default hidden
 width is 128 and batch size 32; the command above uses width 64 and batch 128.
-Stationary overshoots smaller than the solver's documented FP64 roundoff bound
+Stationary overshoots smaller than the solver's documented FP32 roundoff bound
 are indistinguishable from grazing. Extreme support ratios remain limited by
 floating-point resolution. No surrogate or silent-neuron recovery is built in.
+
+The general solver and CubicSRM accept only FP32 floating tensors, with no
+precision selector or FP64 path. Rebase/rescale extreme absolute times or support
+ratios when intervals cannot be resolved.

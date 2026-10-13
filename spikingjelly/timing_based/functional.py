@@ -1048,8 +1048,15 @@ def _cubic_parameters(duration, support, threshold):
     if not math.isfinite(support) or support <= 0:
         raise ValueError("support must be finite and positive.")
     ratio = support / duration
-    if ratio == 0 or not math.isfinite(1 / ratio) or not math.isfinite(ratio):
-        raise ValueError("support/duration is not representable in FP64.")
+    maximum = torch.finfo(torch.float32).max
+    minimum = torch.finfo(torch.float32).tiny * torch.finfo(torch.float32).eps
+    if (
+        any(not minimum <= x <= maximum for x in (duration, support, threshold))
+        or not minimum <= ratio <= maximum
+        or not math.isfinite(1 / ratio)
+        or 1 / ratio > maximum
+    ):
+        raise ValueError("CubicSRM hyperparameters must be representable in FP32.")
     return ratio
 
 
@@ -1078,7 +1085,7 @@ def _cubic_partition(times, coefficients, duration):
         discriminant = b.square() - 4 * a * c
         if not bool(torch.isfinite(discriminant).all()):
             raise RuntimeError(
-                "Cubic SRM stationary roots are not representable in FP64."
+                "Cubic SRM stationary roots are not representable in FP32."
             )
         quadratic = (a != 0) & (discriminant >= 0)
         radical = torch.sqrt(torch.where(quadratic, discriminant, 0))
@@ -1096,9 +1103,9 @@ def _cubic_partition(times, coefficients, duration):
             ).any()
         ):
             raise RuntimeError(
-                "Cubic SRM stationary roots are not representable in FP64."
+                "Cubic SRM stationary roots are not representable in FP32."
             )
-        tolerance = 8 * torch.finfo(torch.float64).eps * duration
+        tolerance = 8 * torch.finfo(torch.float32).eps * duration
         critical_start = (valid_first & (first.abs() <= tolerance)) | (
             valid_second & (second.abs() <= tolerance)
         )
@@ -1144,15 +1151,38 @@ def _cubic_partition(times, coefficients, duration):
             valid_second[..., :-1] & (second[..., :-1] > 0) & (second[..., :-1] < width)
         )
         left, right = origins[..., :-1], origins[..., 1:]
-        if bool(
-            (
-                (inside_first & (left + first[..., :-1] <= left))
-                | (inside_second & (left + second[..., :-1] <= left))
-            ).any()
+        right_value = ((c3 * local + c2) * local + c1) * local + coefficients[
+            ..., :-1, 0
+        ]
+        inside_roots = []
+        unresolved = torch.zeros_like(inside_first)
+        for offset, inside in (
+            (first[..., :-1], inside_first),
+            (second[..., :-1], inside_second),
         ):
-            raise RuntimeError(
-                "Cubic SRM stationary time is not representable relative to arrival time."
+            point = left + offset
+            at_left = point <= left
+            collapsed = inside & (at_left | (point >= right))
+            shift = (
+                torch.where(collapsed, torch.where(at_left, offset, offset - width), 0)
+                / duration
             )
+            d1 = torch.where(at_left, c1, (3 * c3 * local + 2 * c2) * local + c1)
+            d2 = torch.where(at_left, c2, c2 + 3 * c3 * local)
+            voltage_change = ((c3 * shift + d2) * shift + d1) * shift
+            endpoint_value = torch.where(
+                at_left, coefficients[..., :-1, 0], right_value
+            )
+            bound = 64 * torch.finfo(torch.float32).eps * (1 + endpoint_value.abs())
+            unresolved |= collapsed & (
+                ~torch.isfinite(voltage_change) | (voltage_change.abs() > bound)
+            )
+            inside_roots.append(inside & ~collapsed)
+        if bool(unresolved.any()):
+            raise RuntimeError(
+                "A collapsed stationary point has a resolvable voltage excursion."
+            )
+        inside_first, inside_second = inside_roots
         first_point = torch.where(inside_first, left + first[..., :-1], right)
         second_point = torch.where(inside_second, left + second[..., :-1], right)
         first_flag = torch.where(inside_first, is_extremum, extremum_right)
@@ -1198,18 +1228,20 @@ def cubic_srm(
     在输入及支撑终点间累加三次多项式系数，解析求加权总响应导数的所有
     实根，形成完整单调分段；调用通用 :func:`~spikingjelly.timing_based.solver.first_spike_time`
     求根及一阶隐式梯度。不是均匀时间采样，也不使用单核驻点并集。
-    内部 FP64；前向缓存局部系数，反向在原输入事件重算偏导，不保留前缀扫描图。
+    内部 FP32；前向缓存局部系数，反向在原输入事件重算偏导，不保留前缀扫描图。
     安装 Triton 时 CUDA 融合多项式求值和通用求根更新，否则使用 Torch。
+    舍入到端点的驻点仅在电压变化不超过 FP32 分辨率时合并；否则报错。
+    大绝对时刻或很小支撑可能无法解析有效区间，应先重新设定时间原点/尺度。
     事件/分段拓扑切换处不保证唯一导数。局部时间按 duration
     归一化，用电压/导数前缀推进而非全局时刻幂。极端支撑比例仍受浮点分辨率限制。
 
-    :param spike_times: 有限 FP32/FP64 ``[E]``；窗外事件忽略且梯度为零。
+    :param spike_times: 有限 FP32 ``[E]``；窗外事件忽略且梯度为零。
     :type spike_times: torch.Tensor
     :param input_indices: 同设备 int64 ``[E]``，范围 ``[0,I)``，可重复/无序。
     :type input_indices: torch.Tensor
     :param batch_offsets: 同设备 int64 ``[B+1]``，从 0 到 E 非递减，支持空段。
     :type batch_offsets: torch.Tensor
-    :param weight: 有限 ``[O,I]`` 电压权重，与时刻同 FP32/FP64 dtype/device；
+    :param weight: 有限 ``[O,I]`` 电压权重，与时刻同 FP32 dtype/device；
         CPU/CUDA，I/O 为正。
     :type weight: torch.Tensor
     :param duration: 有限正数观察窗终点 ``[0,duration]``，与时刻同单位。
@@ -1242,21 +1274,24 @@ def cubic_srm(
     find every real derivative root of the weighted total response, then call
     :func:`~spikingjelly.timing_based.solver.first_spike_time` for roots and first-order
     implicit gradients. There is no uniform time sampling or union of individual
-    kernel stationary points. Internals use FP64; forward caches local coefficients
+    kernel stationary points. Internals use FP32; forward caches local coefficients
     and backward recomputes event partials without retaining the prefix graph.
     With Triton installed, CUDA fuses polynomial evaluation and general root updates;
     otherwise it uses Torch.
+    Stationary points rounded to an endpoint are merged only when their voltage
+    excursion is within FP32 resolution; otherwise they raise. Large absolute times
+    or very small supports may require rebasing/rescaling time to resolve intervals.
     Topology boundaries need not
     have unique derivatives. Local time uses duration-normalized voltage/derivative prefix transitions,
     avoiding global time powers. Extreme support ratios remain subject to floating resolution.
 
-    :param spike_times: Finite FP32/FP64 ``[E]``; ignored out-of-window events have zero gradient.
+    :param spike_times: Finite FP32 ``[E]``; ignored out-of-window events have zero gradient.
     :type spike_times: torch.Tensor
     :param input_indices: Same-device int64 ``[E]`` in ``[0,I)``, repeated/unordered allowed.
     :type input_indices: torch.Tensor
     :param batch_offsets: Same-device nondecreasing int64 ``[B+1]`` from 0 to E; empty segments allowed.
     :type batch_offsets: torch.Tensor
-    :param weight: Finite voltage weights ``[O,I]`` matching time FP32/FP64 dtype/device,
+    :param weight: Finite voltage weights ``[O,I]`` matching time FP32 dtype/device,
         CPU/CUDA, positive I/O.
     :type weight: torch.Tensor
     :param duration: Finite positive endpoint of ``[0,duration]``, in the times' units.
@@ -1274,6 +1309,8 @@ def cubic_srm(
     :raises RuntimeError: For non-finite coefficients, failed roots or unrepresentable outputs/gradients.
     """
     ratio = _cubic_parameters(duration, support, v_threshold)
+    if spike_times.dtype != torch.float32 or weight.dtype != torch.float32:
+        raise TypeError("CubicSRM requires FP32 times and weights.")
     _validate_events(spike_times, input_indices, batch_offsets, weight)
     spike_times, weight = _SRMInputs.apply(spike_times, weight)
     batch_count, output_count = batch_offsets.numel() - 1, weight.shape[0]
@@ -1283,7 +1320,7 @@ def cubic_srm(
         output_size=spike_times.numel(),
     )
     accepted = (spike_times >= 0) & (spike_times <= duration)
-    arrivals, rows = spike_times[accepted].double(), batches[accepted]
+    arrivals, rows = spike_times[accepted], batches[accepted]
     if not batch_count or not arrivals.numel():
         return (
             spike_times[:0] + weight.flatten()[0] * 0,
@@ -1298,7 +1335,7 @@ def cubic_srm(
     input_width = int(input_counts.max())
     input_times = arrivals.new_full((batch_count, input_width), duration)
     input_times[rows, input_columns] = arrivals
-    incoming = weight.double()[:, input_indices[accepted]].T / v_threshold
+    incoming = weight[:, input_indices[accepted]].T / v_threshold
     input_weights = incoming.new_zeros((batch_count, input_width, output_count))
     input_weights[rows, input_columns] = incoming
     input_weights = input_weights.permute(0, 2, 1)
@@ -1424,7 +1461,7 @@ def cubic_srm(
         )
         coefficients = torch.stack((voltage, current, quadratic, cubic), -1)
         if not bool(torch.isfinite(coefficients).all()):
-            raise RuntimeError("Cubic SRM coefficients are not representable in FP64.")
+            raise RuntimeError("Cubic SRM coefficients are not representable in FP32.")
         origins = knots[:, None, :].expand(coefficients.shape[:-1])
         boundaries, extrema = _cubic_partition(knots, coefficients, duration)
     roots = solver.first_spike_time(

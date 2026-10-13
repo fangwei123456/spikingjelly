@@ -15,40 +15,42 @@ def _linear(time, piece, start, slope):
 def test_linear_implicit_gradients_and_silence(device):
     if device == "cuda" and not torch.cuda.is_available():
         pytest.skip("CUDA unavailable")
-    knots = torch.tensor([[0.0, 2.0], [0.0, 2.0]], dtype=torch.float64, device=device)
+    knots = torch.tensor([[0.0, 2.0], [0.0, 2.0]], dtype=torch.float32, device=device)
     start = torch.tensor(
-        [[0.1], [0.2]], dtype=torch.float64, device=device, requires_grad=True
+        [[0.1], [0.2]], dtype=torch.float32, device=device, requires_grad=True
     )
     slope = torch.tensor(
-        [[2.0], [0.1]], dtype=torch.float64, device=device, requires_grad=True
+        [[2.0], [0.1]], dtype=torch.float32, device=device, requires_grad=True
     )
     root = solver.first_spike_time(_linear, knots, (start, slope))
     torch.testing.assert_close(
-        root, torch.tensor([0.6, torch.inf], dtype=torch.float64, device=device)
+        root, torch.tensor([0.6, torch.inf], dtype=torch.float32, device=device)
     )
     # Even an upstream gradient on inf must contribute zero on the silent branch.
     root.sum().backward()
     torch.testing.assert_close(
-        start.grad, torch.tensor([[1.0], [0.0]], dtype=torch.float64, device=device)
+        start.grad, torch.tensor([[1.0], [0.0]], dtype=torch.float32, device=device)
     )
     torch.testing.assert_close(
-        slope.grad, torch.tensor([[-0.25], [0.0]], dtype=torch.float64, device=device)
+        slope.grad, torch.tensor([[-0.25], [0.0]], dtype=torch.float32, device=device)
     )
 
 
+@pytest.mark.filterwarnings("ignore:Input #.*not a double precision:UserWarning")
 def test_nonconstant_output_history_keeps_time_chain_rule():
     def response(t, piece, gain, history):
         history_response = torch.exp(history - t)
         return torch.exp(t) - gain - history_response, torch.exp(t) + history_response
 
-    gain = torch.tensor([2.0], dtype=torch.float64, requires_grad=True)
-    history = torch.tensor([0.2], dtype=torch.float64, requires_grad=True)
-    knots = torch.tensor([0.0, 2.0], dtype=torch.float64)
+    gain = torch.tensor([2.0], dtype=torch.float32, requires_grad=True)
+    history = torch.tensor([0.2], dtype=torch.float32, requires_grad=True)
+    knots = torch.tensor([0.0, 2.0], dtype=torch.float32)
     assert torch.autograd.gradcheck(
         lambda g, h: solver.first_spike_time(response, knots, (g, h)),
         (gain, history),
-        atol=1e-6,
-        rtol=1e-4,
+        eps=1e-3,
+        atol=2e-3,
+        rtol=1e-2,
     )
     root = solver.first_spike_time(response, knots, (gain, history))
     root.backward()
@@ -59,38 +61,38 @@ def test_hidden_peak_tangent_endpoint_and_padding():
     def bump(t, piece, amplitude):
         return amplitude - (t - 1).square(), -2 * (t - 1)
 
-    knots = torch.tensor([[0.0, 1.0, 2.0, 2.0]], dtype=torch.float64)
+    knots = torch.tensor([[0.0, 1.0, 2.0, 2.0]], dtype=torch.float32)
     flags = torch.tensor([[[False, True], [True, False], [False, False]]])
-    amplitude = torch.tensor([[0.25]], dtype=torch.float64, requires_grad=True)
+    amplitude = torch.tensor([[0.25]], dtype=torch.float32, requires_grad=True)
     root = solver.first_spike_time(bump, knots, (amplitude,), flags)
-    assert root.item() == pytest.approx(0.5, abs=1e-12)
+    assert root.item() == pytest.approx(0.5, abs=1e-6)
     root.backward()
-    assert amplitude.grad.item() == pytest.approx(-1.0, abs=1e-12)
+    assert amplitude.grad.item() == pytest.approx(-1.0, abs=1e-6)
     assert torch.isinf(
         solver.first_spike_time(bump, knots, (amplitude * 0,), flags)
     ).all()
     endpoint = solver.first_spike_time(
         _linear,
-        torch.tensor([0.0, 0.5], dtype=torch.float64),
+        torch.tensor([0.0, 0.5], dtype=torch.float32),
         (
-            torch.tensor([0.0], dtype=torch.float64),
-            torch.tensor([2.0], dtype=torch.float64),
+            torch.tensor([0.0], dtype=torch.float32),
+            torch.tensor([2.0], dtype=torch.float32),
         ),
     )
     assert endpoint.item() == 0.5
 
 
 def test_first_spike_second_backward_is_rejected():
-    p = torch.tensor([2.0], dtype=torch.float64, requires_grad=True)
+    p = torch.tensor([2.0], dtype=torch.float32, requires_grad=True)
     root = solver.first_spike_time(
-        _linear, torch.tensor([0.0, 1.0], dtype=torch.float64), (p * 0, p)
+        _linear, torch.tensor([0.0, 1.0], dtype=torch.float32), (p * 0, p)
     )
     with pytest.raises(RuntimeError, match="first-order"):
         torch.autograd.grad(root, p, create_graph=True)
 
 
 def test_invalid_partition_and_nonfinite_response():
-    p = torch.ones(1, dtype=torch.float64)
+    p = torch.ones(1, dtype=torch.float32)
     with pytest.raises(ValueError, match="nondecreasing"):
         solver.first_spike_time(_linear, torch.tensor([1.0, 0.0]), (p, p))
     with pytest.raises(RuntimeError, match="non-finite"):
@@ -112,20 +114,20 @@ def test_double_exponential_adapter_matches_tempotron_time_and_jacobian():
         dh = decay * (delta * torch.exp(-delta * u) - difference / slow) / normalizer
         return weight * h - 1, weight * dh
 
-    t = torch.tensor([0.2], dtype=torch.float64, requires_grad=True)
-    w = torch.tensor([[1.8]], dtype=torch.float64, requires_grad=True)
-    knots = torch.tensor([[0.2, 0.2 + peak, 4.0]], dtype=torch.float64)
+    t = torch.tensor([0.2], dtype=torch.float32, requires_grad=True)
+    w = torch.tensor([[1.8]], dtype=torch.float32, requires_grad=True)
+    knots = torch.tensor([[0.2, 0.2 + peak, 4.0]], dtype=torch.float32)
     generic = solver.first_spike_time(
         response, knots, (t, w), torch.tensor([[[False, True], [True, False]]])
     )
     specific = functional.tempotron(
         t, torch.tensor([0]), torch.tensor([0, 1]), w, 4.0, slow, fast
     )[2]
-    torch.testing.assert_close(generic, specific.flatten(), atol=1e-10, rtol=1e-9)
+    torch.testing.assert_close(generic, specific.flatten(), atol=1e-6, rtol=1e-5)
     generic_grads = torch.autograd.grad(generic.sum(), (t, w))
     specific_grads = torch.autograd.grad(specific.sum(), (t, w))
     for actual, expected in zip(generic_grads, specific_grads):
-        torch.testing.assert_close(actual, expected, atol=1e-10, rtol=1e-9)
+        torch.testing.assert_close(actual, expected, atol=1e-6, rtol=1e-5)
 
 
 def test_knot_has_independent_one_sided_stationary_flags():
@@ -136,10 +138,10 @@ def test_knot_has_independent_one_sided_stationary_flags():
             piece == 0, -2 * (t - 1), parameter.expand_as(t)
         )
 
-    p = torch.tensor([2.0], dtype=torch.float64, requires_grad=True)
+    p = torch.tensor([2.0], dtype=torch.float32, requires_grad=True)
     root = solver.first_spike_time(
         response,
-        torch.tensor([0.0, 1.0, 2.0], dtype=torch.float64),
+        torch.tensor([0.0, 1.0, 2.0], dtype=torch.float32),
         (p,),
         torch.zeros(2, 2, dtype=torch.bool),
     )
@@ -149,14 +151,14 @@ def test_knot_has_independent_one_sided_stationary_flags():
 
 
 def test_cubic_simultaneous_events_keep_individual_time_gradients():
-    times = torch.tensor([0.2, 0.2], dtype=torch.float64, requires_grad=True)
-    weight = torch.tensor([[0.7, 1.3]], dtype=torch.float64, requires_grad=True)
+    times = torch.tensor([0.2, 0.2], dtype=torch.float32, requires_grad=True)
+    weight = torch.tensor([[0.7, 1.3]], dtype=torch.float32, requires_grad=True)
     output = functional.cubic_srm(
         times, torch.tensor([0, 1]), torch.tensor([0, 2]), weight, 3.0
     )
     output[0].sum().backward()
     torch.testing.assert_close(
-        times.grad, torch.tensor([0.35, 0.65], dtype=torch.float64)
+        times.grad, torch.tensor([0.35, 0.65], dtype=torch.float32)
     )
     torch.testing.assert_close(weight.grad[:, 0], weight.grad[:, 1])
 
@@ -221,8 +223,8 @@ def _cubic_reference(times, indices, offsets, weights, duration, support):
 
 
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_cubic_against_independent_polynomial_brent_reference(device, dtype):
+def test_cubic_against_independent_polynomial_brent_reference(device):
+    dtype = torch.float32
     if device == "cuda" and not torch.cuda.is_available():
         pytest.skip("CUDA unavailable")
     generator = np.random.default_rng(13)
@@ -244,38 +246,39 @@ def test_cubic_against_independent_polynomial_brent_reference(device, dtype):
         torch.testing.assert_close(
             actual[0],
             torch.tensor(expected[0], device=device, dtype=dtype),
-            rtol=1e-5 if dtype == torch.float32 else 1e-9,
-            atol=1e-6 if dtype == torch.float32 else 1e-10,
+            rtol=1e-5,
+            atol=1e-6,
         )
         assert actual[1].tolist() == expected[1]
         assert actual[2].tolist() == expected[2]
 
 
+@pytest.mark.filterwarnings("ignore:Input #.*not a double precision:UserWarning")
 def test_cubic_shared_events_gradcheck_and_two_layers():
-    t = torch.tensor([0.13, 0.37, 0.18], dtype=torch.float64, requires_grad=True)
+    t = torch.tensor([0.13, 0.37, 0.18], dtype=torch.float32, requires_grad=True)
     indices, offsets = torch.tensor([0, 1, 0]), torch.tensor([0, 3])
-    w1 = torch.tensor([[0.8, 1.0], [0.9, 0.7]], dtype=torch.float64, requires_grad=True)
-    w2 = torch.tensor([[1.1, 1.3]], dtype=torch.float64, requires_grad=True)
+    w1 = torch.tensor([[0.8, 1.0], [0.9, 0.7]], dtype=torch.float32, requires_grad=True)
+    w2 = torch.tensor([[1.1, 1.3]], dtype=torch.float32, requires_grad=True)
 
     def network(times, first, second):
         events = functional.cubic_srm(times, indices, offsets, first, 3.0)
         return functional.cubic_srm(*events, second, 3.0)[0]
 
     assert torch.autograd.gradcheck(
-        network, (t, w1, w2), eps=1e-6, atol=1e-6, rtol=1e-4
+        network, (t, w1, w2), eps=1e-3, atol=2e-3, rtol=1e-2
     )
 
 
 def test_cubic_tangent_late_peak_empty_outside_and_signed_inputs():
-    t = torch.tensor([0.0, 2.0], dtype=torch.float64, requires_grad=True)
+    t = torch.tensor([0.0, 2.0], dtype=torch.float32, requires_grad=True)
     i, off = torch.tensor([0, 1]), torch.tensor([0, 2, 2])
-    w = torch.tensor([[1.0, 2.0]], dtype=torch.float64, requires_grad=True)
+    w = torch.tensor([[1.0, 2.0]], dtype=torch.float32, requires_grad=True)
     events = functional.cubic_srm(t, i, off, w, 4.0, support=1.0)
     assert events[0].item() > 2.0  # First PSP only grazes; the later PSP fires.
     assert events[2].tolist() == [0, 1, 1]
     events[0].sum().backward()
     torch.testing.assert_close(
-        t.grad, torch.tensor([0.0, 1.0], dtype=torch.float64), atol=1e-10, rtol=1e-9
+        t.grad, torch.tensor([0.0, 1.0], dtype=torch.float32), atol=1e-6, rtol=1e-5
     )
     empty = functional.cubic_srm(t[:0], i[:0], torch.tensor([0, 0]), w, 4.0)
     assert empty[0].numel() == 0 and empty[2].tolist() == [0, 0]
@@ -301,36 +304,41 @@ def test_cubic_demo_gradients(device):
         assert torch.isfinite(p.grad).all() and p.grad.abs().sum() > 0
 
 
-@pytest.mark.parametrize("shift", [0.0, 99.0, 999.0, 1e6])
+@pytest.mark.parametrize("shift", [0.0, 10.0, 99.0])
 def test_cubic_translation_does_not_turn_tangent_into_spike(shift):
-    times = torch.tensor([shift], dtype=torch.float64, requires_grad=True)
+    times = torch.tensor([shift], dtype=torch.float32, requires_grad=True)
     indices, offsets = torch.tensor([0]), torch.tensor([0, 1])
     tangent = functional.cubic_srm(
         times,
         indices,
         offsets,
-        torch.ones(1, 1, dtype=torch.float64),
+        torch.ones(1, 1, dtype=torch.float32),
         shift + 2,
         support=1,
     )
     assert tangent[0].numel() == 0
-    weights = torch.tensor([[1.2]], dtype=torch.float64, requires_grad=True)
+    weights = torch.tensor([[1.2]], dtype=torch.float32, requires_grad=True)
     shifted = functional.cubic_srm(
         times, indices, offsets, weights, shift + 2, support=1
     )[0]
     baseline = functional.cubic_srm(
         times * 0, indices, offsets, weights, 2.0, support=1
     )[0]
-    torch.testing.assert_close(shifted - shift, baseline, atol=1e-9, rtol=1e-9)
+    torch.testing.assert_close(
+        shifted - shift,
+        baseline,
+        atol=8 * torch.finfo(torch.float32).eps * (shift + 2),
+        rtol=1e-5,
+    )
     shifted.sum().backward()
-    torch.testing.assert_close(times.grad, torch.ones_like(times), atol=1e-9, rtol=1e-9)
+    torch.testing.assert_close(times.grad, torch.ones_like(times), atol=1e-6, rtol=1e-5)
 
 
 def test_horizontal_upcrossing_emits_but_rejects_singular_gradient():
-    p = torch.tensor([1.0], dtype=torch.float64, requires_grad=True)
+    p = torch.tensor([1.0], dtype=torch.float32, requires_grad=True)
     root = solver.first_spike_time(
         lambda t, i, p: ((t - p).pow(3), 3 * (t - p).square()),
-        torch.tensor([0.0, 1.0, 1.0, 2.0], dtype=torch.float64),
+        torch.tensor([0.0, 1.0, 1.0, 2.0], dtype=torch.float32),
         (p,),
         torch.zeros(3, 2, dtype=torch.bool),
     )
@@ -340,70 +348,70 @@ def test_horizontal_upcrossing_emits_but_rejects_singular_gradient():
 
 
 def test_small_representable_root_has_relative_time_and_gradient_accuracy():
-    weight = torch.tensor([1e38], dtype=torch.float64, requires_grad=True)
+    weight = torch.tensor([1e38], dtype=torch.float32, requires_grad=True)
     root = solver.first_spike_time(
         lambda t, i, w: (t * w - 1, w.expand_as(t)),
-        torch.tensor([0.0, 1.0], dtype=torch.float64),
+        torch.tensor([0.0, 1.0], dtype=torch.float32),
         (weight,),
     )
-    torch.testing.assert_close(root, weight[0].reciprocal(), atol=0, rtol=1e-14)
+    torch.testing.assert_close(root, weight[0].reciprocal(), atol=0, rtol=1e-5)
     root.backward()
-    torch.testing.assert_close(
-        weight.grad, -weight.detach().pow(-2), atol=0, rtol=1e-14
-    )
+    torch.testing.assert_close(weight.grad, -weight.detach().pow(-2), atol=0, rtol=1e-5)
 
 
 def test_expired_cubic_support_has_exact_zero_state_in_long_empty_tail():
     for n, duration in ((40, 1e8), (1000, 1e6)):
-        times = torch.arange(n, dtype=torch.float64) * 1.2 + 0.123
+        times = torch.arange(n, dtype=torch.float32) * 1.2 + 0.123
         output = functional.cubic_srm(
             times,
             torch.zeros(n, dtype=torch.int64),
             torch.tensor([0, n]),
-            torch.tensor([[0.9]], dtype=torch.float64),
+            torch.tensor([[0.9]], dtype=torch.float32),
             duration,
             support=1.0,
         )
         assert output[0].numel() == 0
 
 
+@pytest.mark.filterwarnings("ignore:Input #.*not a double precision:UserWarning")
 def test_separated_supports_restart_gradients_without_expired_history():
-    times = torch.tensor([0.1, 5.2], dtype=torch.float64, requires_grad=True)
-    weight = torch.tensor([[0.9, 1.3]], dtype=torch.float64, requires_grad=True)
+    times = torch.tensor([0.1, 5.2], dtype=torch.float32, requires_grad=True)
+    weight = torch.tensor([[0.9, 1.3]], dtype=torch.float32, requires_grad=True)
     indices, offsets = torch.tensor([0, 1]), torch.tensor([0, 2])
     assert torch.autograd.gradcheck(
         lambda t, w: functional.cubic_srm(t, indices, offsets, w, 7.0, support=1.0)[0],
         (times, weight),
-        atol=1e-6,
-        rtol=1e-4,
+        eps=1e-3,
+        atol=2e-3,
+        rtol=1e-2,
     )
     functional.cubic_srm(times, indices, offsets, weight, 7.0, support=1.0)[
         0
     ].sum().backward()
     torch.testing.assert_close(
-        times.grad[:1], torch.zeros(1, dtype=torch.float64), atol=1e-12, rtol=0
+        times.grad[:1], torch.zeros(1, dtype=torch.float32), atol=1e-6, rtol=0
     )
     torch.testing.assert_close(
-        weight.grad[:, :1], torch.zeros(1, 1, dtype=torch.float64), atol=1e-12, rtol=0
+        weight.grad[:, :1], torch.zeros(1, 1, dtype=torch.float32), atol=1e-6, rtol=0
     )
 
 
-def test_general_solver_reports_cast_gradient_overflow():
-    weight = torch.tensor([1e-38], requires_grad=True)
+def test_general_solver_reports_nonfinite_gradient():
+    weight = torch.tensor([1e-22], requires_grad=True)
     root = solver.first_spike_time(
         lambda t, i, w: (t * w - 1, w.expand_as(t)),
-        torch.tensor([0.0, 1.1e38], dtype=torch.float64),
+        torch.tensor([0.0, 2e22], dtype=torch.float32),
         (weight,),
     )
-    with pytest.raises(RuntimeError, match="overflow"):
+    with pytest.raises(RuntimeError, match="not finite"):
         root.backward()
 
 
 def test_horizontal_upcrossing_at_window_endpoint_uses_certified_type():
-    p = torch.tensor([1.0], dtype=torch.float64, requires_grad=True)
+    p = torch.tensor([1.0], dtype=torch.float32, requires_grad=True)
     root = solver.first_spike_time(
         lambda t, i, p: ((t - p).pow(3), 3 * (t - p).square()),
-        torch.tensor([0.0, 1.0], dtype=torch.float64),
+        torch.tensor([0.0, 1.0], dtype=torch.float32),
         (p,),
         extrema=torch.tensor([[False, False]]),
     )
@@ -413,17 +421,17 @@ def test_horizontal_upcrossing_at_window_endpoint_uses_certified_type():
 
 
 def test_cubic_knot_crossing_uses_earlier_branch_with_zero_slope():
-    times = torch.tensor([0.0, 1 / 3], dtype=torch.float64, requires_grad=True)
+    times = torch.tensor([0.0, 1 / 3], dtype=torch.float32, requires_grad=True)
     output = functional.cubic_srm(
         times,
         torch.tensor([0, 1]),
         torch.tensor([0, 2]),
-        torch.ones(1, 2, dtype=torch.float64),
+        torch.ones(1, 2, dtype=torch.float32),
         2.0,
         support=1.0,
     )[0]
     torch.testing.assert_close(
-        output, torch.tensor([1 / 3], dtype=torch.float64), atol=1e-14, rtol=1e-14
+        output, torch.tensor([1 / 3], dtype=torch.float32), atol=1e-6, rtol=1e-5
     )
     with pytest.raises(RuntimeError, match="not transverse"):
         output.sum().backward()
@@ -433,20 +441,20 @@ def test_cubic_knot_crossing_uses_earlier_branch_with_zero_slope():
 def test_cubic_unrepresentable_relative_support_or_stationary_time_raises(support):
     with pytest.raises(RuntimeError, match="representable"):
         functional.cubic_srm(
-            torch.tensor([2e16], dtype=torch.float64),
+            torch.tensor([2e16], dtype=torch.float32),
             torch.tensor([0]),
             torch.tensor([0, 1]),
-            torch.tensor([[2.0]], dtype=torch.float64),
+            torch.tensor([[2.0]], dtype=torch.float32),
             2e16 + 8,
             support=support,
         )
 
 
 def test_composite_parameters_cannot_silently_return_partial_second_derivative():
-    weight = torch.tensor([2.0], dtype=torch.float64, requires_grad=True)
+    weight = torch.tensor([2.0], dtype=torch.float32, requires_grad=True)
     root = solver.first_spike_time(
         lambda t, i, p: (t * p - 1, p.expand_as(t)),
-        torch.tensor([0.0, 1.0], dtype=torch.float64),
+        torch.tensor([0.0, 1.0], dtype=torch.float32),
         (weight.square(),),
     )
     with pytest.raises(RuntimeError, match="first-order"):
@@ -454,18 +462,18 @@ def test_composite_parameters_cannot_silently_return_partial_second_derivative()
 
 
 def test_inactive_rows_do_not_evaluate_nonfinite_dummy_midpoints():
-    weight = torch.tensor([[0.0], [2.0]], dtype=torch.float64, requires_grad=True)
+    weight = torch.tensor([[0.0], [2.0]], dtype=torch.float32, requires_grad=True)
     roots = solver.first_spike_time(
         _linear,
-        torch.tensor([[-1e308, 1e308], [0.0, 1.0]], dtype=torch.float64),
+        torch.tensor([[-3e38, 3e38], [0.0, 1.0]], dtype=torch.float32),
         (torch.zeros_like(weight), weight),
     )
     torch.testing.assert_close(
-        roots, torch.tensor([torch.inf, 0.5], dtype=torch.float64)
+        roots, torch.tensor([torch.inf, 0.5], dtype=torch.float32)
     )
     roots.sum().backward()
     torch.testing.assert_close(
-        weight.grad, torch.tensor([[0.0], [-0.25]], dtype=torch.float64)
+        weight.grad, torch.tensor([[0.0], [-0.25]], dtype=torch.float32)
     )
 
 
@@ -479,19 +487,19 @@ def test_safeguarded_newton_handles_flat_and_outside_bracket_proposals():
             1 / 40000,
         ),
     ):
-        p = torch.tensor([parameter], dtype=torch.float64, requires_grad=True)
+        p = torch.tensor([parameter], dtype=torch.float32, requires_grad=True)
         root = solver.first_spike_time(
-            response, torch.tensor([0.0, 1.999], dtype=torch.float64), (p,)
+            response, torch.tensor([0.0, 1.999], dtype=torch.float32), (p,)
         )
         torch.testing.assert_close(
-            root, torch.tensor(expected, dtype=torch.float64), rtol=1e-10, atol=1e-12
+            root, torch.tensor(expected, dtype=torch.float32), rtol=1e-5, atol=1e-6
         )
         root.backward()
         torch.testing.assert_close(
             p.grad,
-            torch.tensor([derivative], dtype=torch.float64),
-            rtol=1e-9,
-            atol=1e-12,
+            torch.tensor([derivative], dtype=torch.float32),
+            rtol=1e-5,
+            atol=1e-6,
         )
 
 
@@ -515,17 +523,17 @@ def test_cuda_newton_matches_torch_on_curved_and_tiny_roots(monkeypatch):
     )
     for response, values, window in cases:
         # Strided parameters and broadcast partitions exercise real public inputs.
-        storage = torch.tensor(values * 2, device="cuda", dtype=torch.float64)
+        storage = torch.tensor(values * 2, device="cuda", dtype=torch.float32)
         p = storage[::2].detach().requires_grad_()
-        knots = torch.tensor(window, device="cuda", dtype=torch.float64).expand(3, 2)
+        knots = torch.tensor(window, device="cuda", dtype=torch.float32).expand(3, 2)
         actual = solver.first_spike_time(response, knots, (p[:, None],))
         actual_grad = torch.autograd.grad(actual.sum(), p)[0]
         with monkeypatch.context() as reference:
             reference.setattr(first_spike, "triton", None)
             expected = solver.first_spike_time(response, knots, (p[:, None],))
             expected_grad = torch.autograd.grad(expected.sum(), p)[0]
-        torch.testing.assert_close(actual, expected, rtol=1e-14, atol=0)
-        torch.testing.assert_close(actual_grad, expected_grad, rtol=1e-13, atol=0)
+        torch.testing.assert_close(actual, expected, rtol=1e-5, atol=0)
+        torch.testing.assert_close(actual_grad, expected_grad, rtol=1e-5, atol=0)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
@@ -536,7 +544,7 @@ def test_cuda_cubic_matches_torch_for_shared_signed_events(monkeypatch):
     times = torch.tensor(
         [0.4, 0.1, 0.1, 0.7, 1.1],
         device="cuda",
-        dtype=torch.float64,
+        dtype=torch.float32,
         requires_grad=True,
     )
     indices = torch.tensor([0, 1, 1, 0, 1], device="cuda")
@@ -544,7 +552,7 @@ def test_cuda_cubic_matches_torch_for_shared_signed_events(monkeypatch):
     weights = torch.tensor(
         [[1.1, 0.8], [-0.4, 1.7], [0.1, -0.3]],
         device="cuda",
-        dtype=torch.float64,
+        dtype=torch.float32,
         requires_grad=True,
     )
     actual = functional.cubic_srm(times, indices, offsets, weights, 4.0)
@@ -554,16 +562,16 @@ def test_cuda_cubic_matches_torch_for_shared_signed_events(monkeypatch):
         expected = functional.cubic_srm(times, indices, offsets, weights, 4.0)
         expected_grad = torch.autograd.grad(expected[0].sum(), (times, weights))
     for a, b in zip(actual, expected):
-        torch.testing.assert_close(a, b, rtol=1e-13, atol=1e-14)
+        torch.testing.assert_close(a, b, rtol=1e-5, atol=1e-6)
     for a, b in zip(actual_grad, expected_grad):
-        torch.testing.assert_close(a, b, rtol=1e-12, atol=1e-13)
+        torch.testing.assert_close(a, b, rtol=1e-5, atol=1e-6)
 
 
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
 def test_nonfinite_interior_response_is_rejected(device):
     if device == "cuda" and not torch.cuda.is_available():
         pytest.skip("CUDA unavailable")
-    knots = torch.tensor([0.0, 1.0], device=device, dtype=torch.float64)
+    knots = torch.tensor([0.0, 1.0], device=device, dtype=torch.float32)
     for invalid_slope in (False, True):
 
         def response(time, piece):
@@ -575,3 +583,45 @@ def test_nonfinite_interior_response_is_rejected(device):
 
         with pytest.raises(RuntimeError, match="non-finite"):
             solver.first_spike_time(response, knots, ())
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.float64])
+def test_solver_and_cubic_reject_non_fp32(dtype):
+    with pytest.raises(TypeError, match="FP32"):
+        solver.first_spike_time(_linear, torch.tensor([0.0, 1.0], dtype=dtype), ())
+    with pytest.raises(TypeError, match="FP32"):
+        solver.first_spike_time(
+            _linear, torch.tensor([0.0, 1.0]), (torch.ones(1, dtype=dtype),)
+        )
+    with pytest.raises(TypeError, match="FP32"):
+        functional.cubic_srm(
+            torch.zeros(1, dtype=dtype),
+            torch.tensor([0]),
+            torch.tensor([0, 1]),
+            torch.ones(1, 1, dtype=dtype),
+            1.0,
+        )
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_fp32_small_support_keeps_representable_stationary_points(device):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA unavailable")
+    events = functional.cubic_srm(
+        torch.zeros(1, device=device),
+        torch.zeros(1, device=device, dtype=torch.long),
+        torch.tensor([0, 1], device=device),
+        torch.full((1, 1), 2.0, device=device),
+        1.0,
+        support=1e-6,
+    )
+    assert events[0].numel() == 1 and 0 < events[0].item() < 1e-6 / 3
+    z = events[0].item() / 1e-6
+    assert 2 * 27 / 4 * z * (1 - z) ** 2 == pytest.approx(1.0, rel=1e-5)
+
+
+def test_fp32_collapsed_stationary_point_cannot_hide_large_peak():
+    knots = torch.tensor([[1.0, 1.1]])
+    coefficients = torch.tensor([[[[0.0, 8e8, -8e16, 0.0], [0.0, 0.0, 0.0, 0.0]]]])
+    with pytest.raises(RuntimeError, match="resolvable voltage"):
+        functional._cubic_partition(knots, coefficients, 1.0)

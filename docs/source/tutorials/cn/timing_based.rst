@@ -206,14 +206,14 @@ Adam（默认 lr=0.01）训练原始参数，示例通过 PyTorch parametrizatio
 
 :func:`spikingjelly.timing_based.solver.first_spike_time` 求连续总阈值残差的最早
 上穿零点。接口接收响应函数、完整单调分段及显式张量参数。响应函数接收
-FP64 查询时刻及原分段索引，返回 ``(F, partial_F/partial_t)``。每个前导
+FP32 查询时刻及原分段索引，返回 ``(F, partial_F/partial_t)``。每个前导
 索引是一条独立时间轴，最后一维是全部区间查询或一个选中查询。每段左右
 两侧分别标记局部极值/平台端点，因此折点可具有不同单侧导数。窗口端点
 类型也须由核实现认证；水平拐点不属于极值。
 
 只有函数值和导数不能证明两个检查点间没有隐藏的超阈峰。调用方必须给出
 加权总响应的全部驻点，不能只取各 PSP 驻点的并集。求解器依赖这一数学
-契约；格式校验无法认证黑盒分段。它选择最早有效区间，进行 FP64 括区间保护的 Newton/二分，
+契约；格式校验无法认证黑盒分段。它选择最早有效区间，进行 FP32 括区间保护的 Newton/二分，
 检查收敛及残差，沉默返回 inf。相切不发放，窗口终点上穿计入。一阶反向
 重算 ``dt/dp=-F_p/F_t``，不对二分求导。可微历史输出时刻必须作为显式参数
 传入，从而保留历史链式梯度。求解器不拥有神经元历史、reset/shunting 或
@@ -231,10 +231,10 @@ FP64 查询时刻及原分段索引，返回 ``(F, partial_F/partial_t)``。每�
    def response(time, piece, arrival, weight):
        return weight * (time - arrival) - 1, weight.expand_as(time)
 
-   arrival = torch.tensor([[0.1]], dtype=torch.float64, requires_grad=True)
-   weight = torch.tensor([[2.0]], dtype=torch.float64, requires_grad=True)
+   arrival = torch.tensor([[0.1]], dtype=torch.float32, requires_grad=True)
+   weight = torch.tensor([[2.0]], dtype=torch.float32, requires_grad=True)
    # 残差在整个区间内线性，因此此分段完整。
-   root = first_spike_time(response, torch.tensor([[0., 2.]], dtype=torch.float64),
+   root = first_spike_time(response, torch.tensor([[0., 2.]], dtype=torch.float32),
                            (arrival, weight))
    root.sum().backward()  # root=0.6，arrival.grad=1，weight.grad=-0.25
 
@@ -265,5 +265,8 @@ shunting 与峰值输出；ramp SRM 保留解析多水平扫描与阶跃复位�
 越高：logits 为 ``50*(4-time)``，沉默得分零。使用交叉熵与 Adam，复用
 ramp SRM 示例的验证选 checkpoint/早停流程，记录完整 55000/5000/10000
 划分与源码哈希。默认隐藏宽度 128、batch 32，上述命令使用宽度 64、batch 128。
-驻点超阈幅度小于求解器文档所述 FP64 舍入界时无法与相切区分。极端支撑
+驻点超阈幅度小于求解器文档所述 FP32 舍入界时无法与相切区分。极端支撑
 比例仍受浮点分辨率限制。没有替代梯度或沉默恢复。
+
+通用求解器与 CubicSRM 只接受 FP32 浮点张量，无精度选择参数或 FP64 路径。
+极端绝对时刻/支撑比例可能使区间无法解析；应重新设定时间原点或尺度。
