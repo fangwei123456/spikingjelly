@@ -11,6 +11,11 @@ and the archived documentation linked from the project README.
 
 ### Fixes
 
+- Fixed `layer.WSLinear` with the default `gain=True`, which previously raised
+  `AttributeError` because it sized the learnable gain with a non-existent
+  `out_channels` attribute. The weight-standardized OTTT Spiking VGG models
+  (`ottt_spiking_vgg11_ws`, `ottt_spiking_vgg13_ws`, `ottt_spiking_vgg16_ws`,
+  `ottt_spiking_vgg19_ws`) can be constructed again.
 - Restored Torch 2.6 spike unpacking registration and rank-local distributed
   vision checkpoint loading without changing packed bytes or checkpoint formats.
 - Fused neuron–Linear native kernels validate shared-memory capacity in CUDA,
