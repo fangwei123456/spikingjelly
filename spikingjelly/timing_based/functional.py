@@ -1106,7 +1106,10 @@ def _cubic_partition(times, coefficients, duration):
                 "Cubic SRM stationary roots are not representable in FP32."
             )
         width = (times[:, 1:] - times[:, :-1])[:, None, :]
-        spans = torch.cat((width, torch.zeros_like(width[..., :1])), -1)
+        zero_span = torch.zeros_like(width[..., :1])
+        spans = torch.maximum(
+            torch.cat((zero_span, width), -1), torch.cat((width, zero_span), -1)
+        )
         c0_all, c1_all, c2_all, c3_all = coefficients.unbind(-1)
         local = width / duration
         end_d1 = (3 * c3_all[..., :-1] * local + 2 * c2_all[..., :-1]) * local + c1_all[
