@@ -12,7 +12,7 @@ from spikingjelly.activation_based import (
     surrogate,
 )
 from spikingjelly.activation_based.model.masnn import MASNN, AttMSResNet
-from spikingjelly.activation_based.model.maxformer import MaxFormer
+from spikingjelly.activation_based.model.maxformer import MaxFormer, maxformer_cifar
 from spikingjelly.activation_based.model.ms_resnet import MaxResNet, MSResNet
 from spikingjelly.activation_based.model.qkformer import QKFormer
 from spikingjelly.activation_based.model.spike_driven_transformer import (
@@ -99,6 +99,41 @@ def test_maxformer_tiny_forward_and_backward():
     _train_step(model)
 
 
+def test_maxformer_cifar_preserves_resolution_and_paper_neurons():
+    model = maxformer_cifar(T=2, num_classes=100)
+    assert sum(p.numel() for p in model.parameters()) == 6602932
+    assert tuple(map(len, (model.stage1, model.stage2, model.stage3))) == (1, 1, 2)
+    assert model.stage3[0].attn.num_heads == 8
+    assert model.stage3[0].attn.attn_lif.v_threshold == 0.5
+    assert all(
+        n.detach_reset for n in model.modules() if isinstance(n, neuron.BaseNode)
+    )
+    with torch.no_grad():
+        stem = model.patch_embed1(torch.randn(2, 2, 3, 32, 32))
+    assert stem.shape == (2, 2, 96, 32, 32)
+
+
+def test_maxformer_cifar_attention_output_and_gradient():
+    model = MaxFormer(T=2, embed_dims=32, depths=(1, 1, 1), cifar=True)
+    attention = model.stage3[0].attn.double()
+    reference = copy.deepcopy(attention)
+    x = torch.randn(2, 2, 32, 5, dtype=torch.float64, requires_grad=True)
+    y = x.detach().clone().requires_grad_()
+    actual = attention(x)
+    q, k, v = reference.qkv_lif(reference.qkv(reference.input_lif(y))).chunk(3, 2)
+    q, k, v = [z.reshape(2, 2, 8, 4, 5) for z in (q, k, v)]
+    expected = (v @ k.transpose(-1, -2)) @ q * 0.125
+    expected = reference.proj(reference.attn_lif(expected.reshape(2, 2, 32, 5)))
+    torch.testing.assert_close(actual, expected, rtol=1e-12, atol=1e-12)
+    actual.square().sum().backward()
+    expected.square().sum().backward()
+    torch.testing.assert_close(x.grad, y.grad, rtol=1e-10, atol=1e-12)
+    for p, q in zip(attention.parameters(), reference.parameters()):
+        torch.testing.assert_close(p.grad, q.grad, rtol=1e-10, atol=1e-12)
+    functional.reset_net(attention)
+    torch.testing.assert_close(attention(x.detach()), actual.detach(), rtol=0, atol=0)
+
+
 def test_spike_driven_transformer_tiny_forward_and_backward():
     model = SpikeDrivenTransformer(
         T=2,
@@ -149,6 +184,7 @@ def test_spike_driven_transformer_tiny_forward_and_backward():
             embed_dims=32,
             depths=(1, 1, 1),
         ),
+        partial(MaxFormer, embed_dims=32, depths=(1, 1, 1), cifar=True),
         partial(
             QKFormer,
             embed_dims=32,

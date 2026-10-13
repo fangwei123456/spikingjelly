@@ -131,7 +131,14 @@ def check(root: Path) -> list[str]:
         is_package_logger_module = path == root / "logger.py"
         imports_package_logger = is_package_logger_module or any(
             isinstance(node, ast.ImportFrom)
-            and node.module == "spikingjelly.logger"
+            and (
+                (node.level == 0 and node.module == "spikingjelly.logger")
+                or (
+                    node.module == "logger"
+                    and 0 < node.level < len(path.parents)
+                    and path.parents[node.level - 1].resolve() == root.resolve()
+                )
+            )
             and any(alias.name == "logger" for alias in node.names)
             for node in ast.walk(tree)
         )

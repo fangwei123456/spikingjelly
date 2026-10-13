@@ -31,6 +31,7 @@ from spikingjelly.activation_based.precision import (
     PrecisionConfig,
     prepare_model_for_precision,
 )
+from spikingjelly.logger import logger
 from .config import TrainingConfig
 from .execution import (
     _classification_logits,
@@ -945,7 +946,8 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                 )
                 model.train()
             if rank == 0:
-                print(
+                logger.info(
+                    "{}",
                     json.dumps(
                         {
                             "epoch": epoch + 1,
@@ -956,7 +958,6 @@ def train_classification(config: TrainingConfig) -> dict[str, float]:
                         },
                         sort_keys=True,
                     ),
-                    flush=True,
                 )
             start_batch = 0
             if stop:
