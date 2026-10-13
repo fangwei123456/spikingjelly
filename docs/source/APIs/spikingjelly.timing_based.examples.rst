@@ -21,3 +21,9 @@ MNIST Classification with Cubic PSPs
 
 .. automodule:: spikingjelly.timing_based.examples.cubic_srm_mnist
    :members:
+
+MNIST Classification with Cubic Event Convolution
+-------------------------------------------------
+
+.. automodule:: spikingjelly.timing_based.examples.cubic_conv_mnist
+   :members:

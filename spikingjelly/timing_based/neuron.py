@@ -3,7 +3,7 @@ from torch import nn
 
 from . import functional
 
-__all__ = ["Tempotron", "SRM", "CubicSRM"]
+__all__ = ["Tempotron", "SRM", "CubicSRM", "CubicConv2d"]
 
 
 class Tempotron(nn.Module):
@@ -466,4 +466,179 @@ class CubicSRM(nn.Module):
             self.duration,
             self.support,
             self.v_threshold,
+        )
+
+
+class CubicConv2d(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        duration: float,
+        support: float = 2.0,
+        v_threshold: float = 1.0,
+        stride: int = 1,
+        padding: int = 0,
+    ) -> None:
+        r"""
+        **API Language** - :ref:`中文 <timing-CubicConv2d-cn>` | :ref:`English <timing-CubicConv2d-en>`
+
+        ----
+
+        .. _timing-CubicConv2d-cn:
+
+        * **中文**
+
+        拥有 ``weight[Cout,Cin,k,k]`` 的单发三次PSP卷积神经元。使用
+        :func:`~spikingjelly.timing_based.functional.cubic_conv2d` 的局部事件试次，
+        不维护跨调用状态；无bias、groups或dilation。权重固定FP32，默认N(0,0.001²)，
+        checkpoint键为weight；可用.to在CPU/CUDA之间转换。loss与权重约束由调用方定义。
+
+        :param in_channels: 正整数输入通道数。
+        :type in_channels: int
+        :param out_channels: 正整数输出通道数。
+        :type out_channels: int
+        :param kernel_size: 正整数方形核边长。
+        :type kernel_size: int
+        :param duration: 有限正数窗口终点，与事件同时间单位。
+        :type duration: float
+        :param support: 有限正数PSP支撑长度，默认2，同时间单位。
+        :type support: float
+        :param v_threshold: 有限正数阈值，默认1，不改变单位峰值核。
+        :type v_threshold: float
+        :param stride: 两个空间轴共用的正整数步长，默认1。
+        :type stride: int
+        :param padding: 两个空间轴共用的非负整数边缘宽度，默认0；padding没有事件。
+        :type padding: int
+        :raises TypeError: 参数类型非法。
+        :raises ValueError: 通道数、空间参数或FP32超参数非法。
+
+        ----
+
+        .. _timing-CubicConv2d-en:
+
+        * **English**
+
+        Single-spike cubic-PSP convolution owning ``weight[Cout,Cin,k,k]``.
+        Use local event trials from :func:`~spikingjelly.timing_based.functional.cubic_conv2d`;
+        no persistent temporal state, bias, groups or dilation. Weights are FP32,
+        initialized to N(0,0.001²), with checkpoint key weight; .to supports CPU/CUDA
+        device moves. Callers define losses and weight constraints.
+
+        :param in_channels: Positive integer input channel count.
+        :type in_channels: int
+        :param out_channels: Positive integer output channel count.
+        :type out_channels: int
+        :param kernel_size: Positive integer square-kernel side length.
+        :type kernel_size: int
+        :param duration: Finite positive window endpoint in input-time units.
+        :type duration: float
+        :param support: Finite positive PSP support in the same time units, default 2.
+        :type support: float
+        :param v_threshold: Finite positive threshold, default 1, independent of the unit-peak kernel.
+        :type v_threshold: float
+        :param stride: Positive integer stride shared by both spatial axes, default 1.
+        :type stride: int
+        :param padding: Nonnegative integer border width shared by both axes, default 0; padded positions have no events.
+        :type padding: int
+        :raises TypeError: For invalid parameter types.
+        :raises ValueError: For invalid channels, spatial parameters or FP32 hyperparameters.
+        """
+        super().__init__()
+        if any(
+            not isinstance(x, int) or isinstance(x, bool)
+            for x in (in_channels, out_channels)
+        ):
+            raise TypeError("Channel counts must be integers.")
+        if min(in_channels, out_channels) < 1:
+            raise ValueError("Channel counts must be positive.")
+        functional._conv_parameters(kernel_size, stride, padding)
+        functional._cubic_parameters(duration, support, v_threshold)
+        self.in_channels, self.out_channels = in_channels, out_channels
+        self.kernel_size, self.stride, self.padding = kernel_size, stride, padding
+        self.duration, self.support, self.v_threshold = duration, support, v_threshold
+        self.weight = nn.Parameter(
+            torch.empty(
+                out_channels, in_channels, kernel_size, kernel_size, dtype=torch.float32
+            )
+        )
+        nn.init.normal_(self.weight, mean=0.0, std=0.001)
+
+    def forward(
+        self,
+        spike_times: torch.Tensor,
+        input_indices: torch.Tensor,
+        batch_offsets: torch.Tensor,
+        input_size: tuple[int, int],
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        r"""
+        **API Language** - :ref:`中文 <timing-CubicConv2d-forward-cn>` | :ref:`English <timing-CubicConv2d-forward-en>`
+
+        ----
+
+        .. _timing-CubicConv2d-forward-cn:
+
+        * **中文**
+
+        使用共享卷积权重执行 :func:`~spikingjelly.timing_based.functional.cubic_conv2d`。
+        独立试次，支持重复输入事件、无序与空样本；padding无事件，窗外梯度为零。
+        FP32 CPU/CUDA，保留原CubicSRM完整分段、最早上穿和仅一阶梯度契约。
+
+        :param spike_times: 同权重设备的有限FP32 ``[E]`` 时刻。
+        :type spike_times: torch.Tensor
+        :param input_indices: 同设备int64 ``[E]``，按 ``(Cin,H,W)`` 展平。
+        :type input_indices: torch.Tensor
+        :param batch_offsets: 同设备int64 ``[B+1]``，从0到E非递减。
+        :type batch_offsets: torch.Tensor
+        :param input_size: 正整数输入空间大小 ``(H,W)``。
+        :type input_size: tuple[int, int]
+        :return: 原B段紧凑CSR ``(times,indices,offsets)``，索引按 ``(Cout,Hout,Wout)``
+            展平并按样本/输出排序。每输出至多一发，沉默无事件；时刻同dtype/device。
+            Hout/Wout公式见functional接口；结果可传入下一事件层。
+        :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        :raises TypeError: dtype或输入空间参数类型不支持。
+        :raises ValueError: 事件、设备、CSR或空间形状非法。
+        :raises RuntimeError: 状态、根或被请求梯度不可表示。
+
+        ----
+
+        .. _timing-CubicConv2d-forward-en:
+
+        * **English**
+
+        Evaluate :func:`~spikingjelly.timing_based.functional.cubic_conv2d` with shared
+        convolution weights. Independent trials accept repeated/unordered input events
+        and empty samples; padding has no events and outside-window gradients are zero.
+        FP32 CPU/CUDA retains CubicSRM's complete partition, earliest upcrossing and
+        first-order-only gradient contract.
+
+        :param spike_times: Finite FP32 ``[E]`` times on the weights' device.
+        :type spike_times: torch.Tensor
+        :param input_indices: Same-device int64 ``[E]`` flattened over ``(Cin,H,W)``.
+        :type input_indices: torch.Tensor
+        :param batch_offsets: Same-device nondecreasing int64 ``[B+1]`` from 0 to E.
+        :type batch_offsets: torch.Tensor
+        :param input_size: Positive integer input spatial size ``(H,W)``.
+        :type input_size: tuple[int, int]
+        :return: Compact CSR ``(times,indices,offsets)`` with original B segments;
+            indices flatten ``(Cout,Hout,Wout)`` in trial/output order. At most one
+            spike per output; silence emits nothing. Times match input dtype/device.
+            See the functional interface for Hout/Wout; composable with another event layer.
+        :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        :raises TypeError: For unsupported dtypes or spatial parameter types.
+        :raises ValueError: For invalid events/devices/CSR/spatial shapes.
+        :raises RuntimeError: For unrepresentable states, roots or requested gradients.
+        """
+        return functional.cubic_conv2d(
+            spike_times,
+            input_indices,
+            batch_offsets,
+            self.weight,
+            input_size,
+            self.duration,
+            self.support,
+            self.v_threshold,
+            self.stride,
+            self.padding,
         )

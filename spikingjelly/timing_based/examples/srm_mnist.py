@@ -21,7 +21,7 @@ class _RowWeights(nn.Module):
         self.gain = gain
 
     def forward(self, weight):
-        return self.gain * weight.softmax(1)
+        return self.gain * weight.flatten(1).softmax(1).reshape_as(weight)
 
 
 class _SRMNet(nn.Module):
@@ -106,13 +106,13 @@ def main() -> None:
     _train(_SRMNet, "srm-mnist")
 
 
-def _train(model_factory, output_name, batch_size=128):
+def _train(model_factory, output_name, batch_size=128, hidden_features=128):
     parser = argparse.ArgumentParser(description="Two-layer continuous-event SRM MNIST")
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--dataset-dir", default="./data")
     parser.add_argument("--output-dir", default="./" + output_name)
     parser.add_argument("--batch-size", type=int, default=batch_size)
-    parser.add_argument("--hidden-features", type=int, default=128)
+    parser.add_argument("--hidden-features", type=int, default=hidden_features)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--patience", type=int, default=3)
     parser.add_argument("--lr", type=float, default=1e-2)

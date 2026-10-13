@@ -1,10 +1,23 @@
-Continuous-event neurons
-========================
+Timing-based SNNs with continuous events
+========================================
 
-``timing_based`` exposes explicit event times. TTFS is a coding constraint, not
-an implementation category: TTFS networks passing step-wise binary activations
-still belong to ``activation_based``. This Tempotron solves input-event intervals
-without constructing a uniform time grid.
+``timing_based`` exposes explicit event times. TTFS constrains the code, while the
+representation determines the implementation: a TTFS network that passes step-wise
+binary activations belongs to ``activation_based``. The models here solve continuous
+event responses without constructing a uniform time grid.
+
+Start with the compact event format below. Then choose the section matching the
+model you need:
+
+* Tempotron: double-exponential PSP, one output spike, shunting and peak outputs.
+* SRM: linear-ramp PSP with reset, allowing multiple output spikes.
+* CubicSRM: finite-support cubic PSP, one output spike and the general root solver.
+* CubicConv2d: shared CubicSRM weights over 2D receptive fields.
+
+All modules are stateless across calls. They expose ordinary PyTorch parameters;
+losses, initialization constraints and recovery rules belong to the task. Event
+creation, deletion and ordering boundaries are nonsmooth, so the documented
+gradients apply while the selected event topology remains unchanged.
 
 Response and outputs
 --------------------
@@ -318,3 +331,115 @@ floating-point resolution. No surrogate or silent-neuron recovery is built in.
 The general solver and CubicSRM accept only FP32 floating tensors, with no
 precision selector or FP64 path. Rebase/rescale extreme absolute times or support
 ratios when intervals cannot be resolved.
+
+Continuous-event spatial convolution
+-------------------------------------
+
+:class:`spikingjelly.timing_based.neuron.CubicConv2d` shares a cubic PSP kernel over
+2D receptive fields. It accepts the same three CSR event tensors as CubicSRM,
+plus an explicit ``(H,W)`` input size. Input indices flatten ``(Cin,H,W)``;
+outputs flatten ``(Cout,Hout,Wout)`` and remain grouped into the original B trials.
+Padding has no events. Multiple events per input location are retained, and both
+spatial axes use integer stride/padding and a square kernel. There is no bias,
+groups, dilation, reset history or cross-call state.
+
+The implementation routes events into local trials, folds positions into batch,
+and calls the existing FP32 cubic solver and optional Triton arithmetic. All
+positions/channels are processed in tensors. Weight gradients accumulate across
+positions, and overlapping fields accumulate gradients to their original input
+times. The earliest-upcrossing, tangent, silence and first-order-only contracts
+are inherited from CubicSRM; spatial convolution does not introduce time sampling.
+
+CSR routing and unfold
+~~~~~~~~~~~~~~~~~~~~~~
+
+The public convolution accepts CSR events because one spatial position may be
+silent or carry multiple spikes. Routing starts from each event, finds every
+receptive field that covers its position, and records the corresponding local
+``(channel, kernel_y, kernel_x)`` weight column. Output channels share this routed
+event list. Each receptive field becomes a CubicSRM trial, and standard autograd
+sums gradients into shared weights and input events used by overlapping fields.
+
+For a dense single-spike time map, ``torch.nn.functional.unfold`` can extract
+fixed-size time patches more cheaply. That representation needs an explicit mask
+for silence, padded event slots for multiple spikes, and separate handling so that
+zero padding does not become a time-zero event. Patch extraction does not change
+the PSP, partition, or root solver. The public implementation accepts CSR events;
+the MNIST benchmark uses unfold only as an equivalent reference because every
+pixel emits once.
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.timing_based.neuron import CubicConv2d
+
+    layer = CubicConv2d(1, 2, 3, duration=4.0, stride=2, padding=1)
+    with torch.no_grad():
+        layer.weight.fill_(1.2)
+    times = torch.tensor([0.1, 0.3])
+    indices = torch.tensor([0, 0])  # repeated events at the same input pixel
+    offsets = torch.tensor([0, 2])
+    output_times, output_indices, output_offsets = layer(
+        times, indices, offsets, (4, 4)
+    )
+
+The minimal MNIST network is ``1×28×28 → 8C5/stride2 → 8×12×12 → 1152→10``,
+with two spiking layers and 11720 parameters. Pixels become ``1-pixel`` times;
+all pixels emit, including the black background at time 1. Weights use the demo's
+row-softmax gains 8/2, logits ``50*(4-time)`` (zero for silence), cross-entropy
+and Adam. The shared trainer uses a 55000/5000/10000 split, validation-selected
+checkpoints and one final test; ``--hidden-features`` means convolution channels.
+
+.. code-block:: bash
+
+    python -m spikingjelly.timing_based.examples.cubic_conv_mnist \
+        --device cuda:0 --batch-size 128 --epochs 5 --hidden-features 8 \
+        --dataset-dir ./data --output-dir ./cubic-conv-mnist
+
+Convolution reduces local fan-in and adds output neurons, event routing, and sorting.
+Temporary coefficients grow with positions, channels, and local event counts.
+Performance comparisons must use the same network, events, and weights, and must
+include backward and peak memory. Chunking limits some construction intermediates;
+autograd still retains the tensors needed by every chunk. The measurements below
+do not compare this implementation with cuDNN time-step convolution.
+
+Validation on a Tesla V100S (Torch 2.7.1+cu118, Triton 3.3.1): seed 0, B128,
+five full training epochs selected epoch 5, validation 92.24% and test **93.06%**
+(9306/10000). Final routing/gradient-guard code replayed all 10000 logits exactly,
+with identical finite B128 parameter gradients. This is a single-seed result.
+
+Three independent processes compared the same trained network, checkpoint,
+MNIST first batch and cross-entropy forward+backward, excluding optimizer.
+Three warmups and 10 alternating repeats per process gave the following medians
+of process medians (peak memory is the maximum observed across processes):
+
+.. list-table:: Equivalent routing comparison on dense single-spike inputs
+   :header-rows: 1
+
+   * - Batch
+     - Multi-event CSR route (ms)
+     - Single-spike unfold reference (ms)
+     - CSR peak memory (MiB)
+   * - 1
+     - 40.90
+     - 38.46
+     - 10.10
+   * - 8
+     - 44.79
+     - 42.83
+     - 87.83
+   * - 32
+     - 53.37
+     - 52.77
+     - 361.71
+   * - 128
+     - 104.59
+     - 104.00
+     - 1583.22
+
+The unfold reference is restricted to one event per pixel and uses the same
+cubic solver and output packing; it is not a time-step model. The multi-event
+CSR path is not faster on this dense workload. Isolated routing forward+backward
+at B128 takes 2.14 ms (unfold 1.28 ms); this includes input-time gradients unlike the
+image-input training step, so it is a scale comparison, not an exact subtraction
+from total time. The existing partition/root operations dominate overall cost.
