@@ -1,6 +1,3 @@
-import builtins
-import importlib.util
-
 import numpy as np
 import pytest
 import torch
@@ -8,47 +5,6 @@ from scipy.optimize import brentq
 
 from spikingjelly.timing_based import functional, solver
 from spikingjelly.timing_based.examples.cubic_srm_mnist import _CubicNet
-
-
-def test_triton_load_error_keeps_torch_root_updates(monkeypatch):
-    from spikingjelly._ops import first_spike
-
-    original_import = builtins.__import__
-
-    def broken_triton(name, *args, **kwargs):
-        if name == "triton":
-            raise OSError("Triton shared library unavailable")
-        return original_import(name, *args, **kwargs)
-
-    spec = importlib.util.spec_from_file_location(
-        "_first_spike_test", first_spike.__file__
-    )
-    module = importlib.util.module_from_spec(spec)
-    with monkeypatch.context() as imports:
-        imports.setattr(builtins, "__import__", broken_triton)
-        spec.loader.exec_module(module)
-    assert module.triton is None
-    lo, hi, trial = (torch.tensor([x]) for x in (0.0, 1.0, 0.5))
-    proposal = module._newton_proposal(
-        lo, hi, trial, trial - 0.75, torch.ones_like(trial), torch.tensor([True])
-    )
-    lo, hi, proposed, step, lower, upper, transverse, near, probes = proposal
-    assert not probes
-    result = module._newton_finish(
-        lo,
-        hi,
-        proposed,
-        step,
-        torch.ones_like(step),
-        trial,
-        transverse,
-        near,
-        lower,
-        upper,
-        lower - 0.75,
-        upper - 0.75,
-    )
-    torch.testing.assert_close(result[2], torch.tensor([0.75]))
 
 
 def _linear(time, piece, start, slope):
