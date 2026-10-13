@@ -86,8 +86,9 @@ six-task zero-shot, native SNN training or a speed claim. Model/data revisions,
 actual dataset fingerprints/token hashes and calibration are retained. Run in
 the pinned qwen environment (`transformers==5.13.0`, `datasets>=5,<6`).
 
-FP8-specific hardware tests are excluded by release profiles; normal precision/API
-regressions stay in `test/`. No FP8 training/performance project is required.
+Release profiles deselect `fp8_hardware`: the dedicated hardware file and FP8
+device numerical/training cases in the neuron suite. Normal precision/API
+regressions stay enabled. Plain `pytest test/` still includes all FP8 tests.
 
 Choose quality threshold and training budget before running. Quality profiles
 require `--data-root`, `--minimum-top1` and either `--checkpoint` (evaluation) or
