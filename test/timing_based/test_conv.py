@@ -155,3 +155,21 @@ def test_conv_mnist_loss_backpropagates(device):
     for parameter in model.parameters():
         assert parameter.grad is not None and torch.isfinite(parameter.grad).all()
         assert parameter.grad.count_nonzero() > 0
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_overlapping_event_gradient_overflow_is_rejected(device):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA unavailable")
+    times = torch.tensor([0.2], device=device, requires_grad=True)
+    events = functional.cubic_conv2d(
+        times,
+        torch.tensor([4], device=device),
+        torch.tensor([0, 1], device=device),
+        torch.full((1, 1, 2, 2), 2.0, device=device),
+        (3, 3),
+        3.0,
+    )
+    assert events[0].numel() == 4
+    with pytest.raises(RuntimeError, match="gradients overflow"):
+        events[0].backward(torch.full_like(events[0], 1e38))

@@ -1530,17 +1530,13 @@ def _conv_parameters(kernel_size, stride, padding):
         raise ValueError("kernel_size/stride must be positive and padding nonnegative.")
 
 
-def _conv_events(times, indices, offsets, input_size, kernel_size, stride, padding):
+def _conv_events(
+    times, indices, batches, batch_count, input_size, kernel_size, stride, padding
+):
     height, width = input_size
     output_height = (height + 2 * padding - kernel_size) // stride + 1
     output_width = (width + 2 * padding - kernel_size) // stride + 1
     locations = output_height * output_width
-    batch_count = offsets.numel() - 1
-    batches = torch.repeat_interleave(
-        torch.arange(batch_count, device=times.device),
-        offsets.diff(),
-        output_size=times.numel(),
-    )
     channel = indices // (height * width)
     y, x = indices // width % height + padding, indices % width + padding
     # Only kernel offsets congruent to the input coordinate can reach a strided patch.
@@ -1719,17 +1715,18 @@ def cubic_conv2d(
         flat_weight,
         weight.shape[1] * input_size[0] * input_size[1],
     )
+    spike_times, flat_weight = _SRMInputs.apply(spike_times, flat_weight)
     batches = torch.repeat_interleave(
         torch.arange(batch_offsets.numel() - 1, device=spike_times.device),
         batch_offsets.diff(),
         output_size=spike_times.numel(),
     )
     accepted = (spike_times >= 0) & (spike_times <= duration)
-    counts = torch.bincount(batches[accepted], minlength=batch_offsets.numel() - 1)
     events = _conv_events(
         spike_times[accepted],
         input_indices[accepted],
-        torch.cat((counts.new_zeros(1), counts.cumsum(0))),
+        batches[accepted],
+        batch_offsets.numel() - 1,
         input_size,
         kernel,
         stride,
