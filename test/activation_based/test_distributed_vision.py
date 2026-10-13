@@ -1233,10 +1233,16 @@ def test_vision_checkpoint_restores_rng(
     tmp_path, monkeypatch, legacy_precision, legacy_load
 ):
     import torch.distributed.checkpoint as dcp
-    from torch.distributed.checkpoint import state_dict as dcp_state_dict
 
     model = nn.Linear(2, 2)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
+    model(torch.ones(1, 2)).sum().backward()
+    optimizer.step()
+    saved_weights = {name: value.clone() for name, value in model.state_dict().items()}
+    saved_momentum = {
+        name: optimizer.state[param]["momentum_buffer"].clone()
+        for name, param in model.named_parameters()
+    }
     scaler = torch.amp.GradScaler("cuda", enabled=False)
     config = vision.TrainingConfig(
         model=SEWResNet34Config(),
@@ -1259,12 +1265,6 @@ def test_vision_checkpoint_restores_rng(
         "set_rng_state",
         lambda state: restored.setdefault("cuda", state),
     )
-    monkeypatch.setattr(
-        dcp_state_dict,
-        "set_state_dict",
-        lambda *_args, **_kwargs: None,
-    )
-
     checkpoint = tmp_path / "checkpoint"
     future = training._save_checkpoint(
         checkpoint,
@@ -1282,6 +1282,11 @@ def test_vision_checkpoint_restores_rng(
         dp_rank=0,
     )
     future.result()
+    with torch.no_grad():
+        for param in model.parameters():
+            param.add_(1)
+            optimizer.state[param]["momentum_buffer"].zero_()
+    optimizer.param_groups[0]["lr"] = 0.7
     if legacy_load:
 
         def load_without_no_dist(state_dict, *, checkpoint_id):
@@ -1307,6 +1312,15 @@ def test_vision_checkpoint_restores_rng(
     assert progress == (2, 1, 3)
     assert torch.equal(restored["torch"], cpu_rng)
     assert torch.equal(restored["cuda"], cuda_rng)
+    for name, param in model.named_parameters():
+        torch.testing.assert_close(param, saved_weights[name], rtol=0, atol=0)
+        torch.testing.assert_close(
+            optimizer.state[param]["momentum_buffer"],
+            saved_momentum[name],
+            rtol=0,
+            atol=0,
+        )
+    assert optimizer.param_groups[0]["lr"] == 0.1
 
 
 def test_legacy_checkpoint_precision_does_not_inherit_new_triton_fields(tmp_path):

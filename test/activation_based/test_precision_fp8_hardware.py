@@ -22,6 +22,8 @@ from spikingjelly.activation_based.precision.float8_te import (
     Float8TransformerEnginePolicy,
 )
 
+pytestmark = pytest.mark.fp8_hardware
+
 
 def _relative_l2(candidate: torch.Tensor, reference: torch.Tensor) -> float:
     numerator = torch.linalg.vector_norm(candidate.float() - reference.float())

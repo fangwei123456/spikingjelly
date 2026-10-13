@@ -9,7 +9,7 @@ required_groups = ["package", "cpu-minimum", "cpu", "cuda", "native", "quality",
 [cases.cpu]
 kind = "pytest"
 group = "cpu"
-args = ["test/", "-v", "-o", "faulthandler_timeout=60", "--ignore=test/activation_based/test_precision_fp8_hardware.py"]
+args = ["test/", "-v", "-o", "faulthandler_timeout=60", "-m", "not fp8_hardware"]
 # GPU/extras are separate declared environments. Every skip is retained in JSON.
 allow_skip_reasons = ["*CUDA*", "*cuda*", "*Triton*", "*triton*", "*could not import 'nir'*", "*could not import 'nirtorch'*"]
 
@@ -18,13 +18,13 @@ kind = "pytest"
 group = "cpu-minimum"
 python_prefix = "3.11."
 torch_prefix = "2.6."
-args = ["test/", "-v", "-o", "faulthandler_timeout=60", "--ignore=test/activation_based/test_precision_fp8_hardware.py"]
+args = ["test/", "-v", "-o", "faulthandler_timeout=60", "-m", "not fp8_hardware"]
 allow_skip_reasons = ["*CUDA*", "*cuda*", "*Triton*", "*triton*", "*could not import 'nir'*", "*could not import 'nirtorch'*"]
 
 [cases.cuda]
 kind = "pytest"
 group = "cuda"
-args = ["test/", "-v", "-o", "faulthandler_timeout=60", "--ignore=test/activation_based/test_precision_fp8_hardware.py"]
+args = ["test/", "-v", "-o", "faulthandler_timeout=60", "-m", "not fp8_hardware"]
 # Do not approve missing providers or optional support silently.
 allow_skip_reasons = []
 
