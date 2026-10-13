@@ -1107,26 +1107,41 @@ def _cubic_partition(times, coefficients, duration):
             )
         width = (times[:, 1:] - times[:, :-1])[:, None, :]
         spans = torch.cat((width, torch.zeros_like(width[..., :1])), -1)
-        # Only roots that round onto an endpoint may change its Taylor branch.
-        critical_start = (
-            valid_first & (first >= 0) & (first <= spans) & (origins + first == origins)
-        ) | (
-            valid_second
-            & (second >= 0)
-            & (second <= spans)
-            & (origins + second == origins)
-        )
-        critical_end = (
-            valid_first[..., :-1]
-            & (first[..., :-1] >= 0)
-            & (first[..., :-1] <= width)
-            & (origins[..., :-1] + first[..., :-1] == origins[..., 1:])
-        ) | (
-            valid_second[..., :-1]
-            & (second[..., :-1] >= 0)
-            & (second[..., :-1] <= width)
-            & (origins[..., :-1] + second[..., :-1] == origins[..., 1:])
-        )
+        c0_all, c1_all, c2_all, c3_all = coefficients.unbind(-1)
+        local = width / duration
+        end_d1 = (3 * c3_all[..., :-1] * local + 2 * c2_all[..., :-1]) * local + c1_all[
+            ..., :-1
+        ]
+        end_d2 = c2_all[..., :-1] + 3 * c3_all[..., :-1] * local
+        end_value = (
+            (c3_all[..., :-1] * local + c2_all[..., :-1]) * local + c1_all[..., :-1]
+        ) * local + c0_all[..., :-1]
+        critical_start = torch.zeros_like(valid_first)
+        critical_end = torch.zeros_like(valid_first[..., :-1])
+        eps = torch.finfo(torch.float32).eps
+        # Endpoint certification uses local root error and voltage resolution.
+        for offset, valid in ((first, valid_first), (second, valid_second)):
+            near_start = valid & (
+                (origins + offset == origins) | (offset.abs() <= 8 * eps * spans)
+            )
+            x = torch.where(near_start, offset, 0) / duration
+            change = ((c3_all * x + c2_all) * x + c1_all) * x
+            critical_start |= (
+                near_start
+                & torch.isfinite(change)
+                & (change.abs() <= 64 * eps * (1 + c0_all.abs()))
+            )
+            near_end = valid[..., :-1] & (
+                (origins[..., :-1] + offset[..., :-1] == origins[..., 1:])
+                | ((offset[..., :-1] - width).abs() <= 8 * eps * width)
+            )
+            x = torch.where(near_end, offset[..., :-1] - width, 0) / duration
+            change = ((c3_all[..., :-1] * x + end_d2) * x + end_d1) * x
+            critical_end |= (
+                near_end
+                & torch.isfinite(change)
+                & (change.abs() <= 64 * eps * (1 + end_value.abs()))
+            )
         double_root = quadratic & (discriminant == 0)
         local = width / duration
         c1, c2, c3 = (

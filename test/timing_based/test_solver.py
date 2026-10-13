@@ -650,3 +650,24 @@ def test_small_support_input_knot_remains_an_upcrossing(device, support):
         times.grad, torch.tensor([1.0, 0.0], device=device), rtol=1e-5, atol=1e-6
     )
     assert torch.isfinite(weight.grad).all() and weight.grad[0, 0] < 0
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+@pytest.mark.parametrize("arrival,support", [(0.1, 1.0), (0.001, 0.001), (0.0, 1e-6)])
+def test_window_endpoint_grazing_remains_silent(device, arrival, support):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA unavailable")
+    time = torch.tensor([arrival], device=device, requires_grad=True)
+    weight = torch.ones(1, 1, device=device, requires_grad=True)
+    output = functional.cubic_srm(
+        time,
+        torch.tensor([0], device=device),
+        torch.tensor([0, 1], device=device),
+        weight,
+        arrival + support / 3,
+        support=support,
+    )[0]
+    assert output.numel() == 0
+    output.sum().backward()
+    torch.testing.assert_close(time.grad, torch.zeros_like(time))
+    torch.testing.assert_close(weight.grad, torch.zeros_like(weight))
