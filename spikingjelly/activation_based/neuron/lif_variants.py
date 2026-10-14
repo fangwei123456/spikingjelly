@@ -512,7 +512,8 @@ class ComplementaryLIFNode(BaseNode):
         专属可学习参数。``v`` 和 ``m`` 是持久状态，调用 :meth:`reset` 会将两者
         恢复为零。默认替代函数的前向输出为二值脉冲；若显式传入非脉冲替代函数，
         则输出遵循该替代函数的定义。CUDA eager 下的同 dtype FP32/FP16/BF16
-        状态可自动使用 Triton 充电/复位算子，替代函数语义保持不变；CPU 和
+        状态在禁用梯度的自动模式下可使用 Triton 充电/复位算子，训练须显式请求
+        ``SJ_CLIF_CUDA_IMPLEMENTATION=triton``；替代函数语义保持不变。CPU 和
         ``torch.compile`` 使用 Torch 公式，详见 :func:`~spikingjelly.activation_based.functional.clif_step`。
 
         :param tau: 膜电位时间常数，必须为大于 ``1.0`` 的浮点数
@@ -564,7 +565,9 @@ class ComplementaryLIFNode(BaseNode):
         forward propagation. If a non-spiking surrogate is supplied explicitly,
         the output follows that surrogate's definition. CUDA eager execution with
         matching FP32/FP16/BF16 state can automatically use Triton charge/reset
-        operators while preserving the supplied surrogate. CPU and
+        operators when gradients are disabled. Training requires an explicit
+        ``SJ_CLIF_CUDA_IMPLEMENTATION=triton`` request; the supplied surrogate is
+        preserved. CPU and
         ``torch.compile`` use the Torch formulas; see
         :func:`~spikingjelly.activation_based.functional.clif_step`.
 

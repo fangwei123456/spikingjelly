@@ -166,7 +166,7 @@ sdist 的 ``--no-binary`` 等参数。editable 修改 ``.cu`` 或头文件后需
     * - 普通注册神经元
       - 受支持的输入、FP32 状态及内置替代梯度可进入融合路径。普通模块状态跟随输入 dtype，低精度状态或自定义 surrogate 可使用 Torch 参考公式。
     * - ComplementaryLIF（CLIF）
-      - 同形状、同设备、同 dtype 的 CUDA FP32/FP16/BF16 张量可在 eager 下使用可选 Triton 充电、互补电位衰减及复位内核，保留原放电函数和状态 dtype。CPU 与编译路径使用 Torch 公式。可设 ``SJ_CLIF_CUDA_IMPLEMENTATION=auto|triton|torch``；没有原生 CUDA CLIF 内核。
+      - 同形状、同设备、同 dtype 的 CUDA FP32/FP16/BF16 张量可在 eager 下使用可选 Triton 充电、互补电位衰减及复位内核，保留原放电函数和状态 dtype。自动模式在禁用梯度时可选择 Triton，启用梯度时保留 Torch；训练须显式选择 ``triton``，小 batch 可能更慢。CPU 与编译路径使用 Torch 公式。可设 ``SJ_CLIF_CUDA_IMPLEMENTATION=auto|triton|torch``；没有原生 CUDA CLIF 内核。
     * - IF/LIF/PLIF 显式精度配置
       - 要求支持该组合的 CUDA Triton；不能以其他实现替换明确指定的数值策略。
     * - FlexSN CUDA 多步

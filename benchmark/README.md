@@ -106,7 +106,10 @@ CLIF correctness packets use a deterministic window-mean reference for the
 so even repeated Torch runs can miss strict gradient comparisons. The reference
 checks its forward output bitwise against the original pooling. Timed and
 quality runs keep the original model; the packet oracle is recorded and must
-match between compared reports. CLIF reports also record provider requests,
+match between compared reports. CLIF auto mode keeps Torch when gradients are enabled; training acceleration
+requires `SJ_CLIF_CUDA_IMPLEMENTATION=triton`. Small batches can be slower even
+when larger training batches benefit. Auto inference with gradients disabled can
+use Triton. CLIF reports also record provider requests,
 selection and correctness/timed state dtypes.
 Inference packets include the evaluated output. GPU UUID/driver are recorded;
 CUDA runs need `nvidia-smi`.

@@ -1303,3 +1303,37 @@ def test_clif_compile_preserves_reference_contract(device_type, monkeypatch):
     gr = torch.autograd.grad(sum(x.sum() for x in expected), reference)
     for a, r in zip(actual + ga, expected + gr):
         torch.testing.assert_close(a, r)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+def test_clif_auto_preserves_training_and_accelerates_without_gradients(monkeypatch):
+    from spikingjelly._ops.clif import _selection, cpu
+
+    monkeypatch.setattr(_selection, "_requested", "auto")
+    monkeypatch.setattr(_selection, "_selections", {})
+    inputs = [torch.randn(2, 31, device="cuda", requires_grad=True) for _ in range(3)]
+    spike = surrogate.Rect()
+    expected = cpu._forward_impl(*inputs, 2.0, 1.0, spike)
+    with monkeypatch.context() as unavailable:
+
+        def no_accelerator(device):
+            raise AssertionError("Auto gradient-enabled CLIF must not require Triton")
+
+        unavailable.setattr(_selection, "get_cuda_forward", no_accelerator)
+        actual = functional.clif_step(*inputs, 2.0, 1.0, spike)
+        assert (
+            functional.neuron_implementation("clif", inputs[0].device)["implementation"]
+            == "torch-reference"
+        )
+        for a, e in zip(actual, expected):
+            torch.testing.assert_close(a, e, rtol=0, atol=0)
+        gradients = torch.autograd.grad(sum(x.sum() for x in actual), inputs)
+        assert all(torch.isfinite(x).all() for x in gradients)
+    with torch.no_grad():
+        actual = functional.clif_step(*inputs, 2.0, 1.0, spike)
+        assert (
+            functional.neuron_implementation("clif", inputs[0].device)["implementation"]
+            == "triton"
+        )
+        for a, e in zip(actual, expected):
+            torch.testing.assert_close(a, e)

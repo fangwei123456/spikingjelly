@@ -457,6 +457,18 @@ def _check(net, x, target, args, device):
     return packet
 
 
+def _clif_execution(args, device, training):
+    if args.case != "clif-tinyimagenet":
+        return None
+    with torch.set_grad_enabled(training):
+        selected = functional.neuron_implementation("clif", device)["implementation"]
+    return {
+        "requested": os.environ.get("SJ_CLIF_CUDA_IMPLEMENTATION", "auto"),
+        "selected": selected,
+        "state_dtype": "torch.float16" if training and args.amp else "torch.float32",
+    }
+
+
 def _benchmark(net, evaluation, args, device):
     if device.type != "cuda":
         raise ValueError("Performance measurements require CUDA.")
@@ -513,6 +525,11 @@ def _benchmark(net, evaluation, args, device):
         raise RuntimeError("Non-finite model parameters after measurement")
     if not all(math.isfinite(v) and v > 0 for v in gpu_ms + wall_ms):
         raise RuntimeError("Invalid timing samples.")
+    execution = _clif_execution(args, device, training)
+    if execution is not None:
+        execution["correctness_state_dtypes"] = sorted(
+            {str(v.dtype) for v in packet["states"].values()}
+        )
     return dict(
         phase=args.phase,
         precision="fp16"
@@ -525,20 +542,7 @@ def _benchmark(net, evaluation, args, device):
         correctness_pooling="deterministic CLIF window reference"
         if args.case == "clif-tinyimagenet"
         else "production",
-        clif_execution={
-            "requested": os.environ.get("SJ_CLIF_CUDA_IMPLEMENTATION", "auto"),
-            "selected": functional.neuron_implementation("clif", device)[
-                "implementation"
-            ],
-            "correctness_state_dtypes": sorted(
-                {str(v.dtype) for v in packet["states"].values()}
-            ),
-            "timed_state_dtype": "torch.float16"
-            if args.phase == "training" and args.amp
-            else "torch.float32",
-        }
-        if args.case == "clif-tinyimagenet"
-        else None,
+        clif_execution=execution,
         correctness_file=correctness.name,
         correctness_batch_size=len(x),
         state_samples=min(2, len(x)),
@@ -706,6 +710,12 @@ def _main():
             cudnn_benchmark=torch.backends.cudnn.benchmark,
             cudnn_allow_tf32=torch.backends.cudnn.allow_tf32,
             matmul_allow_tf32=torch.backends.cuda.matmul.allow_tf32,
+        ),
+        clif_execution=_clif_execution(
+            args,
+            device,
+            args.mode == "train"
+            or (args.mode == "benchmark" and args.phase == "training"),
         ),
         parameters=sum(p.numel() for p in net.parameters()),
         train_samples=len(train),
