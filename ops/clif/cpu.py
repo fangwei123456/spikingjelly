@@ -4,7 +4,7 @@ import torch
 
 
 def _charge(x, v, tau):
-    return v - v / tau + x
+    return v - (v - 0.0) / tau + x
 
 
 def _decay(h, m, tau):
