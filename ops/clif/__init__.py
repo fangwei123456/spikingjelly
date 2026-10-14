@@ -15,6 +15,7 @@ def step(x, v, m, tau, threshold, spike_function):
         return cpu._forward_impl(x, v, m, tau, threshold, spike_function)
     supported = (
         not torch.compiler.is_compiling()
+        and not torch.version.hip
         and x.dtype in (torch.float32, torch.float16, torch.bfloat16)
         and x.dtype == v.dtype == m.dtype
         and x.device == v.device == m.device

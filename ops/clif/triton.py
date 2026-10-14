@@ -149,6 +149,7 @@ class _Decay(torch.autograd.Function):
                 _decay_kernel[(triton.cdiv(h.numel(), 256),)](
                     h, m, d, a, h.numel(), tau, cache, 256, enable_fp_fusion=False
                 )
+        # Returning the cached sigmoid preserves its graph for double backward.
         ctx.save_for_backward(m, a)
         ctx.tau = tau
         ctx.set_materialize_grads(False)
