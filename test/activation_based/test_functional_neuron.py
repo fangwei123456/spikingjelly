@@ -1202,8 +1202,10 @@ def test_clif_triton_matches_torch_states_and_all_gradients(
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
+@pytest.mark.parametrize("create_graph", [False, True])
 def test_clif_triton_preserves_custom_derivative_boundaries_and_higher_order(
     monkeypatch,
+    create_graph,
 ):
     from benchmark.benchmark_image_classification import _SourceRectangle
     from spikingjelly._ops.clif import _selection, cpu
@@ -1217,17 +1219,20 @@ def test_clif_triton_preserves_custom_derivative_boundaries_and_higher_order(
         actual = functional.clif_step(*inputs, 3.7, 1.0, spike)
         expected = cpu._forward_impl(*reference, 3.7, 1.0, spike)
         ga = torch.autograd.grad(
-            sum(x.square().sum() for x in actual), inputs, create_graph=True
+            sum(x.square().sum() for x in actual), inputs, create_graph=create_graph
         )
         gr = torch.autograd.grad(
-            sum(x.square().sum() for x in expected), reference, create_graph=True
+            sum(x.square().sum() for x in expected),
+            reference,
+            create_graph=create_graph,
         )
         for a, r in zip(actual + ga, expected + gr):
             torch.testing.assert_close(a, r)
-        gga = torch.autograd.grad(sum(x.sum() for x in ga), inputs)
-        ggr = torch.autograd.grad(sum(x.sum() for x in gr), reference)
-        for a, r in zip(gga, ggr):
-            torch.testing.assert_close(a, r)
+        if create_graph:
+            gga = torch.autograd.grad(sum(x.sum() for x in ga), inputs)
+            ggr = torch.autograd.grad(sum(x.sum() for x in gr), reference)
+            for a, r in zip(gga, ggr):
+                torch.testing.assert_close(a, r)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
@@ -1259,3 +1264,41 @@ def test_clif_triton_module_reset_state_and_graph(monkeypatch):
             functional.reset_net(node)
         graph.replay()
         torch.testing.assert_close(captured, first)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
+def test_clif_triton_empty_outputs_and_unsupported_profile(monkeypatch):
+    from spikingjelly._ops.clif import _selection
+
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    monkeypatch.setattr(_selection, "_selections", {})
+    inputs = [torch.empty(0, device="cuda", requires_grad=True) for _ in range(3)]
+    outputs = functional.clif_step(*inputs, 2.0, 1.0, surrogate.Rect())
+    gradients = torch.autograd.grad(sum(x.sum() for x in outputs), inputs)
+    assert all(x.numel() == 0 for x in outputs + gradients)
+    with pytest.raises(RuntimeError, match="matching CUDA eager"):
+        functional.clif_step(*(x.double() for x in inputs), 2.0, 1.0, surrogate.Rect())
+
+
+@pytest.mark.parametrize("device_type", ["cpu", "cuda"])
+def test_clif_compile_preserves_reference_contract(device_type, monkeypatch):
+    if device_type == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+    from spikingjelly._ops.clif import _selection, cpu
+
+    monkeypatch.setattr(_selection, "_requested", "auto")
+    inputs = [
+        torch.randn(7, 31, device=device_type, requires_grad=True) for _ in range(3)
+    ]
+    reference = [x.detach().clone().requires_grad_() for x in inputs]
+    spike = surrogate.Rect()
+
+    def step(x, v, m):
+        return functional.clif_step(x, v, m, 2.0, 1.0, spike)
+
+    actual = torch.compile(step, backend="aot_eager", fullgraph=True)(*inputs)
+    expected = cpu._forward_impl(*reference, 2.0, 1.0, spike)
+    ga = torch.autograd.grad(sum(x.sum() for x in actual), inputs)
+    gr = torch.autograd.grad(sum(x.sum() for x in expected), reference)
+    for a, r in zip(actual + ga, expected + gr):
+        torch.testing.assert_close(a, r)
