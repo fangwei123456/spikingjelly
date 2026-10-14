@@ -95,6 +95,7 @@ def neuron_implementation(
 
     查询神经元在指定设备和执行路径上的绑定实现。CPU 返回 Torch 参考实现；CUDA
     查询会初始化并缓存对应路径的选择，不执行神经元计算，也不改变模块状态。
+    CLIF 的编译路径固定返回 Torch 参考实现，其 Triton 实现仅用于 CUDA eager。
 
     :param neuron_type: ``if``、``lif``、``plif``、``qif``、``eif``、``izhikevich``、``ilif``、``activation_aware_if`` 、``stbif`` 或 ``clif``。
     :type neuron_type: str
@@ -117,6 +118,8 @@ def neuron_implementation(
     Query the bound implementation for a neuron on a device and execution path.
     CPU returns the Torch reference. A CUDA query initializes and caches the
     corresponding path's selection without computation or module-state changes.
+    CLIF compilation queries return the Torch reference; its Triton implementation
+    is restricted to CUDA eager execution.
 
     :param neuron_type: One of ``if``, ``lif``, ``plif``, ``qif``, ``eif``, ``izhikevich``, ``ilif``, ``activation_aware_if``, ``stbif``, or ``clif``.
     :type neuron_type: str
@@ -1763,6 +1766,7 @@ def clif_step(
     :type spike_function: Callable[[torch.Tensor], torch.Tensor]
     :return: ``(spike, v_next, m_next)``，各张量形状与 ``x`` 相同。
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises RuntimeError: 显式请求的 CUDA 实现不可用，或非 Torch 实现不支持当前输入或编译模式。
 
     ----
 
@@ -1797,6 +1801,8 @@ def clif_step(
     :type spike_function: Callable[[torch.Tensor], torch.Tensor]
     :return: ``(spike, v_next, m_next)`` with tensors shaped like ``x``.
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises RuntimeError: An explicitly requested CUDA implementation is unavailable,
+        or a non-Torch implementation does not support the inputs or compiled mode.
     """
     from ..._ops.clif import step
 
