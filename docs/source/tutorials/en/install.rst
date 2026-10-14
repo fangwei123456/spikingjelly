@@ -159,7 +159,9 @@ require another native build; they do not take effect like Python source changes
 Runtime only loads native binaries, without invoking a compiler. The current
 loader checks the operator ABI, complete Torch version, CUDA version and target
 GPU support; environment changes may require rebuilding. Triton retains its own
-first-use JIT and caching. Not every platform's CUDA Torch includes usable Triton.
+first-use JIT and caching, which require a working C compiler (for example GCC)
+for its host launcher. A minimal runtime container may need that compiler even
+without native CUDA extensions. Not every platform's CUDA Torch includes usable Triton.
 
 Execution after installation
 ------------------------------
@@ -184,6 +186,8 @@ Installing an implementation does not mean every call uses it:
       - Requirements
     * - Ordinary registered neurons
       - Supported inputs, FP32 state and built-in surrogates can use fused execution. Ordinary module state follows input dtype; low-precision state or custom surrogates can use Torch reference equations.
+    * - ComplementaryLIF (CLIF)
+      - Matching CUDA FP32/FP16/BF16 tensors use optional Triton charge, complementary decay and reset kernels in eager execution, retaining the supplied spike function and state dtype. CPU and compiled execution use Torch formulas. Select with ``SJ_CLIF_CUDA_IMPLEMENTATION=auto|triton|torch``; there is no native CUDA CLIF kernel.
     * - Explicit IF/LIF/PLIF precision
       - Requires CUDA Triton supporting the requested combination; other implementations cannot replace an explicitly requested numerical policy.
     * - FlexSN CUDA multi-step
