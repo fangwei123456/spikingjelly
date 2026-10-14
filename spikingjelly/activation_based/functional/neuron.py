@@ -142,6 +142,7 @@ def neuron_implementation(
         "ilif": "ilif",
         "activation_aware_if": "activation_aware_if",
         "stbif": "stbif",
+        "clif": "clif",
     }
     if neuron_type not in packages:
         raise ValueError(f"Unknown neuron type {neuron_type!r}.")
@@ -151,6 +152,11 @@ def neuron_implementation(
         return {"implementation": "torch-reference", "unavailable": {}}
     if device.type != "cuda":
         raise ValueError(f"Unsupported neuron device {device}.")
+    if neuron_type == "clif" and execution == "compile":
+        return {
+            "implementation": "torch-reference",
+            "unavailable": {"triton": "CLIF Triton supports CUDA eager execution"},
+        }
     package = importlib.import_module(f"..._ops.{packages[neuron_type]}", __package__)
     return package._selection.diagnostics(device, execution=execution)
 
@@ -1780,12 +1786,9 @@ def clif_step(
     :return: ``(spike, v_next, m_next)`` with tensors shaped like ``x``.
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     """
-    charged = lif_charge(x, v, tau, False, None)
-    m_next = m * torch.sigmoid(charged / tau)
-    spike = spike_function(charged - v_threshold)
-    m_next = m_next + spike
-    v_next = charged - spike * (v_threshold + torch.sigmoid(m_next))
-    return spike, v_next, m_next
+    from ..._ops.clif import step
+
+    return step(x, v, m, tau, v_threshold, spike_function)
 
 
 def sliding_psn_step(

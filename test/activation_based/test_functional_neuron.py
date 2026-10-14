@@ -1135,3 +1135,112 @@ def test_multistep_trajectory_uses_sequence_operator_and_preserves_gradients(
     )
     for g, r in zip(got, want, strict=True):
         torch.testing.assert_close(g, r)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+@pytest.mark.parametrize("layout", ["contiguous", "transpose", "expand"])
+@pytest.mark.parametrize("source_rectangle", [False, True])
+def test_clif_triton_matches_torch_states_and_all_gradients(
+    dtype, layout, source_rectangle, monkeypatch
+):
+    from spikingjelly._ops.clif import _selection, cpu
+
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    monkeypatch.setattr(_selection, "_selections", {})
+    torch.manual_seed(261014)
+    shape = (1, 31) if layout == "expand" else (7, 31)
+    inputs = [torch.randn(shape, device="cuda", dtype=dtype) for _ in range(3)]
+    actual_inputs = [x.clone().requires_grad_() for x in inputs]
+    reference_inputs = [x.clone().requires_grad_() for x in inputs]
+
+    def view(x):
+        if layout == "transpose":
+            return x.t()
+        if layout == "expand":
+            return x.expand(7, -1)
+        return x
+
+    if source_rectangle:
+        from benchmark.benchmark_image_classification import _SourceRectangle
+
+        spike_function = _SourceRectangle(alpha=1.0)
+    else:
+        spike_function = surrogate.Rect(alpha=1.0)
+    actual = tuple(map(view, actual_inputs))
+    reference = tuple(map(view, reference_inputs))
+    actual_outputs, reference_outputs = [], []
+    for _ in range(6):
+        actual = functional.clif_step(*actual, 2.0, 1.0, spike_function)
+        reference = cpu._forward_impl(*reference, 2.0, 1.0, spike_function)
+        actual_outputs.extend(actual)
+        reference_outputs.extend(reference)
+    weights = [torch.randn_like(x) for x in actual_outputs]
+    ag = torch.autograd.grad(
+        sum((x * w).sum() for x, w in zip(actual_outputs, weights)), actual_inputs
+    )
+    rg = torch.autograd.grad(
+        sum((x * w).sum() for x, w in zip(reference_outputs, weights)), reference_inputs
+    )
+    tolerance = 3e-6 if dtype == torch.float32 else 0.003 if dtype == torch.float16 else 0.03
+    for index, (a, r) in enumerate(zip(actual_outputs, reference_outputs)):
+        torch.testing.assert_close(a, r, rtol=tolerance, atol=tolerance)
+        if index % 3 == 0:
+            torch.testing.assert_close(a, r, rtol=0, atol=0)
+    for a, r in zip(ag, rg):
+        torch.testing.assert_close(a, r, rtol=tolerance, atol=tolerance)
+    assert functional.neuron_implementation("clif", torch.device("cuda"))["implementation"] == "triton"
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
+def test_clif_triton_preserves_custom_derivative_boundaries_and_higher_order(monkeypatch):
+    from benchmark.benchmark_image_classification import _SourceRectangle
+    from spikingjelly._ops.clif import _selection, cpu
+
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    monkeypatch.setattr(_selection, "_selections", {})
+    for spike in (surrogate.Rect(), _SourceRectangle(), torch.sigmoid):
+        inputs = [torch.tensor([0.5, 1.5, -0.2], device="cuda", requires_grad=True)]
+        inputs += [torch.zeros_like(inputs[0], requires_grad=True) for _ in range(2)]
+        reference = [x.detach().clone().requires_grad_() for x in inputs]
+        actual = functional.clif_step(*inputs, 3.7, 1.0, spike)
+        expected = cpu._forward_impl(*reference, 3.7, 1.0, spike)
+        ga = torch.autograd.grad(sum(x.square().sum() for x in actual), inputs, create_graph=True)
+        gr = torch.autograd.grad(sum(x.square().sum() for x in expected), reference, create_graph=True)
+        for a, r in zip(actual + ga, expected + gr):
+            torch.testing.assert_close(a, r)
+        gga = torch.autograd.grad(sum(x.sum() for x in ga), inputs)
+        ggr = torch.autograd.grad(sum(x.sum() for x in gr), reference)
+        for a, r in zip(gga, ggr):
+            torch.testing.assert_close(a, r)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
+def test_clif_triton_module_reset_state_and_graph(monkeypatch):
+    from spikingjelly._ops.clif import _selection
+
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    monkeypatch.setattr(_selection, "_selections", {})
+    node = neuron.ComplementaryLIFNode(step_mode="m", store_state_seqs=True).cuda()
+    x = torch.rand(6, 2, 31, device="cuda", requires_grad=True)
+    first = node(x)
+    first.sum().backward()
+    assert node.state_seqs[0].shape == x.shape
+    functional.reset_net(node)
+    assert node.v == node.m == 0.0 and node.state_seqs is None
+    torch.testing.assert_close(node(x), first)
+    functional.reset_net(node)
+    with torch.no_grad():
+        stream = torch.cuda.Stream()
+        stream.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(stream):
+            for _ in range(3):
+                node(x)
+                functional.reset_net(node)
+        torch.cuda.current_stream().wait_stream(stream)
+        graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(graph):
+            captured = node(x)
+            functional.reset_net(node)
+        graph.replay()
+        torch.testing.assert_close(captured, first)
