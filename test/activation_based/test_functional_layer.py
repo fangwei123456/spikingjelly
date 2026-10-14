@@ -317,3 +317,32 @@ def test_linear_recurrent_container_rejects_batch_change_until_reset():
     torch.testing.assert_close(module.y, previous)
     functional.reset_net(module)
     assert module(torch.zeros(2, 3)).shape == (2, 3)
+
+
+@pytest.mark.parametrize("gain", [True, False])
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+def test_ws_linear_matches_standardized_weight_values_and_gradients(gain, step_mode):
+    torch.manual_seed(780)
+    linear = layer.WSLinear(4, 3, gain=gain, step_mode=step_mode).double()
+    if gain:
+        with torch.no_grad():
+            linear.gain.copy_(torch.tensor([[0.5], [1.0], [1.5]]))
+    shape = (2, 4) if step_mode == "s" else (3, 2, 4)
+    x = torch.randn(shape, dtype=torch.double, requires_grad=True)
+    x_ref = x.detach().clone().requires_grad_()
+    parameters = list(linear.parameters())
+    reference = [p.detach().clone().requires_grad_() for p in parameters]
+    weight, bias = reference[:2]
+    centered = weight - weight.mean(dim=1, keepdim=True)
+    variance = centered.square().sum(dim=1, keepdim=True) / 3
+    standardized = centered / (4 * variance + linear.eps).sqrt()
+    if gain:
+        standardized = standardized * reference[2]
+    expected = F.linear(x_ref, standardized, bias)
+
+    actual = linear(x)
+    torch.testing.assert_close(actual, expected)
+    actual.square().sum().backward()
+    expected.square().sum().backward()
+    for actual_input, expected_input in zip([x, *parameters], [x_ref, *reference]):
+        torch.testing.assert_close(actual_input.grad, expected_input.grad)

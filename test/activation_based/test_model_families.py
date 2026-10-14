@@ -19,9 +19,7 @@ from spikingjelly.activation_based.model.spike_driven_transformer import (
     SpikeDrivenTransformer,
 )
 from spikingjelly.activation_based.model.spikformer import Spikformer
-from spikingjelly.activation_based.model.spiking_vggws_ottt import (
-    ottt_spiking_vgg11_ws,
-)
+from spikingjelly.activation_based.model import spiking_vggws_ottt
 
 
 def _train_step(model):
@@ -434,19 +432,10 @@ def test_masnn_keyword_arguments_override_the_paper_neuron():
     assert cell.tau == 10.0 / 7.0
 
 
-def test_ws_linear_gain_matches_the_output_feature_count():
-    # Regression: the gain used to be sized with ``out_channels``, which
-    # ``layer.Linear`` does not define, so the default ``gain=True`` raised an
-    # AttributeError while the layer was being constructed.
-    linear = layer.WSLinear(in_features=4, out_features=8)
-
-    assert isinstance(linear.gain, torch.nn.Parameter)
-    assert linear.gain.shape == (8, 1)
-    assert linear.gain.requires_grad
-
-
-def test_weight_standardized_ott_spiking_vgg_builds_and_runs():
-    net = ottt_spiking_vgg11_ws(num_classes=10, init_weights=False)
-    output = net(torch.randn(2, 3, 32, 32))
-
+@pytest.mark.parametrize("depth", [11, 13, 16, 19])
+def test_weight_standardized_ottt_vgg_factory_shapes(depth):
+    with torch.device("meta"):
+        net = getattr(spiking_vggws_ottt, f"ottt_spiking_vgg{depth}_ws")(num_classes=10)
+        output = net(torch.randn(2, 3, 32, 32))
     assert output.shape == (2, 10)
+    assert isinstance(net.classifier[2], layer.WSLinear)
