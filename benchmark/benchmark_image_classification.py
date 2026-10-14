@@ -12,6 +12,7 @@ import argparse
 import copy
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 import math
 import os
@@ -460,8 +461,13 @@ def _check(net, x, target, args, device):
 def _clif_execution(args, device, training):
     if args.case != "clif-tinyimagenet":
         return None
-    with torch.set_grad_enabled(training):
-        selected = functional.neuron_implementation("clif", device)["implementation"]
+    # Paired runs load this script with the older, Torch-only CLIF package.
+    selected = "torch-reference"
+    if importlib.util.find_spec("spikingjelly._ops.clif") is not None:
+        with torch.set_grad_enabled(training):
+            selected = functional.neuron_implementation("clif", device)[
+                "implementation"
+            ]
     return {
         "requested": os.environ.get("SJ_CLIF_CUDA_IMPLEMENTATION", "auto"),
         "selected": selected,

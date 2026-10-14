@@ -72,8 +72,9 @@ and the archived documentation linked from the project README.
 Module: `spikingjelly.activation_based.functional` and
 `spikingjelly.activation_based.neuron`.
 
-- CLIF uses optional Triton charge/reset forward and backward kernels for CUDA
-  eager FP32, FP16 and BF16 execution, preserving the supplied spike function,
+- CLIF uses optional Triton charge, complementary decay, and reset kernels with
+  autograd support for CUDA eager FP32, FP16 and BF16 execution, preserving the
+  supplied spike function,
   per-operation state rounding and checkpoint layout. CPU and compiled execution
   retain the Torch formulas. Auto mode uses Triton with gradients disabled and
   keeps Torch when gradients are enabled, preserving existing training defaults.

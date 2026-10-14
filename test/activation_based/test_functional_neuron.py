@@ -1337,3 +1337,27 @@ def test_clif_auto_preserves_training_and_accelerates_without_gradients(monkeypa
         )
         for a, e in zip(actual, expected):
             torch.testing.assert_close(a, e)
+
+
+@pytest.mark.parametrize("profile", ["compile", "hip"])
+@pytest.mark.parametrize("requested", ["auto", "torch", "triton", "cuda"])
+def test_clif_diagnostics_reject_explicit_unsupported_profile(
+    profile, requested, monkeypatch
+):
+    from spikingjelly._ops.clif import _selection
+
+    monkeypatch.setattr(_selection, "_requested", requested)
+    monkeypatch.setattr(torch.version, "hip", "test" if profile == "hip" else None)
+    execution = "compile" if profile == "compile" else "eager"
+    if requested in ("auto", "torch"):
+        assert (
+            functional.neuron_implementation(
+                "clif", torch.device("cuda:0"), execution=execution
+            )["implementation"]
+            == "torch-reference"
+        )
+    else:
+        with pytest.raises(RuntimeError, match="cannot run this execution profile"):
+            functional.neuron_implementation(
+                "clif", torch.device("cuda:0"), execution=execution
+            )

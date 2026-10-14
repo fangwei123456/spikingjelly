@@ -1,7 +1,10 @@
+from types import SimpleNamespace
+
 import pytest
 import torch
 import torch.nn.functional as F
 
+from benchmark import benchmark_image_classification as benchmark
 from benchmark.benchmark_image_classification import _CLIFPoolReference
 
 
@@ -53,3 +56,21 @@ def test_clif_correctness_pool_retains_spike_rates_and_exact_gradient(device, dt
             ).all()
         finally:
             torch.use_deterministic_algorithms(enabled, warn_only=warn_only)
+
+
+def test_clif_baseline_without_provider_retains_torch_diagnostics(monkeypatch):
+    monkeypatch.setattr(benchmark.importlib.util, "find_spec", lambda name: None)
+    args = SimpleNamespace(case="clif-tinyimagenet", amp=True)
+    result = benchmark._clif_execution(args, torch.device("cuda"), True)
+    assert result["selected"] == "torch-reference"
+    assert result["state_dtype"] == "torch.float16"
+
+
+def test_clif_current_provider_diagnostic_errors_are_preserved(monkeypatch):
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("Triton unavailable")
+
+    monkeypatch.setattr(benchmark.functional, "neuron_implementation", unavailable)
+    args = SimpleNamespace(case="clif-tinyimagenet", amp=False)
+    with pytest.raises(RuntimeError, match="Triton unavailable"):
+        benchmark._clif_execution(args, torch.device("cuda"), False)

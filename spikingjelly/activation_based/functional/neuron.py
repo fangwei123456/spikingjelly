@@ -159,14 +159,20 @@ def neuron_implementation(
         return {"implementation": "torch-reference", "unavailable": {}}
     if device.type != "cuda":
         raise ValueError(f"Unsupported neuron device {device}.")
+    package = importlib.import_module(f"..._ops.{packages[neuron_type]}", __package__)
     if neuron_type == "clif" and (execution == "compile" or torch.version.hip):
+        if package._selection._requested not in ("auto", "torch"):
+            package._require_automatic_torch(
+                package._selection,
+                device,
+                "CLIF requires matching CUDA eager FP32/FP16/BF16 tensors",
+            )
         return {
             "implementation": "torch-reference",
             "unavailable": {
                 "triton": "CLIF Triton requires NVIDIA CUDA eager execution"
             },
         }
-    package = importlib.import_module(f"..._ops.{packages[neuron_type]}", __package__)
     if (
         neuron_type == "clif"
         and package._selection._requested == "auto"
