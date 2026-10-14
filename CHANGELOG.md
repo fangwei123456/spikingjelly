@@ -11,6 +11,8 @@ and the archived documentation linked from the project README.
 
 ### Fixes
 
+- The `megatron` extra includes `psutil`, which MCore requires when saving
+  distributed checkpoints.
 - Fixed `layer.WSLinear` initialization with `gain=True`, restoring
   weight-standardized OTTT VGG construction.
 - Restored Torch 2.6 spike unpacking registration and rank-local distributed
