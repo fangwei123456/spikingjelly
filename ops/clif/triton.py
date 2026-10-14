@@ -3,7 +3,6 @@ import triton
 import triton.language as tl
 from triton.language.extra import libdevice
 
-from ..autograd import _save_for_higher_order
 from . import cpu
 
 
@@ -18,57 +17,70 @@ def _sigmoid(x):
 
 
 @triton.jit
-def _charge_kernel(X, V, M, H, D, N, TAU: tl.constexpr, BLOCK: tl.constexpr):
+def _sigmoid_backward(g, s, DTYPE: tl.constexpr):
+    return _round(_round(g * _round(1.0 - s, DTYPE), DTYPE) * s, DTYPE)
+
+
+@triton.jit
+def _charge_kernel(X, V, H, N, TAU: tl.constexpr, BLOCK: tl.constexpr):
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
     dtype: tl.constexpr = X.dtype.element_ty
     x = tl.load(X + i, mask, 0).to(tl.float32)
     v = tl.load(V + i, mask, 0).to(tl.float32)
-    m = tl.load(M + i, mask, 0).to(tl.float32)
-    h = _round(_round(v - _round(tl.div_rn(v, TAU), dtype), dtype) + x, dtype)
-    a = _round(_sigmoid(_round(tl.div_rn(h, TAU), dtype)), dtype)
+    h = _round(v - _round(tl.div_rn(v, TAU), dtype), dtype) + x
     tl.store(H + i, h, mask)
+
+
+@triton.jit
+def _decay_kernel(H, M, D, N, TAU: tl.constexpr, BLOCK: tl.constexpr):
+    i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+    mask = i < N
+    dtype: tl.constexpr = H.dtype.element_ty
+    h = tl.load(H + i, mask, 0).to(tl.float32)
+    m = tl.load(M + i, mask, 0).to(tl.float32)
+    a = _round(_sigmoid(_round(tl.div_rn(h, TAU), dtype)), dtype)
     tl.store(D + i, m * a, mask)
 
 
 @triton.jit
-def _reset_kernel(H, D, S, V, M, N, THRESHOLD: tl.constexpr, BLOCK: tl.constexpr):
+def _reset_kernel(H, S, M, V, N, THRESHOLD: tl.constexpr, BLOCK: tl.constexpr):
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
     dtype: tl.constexpr = H.dtype.element_ty
     h = tl.load(H + i, mask, 0).to(tl.float32)
-    d = tl.load(D + i, mask, 0).to(tl.float32)
     s = tl.load(S + i, mask, 0).to(tl.float32)
-    m = _round(d + s, dtype)
+    m = tl.load(M + i, mask, 0).to(tl.float32)
     b = _round(_sigmoid(m), dtype)
-    v = h - _round(s * _round(THRESHOLD + b, dtype), dtype)
-    tl.store(V + i, v, mask)
-    tl.store(M + i, m, mask)
+    tl.store(V + i, h - _round(s * _round(THRESHOLD + b, dtype), dtype), mask)
 
 
 @triton.jit
-def _charge_backward_kernel(
-    GH, GD, H, M, GX, GV, GM, N, TAU: tl.constexpr, BLOCK: tl.constexpr
-):
+def _charge_backward_kernel(G, GV, N, TAU: tl.constexpr, BLOCK: tl.constexpr):
+    i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+    mask = i < N
+    dtype: tl.constexpr = G.dtype.element_ty
+    g = tl.load(G + i, mask, 0).to(tl.float32)
+    tl.store(GV + i, g + _round(tl.div_rn(-g, TAU), dtype), mask)
+
+
+@triton.jit
+def _decay_backward_kernel(GD, H, M, GH, GM, N, TAU: tl.constexpr, BLOCK: tl.constexpr):
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
     dtype: tl.constexpr = H.dtype.element_ty
     h = tl.load(H + i, mask, 0).to(tl.float32)
     m = tl.load(M + i, mask, 0).to(tl.float32)
-    gh = tl.load(GH + i, mask, 0).to(tl.float32)
     gd = tl.load(GD + i, mask, 0).to(tl.float32)
     a = _round(_sigmoid(_round(tl.div_rn(h, TAU), dtype)), dtype)
-    ga = _round(gd * m, dtype)
-    gq = _round(_round(ga * _round(1.0 - a, dtype), dtype) * a, dtype)
-    g = _round(gh + _round(tl.div_rn(gq, TAU), dtype), dtype)
-    tl.store(GX + i, g, mask)
-    tl.store(GV + i, g + _round(tl.div_rn(-g, TAU), dtype), mask)
+    gq = _sigmoid_backward(_round(gd * m, dtype), a, dtype)
+    tl.store(GH + i, tl.div_rn(gq, TAU), mask)
     tl.store(GM + i, gd * a, mask)
 
 
 @triton.jit
 def _reset_backward_kernel(
-    GV, GM, M, S, GH, GD, GS, N, THRESHOLD: tl.constexpr, BLOCK: tl.constexpr
+    GV, M, S, GS, GM, N, THRESHOLD: tl.constexpr, BLOCK: tl.constexpr
 ):
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
@@ -76,136 +88,152 @@ def _reset_backward_kernel(
     m = tl.load(M + i, mask, 0).to(tl.float32)
     s = tl.load(S + i, mask, 0).to(tl.float32)
     gv = tl.load(GV + i, mask, 0).to(tl.float32)
-    gm = tl.load(GM + i, mask, 0).to(tl.float32)
     b = _round(_sigmoid(m), dtype)
-    gb = _round(-gv * s, dtype)
-    sigmoid_grad = _round(_round(gb * _round(1.0 - b, dtype), dtype) * b, dtype)
-    incoming_m = _round(gm + sigmoid_grad, dtype)
-    gs = _round(-gv * _round(THRESHOLD + b, dtype), dtype) + incoming_m
-    tl.store(GH + i, gv, mask)
-    tl.store(GD + i, incoming_m, mask)
-    tl.store(GS + i, gs, mask)
+    tl.store(GS + i, -gv * _round(THRESHOLD + b, dtype), mask)
+    tl.store(GM + i, _sigmoid_backward(_round(-gv * s, dtype), b, dtype), mask)
 
 
 @torch.library.custom_op("sj_clif::charge", mutates_args=(), device_types="cuda")
-def _charge(
-    x: torch.Tensor, v: torch.Tensor, m: torch.Tensor, tau: float
-) -> tuple[torch.Tensor, torch.Tensor]:
-    h, d = torch.empty_like(x), torch.empty_like(x)
-    if x.numel() == 0:
-        return h, d
-    with torch.cuda.device(x.device):
-        _charge_kernel[(triton.cdiv(x.numel(), 256),)](
-            x, v, m, h, d, x.numel(), tau, 256, enable_fp_fusion=False
-        )
-    return h, d
+def _charge(x: torch.Tensor, v: torch.Tensor, tau: float) -> torch.Tensor:
+    h = torch.empty_like(x)
+    if x.numel():
+        with torch.cuda.device(x.device):
+            _charge_kernel[(triton.cdiv(x.numel(), 256),)](
+                x, v, h, x.numel(), tau, 256, enable_fp_fusion=False
+            )
+    return h
 
 
 @_charge.register_fake
-def _charge_fake(x, v, m, tau):
-    return torch.empty_like(x), torch.empty_like(x)
+def _charge_fake(x, v, tau):
+    return torch.empty_like(x)
 
 
 def _charge_setup(ctx, inputs, output):
-    _save_for_higher_order(ctx, inputs, (output[0],))
-    ctx.set_materialize_grads(False)
+    ctx.tau = inputs[-1]
 
 
-def _charge_backward(ctx, gh, gd):
-    h, x, v, m = ctx.saved_tensors
+def _charge_backward(ctx, g):
     if torch.is_grad_enabled():
-        # Inputs can share a graph; compute partials rather than a second VJP.
-        gh = torch.zeros_like(h) if gh is None else gh
-        gd = torch.zeros_like(h) if gd is None else gd
-        tau = ctx.input_template[-1]
-        charged, _ = cpu._charge(x, v, m, tau)
-        a = torch.sigmoid(charged / tau)
-        g = gh + torch.ops.aten.sigmoid_backward(gd * m, a) / tau
-        return g, g - g / tau, gd * a, None
-    gx, gv, gm = (torch.empty_like(x) for _ in range(3))
-    if h.numel() == 0:
-        return gx, gv, gm, None
-    with torch.cuda.device(h.device):
-        _charge_backward_kernel[(triton.cdiv(h.numel(), 256),)](
-            torch.zeros_like(h) if gh is None else gh.contiguous(),
-            torch.zeros_like(h) if gd is None else gd.contiguous(),
-            h,
-            m,
-            gx,
-            gv,
-            gm,
-            h.numel(),
-            ctx.input_template[-1],
-            256,
-            enable_fp_fusion=False,
-        )
-    return gx, gv, gm, None
+        return g, g - g / ctx.tau, None
+    gv = torch.empty_like(g)
+    if g.numel():
+        with torch.cuda.device(g.device):
+            _charge_backward_kernel[(triton.cdiv(g.numel(), 256),)](
+                g.contiguous(), gv, g.numel(), ctx.tau, 256, enable_fp_fusion=False
+            )
+    return g, gv, None
 
 
 _charge.register_autograd(_charge_backward, setup_context=_charge_setup)
 
 
+@torch.library.custom_op("sj_clif::decay", mutates_args=(), device_types="cuda")
+def _decay(h: torch.Tensor, m: torch.Tensor, tau: float) -> torch.Tensor:
+    d = torch.empty_like(h)
+    if h.numel():
+        with torch.cuda.device(h.device):
+            _decay_kernel[(triton.cdiv(h.numel(), 256),)](
+                h, m, d, h.numel(), tau, 256, enable_fp_fusion=False
+            )
+    return d
+
+
+@_decay.register_fake
+def _decay_fake(h, m, tau):
+    return torch.empty_like(h)
+
+
+def _decay_setup(ctx, inputs, output):
+    ctx.save_for_backward(*inputs[:2])
+    ctx.tau = inputs[-1]
+
+
+def _decay_backward(ctx, gd):
+    h, m = ctx.saved_tensors
+    if torch.is_grad_enabled():
+        a = torch.sigmoid(h / ctx.tau)
+        return torch.ops.aten.sigmoid_backward(gd * m, a) / ctx.tau, gd * a, None
+    gh, gm = torch.empty_like(h), torch.empty_like(h)
+    if h.numel():
+        with torch.cuda.device(h.device):
+            _decay_backward_kernel[(triton.cdiv(h.numel(), 256),)](
+                gd.contiguous(),
+                h,
+                m,
+                gh,
+                gm,
+                h.numel(),
+                ctx.tau,
+                256,
+                enable_fp_fusion=False,
+            )
+    return gh, gm, None
+
+
+_decay.register_autograd(_decay_backward, setup_context=_decay_setup)
+
+
 @torch.library.custom_op("sj_clif::reset", mutates_args=(), device_types="cuda")
 def _reset(
-    h: torch.Tensor, d: torch.Tensor, spike: torch.Tensor, threshold: float
-) -> tuple[torch.Tensor, torch.Tensor]:
-    v, m = torch.empty_like(h), torch.empty_like(h)
-    if h.numel() == 0:
-        return v, m
-    with torch.cuda.device(h.device):
-        _reset_kernel[(triton.cdiv(h.numel(), 256),)](
-            h, d, spike, v, m, h.numel(), threshold, 256, enable_fp_fusion=False
-        )
-    return v, m
+    h: torch.Tensor, spike: torch.Tensor, m: torch.Tensor, threshold: float
+) -> torch.Tensor:
+    v = torch.empty_like(h)
+    if h.numel():
+        with torch.cuda.device(h.device):
+            _reset_kernel[(triton.cdiv(h.numel(), 256),)](
+                h, spike, m, v, h.numel(), threshold, 256, enable_fp_fusion=False
+            )
+    return v
 
 
 @_reset.register_fake
-def _reset_fake(h, d, spike, threshold):
-    return torch.empty_like(h), torch.empty_like(h)
+def _reset_fake(h, spike, m, threshold):
+    return torch.empty_like(h)
 
 
 def _reset_setup(ctx, inputs, output):
-    _save_for_higher_order(ctx, inputs, (output[1],))
-    ctx.set_materialize_grads(False)
+    ctx.save_for_backward(inputs[1], inputs[2])
+    ctx.threshold = inputs[-1]
 
 
-def _reset_backward(ctx, gv, gm):
-    m, h, d, spike = ctx.saved_tensors
+def _reset_backward(ctx, gv):
+    spike, m = ctx.saved_tensors
     if torch.is_grad_enabled():
-        gv = torch.zeros_like(m) if gv is None else gv
-        gm = torch.zeros_like(m) if gm is None else gm
-        threshold = ctx.input_template[-1]
-        b = torch.sigmoid(d + spike)
-        incoming_m = gm + torch.ops.aten.sigmoid_backward(-gv * spike, b)
-        return gv, incoming_m, -gv * (threshold + b) + incoming_m, None
-    gh, gd, gs = (torch.empty_like(h) for _ in range(3))
-    if h.numel() == 0:
-        return gh, gd, gs, None
-    with torch.cuda.device(h.device):
-        _reset_backward_kernel[(triton.cdiv(h.numel(), 256),)](
-            torch.zeros_like(m) if gv is None else gv.contiguous(),
-            torch.zeros_like(m) if gm is None else gm.contiguous(),
-            m,
-            spike,
-            gh,
-            gd,
-            gs,
-            m.numel(),
-            ctx.input_template[-1],
-            256,
-            enable_fp_fusion=False,
+        b = torch.sigmoid(m)
+        return (
+            gv,
+            -gv * (ctx.threshold + b),
+            torch.ops.aten.sigmoid_backward(-gv * spike, b),
+            None,
         )
-    return gh, gd, gs, None
+    gs, gm = torch.empty_like(m), torch.empty_like(m)
+    if m.numel():
+        with torch.cuda.device(m.device):
+            _reset_backward_kernel[(triton.cdiv(m.numel(), 256),)](
+                gv.contiguous(),
+                m,
+                spike,
+                gs,
+                gm,
+                m.numel(),
+                ctx.threshold,
+                256,
+                enable_fp_fusion=False,
+            )
+    return gv, gs, gm, None
 
 
 _reset.register_autograd(_reset_backward, setup_context=_reset_setup)
 
 
 def _forward_impl(x, v, m, tau, threshold, spike_function, *, _kernel_wrapper=None):
-    h, d = _charge(x.contiguous(), v.contiguous(), m.contiguous(), tau)
+    h = _charge(x.contiguous(), v.contiguous(), tau)
+    decayed_m = _decay(h, m.contiguous(), tau)
     spike = spike_function(h - threshold)
-    # The callable may return a broadcast view or a different dtype.
+    m = decayed_m + spike
+    # Keep gradient accumulation at the same branch points as the Torch graph.
     if spike.shape != h.shape or spike.dtype != h.dtype:
-        return spike, *cpu._reset(h, d, spike, threshold)
-    v, m = _reset(h, d, spike.contiguous(), threshold)
+        return spike, cpu._reset(h, spike, m, threshold), m
+    v = _reset(h, spike.contiguous(), m, threshold)
     return spike, v, m
