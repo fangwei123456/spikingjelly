@@ -996,6 +996,7 @@ import torch
 import torch.distributed as dist
 
 from spikingjelly.activation_based import functional, neuron
+from spikingjelly.activation_based.distributed.vision import NeuronConfig
 from spikingjelly.activation_based.distributed.vision.inference import _ForwardPipeline
 from spikingjelly.activation_based.model.spikformer import (
     SpikformerBuilder, SpikformerConfig,
@@ -1014,6 +1015,10 @@ dist.init_process_group("nccl", device_id=device)
 try:
     config = SpikformerConfig(
         time_steps=2, num_classes=10, image_height=32, image_width=32,
+        neuron_config=NeuronConfig(
+            class_path="spikingjelly.activation_based.neuron.lif.LIFNode",
+            kwargs={"v_threshold": 0.1},
+        ),
     )
     builder = SpikformerBuilder(config)
     canonical = builder._build_canonical_model().eval()
@@ -1039,7 +1044,7 @@ try:
     with torch.no_grad():
         first = None
         for iteration in range(6):
-            value = images if iteration % 2 == 0 else images.flip(-1) * 0.5
+            value = images if iteration % 2 == 0 else images.flip(-1) * -0.5
             actual = pipeline.step(value if rank == 0 else None)
             nodes = [m for m in stage.modules() if isinstance(m, neuron.BaseNode)]
             assert nodes and all(not isinstance(m.v, torch.Tensor) for m in nodes)
@@ -1053,6 +1058,8 @@ try:
                 )
                 if iteration == 0:
                     first = actual.clone()
+                elif iteration == 1:
+                    assert not torch.equal(actual, first)
                 elif iteration % 2 == 0:
                     torch.testing.assert_close(actual, first, rtol=0, atol=0)
     torch.cuda.synchronize(device)
@@ -1060,6 +1067,7 @@ try:
     (output / f"pp4-rank-{rank}.json").write_text(json.dumps({
         "rank": rank, "iterations": 6, "microbatches": 2,
         "state_reset": True, "canonical_output_checked": rank == 3,
+        "input_sensitivity_checked": rank == 3,
         "gpu": torch.cuda.get_device_name(device),
         "peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
         "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
