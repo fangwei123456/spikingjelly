@@ -979,6 +979,116 @@ def test_forward_pipeline_sends_declared_dtype(monkeypatch):
     assert sent[0].dtype == torch.bfloat16
 
 
+@pytest.mark.skipif(
+    not torch.cuda.is_available() or torch.cuda.device_count() < 4,
+    reason="four CUDA devices are required",
+)
+def test_pp4_repeated_inference_matches_canonical_and_resets_state(tmp_path):
+    script = tmp_path / "pp4_inference.py"
+    script.write_text(
+        """
+import json
+import os
+from pathlib import Path
+import sys
+
+import torch
+import torch.distributed as dist
+
+from spikingjelly.activation_based import functional, neuron
+from spikingjelly.activation_based.distributed.vision.inference import _ForwardPipeline
+from spikingjelly.activation_based.model.spikformer import (
+    SpikformerBuilder, SpikformerConfig,
+)
+
+torch.set_num_threads(1)
+torch.manual_seed(1234)
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.allow_tf32 = False
+torch.backends.cuda.matmul.allow_tf32 = False
+rank = int(os.environ["LOCAL_RANK"])
+device = torch.device("cuda", rank)
+torch.cuda.set_device(device)
+dist.init_process_group("nccl", device_id=device)
+try:
+    config = SpikformerConfig(
+        time_steps=2, num_classes=10, image_height=32, image_width=32,
+    )
+    builder = SpikformerBuilder(config)
+    canonical = builder._build_canonical_model().eval()
+    state = canonical.state_dict()
+    stage, _, input_shape, _ = builder.build_for_inference(
+        state, process_group=None, pipeline_rank=rank, pipeline_size=4,
+        pipeline_microbatches=2, device=device, micro_batch_size=4,
+    )
+    stage.eval()
+    pipeline = _ForwardPipeline(
+        stage, process_group=dist.group.WORLD, pipeline_rank=rank,
+        pipeline_size=4, microbatches=2,
+        input_shape=(input_shape[0], *input_shape[2:]) if rank == 0 else input_shape,
+        communication_dtype=torch.float32, device=device,
+        time_steps=2 if rank == 0 else None,
+    )
+    images = torch.linspace(-1, 1, 4 * 3 * 32 * 32, device=device).reshape(
+        4, 3, 32, 32,
+    )
+    if rank == 3:
+        canonical.to(device)
+
+    with torch.no_grad():
+        first = None
+        for iteration in range(6):
+            value = images if iteration % 2 == 0 else images.flip(-1) * 0.5
+            actual = pipeline.step(value if rank == 0 else None)
+            nodes = [m for m in stage.modules() if isinstance(m, neuron.BaseNode)]
+            assert nodes and all(not isinstance(m.v, torch.Tensor) for m in nodes)
+            if rank == 3:
+                expected = []
+                for chunk in value.chunk(2):
+                    functional.reset_net(canonical)
+                    expected.append(canonical(chunk.unsqueeze(0).expand(2, -1, -1, -1, -1)).mean(0))
+                torch.testing.assert_close(
+                    actual, torch.cat(expected), rtol=1e-4, atol=1e-5,
+                )
+                if iteration == 0:
+                    first = actual.clone()
+                elif iteration % 2 == 0:
+                    torch.testing.assert_close(actual, first, rtol=0, atol=0)
+    torch.cuda.synchronize(device)
+    output = Path(sys.argv[1])
+    (output / f"pp4-rank-{rank}.json").write_text(json.dumps({
+        "rank": rank, "iterations": 6, "microbatches": 2,
+        "state_reset": True, "canonical_output_checked": rank == 3,
+        "gpu": torch.cuda.get_device_name(device),
+        "peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
+        "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
+    }, indent=2))
+finally:
+    dist.destroy_process_group()
+""",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "torch.distributed.run",
+            "--standalone",
+            "--nproc_per_node=4",
+            str(script),
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    records = [json.loads(p.read_text()) for p in tmp_path.glob("pp4-rank-*.json")]
+    assert len(records) == 4
+    assert all(record["state_reset"] for record in records)
+
+
 def test_vision_inference_preserves_early_configuration_error(monkeypatch):
     config = vision.EvaluationConfig(
         artifact=Path("artifact.pt"),
