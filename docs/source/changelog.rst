@@ -18,6 +18,8 @@ Unreleased
 Fixes
 ~~~~~
 
+- PyTorch API references use the supported 2.6 documentation rather than
+  ``stable`` HTML redirects, keeping external API anchors resolvable.
 - The ``megatron`` extra includes ``psutil``, which MCore requires when saving
   distributed checkpoints.
 - Fixed ``layer.WSLinear`` initialization with ``gain=True``, restoring
