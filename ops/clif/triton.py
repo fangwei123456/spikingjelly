@@ -22,13 +22,14 @@ def _sigmoid_backward(g, s, DTYPE: tl.constexpr):
 
 
 @triton.jit
-def _charge_kernel(X, V, H, N, TAU: tl.constexpr, BLOCK: tl.constexpr):
+def _charge_kernel(X, V, LEAK_V, H, N, TAU: tl.constexpr, BLOCK: tl.constexpr):
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
     dtype: tl.constexpr = X.dtype.element_ty
     x = tl.load(X + i, mask, 0).to(tl.float32)
     v = tl.load(V + i, mask, 0).to(tl.float32)
-    h = _round(v - _round(tl.div_rn(v, TAU), dtype), dtype) + x
+    leak_v = tl.load(LEAK_V + i, mask, 0).to(tl.float32)
+    h = _round(v - _round(tl.div_rn(leak_v, TAU), dtype), dtype) + x
     tl.store(H + i, h, mask)
 
 
@@ -59,9 +60,8 @@ def _reset_kernel(H, S, M, V, N, THRESHOLD: tl.constexpr, BLOCK: tl.constexpr):
 def _charge_backward_kernel(G, GV, N, TAU: tl.constexpr, BLOCK: tl.constexpr):
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
-    dtype: tl.constexpr = G.dtype.element_ty
     g = tl.load(G + i, mask, 0).to(tl.float32)
-    tl.store(GV + i, g + _round(tl.div_rn(-g, TAU), dtype), mask)
+    tl.store(GV + i, tl.div_rn(-g, TAU), mask)
 
 
 @triton.jit
@@ -94,18 +94,20 @@ def _reset_backward_kernel(
 
 
 @torch.library.custom_op("sj_clif::charge", mutates_args=(), device_types="cuda")
-def _charge(x: torch.Tensor, v: torch.Tensor, tau: float) -> torch.Tensor:
+def _charge(
+    x: torch.Tensor, v: torch.Tensor, leak_v: torch.Tensor, tau: float
+) -> torch.Tensor:
     h = torch.empty_like(x)
     if x.numel():
         with torch.cuda.device(x.device):
             _charge_kernel[(triton.cdiv(x.numel(), 256),)](
-                x, v, h, x.numel(), tau, 256, enable_fp_fusion=False
+                x, v, leak_v, h, x.numel(), tau, 256, enable_fp_fusion=False
             )
     return h
 
 
 @_charge.register_fake
-def _charge_fake(x, v, tau):
+def _charge_fake(x, v, leak_v, tau):
     return torch.empty_like(x)
 
 
@@ -115,14 +117,14 @@ def _charge_setup(ctx, inputs, output):
 
 def _charge_backward(ctx, g):
     if torch.is_grad_enabled():
-        return g, g - g / ctx.tau, None
+        return g, g, -g / ctx.tau, None
     gv = torch.empty_like(g)
     if g.numel():
         with torch.cuda.device(g.device):
             _charge_backward_kernel[(triton.cdiv(g.numel(), 256),)](
                 g.contiguous(), gv, g.numel(), ctx.tau, 256, enable_fp_fusion=False
             )
-    return g, gv, None
+    return g, g, gv, None
 
 
 _charge.register_autograd(_charge_backward, setup_context=_charge_setup)
@@ -228,7 +230,9 @@ _reset.register_autograd(_reset_backward, setup_context=_reset_setup)
 
 
 def _forward_impl(x, v, m, tau, threshold, spike_function, *, _kernel_wrapper=None):
-    h = _charge(x.contiguous(), v.contiguous(), tau)
+    # Separate edges preserve accumulation at v across recurrent time steps.
+    v = v.contiguous()
+    h = _charge(x.contiguous(), v, v, tau)
     decayed_m = _decay(h, m.contiguous(), tau)
     spike = spike_function(h - threshold)
     m = decayed_m + spike
