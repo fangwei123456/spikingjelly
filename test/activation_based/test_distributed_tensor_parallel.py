@@ -3,6 +3,7 @@ import os
 import tempfile
 from datetime import timedelta
 
+import pytest
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -15,7 +16,7 @@ from spikingjelly.activation_based.distributed.tensor_parallel import (
 from spikingjelly.activation_based.memopt import checkpoint_module
 
 
-def _vision_tp_worker(rank: int, store_path: str) -> None:
+def _vision_tp_worker(rank: int, store_path: str, device_type: str) -> None:
     from spikingjelly.activation_based.model.sew_resnet import (
         SEWResNet34Builder,
         SEWResNet34Config,
@@ -25,8 +26,15 @@ def _vision_tp_worker(rank: int, store_path: str) -> None:
         SpikformerConfig,
     )
 
+    device = (
+        torch.device(device_type, rank)
+        if device_type == "cuda"
+        else torch.device("cpu")
+    )
+    if device_type == "cuda":
+        torch.cuda.set_device(device)
     dist.init_process_group(
-        "gloo",
+        "nccl" if device_type == "cuda" else "gloo",
         init_method=f"file://{store_path}",
         rank=rank,
         world_size=2,
@@ -56,7 +64,7 @@ def _vision_tp_worker(rank: int, store_path: str) -> None:
                 pipeline_rank=0,
                 pipeline_size=1,
                 pipeline_microbatches=1,
-                device=torch.device("cpu"),
+                device=device,
                 micro_batch_size=1,
                 memopt_level=0,
                 memopt_compress_inputs=False,
@@ -69,7 +77,7 @@ def _vision_tp_worker(rank: int, store_path: str) -> None:
                 pipeline_rank=0,
                 pipeline_size=1,
                 pipeline_microbatches=1,
-                device=torch.device("cpu"),
+                device=device,
                 micro_batch_size=1,
                 memopt_level=0,
                 memopt_compress_inputs=False,
@@ -79,7 +87,7 @@ def _vision_tp_worker(rank: int, store_path: str) -> None:
             candidate.eval()
             torch.manual_seed(19)
             x_reference = torch.randn(
-                config.time_steps, 1, 3, 32, 32, requires_grad=True
+                config.time_steps, 1, 3, 32, 32, device=device, requires_grad=True
             )
             x_candidate = x_reference.detach().clone().requires_grad_(True)
 
@@ -164,11 +172,24 @@ def test_channel_shard_batch_norm_updates_stats_once_under_memopt():
     assert batch_norm.num_batches_tracked.item() == 1
 
 
-def test_builtin_vision_tensor_parallel_strategies_match_dense_models():
+@pytest.mark.parametrize(
+    "device_type",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available() or torch.cuda.device_count() < 2,
+                reason="two CUDA devices are required",
+            ),
+        ),
+    ],
+)
+def test_builtin_vision_tensor_parallel_strategies_match_dense_models(device_type):
     with tempfile.TemporaryDirectory() as directory:
         mp.spawn(
             _vision_tp_worker,
-            args=(os.path.join(directory, "store"),),
+            args=(os.path.join(directory, "store"), device_type),
             nprocs=2,
             join=True,
         )
