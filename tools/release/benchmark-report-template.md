@@ -35,6 +35,11 @@ selection. Separate complete training, fixed-weight evaluation and bounded runs.
 
 ## Task quality
 
+Use our previous formal release as the quality reference when comparison is
+required. Paper accuracy is context, not a release target. Separate evaluation
+of the same checkpoint from independent retraining; an isolated seed does not
+establish the range of training noise.
+
 Repeat rows for every seed; include all attempts and the chosen aggregation.
 For ongoing training, label metrics interim and record completed/planned epochs,
 latest checkpoint and recent time per epoch. Interim metrics do not close a run.
@@ -42,6 +47,17 @@ latest checkpoint and recent time per epoch. Interim metrics do not close a run.
 | Task / seed | Budget completed / planned | Evaluation split and count | Final quality | Best validation quality / selection rule | Criterion / result | Curves, checkpoint and report |
 | --- | --- | --- | --- | --- | --- | --- |
 | {fill} | {epochs/steps/tokens} | {fill} | {top1/top5 %, PPL or task score} | {N/A if not used} | {threshold or approved report-only; status} | {paths and SHA256} |
+
+For version comparisons, record the following alongside the absolute results.
+Lock data/splits, preprocessing, precision and environment. For evaluation drift,
+also lock checkpoint bytes; for retraining drift, match initial weights/seeds,
+recipe and budget, and report paired variability when needed. Separate intended
+behavior changes from unexplained drift; a quality score alone cannot establish
+numerical equivalence.
+
+| Task / comparison type | Baseline quality | Candidate quality | Change / variability | Predeclared tolerance / decision |
+| --- | --- | --- | --- | --- |
+| {same-checkpoint evaluation / retraining} | {fill} | {fill} | {accuracy: candidate minus baseline in percentage points; PPL: ratio/change; paired seeds if used} | {criterion or approved N/A} |
 
 For conversion, include original-model quality, converted quality and the change
 on the same inputs/calibration. State the evaluation budget: quick PPL is not a

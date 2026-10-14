@@ -36,6 +36,15 @@ The previous formal release remains the only version baseline. Quality tolerance
 and the 2% efficiency gate are separate. New capabilities without a previous
 counterpart need an explicit N/A decision and absolute results.
 
+Release quality benchmarks detect drift against our own version baseline;
+matching a paper's reported accuracy is not an acceptance requirement. Papers
+remain references for model/recipe implementation. Separate fixed-checkpoint
+evaluation drift from retraining variability: lock data, preprocessing, weights,
+precision and environment for the former; use matched seeds and training budgets
+for the latter, adding paired seeds when needed to resolve training noise.
+Report accuracy changes in percentage points and predeclare task-specific
+tolerances. Stable accuracy does not replace numerical correctness checks.
+
 [benchmark_snn_single_gpu.py](benchmark_snn_single_gpu.py) remains useful for
 controlled full-model timing, but its random-input results do not establish real
 task performance. Its historical `performance_gates.met` is not the release's
