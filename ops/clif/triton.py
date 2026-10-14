@@ -3,7 +3,7 @@ import triton
 import triton.language as tl
 from triton.language.extra import libdevice
 
-from ..autograd import _higher_order_grad, _save_for_higher_order
+from ..autograd import _save_for_higher_order
 from . import cpu
 
 
@@ -59,7 +59,7 @@ def _charge_backward_kernel(
     gd = tl.load(GD + i, mask, 0).to(tl.float32)
     a = _round(_sigmoid(_round(tl.div_rn(h, TAU), dtype)), dtype)
     ga = _round(gd * m, dtype)
-    gq = _round(ga * (1.0 - a) * a, dtype)
+    gq = _round(_round(ga * _round(1.0 - a, dtype), dtype) * a, dtype)
     g = _round(gh + _round(tl.div_rn(gq, TAU), dtype), dtype)
     tl.store(GX + i, g, mask)
     tl.store(GV + i, g + _round(tl.div_rn(-g, TAU), dtype), mask)
@@ -79,7 +79,8 @@ def _reset_backward_kernel(
     gm = tl.load(GM + i, mask, 0).to(tl.float32)
     b = _round(_sigmoid(m), dtype)
     gb = _round(-gv * s, dtype)
-    incoming_m = _round(gm + _round(gb * (1.0 - b) * b, dtype), dtype)
+    sigmoid_grad = _round(_round(gb * _round(1.0 - b, dtype), dtype) * b, dtype)
+    incoming_m = _round(gm + sigmoid_grad, dtype)
     gs = _round(-gv * _round(THRESHOLD + b, dtype), dtype) + incoming_m
     tl.store(GH + i, gv, mask)
     tl.store(GD + i, incoming_m, mask)
@@ -111,9 +112,16 @@ def _charge_setup(ctx, inputs, output):
 
 
 def _charge_backward(ctx, gh, gd):
-    if torch.is_grad_enabled():
-        return _higher_order_grad(ctx, cpu._charge, (gh, gd))
     h, x, v, m = ctx.saved_tensors
+    if torch.is_grad_enabled():
+        # Inputs can share a graph; compute partials rather than a second VJP.
+        gh = torch.zeros_like(h) if gh is None else gh
+        gd = torch.zeros_like(h) if gd is None else gd
+        tau = ctx.input_template[-1]
+        charged, _ = cpu._charge(x, v, m, tau)
+        a = torch.sigmoid(charged / tau)
+        g = gh + torch.ops.aten.sigmoid_backward(gd * m, a) / tau
+        return g, g - g / tau, gd * a, None
     gx, gv, gm = (torch.empty_like(x) for _ in range(3))
     if h.numel() == 0:
         return gx, gv, gm, None
@@ -162,9 +170,14 @@ def _reset_setup(ctx, inputs, output):
 
 
 def _reset_backward(ctx, gv, gm):
-    if torch.is_grad_enabled():
-        return _higher_order_grad(ctx, cpu._reset, (gv, gm))
     m, h, d, spike = ctx.saved_tensors
+    if torch.is_grad_enabled():
+        gv = torch.zeros_like(m) if gv is None else gv
+        gm = torch.zeros_like(m) if gm is None else gm
+        threshold = ctx.input_template[-1]
+        b = torch.sigmoid(d + spike)
+        incoming_m = gm + torch.ops.aten.sigmoid_backward(-gv * spike, b)
+        return gv, incoming_m, -gv * (threshold + b) + incoming_m, None
     gh, gd, gs = (torch.empty_like(h) for _ in range(3))
     if h.numel() == 0:
         return gh, gd, gs, None
