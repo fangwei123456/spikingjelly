@@ -5,6 +5,10 @@ are Git-tracked. Scripts exist; vision quality/performance orchestration is in [
 Previous-release API adapters remain pending; FP8 release projects are deferred.
 Qwen quick conversion/PPL is integrated in the release profiles.
 
+Use the [release benchmark report template](../tools/release/benchmark-report-template.md)
+to summarize selected tasks, quality, performance, evidence and limitations for
+each formal release. It reuses runner outputs and does not add mandatory tasks.
+
 ## Core task benchmarks
 
 Select release cases from real CIFAR-scale or larger tasks, or language tasks.
