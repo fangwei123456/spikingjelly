@@ -32,6 +32,9 @@ exact commands, dependencies and machine-specific paths.
 Record checkpoint hashes/epochs and any resume or recipe overrides. State how
 checkpoints are selected; keep test data out of training, calibration and model
 selection. Separate complete training, fixed-weight evaluation and bounded runs.
+Record actual neuron execution paths, input/state dtypes and fallback reasons;
+CUDA tensors, installed Triton or a default-provider query alone do not prove
+that the measured workload used a fused CUDA/Triton implementation.
 
 ## Task quality
 
