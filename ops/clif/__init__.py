@@ -22,7 +22,9 @@ def step(x, v, m, tau, threshold, spike_function):
     )
     if not supported:
         _require_automatic_torch(
-            _selection, x.device, "CLIF requires matching CUDA eager FP32/FP16/BF16 tensors"
+            _selection,
+            x.device,
+            "CLIF requires matching CUDA eager FP32/FP16/BF16 tensors",
         )
         return cpu._forward_impl(x, v, m, tau, threshold, spike_function)
     return _selection.get_cuda_forward(x.device)(

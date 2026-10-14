@@ -1182,18 +1182,29 @@ def test_clif_triton_matches_torch_states_and_all_gradients(
     rg = torch.autograd.grad(
         sum((x * w).sum() for x, w in zip(reference_outputs, weights)), reference_inputs
     )
-    tolerance = 3e-6 if dtype == torch.float32 else 0.003 if dtype == torch.float16 else 0.03
+    rtol, atol = (
+        (1e-6, 1e-6)
+        if dtype == torch.float32
+        else (1e-3, 1e-5)
+        if dtype == torch.float16
+        else (1.6e-2, 1e-5)
+    )
     for index, (a, r) in enumerate(zip(actual_outputs, reference_outputs)):
-        torch.testing.assert_close(a, r, rtol=tolerance, atol=tolerance)
+        torch.testing.assert_close(a, r, rtol=rtol, atol=atol)
         if index % 3 == 0:
             torch.testing.assert_close(a, r, rtol=0, atol=0)
     for a, r in zip(ag, rg):
-        torch.testing.assert_close(a, r, rtol=tolerance, atol=tolerance)
-    assert functional.neuron_implementation("clif", torch.device("cuda"))["implementation"] == "triton"
+        torch.testing.assert_close(a, r, rtol=rtol, atol=atol)
+    assert (
+        functional.neuron_implementation("clif", torch.device("cuda"))["implementation"]
+        == "triton"
+    )
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
-def test_clif_triton_preserves_custom_derivative_boundaries_and_higher_order(monkeypatch):
+def test_clif_triton_preserves_custom_derivative_boundaries_and_higher_order(
+    monkeypatch,
+):
     from benchmark.benchmark_image_classification import _SourceRectangle
     from spikingjelly._ops.clif import _selection, cpu
 
@@ -1205,8 +1216,12 @@ def test_clif_triton_preserves_custom_derivative_boundaries_and_higher_order(mon
         reference = [x.detach().clone().requires_grad_() for x in inputs]
         actual = functional.clif_step(*inputs, 3.7, 1.0, spike)
         expected = cpu._forward_impl(*reference, 3.7, 1.0, spike)
-        ga = torch.autograd.grad(sum(x.square().sum() for x in actual), inputs, create_graph=True)
-        gr = torch.autograd.grad(sum(x.square().sum() for x in expected), reference, create_graph=True)
+        ga = torch.autograd.grad(
+            sum(x.square().sum() for x in actual), inputs, create_graph=True
+        )
+        gr = torch.autograd.grad(
+            sum(x.square().sum() for x in expected), reference, create_graph=True
+        )
         for a, r in zip(actual + ga, expected + gr):
             torch.testing.assert_close(a, r)
         gga = torch.autograd.grad(sum(x.sum() for x in ga), inputs)

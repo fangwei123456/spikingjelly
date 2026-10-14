@@ -75,6 +75,17 @@ Fixes
 Features
 ~~~~~~~~
 
+CLIF Triton Execution
+^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.functional`` and
+``spikingjelly.activation_based.neuron``.
+
+- CLIF uses optional Triton charge/reset forward and backward kernels for CUDA
+  eager FP32, FP16 and BF16 execution, preserving the supplied spike function,
+  per-operation state rounding and checkpoint layout. CPU and compiled execution
+  retain the Torch formulas. Select with ``SJ_CLIF_CUDA_IMPLEMENTATION``.
+
 Plasticity MNIST Example
 ^^^^^^^^^^^^^^^^^^^^^^^^
 

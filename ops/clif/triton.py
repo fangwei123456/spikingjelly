@@ -47,7 +47,9 @@ def _reset_kernel(H, D, S, V, M, N, THRESHOLD: tl.constexpr, BLOCK: tl.constexpr
 
 
 @triton.jit
-def _charge_backward_kernel(GH, GD, H, M, GX, GV, GM, N, TAU: tl.constexpr, BLOCK: tl.constexpr):
+def _charge_backward_kernel(
+    GH, GD, H, M, GX, GV, GM, N, TAU: tl.constexpr, BLOCK: tl.constexpr
+):
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
     dtype: tl.constexpr = H.dtype.element_ty
@@ -65,7 +67,9 @@ def _charge_backward_kernel(GH, GD, H, M, GX, GV, GM, N, TAU: tl.constexpr, BLOC
 
 
 @triton.jit
-def _reset_backward_kernel(GV, GM, M, S, GH, GD, GS, N, THRESHOLD: tl.constexpr, BLOCK: tl.constexpr):
+def _reset_backward_kernel(
+    GV, GM, M, S, GH, GD, GS, N, THRESHOLD: tl.constexpr, BLOCK: tl.constexpr
+):
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
     dtype: tl.constexpr = M.dtype.element_ty
@@ -83,8 +87,12 @@ def _reset_backward_kernel(GV, GM, M, S, GH, GD, GS, N, THRESHOLD: tl.constexpr,
 
 
 @torch.library.custom_op("sj_clif::charge", mutates_args=(), device_types="cuda")
-def _charge(x: torch.Tensor, v: torch.Tensor, m: torch.Tensor, tau: float) -> tuple[torch.Tensor, torch.Tensor]:
+def _charge(
+    x: torch.Tensor, v: torch.Tensor, m: torch.Tensor, tau: float
+) -> tuple[torch.Tensor, torch.Tensor]:
     h, d = torch.empty_like(x), torch.empty_like(x)
+    if x.numel() == 0:
+        return h, d
     with torch.cuda.device(x.device):
         _charge_kernel[(triton.cdiv(x.numel(), 256),)](
             x, v, m, h, d, x.numel(), tau, 256, enable_fp_fusion=False
@@ -107,11 +115,20 @@ def _charge_backward(ctx, gh, gd):
         return _higher_order_grad(ctx, cpu._charge, (gh, gd))
     h, x, v, m = ctx.saved_tensors
     gx, gv, gm = (torch.empty_like(x) for _ in range(3))
+    if h.numel() == 0:
+        return gx, gv, gm, None
     with torch.cuda.device(h.device):
         _charge_backward_kernel[(triton.cdiv(h.numel(), 256),)](
             torch.zeros_like(h) if gh is None else gh.contiguous(),
             torch.zeros_like(h) if gd is None else gd.contiguous(),
-            h, m, gx, gv, gm, h.numel(), ctx.input_template[-1], 256,
+            h,
+            m,
+            gx,
+            gv,
+            gm,
+            h.numel(),
+            ctx.input_template[-1],
+            256,
             enable_fp_fusion=False,
         )
     return gx, gv, gm, None
@@ -121,8 +138,12 @@ _charge.register_autograd(_charge_backward, setup_context=_charge_setup)
 
 
 @torch.library.custom_op("sj_clif::reset", mutates_args=(), device_types="cuda")
-def _reset(h: torch.Tensor, d: torch.Tensor, spike: torch.Tensor, threshold: float) -> tuple[torch.Tensor, torch.Tensor]:
+def _reset(
+    h: torch.Tensor, d: torch.Tensor, spike: torch.Tensor, threshold: float
+) -> tuple[torch.Tensor, torch.Tensor]:
     v, m = torch.empty_like(h), torch.empty_like(h)
+    if h.numel() == 0:
+        return v, m
     with torch.cuda.device(h.device):
         _reset_kernel[(triton.cdiv(h.numel(), 256),)](
             h, d, spike, v, m, h.numel(), threshold, 256, enable_fp_fusion=False
@@ -145,11 +166,20 @@ def _reset_backward(ctx, gv, gm):
         return _higher_order_grad(ctx, cpu._reset, (gv, gm))
     m, h, d, spike = ctx.saved_tensors
     gh, gd, gs = (torch.empty_like(h) for _ in range(3))
+    if h.numel() == 0:
+        return gh, gd, gs, None
     with torch.cuda.device(h.device):
         _reset_backward_kernel[(triton.cdiv(h.numel(), 256),)](
             torch.zeros_like(m) if gv is None else gv.contiguous(),
             torch.zeros_like(m) if gm is None else gm.contiguous(),
-            m, spike, gh, gd, gs, m.numel(), ctx.input_template[-1], 256,
+            m,
+            spike,
+            gh,
+            gd,
+            gs,
+            m.numel(),
+            ctx.input_template[-1],
+            256,
             enable_fp_fusion=False,
         )
     return gh, gd, gs, None

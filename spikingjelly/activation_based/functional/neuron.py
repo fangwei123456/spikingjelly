@@ -96,7 +96,7 @@ def neuron_implementation(
     查询神经元在指定设备和执行路径上的绑定实现。CPU 返回 Torch 参考实现；CUDA
     查询会初始化并缓存对应路径的选择，不执行神经元计算，也不改变模块状态。
 
-    :param neuron_type: ``if``、``lif``、``plif``、``qif``、``eif``、``izhikevich``、``ilif``、``activation_aware_if`` 或 ``stbif``。
+    :param neuron_type: ``if``、``lif``、``plif``、``qif``、``eif``、``izhikevich``、``ilif``、``activation_aware_if`` 、``stbif`` 或 ``clif``。
     :type neuron_type: str
     :param device: CPU 或 NVIDIA CUDA 设备；省略 CUDA 索引时使用当前设备。
     :type device: torch.device
@@ -118,7 +118,7 @@ def neuron_implementation(
     CPU returns the Torch reference. A CUDA query initializes and caches the
     corresponding path's selection without computation or module-state changes.
 
-    :param neuron_type: One of ``if``, ``lif``, ``plif``, ``qif``, ``eif``, ``izhikevich``, ``ilif``, ``activation_aware_if``, or ``stbif``.
+    :param neuron_type: One of ``if``, ``lif``, ``plif``, ``qif``, ``eif``, ``izhikevich``, ``ilif``, ``activation_aware_if``, ``stbif``, or ``clif``.
     :type neuron_type: str
     :param device: CPU or NVIDIA CUDA device; an omitted CUDA index uses the current device.
     :type device: torch.device
@@ -1743,6 +1743,11 @@ def clif_step(
     执行一次 ComplementaryLIF 状态转移，返回脉冲、下一膜电位和下一互补电位。
     输入状态须已物化；函数不读取 module memory，也不原地修改输入状态。
     ``spike_function`` 由调用者按训练或推理模式选择。
+    对同形状、同设备、同 dtype 的 CUDA FP32/FP16/BF16 张量，eager 模式自动
+    选择可用的 Triton 充电与复位算子，保持原有逐算子 dtype 舍入；放电函数及其
+    自定义梯度仍由调用者提供。``SJ_CLIF_CUDA_IMPLEMENTATION`` 可设为
+    ``auto``（默认）、``triton`` 或 ``torch``。CPU、编译及其他输入使用 Torch
+    公式；显式请求不支持的 CUDA profile 会报错。函数不融合不同时间步。
 
     :param x: 当前输入，形状为 ``[N, *]``。
     :type x: torch.Tensor
@@ -1769,6 +1774,13 @@ def clif_step(
     voltage, and next complementary voltage. States must be materialized. The
     function does not read module memory or mutate input states. The caller
     selects ``spike_function`` for training or inference.
+    CUDA eager execution automatically uses available Triton charge/reset operators
+    for matching FP32/FP16/BF16 shapes, devices and dtypes, preserving per-operation
+    dtype rounding. The supplied spike function retains its custom gradient.
+    ``SJ_CLIF_CUDA_IMPLEMENTATION`` accepts ``auto`` (default), ``triton`` or
+    ``torch``. CPU, compiled execution and other inputs use the Torch formulas;
+    explicitly requesting an unsupported CUDA profile raises an error. Time steps
+    are not fused.
 
     :param x: Current input shaped ``[N, *]``.
     :type x: torch.Tensor
