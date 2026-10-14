@@ -11,7 +11,7 @@ _selection = _CudaSelection(
 
 
 def step(x, v, m, tau, threshold, spike_function):
-    if x.device.type != "cuda":
+    if x.device.type != "cuda" or _selection._requested == "torch":
         return cpu._forward_impl(x, v, m, tau, threshold, spike_function)
     supported = (
         not torch.compiler.is_compiling()
@@ -19,6 +19,8 @@ def step(x, v, m, tau, threshold, spike_function):
         and x.dtype == v.dtype == m.dtype
         and x.device == v.device == m.device
         and x.shape == v.shape == m.shape
+        and isinstance(tau, (float, int))
+        and isinstance(threshold, (float, int))
     )
     if not supported:
         _require_automatic_torch(

@@ -1141,8 +1141,9 @@ def test_multistep_trajectory_uses_sequence_operator_and_preserves_gradients(
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("layout", ["contiguous", "transpose", "expand"])
 @pytest.mark.parametrize("source_rectangle", [False, True])
+@pytest.mark.parametrize("tau", [2.0, 3.7])
 def test_clif_triton_matches_torch_states_and_all_gradients(
-    dtype, layout, source_rectangle, monkeypatch
+    dtype, layout, source_rectangle, tau, monkeypatch
 ):
     from spikingjelly._ops.clif import _selection, cpu
 
@@ -1171,8 +1172,8 @@ def test_clif_triton_matches_torch_states_and_all_gradients(
     reference = tuple(map(view, reference_inputs))
     actual_outputs, reference_outputs = [], []
     for _ in range(6):
-        actual = functional.clif_step(*actual, 2.0, 1.0, spike_function)
-        reference = cpu._forward_impl(*reference, 2.0, 1.0, spike_function)
+        actual = functional.clif_step(*actual, tau, 1.0, spike_function)
+        reference = cpu._forward_impl(*reference, tau, 1.0, spike_function)
         actual_outputs.extend(actual)
         reference_outputs.extend(reference)
     weights = [torch.randn_like(x) for x in actual_outputs]
