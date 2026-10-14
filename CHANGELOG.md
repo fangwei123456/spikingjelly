@@ -11,6 +11,8 @@ and the archived documentation linked from the project README.
 
 ### Fixes
 
+- Fixed `layer.WSLinear` initialization with `gain=True`, restoring
+  weight-standardized OTTT VGG construction.
 - Restored Torch 2.6 spike unpacking registration and rank-local distributed
   vision checkpoint loading without changing packed bytes or checkpoint formats.
 - Fused neuron–Linear native kernels validate shared-memory capacity in CUDA,

@@ -7,7 +7,7 @@ import torch.nn as nn
 
 from spikingjelly.activation_based import base, layer
 from spikingjelly.activation_based import neuron
-from spikingjelly.activation_based.functional.net_config import reset_net
+from spikingjelly.activation_based.functional.net_config import detach_net, reset_net
 from spikingjelly.activation_based.learning.online_learning import (
     fptt_online_training,
     fptt_online_training_init_w_ra,
@@ -123,19 +123,25 @@ def test_online_lif_nodes_support_functional_conversion(node_type):
     assert tuple(node._memories.values()) == states
 
 
-def test_grad_with_trace_uses_spikes_for_values_and_traces_for_gradients():
-    linear = nn.Linear(2, 1, bias=False)
-    linear.weight.data.copy_(torch.tensor([[2.0, -1.0]]))
+@pytest.mark.parametrize("linear_type", [nn.Linear, layer.WSLinear])
+def test_grad_with_trace_uses_spikes_for_values_and_traces_for_gradients(linear_type):
+    linear = linear_type(2, 1, bias=False)
+    with torch.no_grad():
+        linear.weight.copy_(torch.tensor([[2.0, -1.0]]))
+    reference = copy.deepcopy(linear)
     spike = torch.tensor([[1.0, 0.0]], requires_grad=True)
     trace = torch.tensor([[0.25, 0.75]], requires_grad=True)
+    reference_trace = trace.detach().clone().requires_grad_()
 
     output = GradwithTrace(linear)([spike, trace])
-    torch.testing.assert_close(output, torch.tensor([[2.0]]))
+    torch.testing.assert_close(output, reference(spike))
     output.sum().backward()
+    reference(reference_trace).sum().backward()
 
-    torch.testing.assert_close(linear.weight.grad, trace)
-    torch.testing.assert_close(spike.grad, linear.weight.detach())
-    torch.testing.assert_close(trace.grad, linear.weight.detach())
+    for actual, expected in zip(linear.parameters(), reference.parameters()):
+        torch.testing.assert_close(actual.grad, expected.grad)
+    torch.testing.assert_close(spike.grad, reference_trace.grad)
+    torch.testing.assert_close(trace.grad, reference_trace.grad)
 
 
 def test_ottt_sequential_keeps_the_public_trace_gradient_behavior():
@@ -184,44 +190,58 @@ def test_fptt_running_average_starts_from_independent_parameter_snapshots():
 
 
 @pytest.mark.parametrize("online", [True, False])
-@pytest.mark.parametrize("use_ottt_output_neuron", [True, False])
-def test_ottt_online_training_runs_over_multiple_timesteps(
-    online, use_ottt_output_neuron
-):
-    # Regression for issue #593: ottt_online_training used to raise
-    # RuntimeError on the second time step because neuron states stayed in the
-    # previous graph. The public example uses LIFNode as the last layer; a
-    # collaborator suggested OTTTLIFNode there instead. Both should train.
-    last = OTTTLIFNode() if use_ottt_output_neuron else neuron.LIFNode()
+@pytest.mark.parametrize("node_type", [OTTTLIFNode, SLTTLIFNode, neuron.LIFNode])
+def test_online_training_matches_manual_updates(online, node_type):
+    torch.manual_seed(780)
     net = OTTTSequential(
-        nn.Linear(8, 4),
-        OTTTLIFNode(),
-        nn.Linear(4, 2),
-        last,
+        layer.WSLinear(4, 3),
+        SLTTLIFNode() if node_type is SLTTLIFNode else OTTTLIFNode(),
+        layer.WSLinear(3, 2),
+        node_type(),
     )
+    reference = copy.deepcopy(net)
     optimizer = torch.optim.SGD(net.parameters(), lr=0.1)
-    T = 4
-    N = 2
-    x_seq = torch.rand([N, T, 8])
-    target_seq = torch.rand([N, T, 2])
+    reference_optimizer = torch.optim.SGD(reference.parameters(), lr=0.1)
+    x_seq = torch.rand(2, 3, 4)
+    target_seq = torch.rand(2, 3, 2)
 
-    batch_loss, y_all = ottt_online_training(
-        model=net,
-        optimizer=optimizer,
-        x_seq=x_seq,
-        target_seq=target_seq,
-        f_loss_t=nn.functional.mse_loss,
-        online=online,
-    )
-    reset_net(net)
+    for _ in range(2):
+        expected_outputs, expected_losses = [], []
+        reference_optimizer.zero_grad()
+        for t in range(x_seq.shape[1]):
+            output = reference(x_seq[:, t])
+            if isinstance(output, list):
+                output = output[0]
+            loss = nn.functional.mse_loss(output, target_seq[:, t])
+            loss.backward()
+            expected_outputs.append(output.detach())
+            expected_losses.append(loss.detach())
+            detach_net(reference)
+            if online:
+                reference_optimizer.step()
+                reference_optimizer.zero_grad()
+        if not online:
+            reference_optimizer.step()
 
-    assert y_all.shape == (N, T, 2)
-    assert torch.isfinite(batch_loss)
+        batch_loss, outputs = ottt_online_training(
+            net, optimizer, x_seq, target_seq, nn.functional.mse_loss, online
+        )
+        torch.testing.assert_close(outputs, torch.stack(expected_outputs, dim=1))
+        torch.testing.assert_close(batch_loss, torch.stack(expected_losses).sum())
+        assert not outputs.requires_grad
+        assert not batch_loss.requires_grad
+        for actual, expected in zip(net.parameters(), reference.parameters()):
+            torch.testing.assert_close(actual, expected)
+        for actual, expected in zip(net.modules(), reference.modules()):
+            if isinstance(actual, neuron.LIFNode):
+                torch.testing.assert_close(actual.v, expected.v)
+                assert actual.v.grad_fn is None
+        reset_net(net)
+        reset_net(reference)
 
 
-@pytest.mark.parametrize("online", [True, False])
 @pytest.mark.parametrize("use_subclass", [False, True])
-def test_ottt_sequential_calls_stacked_ottt_lif_once_on_spike(online, use_subclass):
+def test_ottt_sequential_calls_stacked_ottt_lif_once_on_spike(use_subclass):
     class CustomOTTTLIFNode(OTTTLIFNode):
         pass
 
@@ -244,17 +264,45 @@ def test_ottt_sequential_calls_stacked_ottt_lif_once_on_spike(online, use_subcla
         torch.testing.assert_close(net[0].bias.grad, reference[0].bias.grad)
     reset_net(net)
 
-    optimizer = torch.optim.SGD(net.parameters(), lr=0.1)
-    T = 4
-    N = 2
-    batch_loss, y_all = ottt_online_training(
-        model=net,
-        optimizer=optimizer,
-        x_seq=torch.rand([N, T, 8]),
-        target_seq=torch.rand([N, T, 2]),
-        f_loss_t=nn.functional.mse_loss,
-        online=online,
+
+@pytest.mark.parametrize("node_type", [OTTTLIFNode, SLTTLIFNode])
+@pytest.mark.parametrize("v_reset", [None, 0.0])
+def test_online_lif_cuts_temporal_gradients(node_type, v_reset):
+    node = node_type(tau=2.0, decay_input=False, v_reset=v_reset)
+    x_previous = torch.tensor([1.2], requires_grad=True)
+    x_current = torch.tensor([0.3], requires_grad=True)
+    node(x_previous)
+    output = node(x_current)
+    spike = output[0] if isinstance(output, list) else output
+    spike.sum().backward()
+    assert x_previous.grad is None
+    voltage = 0.4 if v_reset is None else 0.3
+    sigmoid = torch.sigmoid(4 * torch.tensor([voltage - 1.0]))
+    torch.testing.assert_close(x_current.grad, 4 * sigmoid * (1 - sigmoid))
+    if node_type is OTTTLIFNode:
+        assert not node.trace.requires_grad
+
+
+def test_fptt_updates_parameters_and_running_average():
+    model = nn.Linear(1, 1, bias=False).double()
+    with torch.no_grad():
+        model.weight.fill_(0.5)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    w_ra = fptt_online_training_init_w_ra(optimizer)
+    x_seq = torch.tensor([1.0, 2.0, 0.5], dtype=torch.double).reshape(3, 1, 1)
+    targets = torch.tensor([0.2, 0.8, -0.1], dtype=torch.double).reshape(3, 1, 1)
+    weight, average, previous_gradient = 0.5, 0.5, 0.0
+    alpha = 0.3
+    for t, (x, target) in enumerate(zip(x_seq.flatten(), targets.flatten())):
+        gradient = 2 * (weight * x - target) * x
+        gradient += alpha * (weight - average) - previous_gradient / 2
+        weight -= 0.1 * gradient
+        if t < 2:
+            previous_gradient = 2 * (weight * x - target) * x
+            average = (average + weight) / 2 - previous_gradient / (2 * alpha)
+
+    fptt_online_training(
+        model, optimizer, x_seq, targets, nn.functional.mse_loss, alpha, w_ra
     )
-    reset_net(net)
-    assert y_all.shape == (N, T, 2)
-    assert torch.isfinite(batch_loss)
+    torch.testing.assert_close(model.weight.squeeze(), weight)
+    torch.testing.assert_close(w_ra[0].squeeze(), average)

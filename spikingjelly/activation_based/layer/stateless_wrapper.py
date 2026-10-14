@@ -1433,7 +1433,7 @@ class WSLinear(Linear):
         """
         super().__init__(in_features, out_features, bias, step_mode)
         if gain:
-            self.gain = nn.Parameter(torch.ones(self.out_channels, 1))
+            self.gain = nn.Parameter(torch.ones(self.out_features, 1))
         else:
             self.gain = None
         self.eps = eps
