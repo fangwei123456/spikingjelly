@@ -57,14 +57,6 @@ def _reset_kernel(H, S, M, V, N, THRESHOLD: tl.constexpr, BLOCK: tl.constexpr):
 
 
 @triton.jit
-def _charge_backward_kernel(G, GV, N, TAU: tl.constexpr, BLOCK: tl.constexpr):
-    i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
-    mask = i < N
-    g = tl.load(G + i, mask, 0).to(tl.float32)
-    tl.store(GV + i, tl.div_rn(-g, TAU), mask)
-
-
-@triton.jit
 def _decay_backward_kernel(GD, H, M, GH, GM, N, TAU: tl.constexpr, BLOCK: tl.constexpr):
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
@@ -107,15 +99,7 @@ class _Charge(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, g):
-        if torch.is_grad_enabled():
-            return (g, g, -g / ctx.tau, None)
-        gv = torch.empty_like(g)
-        if g.numel():
-            with torch.cuda.device(g.device):
-                _charge_backward_kernel[triton.cdiv(g.numel(), 256),](
-                    g.contiguous(), gv, g.numel(), ctx.tau, 256, enable_fp_fusion=False
-                )
-        return (g, g, gv, None)
+        return g, g, g / -ctx.tau, None
 
 
 class _Decay(torch.autograd.Function):
