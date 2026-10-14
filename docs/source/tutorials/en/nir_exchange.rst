@@ -5,12 +5,12 @@ Author: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_
 
 中文版： :doc:`../cn/nir_exchange`
 
-`Neuromorphic intermediate representation (NIR) <https://neuroir.org/docs/index.html>`_ is a set of computational primitives that describes SNN modules and their connections in the form of graphs (nodes and edges), and is designed to be shared across different neuromorphic frameworks and technology stacks. At present, NIR `is supported by multiple simulators and hardware platforms <https://neuroir.org/docs/support.html>`_. SpikingJelly's ``nir_exchange`` package enables bidirectional conversion between supported SpikingJelly models and NIR graphs.
+`Neuromorphic intermediate representation (NIR) <https://neuroir.org/docs/index.html>`_ is a set of computational primitives that describes SNN modules and their connections in the form of graphs (nodes and edges), and is designed to be shared across different neuromorphic frameworks and technology stacks. At present, NIR `is supported by multiple simulators and hardware platforms <https://neuroir.org/docs/support/>`_. SpikingJelly's ``nir_exchange`` package enables bidirectional conversion between supported SpikingJelly models and NIR graphs.
 
 .. figure:: ../../_static/tutorials/nir_exchange/nir-schema.png
     :width: 100%
 
-    Image source: `What is the Neuromorphic Intermediate Representation (NIR)? <https://neuroir.org/docs/what.html>`_
+    Image source: `What is the Neuromorphic Intermediate Representation (NIR)? <https://neuroir.org/docs/what/>`_
 
 The ``nir_exchange`` package provides two key interfaces:
 
