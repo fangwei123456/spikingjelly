@@ -76,6 +76,9 @@ Module: `spikingjelly.activation_based.functional` and
   eager FP32, FP16 and BF16 execution, preserving the supplied spike function,
   per-operation state rounding and checkpoint layout. CPU and compiled execution
   retain the Torch formulas. Select with `SJ_CLIF_CUDA_IMPLEMENTATION`.
+- The CLIF benchmark uses an equivalent deterministic pooling reference only for
+  correctness packets, avoiding nondeterministic CUDA pooling gradients while
+  retaining strict comparisons. Timing and quality runs keep the original model.
 
 
 #### Plasticity MNIST Example

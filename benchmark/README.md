@@ -101,6 +101,13 @@ comes from training/evaluation. Repeat paired performance processes three times.
 Retain `manifest.json`, `report.json`, `epochs.jsonl` and last/best checkpoints.
 Timing also stores `correctness.pt`: full-batch outputs/input/parameter gradients
 and two samples of final neuron states, plus real-input and packet SHA256.
+CLIF correctness packets use a deterministic window-mean reference for the
+2×2-to-7×7 adaptive pooling backward: the CUDA operator uses atomic additions,
+so even repeated Torch runs can miss strict gradient comparisons. The reference
+checks its forward output bitwise against the original pooling. Timed and
+quality runs keep the original model; the packet oracle is recorded and must
+match between compared reports. CLIF reports also record provider requests,
+selection and correctness/timed state dtypes.
 Inference packets include the evaluated output. GPU UUID/driver are recorded;
 CUDA runs need `nvidia-smi`.
 Bounded runs, recipe overrides and AMP-skipped updates are recorded. A scale
