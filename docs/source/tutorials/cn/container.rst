@@ -54,6 +54,7 @@ SpikingJelly中主要提供了如下几种包装器：
         
         conv = nn.Conv2d(C, 8, kernel_size=3, padding=1, bias=False)
         bn = nn.BatchNorm2d(8)
+        bn.eval()
         
         y_seq = functional.multi_step_forward(x_seq, (conv, bn))
         # y_seq.shape = [T, N, 8, H, W]
@@ -64,12 +65,12 @@ SpikingJelly中主要提供了如下几种包装器：
         
         # z_seq is identical to y_seq
 
-但是ANN的网络层本身是无状态的，不存在前序依赖，没有必要在时间上串行的计算，可以使用函数风格的 \
+Conv、Linear 等逐样本计算的层没有时间依赖，可以使用函数风格的 \
 :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` 或模块风格的 \
 :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` 进行包装。\
 :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` 将 \
 ``shape = [T, N, *]`` 的数据首先变换为 ``shape = [TN, *]``，再送入无状态的网络层进行计算，\
-输出的结果会被重新变换为 ``shape = [T, N, *]``。不同时刻的数据是并行计算的，因而速度更快：
+输出的结果会被重新变换为 ``shape = [T, N, *]``。这样将各时间步合并为一次调用。训练态 BatchNorm 会因统计范围变为 T×N 而产生不同结果，下面使用 eval 模式：
 
 .. code-block:: python
 
@@ -87,6 +88,7 @@ SpikingJelly中主要提供了如下几种包装器：
 
         conv = nn.Conv2d(C, 8, kernel_size=3, padding=1, bias=False)
         bn = nn.BatchNorm2d(8)
+        bn.eval()
 
         y_seq = functional.multi_step_forward(x_seq, (conv, bn))
         # y_seq.shape = [T, N, 8, H, W]

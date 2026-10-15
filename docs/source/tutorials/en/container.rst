@@ -56,6 +56,7 @@ For a stateless ANN layer such as :class:`torch.nn.Conv2d`, which requires input
         
         conv = nn.Conv2d(C, 8, kernel_size=3, padding=1, bias=False)
         bn = nn.BatchNorm2d(8)
+        bn.eval()
         
         y_seq = functional.multi_step_forward(x_seq, (conv, bn))
         # y_seq.shape = [T, N, 8, H, W]
@@ -66,9 +67,9 @@ For a stateless ANN layer such as :class:`torch.nn.Conv2d`, which requires input
         
         # z_seq is identical to y_seq
 
-However, the ANN layers are stateless and :math:`Y[t]` is only determined by :math:`X[t]`. Hence, it is not necessary to calculate :math:`Y[t]` step-bt-step.\
+Layers such as Conv and Linear compute each sample independently and have no temporal dependency.\
 We can use :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` or :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` to wrap, \
-which will reshape the input with ``shape = [T, N, *]`` to  ``shape = [TN, *]``, send data to ann layers, and reshape output to ``shape = [T, N, *]``. The calculation in different time-steps are in parallelism and faster:
+which will reshape the input with ``shape = [T, N, *]`` to  ``shape = [TN, *]``, send data to ann layers, and reshape output to ``shape = [T, N, *]``. This combines the time steps into one call. Training-mode BatchNorm changes its results because its statistics cover T×N; the example uses eval mode:
 
 .. code-block:: python
 
@@ -86,6 +87,7 @@ which will reshape the input with ``shape = [T, N, *]`` to  ``shape = [TN, *]``,
 
         conv = nn.Conv2d(C, 8, kernel_size=3, padding=1, bias=False)
         bn = nn.BatchNorm2d(8)
+        bn.eval()
 
         y_seq = functional.multi_step_forward(x_seq, (conv, bn))
         # y_seq.shape = [T, N, 8, H, W]
@@ -144,7 +146,7 @@ In multi-step mode, ``output_size``, if given, is passed to the underlying PyTor
 It may be a spatial-only size (e.g., ``(H, W)``) or a full output size accepted by the underlying module for the flattened input.
 
 Most frequently-used ann modules have been defined in :class:`spikingjelly.activation_based.layer`. It is recommended to use modules in :class:`spikingjelly.activation_based.layer`, \
-rather than using a container to wrap the ann layers manually. Althouth the modules in :class:`spikingjelly.activation_based.layer` are implementd by using :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` to \
+rather than using a container to wrap the ann layers manually. Although the modules in :class:`spikingjelly.activation_based.layer` are implemented by using :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` to \
 wrap forward function, the advantages of modules in :class:`spikingjelly.activation_based.layer` are:
 
 * Both single-step and multi-step modes are supported. When using :class:`SeqToANNContainer<spikingjelly.activation_based.layer.SeqToANNContainer>` or :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` to wrap modules, only the multi-step mode is supported.

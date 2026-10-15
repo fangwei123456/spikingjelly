@@ -14,7 +14,7 @@ Build a simple SNN
 
 When building neural networks with PyTorch, we can simply use ``nn.Sequential`` to stack layers to get a feedforward network, where input data will flow through each layer in order to get the output.
 
-`MNIST dataset <http://yann.lecun.com/exdb/mnist/>`__ contains 8-bit grey-scale images whose size is :math:`28\times 28` and category is from 1 to 10. A simple single layer ANN to classify MNIST is as follows:
+`MNIST dataset <http://yann.lecun.com/exdb/mnist/>`__ contains 8-bit grey-scale images whose size is :math:`28\times 28` and whose labels are the digits 0–9. A simple single layer ANN to classify MNIST is as follows:
 
 .. code-block:: python
 
@@ -50,11 +50,13 @@ Adam is used as the optimizer by default, and the poisson encoder is used to enc
     # Use PoissonEncoder
     encoder = encoding.PoissonEncoder()
 
+See :mod:`spikingjelly.activation_based.encoding` for encoder usage.
+
 There are three key points to follow when programing training codes:
 
 1. The output of the spiking neuron is binary, and the output of a single run is easily disturbed by the noise caused by coding. Therefore, it is generally to consider **the firing rate**  of the output layer in a period of time as the output of SNN. The value of the firing rate indicates the response intensity of the corresponding category. So we should run the SNN for a period of time ``T`` and take **the average firing rate** in ``T`` as classifying evidence.
 
-2. The ideal outcome is that except for the proper neurons **firing at the highest rate**, the other neurons **keep silent**. Cross-entropy loss or MSE loss is often used. Here we use MSE loss for its better effect.
+2. The ideal outcome is that except for the proper neurons **firing at the highest rate**, the other neurons **keep silent**. Here we use MSE loss with one-hot firing-rate targets.
 
 3. After each network simulation, the network state should be reset by ``functional.reset_net(net)``.
 
@@ -116,7 +118,7 @@ The complete code is in ``activation_based.examples.lif_fc_mnist.py`` , where Te
     uv run --no-sync python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
 
 It should be noted that the amount of memory required to train such an SNN is linearly related to the simulation time ``T``.
-A larger ``T`` is equivalent to using a smaller simulation time step, and the training is more "refined" but not necessarily better. When ``T`` is too large, the SNN unfolds in time and becomes a very deep network,
+A larger ``T`` does not necessarily improve training. When ``T`` is too large, the SNN unfolds in time and becomes a very deep network,
 which will cause BPTT to decay or explode when calculating the gradient.
 
 In addition, since we use the poisson encoder, a large ``T`` is needed to ensure that the coding noise is not too large.
@@ -129,6 +131,8 @@ We set ``tau=2.0,T=100,batch_size=64,lr=1e-3`` , the corresponding command is:
 .. code-block:: shell
 
     python -m spikingjelly.activation_based.examples.lif_fc_mnist -tau 2.0 -T 100 -device cuda:0 -b 64 -epochs 100 -data-dir <PATH to MNIST> -amp -opt adam -lr 1e-3 -j 8
+
+The following results come from an older version and have not been rerun on V2.
 
 In order to speed up training, mixed precision training is used. After 100 Epoch training, two npy files and a training log are output. The highest accuracy on the test dataset is 92.9%. The accuracy curve visualized by matplotlib is as follows:
 
@@ -154,16 +158,3 @@ Voltages and spikes are as follows, which are gotten by the visualization functi
     :width: 100%
 
 Obviously, except for the corresponding neuron in the correct category, no other neurons are firing. The complete training code is in `activation_based/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/lif_fc_mnist.py>`_ .
-
-Running the examples and interpreting results
--------------------------------------------------
-
-The model runs on its input device automatically. Reset independent batches
-with ``functional.reset_net`` after backward and parameter updates; see
-:doc:`./neuron` for continuous state. AMP and fused neuron execution are separate
-policies. See :doc:`./precision` for state precision and :doc:`./triton_backend`
-for compilation and diagnostics.
-
-The accuracy, curves and logs on this page come from historical experiments;
-some runs lack an exact version. They have not been retrained or verified on
-current V2, so they cannot establish its speed or accuracy.

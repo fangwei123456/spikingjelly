@@ -11,14 +11,11 @@ English version: :doc:`../en/ann2snn`
     #. 本页介绍当前 Recipe API 中基于 FX graph 的 rate-coded CNN 转换：``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` 定义算法，``FXConverter`` 执行转换（``Converter`` 为兼容名）。
     #. :doc:`Transformer ANN2SNN 转换 <ann2snn_transformer>` 介绍面向 Transformer 模型的 ``STATransformerRecipe``、``SpikeZIPTFQANNRecipe`` 和离线多步 ``Qwen2SNNRecipe``。
 
-    旧 API 教程仍可查阅：
-
-    #. :doc:`更早期 clock-driven 时代 ANN2SNN API <../../legacy_tutorials/cn/5_ann2snn>`。
-    #. :doc:`legacy pre-Recipe Converter API <../../legacy_tutorials/cn/ann2snn_converter_legacy>`，使用 ``Converter(mode=..., dataloader=...)`` 和 ``convert_to_spiking_neurons(model)``。
+    旧版 ANN2SNN API 见 `0.0.0.0.14 版本文档 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`_。
 
 本节介绍 ``spikingjelly.activation_based.ann2snn``，展示如何用当前 Recipe API 将训练好的前馈 ANN 转换为 SNN 并在 SpikingJelly 中仿真。
 
-相关 API 见 `API 参考 <https://spikingjelly.readthedocs.io/zh_CN/latest/APIs/spikingjelly.activation_based.ann2snn.html>`_。
+相关 API 见 :mod:`spikingjelly.activation_based.ann2snn`。
 
 本页介绍的 rate-coding 路径基于 ``torch.fx``。``torch.fx`` 会将 ``nn.Module`` 实例 trace 为计算图表示，然后由 ANN2SNN FX recipe 对该计算图进行变换。ANN2SNN 也提供不 trace FX graph 的 ``ModuleConverter``，用于 SpikeZIP 和 Qwen2 这类直接替换 ``nn.Module`` tree 的转换；这些路径见 Transformer ANN2SNN 教程。
 
@@ -101,7 +98,7 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 理论证明
 ^^^^^^^^
 
-文献 [#f1]_ 为ANN转SNN提供了理论基础，证明SNN中的IF神经元是ReLU激活函数在时间上的无偏估计器。
+文献 [#f1]_ 证明，恒定输入在 ``[0, V_threshold]`` 内时，采用减法重置的 IF 神经元发放率随 T 增大逼近归一化的 ReLU 激活值。
 
 针对神经网络第一层，考虑 SNN 神经元发放率 :math:`r` 和对应 ANN 激活值之间的关系。假定输入恒定为 :math:`z \in [0,1]`。对于采用减法重置的IF神经元，其膜电位V随时间变化为：
 
@@ -141,15 +138,15 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 
 转换主要解决两个问题：
 
-1. ANN 使用批归一化（Batch Normalization）加速训练和收敛。批归一化将激活值归一化到零均值，与 SNN 特性冲突。解决方法是将 BN 参数吸收到前面的参数层中（Linear、Conv2d）。
+1. 推理时 BN 是固定的仿射变换，可以折叠进前一个卷积层，转换后不再需要单独的 BN 模块。
 
 2. 按转换理论，ANN 每层的输入输出需要限制在 [0,1] 范围内，需要对参数进行缩放（模型归一化）。
 
 ◆ BatchNorm参数吸收
 
 假定BatchNorm的参数为 :math:`\gamma` (``BatchNorm.weight``)， :math:`\beta` (``BatchNorm.bias``)， :math:`\mu` (``BatchNorm.running_mean``)，
-:math:`\sigma` (``BatchNorm.running_var``，:math:`\sigma = \sqrt{\mathrm{running\_var}}`)。具体参数定义详见
-`torch.nn.BatchNorm1d <https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html#torch.nn.BatchNorm1d>`_。参数模块（例如 Linear）具有权重 :math:`W` 和偏置 :math:`b`。BatchNorm 参数吸收就是将 BatchNorm 的参数通过运算转移到参数模块的 :math:`W` 和 :math:`b` 中，使得数据输入新模块的输出和有 BatchNorm 时相同。对此，新模型的 :math:`\bar{W}` 和 :math:`\bar{b}` 公式表示为：
+:math:`\sigma` （包含数值稳定项 ``eps``，:math:`\sigma = \sqrt{\mathrm{running\_var} + \mathrm{eps}}`）。具体参数定义详见
+`torch.nn.BatchNorm1d <https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html#torch.nn.BatchNorm1d>`_。卷积层具有权重 :math:`W` 和偏置 :math:`b`。BatchNorm 参数吸收就是将 BatchNorm 的参数通过运算转移到参数模块的 :math:`W` 和 :math:`b` 中，使得数据输入新模块的输出和有 BatchNorm 时相同。对此，新模型的 :math:`\bar{W}` 和 :math:`\bar{b}` 公式表示为：
 
 .. math::
     \bar{W} = \frac{\gamma}{\sigma}  W
@@ -308,7 +305,7 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
         dataset=test_data_dataset, batch_size=50, shuffle=True, drop_last=False
     )
 
-示例脚本会下载预训练 checkpoint。入口函数 ``download_checkpoint`` 封装了下载逻辑，``download_url`` 失败时回退到 ``requests`` 流式下载。先加载并验证 ANN：
+示例脚本会下载预训练权重。先加载权重并验证 ANN：
 
 .. code-block:: python
 
@@ -383,35 +380,6 @@ ANN 训练完成。选择 rate-coding recipe，传入确定性校准 dataloader�
       )
     )
 
-使用 ``RateCodingRecipe`` 时，``snn_model`` 的类型为 ``GraphModule``。可参考 `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_。
-
-调用 ``GraphModule.graph.print_tabular()`` 可以表格形式查看计算图的中间表示：
-
-.. code-block:: shell
-
-    # snn_model.graph.print_tabular()
-    opcode       name                       target                     args                          kwargs
-    -----------  -------------------------  -------------------------  ----------------------------  ------
-    placeholder  x                          x                          ()                            {}
-    call_module  network_0                  network.0                  (x,)                          {}
-    call_module  network_spiking_0_scaler0  network.spiking_0.scaler0  (network_0,)                  {}
-    call_module  network_spiking_0_if_node  network.spiking_0.if_node  (network_spiking_0_scaler0,)  {}
-    call_module  network_spiking_0_scaler1  network.spiking_0.scaler1  (network_spiking_0_if_node,)  {}
-    call_module  network_3                  network.3                  (network_spiking_0_scaler1,)  {}
-    call_module  network_4                  network.4                  (network_3,)                  {}
-    call_module  network_spiking_1_scaler0  network.spiking_1.scaler0  (network_4,)                  {}
-    call_module  network_spiking_1_if_node  network.spiking_1.if_node  (network_spiking_1_scaler0,)  {}
-    call_module  network_spiking_1_scaler1  network.spiking_1.scaler1  (network_spiking_1_if_node,)  {}
-    call_module  network_7                  network.7                  (network_spiking_1_scaler1,)  {}
-    call_module  network_8                  network.8                  (network_7,)                  {}
-    call_module  network_spiking_2_scaler0  network.spiking_2.scaler0  (network_8,)                  {}
-    call_module  network_spiking_2_if_node  network.spiking_2.if_node  (network_spiking_2_scaler0,)  {}
-    call_module  network_spiking_2_scaler1  network.spiking_2.scaler1  (network_spiking_2_if_node,)  {}
-    call_module  network_11                 network.11                 (network_spiking_2_scaler1,)  {}
-    call_module  network_12                 network.12                 (network_11,)                 {}
-    call_module  network_13                 network.13                 (network_12,)                 {}
-    output       output                     output                     (network_13,)                 {}
-
 其它 recipe 与自定义 recipe
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -465,6 +433,8 @@ FX 路径固定步骤顺序为 ``validate`` -> ``before_trace`` -> ``after_trace
     python -m spikingjelly.activation_based.ann2snn.examples.cnn_mnist \
       --time-steps 50 \
       --plot-mode-sweep
+
+历史文档记录： `237dde3e <https://github.com/fangwei123456/spikingjelly/commit/237dde3e>`_ （2026-06-26）；NVIDIA GeForce RTX 4090；未在当前 V2 上复测。
 
 以下输出是在 NVIDIA GeForce RTX 4090 上以 ``T=50`` 测得：
 
@@ -550,6 +520,8 @@ FX 路径固定步骤顺序为 ``validate`` -> ``before_trace`` -> ``after_trace
       - 32
       - 98.53
 
+历史文档记录： `83b836be <https://github.com/fangwei123456/spikingjelly/commit/83b836be>`_ （2026-06-28）；硬件未记录；未在当前 V2 上复测。
+
 ResNet-18 转换
 --------------
 
@@ -604,6 +576,8 @@ ResNet-18 转换
       - 32
       - 65.472
       - 86.636
+
+历史文档记录： `33766fc7 <https://github.com/fangwei123456/spikingjelly/commit/33766fc7>`_ （2026-07-05）；硬件未记录；未在当前 V2 上复测。
 
 在较深的 ImageNet CNN 上，缺少 per-channel 归一化的标量阈值 robust normalization 转换精度较低（Top-1 仅 12.462%）。LTB recipe 通过局部阈值估计将 Top-1 提升至 65.472%。
 

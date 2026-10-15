@@ -109,7 +109,7 @@ Note that dimension 0 is always the batch dimension for data packed by ``DataLoa
 
     # spikingjelly.activation_based.examples.classify_dvsg
 
-     def main():
+    def main():
         # ...
         for epoch in range(start_epoch, args.epochs):
             for frame, label in train_data_loader:
@@ -119,10 +119,10 @@ Note that dimension 0 is always the batch dimension for data packed by ``DataLoa
                 # ...
 
             with torch.no_grad():
-            for frame, label in test_data_loader:
-                frame = frame.to(args.device)
-                frame = frame.transpose(0, 1)  # [N, T, C, H, W] -> [T, N, C, H, W]
-                # ...
+                for frame, label in test_data_loader:
+                    frame = frame.to(args.device)
+                    frame = frame.transpose(0, 1)  # [N, T, C, H, W] -> [T, N, C, H, W]
+                    # ...
 
         # ...
 
@@ -137,9 +137,7 @@ DVS Gesture has 11 classes:
         label_onehot = F.one_hot(label, 11).float()
         # ...
 
-``DVSGestureNet`` does not output the pulse frequency, but the original output of ``shape = [T, N, 11]``:
-
-The networks in :class:`spikingjelly.activation_based.model.parametric_lif_net` output spikes, rather than firing rates:
+``DVSGestureNet`` outputs ``[T, N, 11]`` tensors. Its final ``VotingLayer`` averages each group of 10 neurons, so the per-step output is not binary. Averaging over time gives the classification scores.
 
 .. code-block:: python
 
@@ -150,7 +148,7 @@ The networks in :class:`spikingjelly.activation_based.model.parametric_lif_net` 
         def forward(self, x: torch.Tensor):
             return self.conv_fc(x)
 
-Therefore, we need to average the output in the time-step dimension to get the firing rates, and then calculate the loss and accuracy by the firing rates:
+Use the time-averaged classification scores to compute loss and accuracy:
 
 .. code-block:: python
 
@@ -167,6 +165,8 @@ Train the network:
 .. code-block:: shell
 
     python -m spikingjelly.activation_based.examples.classify_dvsg -T 16 -device cuda:0 -b 16 -epochs 64 -data-dir /datasets/DVSGesture/ -amp -opt adam -lr 0.001 -j 8
+
+The following results come from an older version and have not been rerun on V2.
 
 The outputs are:
 
@@ -258,17 +258,4 @@ The following figure shows the accuracy curves during the training process:
     :width: 100%
 
 
-.. [#PLIF] Fang, Wei, et al. "Incorporating learnable membrane time constant to enhance learning of spiking neural networks." Proceedings of t                                                                                  
-
-Running the examples and interpreting results
--------------------------------------------------
-
-The model runs on its input device automatically. Reset independent batches
-with ``functional.reset_net`` after backward and parameter updates; see
-:doc:`./neuron` for continuous state. AMP and fused neuron execution are separate
-policies. See :doc:`./precision` for state precision and :doc:`./triton_backend`
-for compilation and diagnostics.
-
-The accuracy, curves and logs on this page come from historical experiments;
-some runs lack an exact version. They have not been retrained or verified on
-current V2, so they cannot establish its speed or accuracy.
+.. [#PLIF] Fang, Wei, et al. "Incorporating learnable membrane time constant to enhance learning of spiking neural networks." Proceedings of t

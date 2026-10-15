@@ -13,7 +13,27 @@ Usage
 -------------------------------------------
 All monitors have similar usage. Let us take :class:`spikingjelly.activation_based.monitor.OutputMonitor` as the example.
 
-Firstly, let us build a simple single-step network. To avoid no spikes, we set all weights to be positive:
+Firstly, let us build a simple multi-step network. To avoid no spikes, we set all weights to be positive:
+
+.. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import monitor, neuron, functional, layer
+
+    net = nn.Sequential(
+        layer.Linear(8, 4),
+        neuron.IFNode(),
+        layer.Linear(4, 2),
+        neuron.IFNode()
+    )
+
+    for param in net.parameters():
+        param.data.abs_()
+
+    functional.set_step_mode(net, 'm')
+
+``OutputMonitor`` records outputs of modules matching ``instance``. Use it to record the spikes from every ``neuron.IFNode``:
 
 .. code-block:: python
 
@@ -57,19 +77,6 @@ We can also use the index to get the ``i``-th data:
 
     print(f'spike_seq_monitor[0]={spike_seq_monitor[0]}')
 
-The outputs are:
-
-.. code-block:: shell
-
-    spike_seq_monitor[0]=tensor([[[0., 0., 0., 0.]],
-
-            [[1., 1., 1., 1.]],
-
-            [[0., 0., 0., 0.]],
-
-            [[1., 1., 1., 1.]]])
-    
-
 The names of monitored layers are stored in ``.monitored_layers``:
 
 .. code-block:: python
@@ -100,19 +107,6 @@ We can also use the name as the index to get the recorded data of the layer, whi
 .. code-block:: python
 
     print(f"spike_seq_monitor['1']={spike_seq_monitor['1']}")
-
-The outputs are:
-
-.. code-block:: shell
-
-    spike_seq_monitor['1']=[tensor([[[0., 0., 0., 0.]],
-
-        [[1., 1., 1., 1.]],
-
-        [[0., 0., 0., 0.]],
-
-        [[1., 1., 1., 1.]]])]
-
 
 We can call ``.clear_recorded_data()`` to clear the recorded data:
 
@@ -164,6 +158,7 @@ Then, we can set this function as ``function_on_output`` to get a firing rates m
 .. code-block:: python
 
     with torch.no_grad():
+        functional.reset_net(net)
         fr_monitor.disable()
         net(x_seq)
         functional.reset_net(net)
@@ -190,7 +185,7 @@ Record Attributes
 To record the attributes of some modules, e.g., the membrane potential, we can use :class:`spikingjelly.activation_based.monitor.AttributeMonitor`.
 
 ``store_v_seq: bool = False`` is the default arg in ``__init__`` of spiking neurons, which means only ``v`` at the last time-step will be stored, \
-and ``v_seq`` at each time-step will not be sotred. To record all :math:`V[t]`, we set  ``store_v_seq = True``:
+and ``v_seq`` at each time-step will not be stored. To record all :math:`V[t]`, we set  ``store_v_seq = True``:
 
 .. code-block:: python
 

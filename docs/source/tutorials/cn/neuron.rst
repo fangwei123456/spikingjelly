@@ -9,8 +9,7 @@ English version: :doc:`../en/neuron`
 
 脉冲神经元模型
 -------------------------------------------
-在 ``spikingjelly`` 中，我们约定，只要是输出脉冲，即0或1的神经元，都可以称之为“脉冲神经元”。使用脉冲神经元的网络，进而也可以称之为脉冲神经元网络(Spiking Neural Networks, SNNs)。\
-:class:`spikingjelly.activation_based.neuron` 中定义了各种常见的脉冲神经元模型，我们以 :class:`spikingjelly.activation_based.neuron.IFNode` 为例来介绍脉冲神经元。
+本节以输出 0/1 的 :class:`spikingjelly.activation_based.neuron.IFNode` 为例介绍脉冲神经元。
 
 首先导入相关的模块：
 
@@ -36,9 +35,9 @@ IF神经元层有一些构造参数，在API文档中对这些参数有详细的
     - **surrogate_function** -- 反向传播时用来计算脉冲函数梯度的替代函数
 
 
-你可能会好奇这一层神经元的数量是多少。对于 :class:`spikingjelly.activation_based.neuron.IFNode` 中的绝大多数神经元层，神经元的数量是在初始化或调用 ``reset()`` 函数重新初始化后，根据第一次接收的输入的 ``shape`` 自动决定的。\
+IFNode 的神经元数量由初始化或 ``reset()`` 后首次输入的 ``shape`` 决定。
 
-与RNN中的神经元非常类似，脉冲神经元也是有状态的，或者说是有记忆。脉冲神经元的状态变量，一般是它的膜电位 :math:`V[t]`。因此，:class:`spikingjelly.activation_based.neuron` 中的神经元，都有成员变量 ``v``。可以打印出刚才新建的IF神经元层的膜电位：
+IFNode 的状态是膜电位 ``v``。可以打印出刚才新建的 IF 神经元层的膜电位：
 
 .. code-block:: python
 
@@ -62,7 +61,7 @@ IF神经元层有一些构造参数，在API文档中对这些参数有详细的
     # x.shape=torch.Size([4, 5, 6]), if_layer.v.shape=torch.Size([4, 5, 6])
     if_layer.reset()
 
-脉冲神经元是有状态的，在输入下一个样本前，一定要先调用 ``reset()`` 函数清除之前的状态。
+输入新的独立样本前需要调用 ``reset()``；连续序列见下文。
 
 :math:`V[t]` 和输入 :math:`X[t]` 的关系是什么样的？在脉冲神经元中，:math:`V[t]` 不仅取决于当前时刻的输入 :math:`X[t]`，还取决于它在上一个时刻末的膜电位 :math:`V[t-1]`。
 
@@ -98,7 +97,7 @@ IF神经元层有一些构造参数，在API文档中对这些参数有详细的
 .. code-block:: python
 
     def neuronal_fire(self):
-        self.spike = self.surrogate_function(self.v - self.v_threshold)
+        return self.surrogate_function(self.v - self.v_threshold)
 
 ``surrogate_function()`` 在前向传播时是阶跃函数，只要输入大于或等于0，就会返回1，否则会返回0。我们将这种元素仅为0或1的 ``tensor`` 视为脉冲。
 
@@ -112,13 +111,12 @@ IF神经元层有一些构造参数，在API文档中对这些参数有详细的
 
 .. code-block:: python
 
-    # The following codes are for tutorials. The actual codes are different, but have the similar behavior.
-
-    def neuronal_reset(self):
+    def neuronal_reset(self, spike):
+        spike_d = spike.detach() if self.detach_reset else spike
         if self.v_reset is None:
-            self.v = self.v - self.spike * self.v_threshold
+            self.v = self.v - self.v_threshold * spike_d
         else:
-            self.v = (1. - self.spike) * self.v + self.spike * self.v_reset
+            self.v = spike_d * self.v_reset + (1.0 - spike_d) * self.v
 
 
 描述离散脉冲神经元的三个方程
@@ -347,13 +345,6 @@ Soft方式重置方程为：
 使用平方积分发放神经元进行单步或多步传播：
 
 .. code-block:: python
-
-    import torch
-    from spikingjelly.activation_based import neuron
-
-    class SquareIFNode(neuron.SimpleBaseNode):
-        def neuronal_charge(self, x: torch.Tensor):
-            self.v = self.v + x.square()
 
     sif_layer = SquareIFNode()
 

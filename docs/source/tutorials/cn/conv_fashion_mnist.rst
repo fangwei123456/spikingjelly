@@ -11,9 +11,11 @@ English version: :doc:`../en/conv_fashion_mnist`
 -------------------------------------------
 我们使用最常见的卷积神经网络结构。具体而言，网络结构为：
 
-``{Conv2d-BatchNorm2d-IFNode-MaxPool2d}-{Conv2d-BatchNorm2d-IFNode-MaxPool2d}-{Linear-IFNode}``
+``{Conv2d-BatchNorm2d-IFNode-MaxPool2d}×2 - Flatten - {Linear-IFNode}×2``
 
 网络结构的定义如下：
+
+完整代码见 :mod:`spikingjelly.activation_based.examples.conv_fashion_mnist`。
 
 .. code-block:: python
 
@@ -79,11 +81,11 @@ English version: :doc:`../en/conv_fashion_mnist`
     # spikingjelly.activation_based.examples.conv_fashion_mnist
     class CSNN(nn.Module):
         def forward(self, x: torch.Tensor):
-        # x.shape = [N, C, H, W]
-        x_seq = x.unsqueeze(0).expand(self.T, -1, -1, -1, -1)  # [N, C, H, W] -> [T, N, C, H, W]
-        x_seq = self.conv_fc(x_seq)
-        fr = x_seq.mean(0)
-        return fr
+            # x.shape = [N, C, H, W]
+            x_seq = x.unsqueeze(0).expand(self.T, -1, -1, -1, -1)  # [N, C, H, W] -> [T, N, C, H, W]
+            x_seq = self.conv_fc(x_seq)
+            fr = x_seq.mean(0)
+            return fr
 
 
 网络训练
@@ -116,42 +118,15 @@ English version: :doc:`../en/conv_fashion_mnist`
 
 .. code-block:: shell
 
-    python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt sgd -lr 0.1 -j 8
+    uv run --no-sync python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt sgd -lr 0.1 -j 8
+
+以下结果来自历史版本，未在当前 V2 上复测。
 
 输出为：
 
 .. code-block:: shell
 
     Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
-    CSNN(
-    (conv_fc): Sequential(
-        (0): Conv2d(1, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
-        (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-        (2): IFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
-        (4): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
-        (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-        (6): IFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
-        (8): Flatten(start_dim=1, end_dim=-1, step_mode=m)
-        (9): Linear(in_features=6272, out_features=2048, bias=False)
-        (10): IFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (11): Linear(in_features=2048, out_features=10, bias=False)
-        (12): IFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-    )
-    )
     Mkdir ./logs/T4_b256_sgd_lr0.1_c128_amp.
     Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
     ./logs/T4_b256_sgd_lr0.1_c128_amp
@@ -281,13 +256,3 @@ English version: :doc:`../en/conv_fashion_mnist`
 
 .. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/3/s_3.*
     :width: 100%
-
-运行与实验记录
-----------------------------
-
-模型按输入设备自动运行。处理独立 batch 时，在反向和参数更新后调用
-``functional.reset_net``；连续序列的状态管理见 :doc:`./neuron`。AMP 与神经元的
-融合执行是不同配置，状态精度见 :doc:`./precision`，编译和诊断见 :doc:`./triton_backend`。
-
-本页准确率、曲线和日志沿用历史实验，部分运行未记录精确版本。本轮未在当前 V2
-上重新训练或验证这些结果，不能用它们评估当前实现的速度或准确率。

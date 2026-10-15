@@ -18,6 +18,10 @@ Unreleased
 Fixes
 ~~~~~
 
+- Removed legacy tutorials from the current docs; see the
+  `0.0.0.0.14 documentation <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`__
+  for archived content. The V2 migration guide remains available.
+
 - PyTorch API references use the supported 2.6 documentation rather than
   ``stable`` HTML redirects, keeping external API anchors resolvable.
 - The ``megatron`` extra includes ``psutil``, which MCore requires when saving

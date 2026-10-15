@@ -14,16 +14,7 @@ English version: :doc:`../en/surrogate`
     0, & x < 0
     \end{cases}
 
-按照定义，其导数为冲激函数：
-
-.. math::
-    \delta(x) = 
-    \begin{cases}
-    +\infty, & x = 0 \\
-    0, & x \neq 0
-    \end{cases}
-
-直接使用冲激函数进行梯度下降，显然会使得网络的训练及其不稳定。为了解决这一问题，各种梯度替代法(the surrogate gradient method)被相继提出，参见\
+阶跃函数的导数在 x≠0 处为 0，在 x=0 处不存在，梯度下降得不到有用的梯度。为了解决这一问题，各种梯度替代法(the surrogate gradient method)被相继提出，参见\
 此综述 `Surrogate Gradient Learning in Spiking Neural Networks <https://arxiv.org/abs/1901.09948>`_。
 
 替代函数在神经元中被用于生成脉冲，查看
@@ -110,7 +101,7 @@ English version: :doc:`../en/surrogate`
 
 
 替代函数通常会有1个或多个控制形状的超参数，例如 :class:`spikingjelly.activation_based.surrogate.Sigmoid` 中的 ``alpha``。\
-SpikingJelly中替代函数的形状参数，默认情况下是使得替代函数梯度最大值为1，这在一定程度上可以避免梯度累乘导致的梯度爆炸问题。
+例如 Sigmoid（alpha=4）和 ATan（alpha=2）的默认值使 x=0 处梯度为 1；其他函数见 API 文档。
 
 替代梯度与自动执行
 ----------------------------

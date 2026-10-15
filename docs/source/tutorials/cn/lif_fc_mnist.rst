@@ -48,11 +48,13 @@ English version: :doc:`../en/lif_fc_mnist`
     # 使用泊松编码器
     encoder = encoding.PoissonEncoder()
 
+编码器用法见 :mod:`spikingjelly.activation_based.encoding`。
+
 训练代码的编写需要遵循以下三个要点：
 
 1. 脉冲神经元的输出是二值的，而直接将单次运行的结果用于分类极易受到编码带来的噪声干扰。因此一般认为脉冲网络的输出是输出层一段时间内的\ **发放频率**\ （或称发放率），发放率的高低表示该类别的响应大小。因此网络需要运行一段时间，即使用\ ``T``\ 个时刻后的\ **平均发放率**\ 作为分类依据。
 
-2. 我们希望的理想结果是除了正确的神经元\ **以最高频率发放**\ ，其他神经元\ **保持静默**\ 。常常采用交叉熵损失或者MSE损失，这里我们使用实际效果更好的MSE损失。
+2. 我们希望的理想结果是除了正确的神经元\ **以最高频率发放**\ ，其他神经元\ **保持静默**\ 。这里以 one-hot 发放率为目标，使用 MSE 损失。
 
 3. 每次网络仿真结束后，需要\ **重置**\ 网络状态
 
@@ -113,7 +115,7 @@ English version: :doc:`../en/lif_fc_mnist`
 
     uv run --no-sync python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
 
-需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 相当于使用更小的仿真步长，训练更为“精细”，但训练效果不一定更好。\ ``T``
+需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 不一定带来更好的训练效果。\ ``T``
 太大时，SNN在时间上展开后会变成一个非常深的网络，这将导致BPTT计算梯度时容易衰减或爆炸。
 
 另外由于我们使用了泊松编码器，因此需要较大的 ``T``\ 保证编码带来的噪声不太大。
@@ -126,6 +128,8 @@ English version: :doc:`../en/lif_fc_mnist`
 .. code-block:: shell
 
     python -m spikingjelly.activation_based.examples.lif_fc_mnist -tau 2.0 -T 100 -device cuda:0 -b 64 -epochs 100 -data-dir <PATH to MNIST> -amp -opt adam -lr 1e-3 -j 8
+
+以下结果来自历史版本，未在当前 V2 上复测。
 
 其中为了加快训练速度，启用了混合精度训练。训练100个Epoch后，将会输出两个npy文件以及训练日志。测试集上的最高正确率为92.9%，通过matplotlib可视化得到的正确率曲线如下
 
@@ -151,13 +155,3 @@ English version: :doc:`../en/lif_fc_mnist`
     :width: 100%
 
 可以看到除了正确类别对应的神经元外，其它神经元均未发放任何脉冲。完整的训练代码可见 `activation_based/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/lif_fc_mnist.py>`_ 。
-
-运行与实验记录
-----------------------------
-
-模型按输入设备自动运行。处理独立 batch 时，在反向和参数更新后调用
-``functional.reset_net``；连续序列的状态管理见 :doc:`./neuron`。AMP 与神经元的
-融合执行是不同配置，状态精度见 :doc:`./precision`，编译和诊断见 :doc:`./triton_backend`。
-
-本页准确率、曲线和日志沿用历史实验，部分运行未记录精确版本。本轮未在当前 V2
-上重新训练或验证这些结果，不能用它们评估当前实现的速度或准确率。

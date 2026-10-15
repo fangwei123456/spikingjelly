@@ -1,4 +1,4 @@
-Basic Conception
+Basic Concepts
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
@@ -107,7 +107,7 @@ However, the best usage is to set the module as a multi-step module directly:
     y_seq = net_m(x_seq)
     # y_seq.shape = [T, N, C, H, W]
 
-To maintain compatibility with codes using older versions of SpikingJelly, the default step mode for all modules in SpikingJelly is single-step.
+IFNode, LIFNode and common layers in ``layer`` default to single-step mode; modules such as FlexSN default to multi-step mode. Check each API for its default.
 
 Saving and Resetting of States
 -------------------------------------------
@@ -177,7 +177,7 @@ If we give a new input sample, we should clear the previous states of the neuron
 
 For convenience, we can also call :class:`spikingjelly.activation_based.functional.reset_net` to reset all modules in a network.
 
-If the network uses one or more stateful modules, it must be reset after processing one batch of data during training and inference:
+Reset the network after processing a batch of independent samples:
 
 .. code-block:: python
 
@@ -247,7 +247,7 @@ So, we write codes in the following simple style:
     
     y_seq_layer_by_layer = net(x_seq)
 
-The only difference between step-by-step and layer-by-layer is the building order of the computation graph, and their outputs are identical:
+The two execution orders produce the same results in this example. Training-mode BatchNorm uses different batch statistics (N versus T×N), so its results differ:
 
 .. code-block:: python
 
@@ -316,16 +316,7 @@ The outputs of the above codes are:
     )
     y_seq_step_by_step=
     tensor([[[0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
-            [0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]],
-
-            [[0., 1., 0., 0., 0., 0., 0., 1., 1., 0.],
-            [0., 0., 0., 0., 0., 0., 0., 1., 1., 0.]],
-
-            [[0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
-            [0., 1., 0., 1., 0., 0., 1., 0., 0., 0.]],
-
-            [[0., 1., 0., 0., 0., 0., 1., 0., 1., 0.],
-            [0., 0., 0., 0., 0., 0., 0., 1., 1., 0.]]])
+             ...]])
     max_error=0.0
 
 The following figure shows how the computation graph is built in the step-by-step propagation pattern:

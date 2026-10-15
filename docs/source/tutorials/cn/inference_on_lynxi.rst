@@ -6,10 +6,12 @@
 
     We are looking for contributors to translate this tutorial to English!
 
+本文基于 2022 年 HP300 和当时的 SDK 编写，未在当前硬件和 SDK 上复测。
+
 在GPU上训练float16模型
 -------------------------------------------
 
-我们使用的是 `灵汐科技 <https://www.lynxi.com/>`_ 的lynxi HP300芯片，完全支持float16，对于float32也可支持但会有一定的计算误差。从我们的使用经验来看，使用float32容易出现误差逐层累计的情况，\
+我们使用的是 `灵汐科技 <https://www.lynxi.com/>`_ 的lynxi HP300芯片，完全支持float16，对于float32也可支持但会有一定的计算误差。在上述环境中，使用float32容易出现误差逐层累计的情况，\
 因此最好使用float16。
 
 将 :class:`spikingjelly.activation_based.examples.conv_fashion_mnist` 中的网络稍作更改，改为使用float16训练：

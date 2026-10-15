@@ -9,9 +9,7 @@ This tutorial is about :class:`spikingjelly.activation_based.neuron` and introdu
 
 Spiking Neuron Modules
 -------------------------------------------
-In SpikingJelly, we define the spiking neuron as the neuron that can only output spikes (or tensor whose element can only be 0 or 1). \
-The network which uses spiking neurons is the Spiking Neural Network (SNN). Many frequently-used spiking neurons are defined in :class:`spikingjelly.activation_based.neuron`. \
-Let us use the :class:`spikingjelly.activation_based.neuron.IFNode` as the example to learn how to use neurons in SpikingJelly.
+This section uses :class:`spikingjelly.activation_based.neuron.IFNode`, which outputs 0/1 spikes, to introduce spiking neurons.
 
 Firstly, let us import modules:
 
@@ -38,9 +36,9 @@ There are some parameters for building IF neurons, and we can refer to API docs 
     - **surrogate_function** -- the function for calculating surrogate gradients of the heaviside step function in backward
 
 
-The user may be curious about how many neurons are in this layer. In most of the neurons layer in :class:`spikingjelly.activation_based.neuron.IFNode`, the number of neurons is defined by the ``shape`` of input after this layer is initialized or ``reset()``.
+The number of IFNode neurons is determined by the shape of the first input after initialization or ``reset()``.
 
-Similar to RNN cells, the spiking neuron is stateful (or has memory). The state of spiking neurons is the membrane potentials :math:`V[t]`. All neurons in :class:`spikingjelly.activation_based.neuron` have the attribute ``v``. We can print the ``v``:
+IFNode stores its membrane potential in ``v``. We can print the newly created layer's membrane potential:
 
 .. code-block:: python
 
@@ -64,7 +62,7 @@ We can find that ``if_layer.v`` is ``0.0`` because we have not given the neurons
     # x.shape=torch.Size([4, 5, 6]), if_layer.v.shape=torch.Size([4, 5, 6])
     if_layer.reset()
 
-Note that the spiking neurons are stateful. So, we must call ``reset()`` before we give a new input sample to the spiking neurons.
+Call ``reset()`` before a new independent sample; see below for continuous sequences.
 
 What is the relationship between :math:`V[t]` and :math:`X[t]`? In spiking neurons, :math:`V[t]` is not determined by the input :math:`X[t]` at the current time-step ``t``, but also by the membrane potential :math:`V[t-1]` at the last time-step ``t-1``.
 
@@ -104,7 +102,7 @@ kernels. The core firing expression in ``SimpleBaseNode.neuronal_fire`` is:
 .. code-block:: python
 
     def neuronal_fire(self):
-        self.spike = self.surrogate_function(self.v - self.v_threshold)
+        return self.surrogate_function(self.v - self.v_threshold)
 
 ``surrogate_function()`` is the Heaviside step function in forward, which returns 1 when input is greater or equal to 0, otherwise returns 0. We regard the ``tensor`` whose element is only 0 or 1 as the spike.
 
@@ -120,13 +118,12 @@ If we set ``v_reset = None``, then the neuron will use the soft reset.
 
 .. code-block:: python
 
-    # The following codes are for tutorials. The actual codes are different but have similar behavior.
-
-    def neuronal_reset(self):
+    def neuronal_reset(self, spike):
+        spike_d = spike.detach() if self.detach_reset else spike
         if self.v_reset is None:
-            self.v = self.v - self.spike * self.v_threshold
+            self.v = self.v - self.v_threshold * spike_d
         else:
-            self.v = (1. - self.spike) * self.v + self.spike * self.v_reset
+            self.v = spike_d * self.v_reset + (1.0 - spike_d) * self.v
 
 
 Three equations for describing spiking neurons
@@ -364,13 +361,6 @@ We can implement this kind of neuron by the following codes:
 Use our ``SquareIFNode`` to implement the single/multi-step forward:
 
 .. code-block:: python
-
-    import torch
-    from spikingjelly.activation_based import neuron
-
-    class SquareIFNode(neuron.SimpleBaseNode):
-        def neuronal_charge(self, x: torch.Tensor):
-            self.v = self.v + x.square()
 
     sif_layer = SquareIFNode()
 

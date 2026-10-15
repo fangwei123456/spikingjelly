@@ -72,7 +72,7 @@ Let us create a train set. We set ``data_type='event'`` to use Event data rather
 
 SpikingJelly will do the followed work when running these codes:
 
-#. Check whether the dataset exists. If the dataset exists, check MD5 to ensure the dataset is complete. Then SpikingJelly will extract the original data into the ``extracted`` folder
+#. If the processed data directory is missing, SpikingJelly checks the original files against their MD5 hashes (or downloads them), then extracts them to ``extract``. An existing ``extract`` directory is reused without an integrity check. If preparation is interrupted, follow the error message to clean the partial directory and ``.building`` marker before retrying.
 #. The sample in DVS128 Gesture is the video that records one actor displaying different gestures under different illumination conditions. Hence, an AER sample contains many gestures and there is also an adjoint csv file to label the time stamp of each gesture. Hence, an AER sample is not a sample with one class but multi-classes. SpikingJelly will use multi-threads to cut and extract each gesture from these files.
 
 Cutting and extracting can take some time. On success, an ``events_np`` folder
@@ -105,9 +105,6 @@ The output is:
 
 where ``event`` is a dictionary with keys ``['t', 'x', 'y', 'p']`` ; ``label`` is the label of the sample. Note that there are 11 classes in DVS128 Gesture.
 The values are independent NumPy arrays and ``t`` is measured in microseconds.
-
-If preparation is interrupted, SpikingJelly leaves a sibling ``.building``
-marker. Clean the partial output directory and remove the marker before retrying.
 
 Get Frame Data
 -----------------------
@@ -160,12 +157,14 @@ Fixed Duration Integration
 --------------------------------------
 
 Integrating by fixed duration is more compatible with the practical application. For example, if we set duration as ``10 ms``,
-then a sample with length ``L ms`` can be integrated to frames with frame number ``math.floor(L / 10)``. However, the lengths
+then a sample whose first and last events are ``L ms`` apart can be integrated to frames with frame number ``math.ceil(L / 10)``. However, the lengths
 of samples in neuromorphic datasets are not identical, and we will get frames with different frame numbers when integrating
 with a fixed duration. Fortunately, we can use :class:`spikingjelly.datasets.utils.pad_sequence_collate` and
 :class:`spikingjelly.datasets.utils.padded_sequence_mask` to pad/unpad frames.
 
 Example codes:
+
+DVS128 Gesture timestamps are in microseconds, so ``duration=1000000`` is one second.
 
 .. code:: python
 

@@ -12,7 +12,7 @@
 从头搭建一个 `层内连接增强的脉冲行动器网络 <https://ieeexplore.ieee.org/document/10423179>`_
 -----------------------------------------------------------------------------------------------
 
-我们使用TD3算法将层内连接增强的脉冲行动器网络（ILC-SAN）与深度行动器网络进行协调训练。ILC-SAN首先采用群体编码器将状态编码为对应的脉冲序列，然后经由骨干SNN处理后输入到群体解码器中，得到最终的连续动作，其具体代码如下：
+我们使用TD3算法将层内连接增强的脉冲行动器网络（ILC-SAN）与两个深度评价器（critic）网络协同训练。ILC-SAN首先采用群体编码器将状态编码为对应的脉冲序列，然后经由骨干SNN处理后输入到群体解码器中，得到最终的连续动作，其具体代码如下：
 
 .. code-block:: python
 
@@ -182,7 +182,7 @@ ILC-SAN 的完整代码位于 ``spikingjelly/activation_based/examples/ilc_san``
       --encode ENC                      the type of population encoder, e.g., "pop-det", "pop-ran" or "pop-raw"
       --decode DEC                      the type of population decoder, e.g., "fr-mlp", "last-mem", "max-mem", "max-abs-mem" or "mean-mem"
 
-需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 相当于使用更小的仿真步长，训练更为“精细”，但训练效果不一定更好。\ ``T``
+需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 不一定带来更好的训练效果。\ ``T``
 太大时，SNN在时间上展开后会变成一个非常深的网络，这将导致BPTT计算梯度时容易衰减或爆炸。
 
 训练结果

@@ -17,8 +17,6 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 * :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` ：将 SpikingJelly 模型导出为 NIR 图；
 * :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` ：将 NIR 图导入为 SpikingJelly 模型。
 
-本教程将对这两个函数展开介绍。
-
 .. note::
 
     使用以下命令安装 NIR exchange 可选依赖：
@@ -30,7 +28,7 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 从 SpikingJelly 到 NIR
 ==========================
 
-由于开发者精力有限且 NIR 本身只能表示少数几种模块，故目前 :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` 只支持以下 SpikingJelly / PyTorch 模块的转换：
+:func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` 支持转换以下模块：
 
 * ``torch.nn.Linear``, :class:`layer.Linear <spikingjelly.activation_based.layer.Linear>`
 * ``torch.nn.Conv1d``, :class:`layer.Conv1d <spikingjelly.activation_based.layer.Conv1d>`

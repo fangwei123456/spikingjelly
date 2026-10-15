@@ -199,6 +199,8 @@ Sequential FashionMNIST上的对比实验
 
     python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt sgd -lr 0.1 -j 8 -model ss
 
+以下结果来自历史版本，未在当前 V2 上复测。
+
 下图展示了3种网络的训练曲线：
 
 .. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/rsnn_train_acc.*
@@ -216,13 +218,3 @@ Sequential FashionMNIST上的对比实验
 .. [#Unsupervised] Diehl P U, Cook M. Unsupervised learning of digit recognition using spike-timing-dependent plasticity[J]. Frontiers in computational neuroscience, 2015, 9: 99.
 
 .. [#Exploiting] Fang H, Shrestha A, Zhao Z, et al. Exploiting Neuron and Synapse Filter Dynamics in Spatial Temporal Learning of Deep Spiking Neural Network[J].
-
-运行与实验记录
-----------------------------
-
-模型按输入设备自动运行。处理独立 batch 时，在反向和参数更新后调用
-``functional.reset_net``；连续序列的状态管理见 :doc:`./neuron`。AMP 与神经元的
-融合执行是不同配置，状态精度见 :doc:`./precision`，编译和诊断见 :doc:`./triton_backend`。
-
-本页准确率、曲线和日志沿用历史实验，部分运行未记录精确版本。本轮未在当前 V2
-上重新训练或验证这些结果，不能用它们评估当前实现的速度或准确率。

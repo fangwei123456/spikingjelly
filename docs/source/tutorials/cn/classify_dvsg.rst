@@ -109,7 +109,7 @@ SpikingJelly的多步模式使用的 ``shape = [T, N, C, H, W]``：
 
     # spikingjelly.activation_based.examples.classify_dvsg
 
-     def main():
+    def main():
         # ...
         for epoch in range(start_epoch, args.epochs):
             for frame, label in train_data_loader:
@@ -119,10 +119,10 @@ SpikingJelly的多步模式使用的 ``shape = [T, N, C, H, W]``：
                 # ...
 
             with torch.no_grad():
-            for frame, label in test_data_loader:
-                frame = frame.to(args.device)
-                frame = frame.transpose(0, 1)  # [N, T, C, H, W] -> [T, N, C, H, W]
-                # ...
+                for frame, label in test_data_loader:
+                    frame = frame.to(args.device)
+                    frame = frame.transpose(0, 1)  # [N, T, C, H, W] -> [T, N, C, H, W]
+                    # ...
 
         # ...
 
@@ -137,7 +137,7 @@ DVS Gesture有11类，因此在生成one hot的target时别忘了设置为11类�
         label_onehot = F.one_hot(label, 11).float()
         # ...
 
-``DVSGestureNet`` 输出的并不是脉冲发放频率，而是 ``shape = [T, N, 11]`` 的原始输出：
+``DVSGestureNet`` 输出形状为 ``[T, N, 11]``。末层 ``VotingLayer`` 对每组 10 个神经元取平均，所以每步输出不是二值脉冲；对时间维取平均得到分类分数。
 
 .. code-block:: python
 
@@ -148,7 +148,7 @@ DVS Gesture有11类，因此在生成one hot的target时别忘了设置为11类�
         def forward(self, x: torch.Tensor):
             return self.conv_fc(x)
 
-因此，我们需要对输出在时间维度上求平均后，得到脉冲发放频率，然后才去计算损失和正确率：
+使用时间平均后的分类分数计算损失和正确率：
 
 .. code-block:: python
 
@@ -165,6 +165,8 @@ DVS Gesture有11类，因此在生成one hot的target时别忘了设置为11类�
 .. code-block:: shell
 
     python -m spikingjelly.activation_based.examples.classify_dvsg -T 16 -device cuda:0 -b 16 -epochs 64 -data-dir /datasets/DVSGesture/ -amp -opt adam -lr 0.001 -j 8
+
+以下结果来自历史版本，未在当前 V2 上复测。
 
 得到输出为：
 
@@ -257,13 +259,3 @@ DVS Gesture有11类，因此在生成one hot的target时别忘了设置为11类�
 
 
 .. [#PLIF] Fang, Wei, et al. "Incorporating learnable membrane time constant to enhance learning of spiking neural networks." Proceedings of t
-
-运行与实验记录
-----------------------------
-
-模型按输入设备自动运行。处理独立 batch 时，在反向和参数更新后调用
-``functional.reset_net``；连续序列的状态管理见 :doc:`./neuron`。AMP 与神经元的
-融合执行是不同配置，状态精度见 :doc:`./precision`，编译和诊断见 :doc:`./triton_backend`。
-
-本页准确率、曲线和日志沿用历史实验，部分运行未记录精确版本。本轮未在当前 V2
-上重新训练或验证这些结果，不能用它们评估当前实现的速度或准确率。

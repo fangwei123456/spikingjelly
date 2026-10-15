@@ -9,23 +9,10 @@ English version: :doc:`../en/distributed_training`
 4 卡 RTX 4090 上的吞吐和显存结果。
 Vision 与 LLM 使用不同的精度配置入口，见 :doc:`./precision`。
 
-API 设计动机
-------------
-
-API 按工作负载分为 ``vision`` 和 ``llm``。Spiking CNN 以通道和特征图为主，LLM
-则围绕 token、attention 和 context parallel；两者共用一套模型描述会产生大量分支。
-公共概念仍保持一致：``ModelConfig`` 描述模型，``ModelBuilder`` 接入模型实现，
-``TrainingConfig`` 和 ``EvaluationConfig`` 分别描述训练与有标签评测，prediction 与
-generation config 描述无标签输出。
-
-并行能力尽量复用现有运行时。PyTorch 提供 DP、FSDP2、device mesh 和视觉 pipeline；
-Megatron Core 提供 LLM 的 TP、PP、CP、distributed optimizer 和 sharded checkpoint。
-SpikingJelly 负责 SNN 时间布局、状态重置、通道分片层和 memopt。LLM builder 返回
-MCore 的 ``model_provider`` / ``forward_step``，Vision builder 返回 pipeline stage、
-FSDP2 roots 和边界形状。高层入口管理生命周期，自定义任务可直接组合底层组件。
-
 高层 API
 --------
+
+``ModelConfig`` 描述模型，``ModelBuilder`` 接入模型实现，``TrainingConfig`` 和 ``EvaluationConfig`` 分别描述训练与有标签评测，prediction 与 generation config 描述无标签输出。
 
 视觉模型
 ~~~~~~~~
@@ -278,7 +265,7 @@ LLM 提供两个目的不同的 backend：
     * - 大规模 prompt corpus、continuous batching 和 KV-cache 调度
       - SGLang
     * - HTTP/router、多租户或 SLA serving
-      - 本轮不支持
+      - 不支持
 
 MCore evaluation 与 SGLang generation 回答不同问题，不能用同一套 batch、显存或
 吞吐 protocol 横向比较。
@@ -1101,8 +1088,8 @@ bubble 尚未摊薄。请求数增至 64 后，同一 workload 下单卡为 1031
 吞吐；这一结果不代表单请求延迟也会降低。
 
 Qwen2.5-0.5B 的 DP4 使用每个 replica 32 个请求，总 output 吞吐为 5845.5
-tokens/s，是单卡 1486.5 tokens/s 的 3.93 倍，TPOT 基本不变。单卡的 2048-token
-共享前缀 workload 将 input 吞吐提高 18.3 倍。CSV 也保留了小模型 PP2 的中位数，
+tokens/s，是单卡 1486.5 tokens/s 的 3.93 倍，TPOT 基本不变。单卡输入从 128 tokens 增至 2176 tokens（共享前缀为 2048 tokens）时，
+p99 TTFT 从 116.8 ms 增至 138.6 ms，输出吞吐基本不变（1486.5 → 1517.1 tokens/s）。CSV 也保留了小模型 PP2 的中位数，
 该点仍低于单卡。并行拓扑需要按模型规模和并发选择。
 
 容量测试还将 12.6B SpikeLM 导出为 564 个 tensor、25,173,851,048 bytes，并在

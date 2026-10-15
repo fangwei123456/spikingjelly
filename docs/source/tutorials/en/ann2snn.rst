@@ -12,14 +12,11 @@ Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https:/
     #. This page covers the current FX graph Recipe API for rate-coded CNN conversion: ``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` define the algorithm, and ``FXConverter`` executes it (``Converter`` is the compatibility name).
     #. :doc:`Transformer ANN2SNN conversion <ann2snn_transformer>` covers ``STATransformerRecipe``, ``SpikeZIPTFQANNRecipe``, and offline multi-step ``Qwen2SNNRecipe`` conversion.
 
-    Legacy API tutorials remain available:
-
-    #. :doc:`Older clock-driven-era ANN2SNN API <../../legacy_tutorials/en/5_ann2snn>`.
-    #. :doc:`Legacy pre-Recipe Converter API <../../legacy_tutorials/en/ann2snn_converter_legacy>`, which used ``Converter(mode=..., dataloader=...)`` and ``convert_to_spiking_neurons(model)``.
+    For older ANN2SNN APIs, see the `0.0.0.0.14 documentation <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en>`_.
 
 This tutorial focuses on ``spikingjelly.activation_based.ann2snn``. It shows how to convert a trained feedforward ANN to an SNN using the Recipe API and simulate the result.
 
-ANN2SNN API references are available `here <https://spikingjelly.readthedocs.io/zh_CN/latest/APIs/spikingjelly.activation_based.ann2snn.html>`_.
+See :mod:`spikingjelly.activation_based.ann2snn` for API references.
 
 The rate-coding path covered on this page is based on ``torch.fx``. ``torch.fx`` traces ``nn.Module`` instances into a graph representation, which is then transformed by ANN2SNN FX recipes. ANN2SNN also provides ``ModuleConverter`` for conversions that directly replace an ``nn.Module`` tree without FX tracing, such as SpikeZIP and Qwen2; see the Transformer ANN2SNN tutorial for those paths.
 
@@ -102,7 +99,7 @@ The two curves are nearly identical. However, the firing rate cannot exceed 1, s
 Theoretical proof
 ^^^^^^^^^^^^^^^^^
 
-Literature [#f1]_ provides an analytical basis for ANN-to-SNN conversion. The theory shows that an IF neuron in an SNN is an unbiased estimator of the ReLU activation over time.
+Literature [#f1]_ shows that, for constant input in ``[0, V_threshold]``, the firing rate of an IF neuron with subtractive reset approaches the normalized ReLU activation as T increases.
 
 Consider the first layer. Let the firing rate of SNN neurons be :math:`r` and the corresponding ANN activation be :math:`a`. Assume constant input :math:`z \in [0,1]`. For an IF neuron with subtractive reset, the membrane potential evolves as:
 
@@ -141,15 +138,15 @@ Converting to spiking neural network
 
 Conversion addresses two problems:
 
-1. ANNs use Batch Normalization to speed up training. It normalizes activations to zero mean, which conflicts with SNN properties. The BN parameters can be absorbed into the preceding parameter layers (Linear, Conv2d).
+1. During inference, BN is a fixed affine transformation that can be folded into the preceding convolution, removing the separate BN module after conversion.
 
 2. According to the conversion theory, each layer's inputs and outputs must lie within [0, 1], requiring parameter scaling (model normalization).
 
 ◆ BatchNorm parameter absorption
 
 Assume that the parameters of BatchNorm are: :math:`\gamma` (``BatchNorm.weight``), :math:`\beta` (``BatchNorm.bias``), :math:`\mu` (``BatchNorm.running_mean``) ,
-:math:`\sigma` (``BatchNorm.running_var``, :math:`\sigma = \sqrt{\mathrm{running\_var}}`). For specific parameter definitions, see
-`torch.nn.BatchNorm1d <https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html#torch.nn.BatchNorm1d>`_ . A parameter module (e.g. Linear) has weight :math:`W` and bias :math:`b`. BatchNorm absorption folds the BatchNorm parameters into :math:`W` and :math:`b` so the new module produces the same output as the original module-plus-BatchNorm pair. The resulting :math:`\bar{W}` and :math:`\bar{b}` are:
+:math:`\sigma` (including the numerical stability term ``eps``, :math:`\sigma = \sqrt{\mathrm{running\_var} + \mathrm{eps}}`). For specific parameter definitions, see
+`torch.nn.BatchNorm1d <https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html#torch.nn.BatchNorm1d>`_ . A convolutional layer has weight :math:`W` and bias :math:`b`. BatchNorm absorption folds the BatchNorm parameters into :math:`W` and :math:`b` so the new module produces the same output as the original module-plus-BatchNorm pair. The resulting :math:`\bar{W}` and :math:`\bar{b}` are:
 
 .. math::
     \bar{W} = \frac{\gamma}{\sigma} W
@@ -308,7 +305,7 @@ Set the runtime options:
         dataset=test_data_dataset, batch_size=50, shuffle=True, drop_last=False
     )
 
-The example script downloads a pretrained checkpoint. The entrypoint ``download_checkpoint`` wraps the download logic, falling back to streamed ``requests`` download when ``download_url`` fails. Load the checkpoint and validate the ANN first:
+The example script downloads a pretrained checkpoint. Load the weights and validate the ANN first:
 
 .. code-block:: python
 
@@ -384,35 +381,6 @@ The ANN is trained and validated. Select the rate-coding recipe, pass the determ
       )
     )
 
-With ``RateCodingRecipe``, ``snn_model`` is an ``fx.GraphModule``; see `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_.
-
-Call ``GraphModule.graph.print_tabular()`` to inspect the computation graph:
-
-.. code-block:: shell
-
-    # snn_model.graph.print_tabular()
-    opcode       name                       target                     args                          kwargs
-    -----------  -------------------------  -------------------------  ----------------------------  ------
-    placeholder  x                          x                          ()                            {}
-    call_module  network_0                  network.0                  (x,)                          {}
-    call_module  network_spiking_0_scaler0  network.spiking_0.scaler0  (network_0,)                  {}
-    call_module  network_spiking_0_if_node  network.spiking_0.if_node  (network_spiking_0_scaler0,)  {}
-    call_module  network_spiking_0_scaler1  network.spiking_0.scaler1  (network_spiking_0_if_node,)  {}
-    call_module  network_3                  network.3                  (network_spiking_0_scaler1,)  {}
-    call_module  network_4                  network.4                  (network_3,)                  {}
-    call_module  network_spiking_1_scaler0  network.spiking_1.scaler0  (network_4,)                  {}
-    call_module  network_spiking_1_if_node  network.spiking_1.if_node  (network_spiking_1_scaler0,)  {}
-    call_module  network_spiking_1_scaler1  network.spiking_1.scaler1  (network_spiking_1_if_node,)  {}
-    call_module  network_7                  network.7                  (network_spiking_1_scaler1,)  {}
-    call_module  network_8                  network.8                  (network_7,)                  {}
-    call_module  network_spiking_2_scaler0  network.spiking_2.scaler0  (network_8,)                  {}
-    call_module  network_spiking_2_if_node  network.spiking_2.if_node  (network_spiking_2_scaler0,)  {}
-    call_module  network_spiking_2_scaler1  network.spiking_2.scaler1  (network_spiking_2_if_node,)  {}
-    call_module  network_11                 network.11                 (network_spiking_2_scaler1,)  {}
-    call_module  network_12                 network.12                 (network_11,)                 {}
-    call_module  network_13                 network.13                 (network_12,)                 {}
-    output       output                     output                     (network_13,)                 {}
-
 Other recipes and custom recipes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -467,6 +435,8 @@ Following this example, we can compare timestep convergence curves for different
     python -m spikingjelly.activation_based.ann2snn.examples.cnn_mnist \
       --time-steps 50 \
       --plot-mode-sweep
+
+Historical documentation record: `237dde3e <https://github.com/fangwei123456/spikingjelly/commit/237dde3e>`_ (2026-06-26); NVIDIA GeForce RTX 4090; not rerun on current V2.
 
 The following output was measured with ``T=50`` on an NVIDIA GeForce RTX 4090:
 
@@ -552,6 +522,8 @@ The table below is generated by this command. RobustNorm uses ``RateCodingRecipe
       - 32
       - 98.53
 
+Historical documentation record: `83b836be <https://github.com/fangwei123456/spikingjelly/commit/83b836be>`_ (2026-06-28); hardware not recorded; not rerun on current V2.
+
 ResNet-18 conversion
 --------------------
 
@@ -606,6 +578,8 @@ The ``robust_legacy`` recipe name denotes the legacy scalar-threshold ``RateCodi
       - 32
       - 65.472
       - 86.636
+
+Historical documentation record: `33766fc7 <https://github.com/fangwei123456/spikingjelly/commit/33766fc7>`_ (2026-07-05); hardware not recorded; not rerun on current V2.
 
 Scalar-threshold robust normalization without per-channel normalization achieves only 12.462% Top-1 on this deeper ImageNet CNN. The LTB recipe raises it to 65.472% Top-1.
 

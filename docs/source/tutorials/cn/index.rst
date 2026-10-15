@@ -51,7 +51,6 @@ GPU 使用与编译见
 
 .. toctree::
     :maxdepth: 1
-    :caption: 老版本相关
+    :caption: 版本迁移
 
     /tutorials/cn/migrate_from_legacy
-    /legacy_tutorials/cn/legacy_tutorials

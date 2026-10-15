@@ -38,21 +38,21 @@ English version: :doc:`../en/spikformer`
 
             self.q_linear = nn.Linear(dim, dim)
             self.q_bn = nn.BatchNorm1d(dim)
-            self.q_lif = neuron.LIFNode(step_mode="m")
+            self.q_lif = neuron.LIFNode(step_mode="m", detach_reset=True)
 
             self.k_linear = nn.Linear(dim, dim)
             self.k_bn = nn.BatchNorm1d(dim)
-            self.k_lif = neuron.LIFNode(step_mode="m")
+            self.k_lif = neuron.LIFNode(step_mode="m", detach_reset=True)
 
             self.v_linear = nn.Linear(dim, dim)
             self.v_bn = nn.BatchNorm1d(dim)
-            self.v_lif = neuron.LIFNode(step_mode="m")
+            self.v_lif = neuron.LIFNode(step_mode="m", detach_reset=True)
 
-            self.attn_lif = neuron.LIFNode(step_mode="m")
+            self.attn_lif = neuron.LIFNode(step_mode="m", v_threshold=0.5, detach_reset=True)
 
             self.proj_linear = nn.Linear(dim, dim)
             self.proj_bn = nn.BatchNorm1d(dim)
-            self.proj_lif = neuron.LIFNode(step_mode="m")
+            self.proj_lif = neuron.LIFNode(step_mode="m", detach_reset=True)
 
         def forward(self, x):
             T,B,N,C = x.shape
@@ -149,15 +149,15 @@ SpikingJelly ``0.0.0.1.0`` 提供了 SSA 的高效实现 :class:`SpikingSelfAtte
                 nn.Conv1d(dim, dim * 3, kernel_size=1, stride=1, bias=False),
                 nn.BatchNorm1d(dim*3),
             )
-            self.qkv_lif = neuron.LIFNode(step_mode="m")
+            self.qkv_lif = neuron.LIFNode(step_mode="m", detach_reset=True)
 
-            self.attn_lif = neuron.LIFNode(step_mode="m")
+            self.attn_lif = neuron.LIFNode(step_mode="m", v_threshold=0.5, detach_reset=True)
 
             self.proj_conv_bn = SeqToANNContainer(
                 nn.Conv1d(dim, dim, kernel_size=1, stride=1, bias=False),
                 nn.BatchNorm1d(dim),
             )
-            self.proj_lif = neuron.LIFNode(step_mode="m")
+            self.proj_lif = neuron.LIFNode(step_mode="m", detach_reset=True)
 
         def forward(self, x_seq: torch.Tensor):
             T, B, C, N = x_seq.shape
@@ -181,12 +181,6 @@ SpikingJelly ``0.0.0.1.0`` 提供了 SSA 的高效实现 :class:`SpikingSelfAtte
 
     使用 token-last 张量格式后，``MLP`` 的实现方式也应从 ``Linear`` 改为 ``Conv1d``，以避免不必要的涉及数据复制的 ``reshape`` 操作。
 
-训练脉冲Transformer
-------------------------------
-脉冲Transformer的训练与SEW ResNet不同，后者需要的轮次较少且收敛较快，而Spikformer通常需要更多的轮次才能收敛。
-以ImageNet为例，SEW ResNet只需150轮次，Spikformer需要训练200轮以上，性能随着训练轮次的增加而提升。
-此外，学习率更新方式和数据增强策略也对Spikformer性能影响较大。
-
 改进脉冲Transformer
 -------------------------------
 脉冲自注意力机制的建模形式尚处于开放探索阶段，已有多种改进，改进点的具体位置有：改进QKV的形式和计算方式，增强QKV的时空关注能力，设计脉冲位置编码和SSA分块加速等。
@@ -196,23 +190,7 @@ SpikingJelly ``0.0.0.1.0`` 提供了 SSA 的高效实现 :class:`SpikingSelfAtte
 .. image:: ../../_static/tutorials/spikformer/spikingresformer.png
     :width: 100%
 
-以及Spike-driven Transformer V1、V2和V3和QKformer等等，详见 `此处 <https://scholar.google.com.hk/scholar?oi=bibs&hl=zh-CN&cites=12209743464525142624&as_sdt=5>`_
 
 
 .. [#spikformer] Zhou Zhaokun, Zhu Yuesheng, He Chao, Wang Yaowei, Yan Shuicheng, Tian Yonghong, Yuan Li. Spikformer: When Spiking Neural Network Meets Transformer [C]. Proceedings of International Conference on Learning Representations, 2023.
 .. [#spikingresformer] Shi Xinyu, Hao Zecheng, Yu Zhaofei. SpikingResformer: Bridging ResNet and Vision Transformer in Spiking Neural Networks [C]. Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2024: 5610-5619.
-
-运行与实验记录
-----------------------------
-
-模型按输入设备自动运行。处理独立 batch 时，在反向和参数更新后调用
-``functional.reset_net``；连续序列的状态管理见 :doc:`./neuron`。AMP 与神经元的
-融合执行是不同配置，状态精度见 :doc:`./precision`，编译和诊断见 :doc:`./triton_backend`。
-
-本页准确率、曲线和日志沿用历史实验，部分运行未记录精确版本。本轮未在当前 V2
-上重新训练或验证这些结果，不能用它们评估当前实现的速度或准确率。
-
-模型结构教学片段保留原有表达；测速请使用仓库 ``benchmark/README.md`` 中的
-标准 Spikformer 流程。使用 ``benchmark.benchmark_snn_single_gpu case`` 做未 profile
-测量；使用 ``tools/nsys/nsys_snn.sh`` 捕获，再用 ``tools/nsys/analyze_nsys_snn.py``
-分析归因。具体参数以 ``--help`` 和 benchmark 文档为准，不将 profile 耗时当作稳定延迟。

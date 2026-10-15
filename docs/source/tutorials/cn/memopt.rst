@@ -5,7 +5,7 @@
 
 English version: :doc:`../en/memopt`
 
-本团队在ICLR 2026发表的新工作 `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ 提出了基于梯度检查点和脉冲压缩的深度SNN训练显存自动优化工具（源代码位于 `Github <https://github.com/AllenYolk/snn-gradient-checkpointing>`_ ）。利用该工具，用户只需添加少量代码，便可以在不损失精度且不过多影响速度的前提下，大幅降低深度SNN训练时的显存占用。
+本团队在ICLR 2026发表的新工作 `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ 提出了基于梯度检查点和脉冲压缩的深度SNN训练显存自动优化工具（源代码位于 `Github <https://github.com/AllenYolk/snn-gradient-checkpointing>`_ ）。只需几行代码即可显著降低深度 SNN 的训练显存；对精度和速度的影响见下文实验。
 
 该工具已经集成到 ``spikingjelly.activation_based.memopt`` 子包中，提供手工检查点、自动搜索和分布式训练接口。
 
@@ -15,7 +15,7 @@ English version: :doc:`../en/memopt`
 显存占用分析
 ---------------------
 
-从图1可以看出，SNN的训练显存峰值远大于结构相似的ANN。而且， **中间特征** （下图浅蓝色部分）占据了SNN峰值显存的绝大部分（96%以上）；这些中间特征在前向传播期间被缓存下来，以供反向传播计算梯度时使用。因此，减少中间特征显存占用是降低SNN训练显存的关键。
+从图1可以看出，SNN的训练显存峰值远大于结构相似的ANN。而且， **中间特征** （下图浅蓝色部分）占据了SNN峰值显存的绝大部分（图 1 中的模型和配置下超过 96%）；这些中间特征在前向传播期间被缓存下来，以供反向传播计算梯度时使用。因此，减少中间特征显存占用是降低SNN训练显存的关键。
 
 .. figure:: ../../_static/tutorials/memopt/memory-bar.png
     :width: 100%

@@ -39,21 +39,21 @@ In the Spiking Self Attention mechanism, Query, Key, and Value are all spike seq
 
             self.q_linear = nn.Linear(dim, dim)
             self.q_bn = nn.BatchNorm1d(dim)
-            self.q_lif = neuron.LIFNode(step_mode="m")
+            self.q_lif = neuron.LIFNode(step_mode="m", detach_reset=True)
 
             self.k_linear = nn.Linear(dim, dim)
             self.k_bn = nn.BatchNorm1d(dim)
-            self.k_lif = neuron.LIFNode(step_mode="m")
+            self.k_lif = neuron.LIFNode(step_mode="m", detach_reset=True)
 
             self.v_linear = nn.Linear(dim, dim)
             self.v_bn = nn.BatchNorm1d(dim)
-            self.v_lif = neuron.LIFNode(step_mode="m")
+            self.v_lif = neuron.LIFNode(step_mode="m", detach_reset=True)
 
-            self.attn_lif = neuron.LIFNode(step_mode="m")
+            self.attn_lif = neuron.LIFNode(step_mode="m", v_threshold=0.5, detach_reset=True)
 
             self.proj_linear = nn.Linear(dim, dim)
             self.proj_bn = nn.BatchNorm1d(dim)
-            self.proj_lif = neuron.LIFNode(step_mode="m")
+            self.proj_lif = neuron.LIFNode(step_mode="m", detach_reset=True)
 
         def forward(self, x):
             T,B,N,C = x.shape
@@ -150,15 +150,15 @@ The resulting ``SpikingSelfAttention`` module is shown below (for illustration p
                 nn.Conv1d(dim, dim * 3, kernel_size=1, stride=1, bias=False),
                 nn.BatchNorm1d(dim*3),
             )
-            self.qkv_lif = neuron.LIFNode(step_mode="m")
+            self.qkv_lif = neuron.LIFNode(step_mode="m", detach_reset=True)
 
-            self.attn_lif = neuron.LIFNode(step_mode="m")
+            self.attn_lif = neuron.LIFNode(step_mode="m", v_threshold=0.5, detach_reset=True)
 
             self.proj_conv_bn = SeqToANNContainer(
                 nn.Conv1d(dim, dim, kernel_size=1, stride=1, bias=False),
                 nn.BatchNorm1d(dim),
             )
-            self.proj_lif = neuron.LIFNode(step_mode="m")
+            self.proj_lif = neuron.LIFNode(step_mode="m", detach_reset=True)
 
         def forward(self, x_seq: torch.Tensor):
             T, B, C, N = x_seq.shape
@@ -183,12 +183,6 @@ The resulting ``SpikingSelfAttention`` module is shown below (for illustration p
     If token-last format is adopted, the implementation of ``MLP`` should also be changed from ``Linear`` to ``Conv1d`` in order to avoid unnecessary ``reshape`` operations that involve data copying.
 
 
-Training Spiking Transformer
------------------------------
-The training of Spiking Transformer is different from SEW ResNet, which requires fewer epochs and converges quickly, while Spikformer generally requires more epochs to converge.
-Taking ImageNet as an example, SEW ResNet only needs 150 epochs, while Spikformer needs more than 200 epochs, with performance increasing as training epochs increase.
-Additionally, the learning rate update method and data augmentation strategy also have a significant impact on Spikformer's performance.
-
 Improving Spiking Transformer
 -----------------------------
 The modeling form of Spiking Self Attention mechanism is still in open exploration, and there are multiple improvements, including: improving the form and calculation method of QKV, enhancing spatial-temporal attention capability of QKV, designing spike position encoding, and accelerating SSA block splitting.
@@ -199,29 +193,8 @@ Some Spikformer variants include: SpikingResformer [#spikingresformer]_, as show
     :width: 100%
 
 
-As well as Spike-driven Transformer V1, V2, and V3, and QKformer, etc. See `here <https://scholar.google.com.hk/scholar?oi=bibs&hl=en&cites=12209743464525142624&as_sdt=5>`_ for details.
 
 
 
 .. [#spikformer] Zhou Zhaokun, Zhu Yuesheng, He Chao, Wang Yaowei, Yan Shuicheng, Tian Yonghong, Yuan Li. Spikformer: When Spiking Neural Network Meets Transformer [C]. Proceedings of International Conference on Learning Representations, 2023.
 .. [#spikingresformer] Shi Xinyu, Hao Zecheng, Yu Zhaofei. SpikingResformer: Bridging ResNet and Vision Transformer in Spiking Neural Networks [C]. Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2024: 5610-5619.
-
-Running the examples and interpreting results
--------------------------------------------------
-
-The model runs on its input device automatically. Reset independent batches
-with ``functional.reset_net`` after backward and parameter updates; see
-:doc:`./neuron` for continuous state. AMP and fused neuron execution are separate
-policies. See :doc:`./precision` for state precision and :doc:`./triton_backend`
-for compilation and diagnostics.
-
-The accuracy, curves and logs on this page come from historical experiments;
-some runs lack an exact version. They have not been retrained or verified on
-current V2, so they cannot establish its speed or accuracy.
-
-Model-structure fragments retain their original teaching form. Use the standard
-Spikformer workflow in the repository's ``benchmark/README.md``: unprofiled
-``benchmark.benchmark_snn_single_gpu case`` measurements, captures with
-``tools/nsys/nsys_snn.sh`` and attribution with ``tools/nsys/analyze_nsys_snn.py``.
-Check ``--help``/benchmark documentation for options; profiler latency is not
-steady-state latency.

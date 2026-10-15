@@ -78,19 +78,6 @@ English version: :doc:`../en/monitor`
 
     print(f'spike_seq_monitor[0]={spike_seq_monitor[0]}')
 
-输出为：
-
-.. code-block:: shell
-
-    spike_seq_monitor[0]=tensor([[[0., 0., 0., 0.]],
-
-            [[1., 1., 1., 1.]],
-
-            [[0., 0., 0., 0.]],
-
-            [[1., 1., 1., 1.]]])
-    
-
 ``.monitored_layers`` 记录了被监视器监控的层的名字：
 
 .. code-block:: python
@@ -121,18 +108,6 @@ English version: :doc:`../en/monitor`
 .. code-block:: python
 
     print(f"spike_seq_monitor['1']={spike_seq_monitor['1']}")
-
-输出为：
-
-.. code-block:: shell
-
-    spike_seq_monitor['1']=[tensor([[[0., 0., 0., 0.]],
-
-        [[1., 1., 1., 1.]],
-
-        [[0., 0., 0., 0.]],
-
-        [[1., 1., 1., 1.]]])]
 
 可以通过调用 ``.clear_recorded_data()`` 来清空已经记录的数据：
 

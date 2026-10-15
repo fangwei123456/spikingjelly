@@ -6,6 +6,8 @@ See :doc:`./triton_backend`
 for GPU execution/compilation and :doc:`./precision` for numerical policies.
 Use :doc:`./flexsn` for custom dynamics and :doc:`./migrate_from_legacy` for old code.
 
+The following tutorials are currently available only in Chinese: :doc:`DSQN <../cn/dsqn>`, :doc:`ILC-SAN <../cn/ilc_san>`, and :doc:`Lynxi inference <../cn/inference_on_lynxi>`.
+
 .. toctree::
     :maxdepth: 1
     :caption: Basics
@@ -48,7 +50,6 @@ Use :doc:`./flexsn` for custom dynamics and :doc:`./migrate_from_legacy` for old
 
 .. toctree::
     :maxdepth: 1
-    :caption: About Old Versions
+    :caption: Version migration
 
     /tutorials/en/migrate_from_legacy
-    /legacy_tutorials/en/legacy_tutorials_en

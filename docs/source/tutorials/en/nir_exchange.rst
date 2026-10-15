@@ -17,8 +17,6 @@ The ``nir_exchange`` package provides two key interfaces:
 * :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` : export a SpikingJelly model to an NIR graph;
 * :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` : convert an NIR graph to a SpikingJelly model.
 
-This tutorial provides a detailed introduction to these two functions.
-
 .. note::
 
     Install the NIR exchange optional dependencies with:
@@ -30,7 +28,7 @@ This tutorial provides a detailed introduction to these two functions.
 From SpikingJelly to NIR
 ============================
 
-Due to limited development resources and the fact that NIR itself can only represent a small number of module types, the current :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` function supports conversion only for the following SpikingJelly / PyTorch modules:
+:func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` supports the following modules:
 
 * ``torch.nn.Linear``, :class:`layer.Linear <spikingjelly.activation_based.layer.Linear>`
 * ``torch.nn.Conv1d``, :class:`layer.Conv1d <spikingjelly.activation_based.layer.Conv1d>`

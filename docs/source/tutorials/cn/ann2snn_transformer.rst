@@ -7,27 +7,36 @@ English version: :doc:`../en/ann2snn_transformer`
 
 本页介绍 ``spikingjelly.activation_based.ann2snn`` 中面向 Transformer 的 ANN2SNN 转换路径，包括 ``TransformerTDEquivalentRecipe`` 基线、基于 Spatio-Temporal Approximation (STA) [#sta]_ 的 ``STATransformerRecipe``、用于 SpikeZIP-compatible QANN 的 ``SpikeZIPTFQANNRecipe`` [#spikezip]_，以及基于校准的 ``Qwen2SNNRecipe``。如果要做经典 CNN 上的 ReLU-to-IFNode rate coding 转换，请阅读 :doc:`ann2snn`。
 
-本教程按从简单到复杂的顺序组织四条 Transformer 转换路径：
+.. list-table::
+    :header-rows: 1
 
-* **Path 1: TransformerTDEquivalentRecipe 基线**。这是最直接的 TD-equivalent operator replacement 路径，用 BERT SST-2 说明语言分类模型在 embedding 输出之后的转换边界。
-* **Path 2: Spatio-Temporal Approximation (STA) Transformer 转换**。这是 ``STATransformerRecipe`` 的模型级增强路径，沿用累计差分和显式 step-mode 读出思想，并进一步加入 dataloader 校准和 spike encoder；本页在 ViT-B/16 ImageNet 上展示完整结果。
-* **Path 3: SpikeZIP QANN-to-SNN 转换**。这是 ``SpikeZIPTFQANNRecipe`` 的 module-tree 路径，输入必须已经是 SpikeZIP-compatible QANN；本页给出 synthetic RoBERTa parity 和 ViT-Small ImageNet 复现实验入口。
-* **Path 4: Qwen2 离线多步转换**。``Qwen2SNNRecipe`` 校准 Hugging Face Qwen2 causal LM，并使用当前 SpikingJelly TD 算子和 signed activation-aware IF 神经元转换全部 decoder block。
+    * - Recipe
+      - 输出
+      - 是否二值
+      - 执行方式
+    * - ``TransformerTDEquivalentRecipe``
+      - 浮点差分
+      - 否
+      - 单步／多步
+    * - ``STATransformerRecipe``
+      - 有符号整数计数 × 阈值
+      - 否
+      - 单步／多步
+    * - ``SpikeZIPTFQANNRecipe``
+      - 有符号三值
+      - 否
+      - 单步／多步
+    * - ``Qwen2SNNRecipe``
+      - 有符号 IF 脉冲与浮点差分
+      - 否
+      - 离线多步
 
-.. warning::
-
-    STA 转换不是严格意义上的 fully spike-driven SNN 转换。``mode="spiking_encoder"`` 的输出是 "整数脉冲数 × 校准阈值" 的量化值；膜电位为负时整数脉冲数也可以为负，因此输出不是二值脉冲 tensor。
-
-    ``STATransformerRecipe`` 因此应视为 training-free 的 Transformer ANN2SNN 近似流程，不承诺 fully spike-driven LLM 转换。以整数 token 作为输入的语言模型需要额外定义输入和 embedding 的转换契约。转换后的 STA 模型是有状态的，遵循 SpikingJelly ``step_mode`` 的单步与多步执行语义。
-
-.. warning::
-
-    SpikeZIP 路径使用的 ST-BIF 神经元支持带符号三值输出，也不是严格的二值脉冲神经元。用严格 SNN 定义对比不同转换方法时，这一点需要单独说明。
+以下示例用于推理。
 
 Path 1: 差分等价基线
 -------------------------------------------
 
-``TransformerTDEquivalentRecipe`` 是一个不需要 dataloader 的替换路径：把当前支持的 Transformer 算子替换为 TD-equivalent 模块。它是本页最小的 Transformer 转换基线：不做 STA 校准，也不维护内部时间循环，只依赖已有 TD 算子表达累计差分。它不会产生脉冲，也不插入脉冲神经元，转换后模块输出的是浮点差分值。因此，它的产物并不是 SNN。
+``TransformerTDEquivalentRecipe`` 是一个不需要 dataloader 的替换路径：把当前支持的 Transformer 算子替换为 TD-equivalent 模块。它是本页最小的 Transformer 转换基线：不做 STA 校准，也不维护内部时间循环，只依赖已有 TD 算子表达累计差分。
 
 后面的 ``STATransformerRecipe`` 可以理解为同一累计差分和显式 step-mode 思路的模型级增强：它加入 dataloader 校准和 spike encoder，并面向完整 Transformer FX graph。二者不是同一个 recipe，也不是严格的 API 超集；它们的支持边界和实验含义不同。
 
@@ -152,6 +161,8 @@ Hugging Face 依赖是可选依赖，只在运行该示例时安装：
       - 872
       - 8
       - 92.431
+
+历史文档记录： `0e24f7d3 <https://github.com/fangwei123456/spikingjelly/commit/0e24f7d3>`_ （2026-07-05）；NVIDIA A100-SXM4-80GB；未在当前 V2 上复测。
 
 Accuracy 下降 0.000 个百分点。评测前，示例会先在前两个 batch 上比对 FX-friendly wrapper 与原 Hugging Face classifier 的 logits。本次 ``batch_size=32`` 的完整运行中，ANN wrapper 推理耗时约 1.60 秒，转换模型约 9.20 秒。关键 stdout 行如下：
 
@@ -338,6 +349,8 @@ ViT-B/16 ImageNet 示例
       - 80.700
       - 95.202
 
+历史文档记录： `d7ed92d8 <https://github.com/fangwei123456/spikingjelly/commit/d7ed92d8>`_ （2026-07-05）；NVIDIA A100-SXM4-80GB；未在当前 V2 上复测。
+
 Top-1 下降 0.368 个百分点。本次 ``batch_size=16`` 的完整运行中，ANN baseline 推理耗时约 181.6 秒，STA 转换模型耗时约 1834.0 秒。wall-clock time 对运行环境比较敏感；如需对比 single-step 和 multi-step 耗时，请使用专门的 step-mode benchmark。
 
 关键 stdout 行如下：
@@ -415,6 +428,8 @@ Synthetic RoBERTa parity 示例
       - 3.278e-07
       - 8.630e-08
 
+历史文档记录： `39ba6e93 <https://github.com/fangwei123456/spikingjelly/commit/39ba6e93>`_ （2026-07-07）；CPU；未在当前 V2 上复测。
+
 SpikeZIP ViT-Small ImageNet Benchmark
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -460,6 +475,8 @@ SpikeZIP ViT-Small ImageNet Benchmark
       - 81.566
       - 96.034
       - ``step_mode="m"``，CUDA 实现自动选择
+
+历史文档记录： `39ba6e93 <https://github.com/fangwei123456/spikingjelly/commit/39ba6e93>`_ （2026-07-07）；NVIDIA A100-SXM4-80GB；未在当前 V2 上复测。
 
 Top-1 差值为 ``+0.090`` 个百分点，Top-1 prediction agreement 为 ``97.34%``。QANN 推理耗时 ``79.20`` 秒；SNN 推理耗时 ``3719.15`` 秒（``61.99`` 分钟），使用 ``snn_batch_size=4``，峰值 CUDA allocated memory 为 ``25.63`` GiB。benchmark 中 ``parity_pass=false`` 是因为该字段使用 ``torch.allclose(snn_logits, qann_logits, atol=parity_atol, rtol=1e-5)`` 检查 logits；本次记录的 ``parity_atol`` 为 ``1e-4``。
 
@@ -660,12 +677,6 @@ Q/K/V 编码边界时才分别求和并重新编码。类似地，一个 block �
 dense Qwen 之间只应剩下浮点和算子实现误差，而 ``signed_if`` 还包含每个编码
 边界的舍入和饱和误差。
 
-当前公共 recipe 没有“把 ``[x,0,...,0]`` 送入 IF 并继续运行 T 步”的第三种
-模式。对于当前无泄漏、soft-reset、每步至多发放一次的 IF，这种 front-loaded
-输入在理想算术下可以得到与恒定 :math:`x/T` 输入相同的总脉冲计数，但发放时刻
-不同，也需要相同的 round-to-even 边界处理。它仍然是量化并受 T 限幅的 IF
-路径，不能等同于不经过神经元的 ``exact_td``。
-
 T、校准 levels 与量化误差
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -780,7 +791,7 @@ Qwen2 校准会为每个通道估计绝对激活边界 :math:`R`。当
 
 校准状态只包含张量和基础 Python 值，可用
 ``Qwen2SNNCalibration.from_state_dict(torch.load(..., weights_only=True))``
-恢复；校准元数据必须与转换配置完全一致。CPU 使用 Torch 参考实现；CUDA 会自动选择兼容的 STBIF 推理实现。
+恢复；校准元数据必须与转换配置完全一致。CPU 使用 Torch 参考实现；CUDA 自动选择兼容的 ActivationAwareIF 推理实现。
 
 正式质量证据
 ^^^^^^^^^^^^^^
@@ -818,11 +829,11 @@ dense accuracy 减去 SNN accuracy 的百分点。
      - 8.57%
      - 0.41 / 1.96
 
+历史文档记录： `c98d8ac4 <https://github.com/fangwei123456/spikingjelly/commit/c98d8ac4>`_ （2026-07-22）；NVIDIA A100；未在当前 V2 上复测。表中 T、levels、quantile 为保留的转换参数；完整 ``quality_eval.py``／``quality_aggregate.py`` 运行参数未记录。
+
 这些结果只证明离线逐层调度的质量，不代表延迟或能耗优势。在 A100 实测中，高 T
 路径仍显著慢于 dense Qwen。3B checkpoint 受 Qwen Research License 约束，
-SpikingJelly 不重新分发该权重。``benchmark/snn_llm/qwen_conversion/README.md``
-记录了本表对应的固定 revision、验收阈值、report digest、正确性证据和性能
-provenance。
+SpikingJelly 不重新分发该权重。运行方式见 ``benchmark/snn_llm/qwen_conversion/README.md``。
 
 .. [#sta] Jiang Y., et al., "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers", ICLR 2024.
 

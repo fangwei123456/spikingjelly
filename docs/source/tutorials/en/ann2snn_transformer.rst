@@ -7,27 +7,36 @@ Author: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_
 
 This page introduces Transformer-oriented ANN2SNN paths in ``spikingjelly.activation_based.ann2snn``, including the ``TransformerTDEquivalentRecipe`` baseline, ``STATransformerRecipe`` based on Spatio-Temporal Approximation (STA) [#sta]_, ``SpikeZIPTFQANNRecipe`` for SpikeZIP-compatible QANNs [#spikezip]_, and calibration-driven ``Qwen2SNNRecipe`` conversion. For classical ReLU-to-IFNode rate-coding conversion on CNNs, see :doc:`ann2snn`.
 
-This page orders four Transformer ANN2SNN paths from the simplest to the most specialized:
+.. list-table::
+    :header-rows: 1
 
-* **Path 1: TransformerTDEquivalentRecipe baseline**. This is the most direct TD-equivalent operator replacement path. The BERT SST-2 example shows the conversion boundary for language classification models after the embedding output.
-* **Path 2: Spatio-Temporal Approximation (STA) Transformer conversion**. This is the model-level enhanced path implemented by ``STATransformerRecipe``. It keeps the cumulative-difference and explicit step-mode readout idea, then adds dataloader calibration and spike encoders. This page reports a full ViT-B/16 ImageNet result.
-* **Path 3: SpikeZIP QANN-to-SNN conversion**. This is the ``SpikeZIPTFQANNRecipe`` module-tree path. The input must already be a SpikeZIP-compatible QANN. This page gives a synthetic RoBERTa parity check and a ViT-Small ImageNet reproducibility entry point.
-* **Path 4: Qwen2 offline multi-step conversion**. ``Qwen2SNNRecipe`` calibrates a Hugging Face Qwen2 causal LM and converts every decoder block with current SpikingJelly TD operators and signed activation-aware IF neurons.
+    * - Recipe
+      - Output
+      - Binary
+      - Execution
+    * - ``TransformerTDEquivalentRecipe``
+      - Floating-point differences
+      - No
+      - Single/multi-step
+    * - ``STATransformerRecipe``
+      - Signed integer counts × threshold
+      - No
+      - Single/multi-step
+    * - ``SpikeZIPTFQANNRecipe``
+      - Signed ternary values
+      - No
+      - Single/multi-step
+    * - ``Qwen2SNNRecipe``
+      - Signed IF spikes and floating-point differences
+      - No
+      - Offline multi-step
 
-.. warning::
-
-    STA conversion is not a strict fully spike-driven SNN conversion. ``mode="spiking_encoder"`` emits a quantized value equal to an integer spike count, possibly negative for negative residuals, multiplied by a calibrated threshold, not a binary spike tensor.
-
-    ``STATransformerRecipe`` should therefore be read as a training-free Transformer ANN2SNN approximation, not as a promise of fully spike-driven LLM conversion. Language models that take integer tokens need a separate input and embedding contract. Converted STA models are stateful and follow SpikingJelly ``step_mode`` semantics for single-step and multi-step execution.
-
-.. warning::
-
-    The ST-BIF neuron used by the SpikeZIP path supports signed ternary outputs and is also not a strict binary-spike neuron. This distinction matters when comparing conversion methods under a strict SNN definition.
+The examples below are for inference.
 
 Path 1: Differential-equivalence Baseline
 -----------------------------------------
 
-``TransformerTDEquivalentRecipe`` is a dataloader-free replacement path that swaps supported Transformer operators for TD-equivalent modules. It is the smallest Transformer conversion baseline on this page: it performs no STA calibration, owns no internal timestep loop, and relies on existing TD operators to express cumulative differences. It does not emit spikes or insert spiking neurons, and converted modules return floating-point difference values. Therefore, its output is not an SNN.
+``TransformerTDEquivalentRecipe`` is a dataloader-free replacement path that swaps supported Transformer operators for TD-equivalent modules. It is the smallest Transformer conversion baseline on this page: it performs no STA calibration, owns no internal timestep loop, and relies on existing TD operators to express cumulative differences.
 
 The later ``STATransformerRecipe`` can be understood as a model-level enhancement of the same cumulative-difference and explicit step-mode idea. It adds dataloader calibration and spike encoders, and targets a complete Transformer FX graph. The two recipes are not the same API and neither is a strict superset of the other; their support boundaries and result interpretations differ.
 
@@ -80,7 +89,7 @@ For ordinary ANN inference on one sample :math:`x`, the common differential inpu
 BERT SST-2 Example
 ^^^^^^^^^^^^^^^^^^
 
-``TransformerTDEquivalentRecipe`` converts common Transformer core operators into TD-equivalent stateful modules, so the converted model can run single-step or multi-step inference with the SpikingJelly ``step_mode`` contract. In addition to the BERT operators below, the recipe converts ``nn.RMSNorm`` to ``TDRMSNorm`` and both ``nn.SiLU`` and ``torch.nn.functional.silu`` to ``TDSiLU``. Their outputs are floating-point temporal differences, not binary spikes. This example uses BERT-style SST-2 classification and places the conversion boundary after the embedding output: the original Hugging Face BERT embedding layer still consumes integer ``input_ids``, while the ANN2SNN graph starts from floating-point ``embedding_output`` and ``extended_attention_mask`` and covers the encoder, pooler, dropout, and classifier wrapper. The runnable example is ``spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_td_equivalent``.
+``TransformerTDEquivalentRecipe`` converts common Transformer core operators into TD-equivalent stateful modules, so the converted model can run single-step or multi-step inference with the SpikingJelly ``step_mode`` contract. In addition to the BERT operators below, the recipe converts ``nn.RMSNorm`` to ``TDRMSNorm`` and both ``nn.SiLU`` and ``torch.nn.functional.silu`` to ``TDSiLU``. This example uses BERT-style SST-2 classification and places the conversion boundary after the embedding output: the original Hugging Face BERT embedding layer still consumes integer ``input_ids``, while the ANN2SNN graph starts from floating-point ``embedding_output`` and ``extended_attention_mask`` and covers the encoder, pooler, dropout, and classifier wrapper. The runnable example is ``spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_td_equivalent``.
 
 Hugging Face packages are optional; install them only when running this example:
 
@@ -152,6 +161,8 @@ The full SST-2 validation run below was measured on an NVIDIA A100-SXM4-80GB wit
       - 872
       - 8
       - 92.431
+
+Historical documentation record: `0e24f7d3 <https://github.com/fangwei123456/spikingjelly/commit/0e24f7d3>`_ (2026-07-05); NVIDIA A100-SXM4-80GB; not rerun on current V2.
 
 The accuracy drop is 0.000 percentage points. Before evaluation, the example checks the logit alignment between the FX-friendly wrapper and the original Hugging Face classifier on the first two batches. In this full run with ``batch_size=32``, the ANN wrapper took about 1.60 seconds and the converted model about 9.20 seconds. The key stdout lines are:
 
@@ -336,6 +347,8 @@ The full ImageNet validation run below was measured on an NVIDIA A100-SXM4-80GB 
       - 80.700
       - 95.202
 
+Historical documentation record: `d7ed92d8 <https://github.com/fangwei123456/spikingjelly/commit/d7ed92d8>`_ (2026-07-05); NVIDIA A100-SXM4-80GB; not rerun on current V2.
+
 The Top-1 drop is 0.368 percentage points. In this full run with ``batch_size=16``, the ANN baseline took about 181.6 seconds and the converted STA model about 1834.0 seconds. Wall-clock time is sensitive to runtime conditions; for single-step versus multi-step timing, use the dedicated step-mode benchmarks.
 
 The key stdout lines are:
@@ -413,6 +426,8 @@ The result below was measured on CPU with the command above. It shows that the S
       - 3.278e-07
       - 8.630e-08
 
+Historical documentation record: `39ba6e93 <https://github.com/fangwei123456/spikingjelly/commit/39ba6e93>`_ (2026-07-07); CPU; not rerun on current V2.
+
 SpikeZIP ViT-Small ImageNet Benchmark
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -458,6 +473,8 @@ The full validation result below was measured on ``g2`` with an NVIDIA A100-SXM4
       - 81.566
       - 96.034
       - ``step_mode="m"`` with automatic CUDA execution
+
+Historical documentation record: `39ba6e93 <https://github.com/fangwei123456/spikingjelly/commit/39ba6e93>`_ (2026-07-07); NVIDIA A100-SXM4-80GB; not rerun on current V2.
 
 The Top-1 difference is ``+0.090`` percentage points, and the Top-1 prediction agreement is ``97.34%``. QANN inference took ``79.20`` seconds; SNN inference took ``3719.15`` seconds (``61.99`` minutes), using ``snn_batch_size=4`` and peaking at ``25.63`` GiB of allocated CUDA memory. In the benchmark output, ``parity_pass=false`` because that field checks logits with ``torch.allclose(snn_logits, qann_logits, atol=parity_atol, rtol=1e-5)``; this run used ``parity_atol=1e-4``.
 
@@ -680,14 +697,6 @@ differences should remain between ``exact_td`` and dense Qwen, while
 ``signed_if`` additionally incurs rounding and saturation error at every
 encoding boundary.
 
-The public recipe currently has no third mode that sends ``[x,0,...,0]`` into
-an IF neuron and continues running it for T steps. For the current non-leaky,
-soft-reset IF with at most one spike per step, that front-loaded input can
-produce the same total spike count as constant :math:`x/T` input in ideal
-arithmetic. Its spike times differ, and it needs the same round-to-even boundary
-handling. It remains a quantized, T-limited IF path and is not equivalent to
-``exact_td``, which bypasses neurons.
-
 T, calibration levels, and quantization error
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -813,8 +822,7 @@ requires the pinned WikiText-2 calibration protocol in
 The calibration state contains tensors and basic Python values and can be
 restored with ``Qwen2SNNCalibration.from_state_dict(torch.load(...,
 weights_only=True))``. Calibration metadata must exactly match the conversion
-configuration. Use the CPU uses the Torch reference; CUDA automatically selects a compatible
-inference implementation for STBIF.
+configuration. On CPU it uses the Torch reference; on CUDA it automatically selects a compatible ActivationAwareIF inference implementation.
 
 Reference quality evidence
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -852,13 +860,12 @@ dense-minus-SNN accuracy percentage points across those tasks.
      - 8.57%
      - 0.41 / 1.96
 
+Historical documentation record: `c98d8ac4 <https://github.com/fangwei123456/spikingjelly/commit/c98d8ac4>`_ (2026-07-22); NVIDIA A100; not rerun on current V2. The table retains T, levels and quantile; the complete ``quality_eval.py``/``quality_aggregate.py`` run arguments were not recorded.
+
 These are quality results for an offline layerwise schedule, not latency or
 energy claims. High-T execution remains substantially slower than dense Qwen
 on the evaluated A100 GPU. The 3B checkpoint is governed by the Qwen Research
-License; SpikingJelly does not redistribute it. The benchmark README at
-``benchmark/snn_llm/qwen_conversion/README.md`` records the pinned revisions,
-acceptance thresholds, report digests, correctness evidence, and performance
-provenance behind this table.
+License; SpikingJelly does not redistribute it. See ``benchmark/snn_llm/qwen_conversion/README.md`` for run instructions.
 
 .. [#sta] Jiang Y., et al., "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers", ICLR 2024.
 

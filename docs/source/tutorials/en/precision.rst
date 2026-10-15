@@ -486,10 +486,9 @@ automatically dispatched LIF, the RTX 5090 end-to-end results are:
 
 The training row uses 1024 classes only to satisfy the current TE FP8 backward
 16-alignment requirement; an ImageNet-1000 head currently fails with
-``lda % 16 == 0``. Nsight shows that FP8 autocast covers only TE pointwise
+``lda % 16 == 0``. For the FP32 fallback configuration, Nsight shows that FP8 autocast covers only TE pointwise
 Conv1d/Linear modules; patch-stem Conv2d, BatchNorm, and LIF outputs fall back
-to FP32, adding elementwise, copy, and layout kernels. Choose FP16/BF16 for
-Spikformer until that boundary is fixed; do not infer a Spikformer win from the
+to FP32, adding elementwise, copy, and layout kernels. FP16/BF16 is faster for Spikformer in the configurations measured here; do not infer a Spikformer win from the
 FC-SNN Triton result. Reproduce a single-GPU profile with:
 
 .. code-block:: bash
@@ -538,8 +537,7 @@ Choosing a mode
 ---------------
 
 Start with BF16. Try FP8 for FC-SNN only with automatically dispatched LIF and matrix sizes near
-the table's crossover. For CNN/neuron-heavy models such as Spikformer, continue
-with FP16/BF16 until the FP32 boundary is optimized. Profile against the
+the table's crossover. FP16/BF16 is faster for Spikformer in the configurations measured here. Profile against the
 end-to-end step; FP8 memory may exceed BF16 and is not a memory-optimization
 switch.
 

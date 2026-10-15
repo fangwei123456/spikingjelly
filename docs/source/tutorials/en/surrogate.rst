@@ -16,16 +16,7 @@ The Heaviside function is:
     0, & x < 0
     \end{cases}
 
-Its derivative is the unit impulse function, which is defined by: 
-
-.. math::
-    \delta(x) = 
-    \begin{cases}
-    +\infty, & x = 0 \\
-    0, & x \neq 0
-    \end{cases}
-
-If we use the unit impulse function to calculate the gradient and apply the gradient descent, the training will be very unstable. To solve this problem, the surrogate gradient method \
+The step function has zero derivative for x≠0 and no derivative at x=0, so gradient descent receives no useful gradient. To solve this problem, the surrogate gradient method \
 is proposed. Refer to `Surrogate Gradient Learning in Spiking Neural Networks <https://arxiv.org/abs/1901.09948>`_ for more details.
 
 The surrogate function is used to generate spikes, as shown by
@@ -107,7 +98,7 @@ Here is an example of using the functional API:
     print(f'x.grad={x.grad}')
 
 Most surrogate functions have one or many hyper-parameters to control the shape, e.g., ``alpha`` of :class:`spikingjelly.activation_based.surrogate.Sigmoid`. \
-In SpikingJelly, the default shape hyper-parameters are set to make the maximum of the surrogate function's gradient to be 1, which can relieve the gradient vanishing or exploding problem caused by the cumulative product of gradients.
+For example, the defaults of Sigmoid (alpha=4) and ATan (alpha=2) give a gradient of 1 at x=0. See the API documentation for other functions.
 
 Surrogates and automatic execution
 ----------------------------------

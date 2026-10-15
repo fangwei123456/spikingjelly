@@ -292,6 +292,7 @@ MNIST CSNN示例
 
 .. code-block:: python
 
+    functional.set_step_mode(net, "m")
     encoder = encoding.PoissonEncoder(step_mode='m')
     # ...
     for img, label in train_data_loader:
@@ -304,6 +305,7 @@ MNIST CSNN示例
         loss = F.cross_entropy(fr, label)
         loss.backward()
         optimizer.step()
+        functional.reset_net(net)
         # ...
 
 当我们训练完成后，将网络转换到Lava DL，并检查测试集的正确率：

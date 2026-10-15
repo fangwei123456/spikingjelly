@@ -180,7 +180,7 @@ The workflow for using Lava DL is:
 For more details, please refer to `Lava: Deep Learning <https://lava-nc.org/dl.html#deep-learning>`_.
 
 `Blocks <https://lava-nc.org/lava-lib-dl/slayer/block/modules.html>`_ can be regarded as the ensemble of a synapse layer and a neuron layer. For example, \
-:class:`lava.lib.dl.slayer.block.cuba.Conv` is composed of a convolutional layer and a CUDA LIF neuron layer.
+:class:`lava.lib.dl.slayer.block.cuba.Conv` is composed of a convolutional layer and a CUBA (current-based) LIF neuron layer.
 
 Note that ``Blocks`` is designed for SNN deployment. Thus, synapses and neuronal dynamics are quantized in ``Blocks``. Thus, ``Blocks`` is not a simple \
 ``synapse + neuron ``, but ``quantize(synapse) + quantize(neuron)``.
@@ -306,6 +306,7 @@ reduce accuracy. An example of the training codes is:
 
 .. code-block:: python
 
+    functional.set_step_mode(net, "m")
     encoder = encoding.PoissonEncoder(step_mode='m')
     # ...
     for img, label in train_data_loader:
@@ -318,6 +319,7 @@ reduce accuracy. An example of the training codes is:
         loss = F.cross_entropy(fr, label)
         loss.backward()
         optimizer.step()
+        functional.reset_net(net)
         # ...
 
 

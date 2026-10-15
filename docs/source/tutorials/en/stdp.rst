@@ -158,7 +158,7 @@ Run each step and record trajectories. Slice batch/feature zero for plotting:
     learner.close()
 
 
-The complete codes are available at ``spikingjelly/activation_based/examples/plasticity/stdp_trace.py``:
+The complete codes are available at ``spikingjelly/activation_based/examples/plasticity/stdp_trace.py``.
 
 Let us plot ``in_spike, out_spike, trace_pre, trace_post, weight``:
 
@@ -580,6 +580,8 @@ The example targets a three-seed mean of at least 90%; individual seeds may fall
      - 90.06%
      - 84.06%
      - +6.00
+
+Historical documentation record: `da6ff9a9 <https://github.com/fangwei123456/spikingjelly/commit/da6ff9a9>`_ (2026-10-12); V100S-PCIE-32GB; not rerun on current V2.
 
 Mean accuracy is 90.2233%, population standard deviation is 0.2894 percentage points,
 and mean paired improvement is 6.4667 percentage points. Every seed uses all 10,000 test

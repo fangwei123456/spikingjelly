@@ -10,28 +10,10 @@ custom model and loop integration, and throughput and memory results from four
 RTX 4090 GPUs.
 Vision and LLM use different precision entry points; see :doc:`./precision`.
 
-API design rationale
---------------------
-
-The API separates ``vision`` and ``llm`` workloads. Spiking CNNs are organized
-around channels and feature maps, whereas LLMs are organized around tokens,
-attention, and context parallelism. Sharing one model description would add
-branches rather than simplify either path. The common vocabulary remains small:
-``ModelConfig`` describes a model, ``ModelBuilder`` connects its implementation,
-``TrainingConfig`` and ``EvaluationConfig`` describe training and labeled
-evaluation, and prediction or generation configs describe unlabeled output.
-
-Parallel execution comes from the native runtime whenever possible. PyTorch
-provides DP, FSDP2, device meshes, and Vision pipelines. Megatron Core provides
-LLM TP, PP, CP, the distributed optimizer, and sharded checkpoints. SpikingJelly
-adds SNN temporal layout, state reset, channel-sharded layers, and memopt. An LLM
-builder returns MCore's ``model_provider`` / ``forward_step`` callbacks; a Vision
-builder returns pipeline stages, FSDP2 roots, and boundary shapes. High-level
-entry points own lifecycle management, while custom workloads can compose the
-low-level pieces directly.
-
 High-level APIs
 ---------------
+
+``ModelConfig`` describes a model, ``ModelBuilder`` connects its implementation, ``TrainingConfig`` and ``EvaluationConfig`` describe training and labeled evaluation, and prediction or generation configs describe unlabeled output.
 
 Vision models
 ~~~~~~~~~~~~~
@@ -1204,8 +1186,7 @@ single-request latency.
 
 Qwen2.5-0.5B DP4 uses 32 requests per replica and reaches 5845.5 aggregate
 output tokens/s, 3.93x the one-GPU 1486.5 tokens/s, with effectively unchanged
-TPOT. A one-GPU workload with a 2048-token shared prefix raises input throughput
-18.3x. The CSV also includes small-model PP2, which remains slower than one GPU.
+TPOT. On one GPU, increasing the input from 128 to 2176 tokens with a 2048-token shared prefix raises p99 TTFT from 116.8 ms to 138.6 ms, while output throughput stays similar (1486.5 to 1517.1 tokens/s). The CSV also includes small-model PP2, which remains slower than one GPU.
 Choose topology for the model size and request concurrency.
 
 The capacity test also exported a 12.6B SpikeLM artifact containing 564 tensors

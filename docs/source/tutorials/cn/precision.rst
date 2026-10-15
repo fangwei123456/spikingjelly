@@ -457,9 +457,9 @@ W4096/depth20 的 requested FP8 tracked dense-MAC coverage 为 100%。
       - 0.778x / 0.918x
       - 4398.4 MiB
 
-nsys 显示 FP8 autocast 只覆盖 TE 的 pointwise Conv1d/Linear；patch-stem Conv2d、
+在 FP32 fallback 配置下，nsys 显示 FP8 autocast 只覆盖 TE 的 pointwise Conv1d/Linear；patch-stem Conv2d、
 BatchNorm 和 LIF 输出都回到 FP32，产生额外的 elementwise、copy 和 layout kernel。
-所以当前 Spikformer 应选择 FP16/BF16；不要用 FC-SNN 的 Triton 结果推断
+在本页测量配置下，Spikformer 使用 FP16/BF16 更快；不要用 FC-SNN 的 Triton 结果推断
 Spikformer 也会加速。可以用下面的命令重新采集单卡 profile（``--profile``
 通过 ``cudaProfilerApi`` 限定采集区间）：
 
@@ -505,7 +505,7 @@ dense-MAC coverage 为 41.98%。当前 RTX 5090 软件栈没有 FP8 Conv2d，不
 --------
 
 默认先用 BF16。FC-SNN 只有在使用 automatically dispatched LIF 且矩阵达到表中规模后才建议测试 FP8；
-Spikformer 等 CNN/神经元占比较高的模型，在完成 FP32 边界优化前继续使用 FP16/BF16。
+在本页测量配置下，Spikformer 使用 FP16/BF16 更快。
 profile 必须以端到端 step 为准；FP8 的显存也可能高于 BF16，不应把它当作显存优化开关。
 
 使用仓库 benchmark 在目标 GPU 上重测交叉点：

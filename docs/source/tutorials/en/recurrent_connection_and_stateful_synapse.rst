@@ -12,7 +12,7 @@ Recurrent connection is the connection from outputs to inputs, e.g., the SRNN(re
 .. image:: ../../_static/tutorials/15_recurrent_connection_and_stateful_synapse/SRNN_example.*
     :width: 100%
 
-We can add recurrent connection to modules by SpikingJelly easily. Considering the most simple case that we add a recurrent connection to the spiking neruons layer to make its \
+We can add recurrent connection to modules by SpikingJelly easily. Considering the most simple case that we add a recurrent connection to the spiking neurons layer to make its \
 outputs :math:`s[t]` at time-step :math:`t` add to the external input :math:`x[t+1]` as the input to the neuron at the next time-step. We can use :class:`spikingjelly.activation_based.layer.ElementWiseRecurrentContainer` to implement this idea.\ 
 :class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.ElementWiseRecurrentContainer>` is a container that add a recurrent connection to any ``sub_module``.\ 
 The connection can be specified as a user-defined element-wise operation :math:`z=f(x, y)`. Denote :math:`x[t]` as the external input for the whole module (container and ``sub_module``) at time-step :math:`t`, :math:`i[t]` and :math:`y[t]` are the input and output of ``sub_module`` \
@@ -30,7 +30,7 @@ Let us use ``ElementWiseRecurrentContainer`` to wrap one IF neuron. We set the e
 
     i[t] = x[t] + y[t-1].
 
-The external intpus are :math:`x[t]=[1.5, 0, ..., 0]`:
+The external inputs are :math:`x[t]=[1.5, 0, ..., 0]`:
 
 .. code-block:: python
 
@@ -200,6 +200,8 @@ Train three networks:
 
     python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt sgd -lr 0.1 -j 8 -model ss
 
+The following results come from an older version and have not been rerun on V2.
+
 The following figures show the accuracy curves during training:
 
 .. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/rsnn_train_acc.*
@@ -217,16 +219,3 @@ We can find that both ``StatefulSynapseNet`` and ``FeedBackNet`` have higher acc
 .. [#Unsupervised] Diehl P U, Cook M. Unsupervised learning of digit recognition using spike-timing-dependent plasticity[J]. Frontiers in computational neuroscience, 2015, 9: 99.
 
 .. [#Exploiting] Fang H, Shrestha A, Zhao Z, et al. Exploiting Neuron and Synapse Filter Dynamics in Spatial Temporal Learning of Deep Spiking Neural Network[J].
-
-Running the examples and interpreting results
--------------------------------------------------
-
-The model runs on its input device automatically. Reset independent batches
-with ``functional.reset_net`` after backward and parameter updates; see
-:doc:`./neuron` for continuous state. AMP and fused neuron execution are separate
-policies. See :doc:`./precision` for state precision and :doc:`./triton_backend`
-for compilation and diagnostics.
-
-The accuracy, curves and logs on this page come from historical experiments;
-some runs lack an exact version. They have not been retrained or verified on
-current V2, so they cannot establish its speed or accuracy.

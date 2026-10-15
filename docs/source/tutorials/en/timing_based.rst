@@ -140,30 +140,9 @@ MNIST example and performance scope
    uv run python -m spikingjelly.timing_based.examples.tempotron_mnist \
        --device cpu --duration 100 --batch-size 64 --dataset-dir ./data
 
-The example uses ``5*v_max/v_threshold`` as logits and adds the signed linear
-peak-to-threshold deviation only for misfiring outputs, normalized by threshold.
-The correct class should fire and other classes remain silent; suppressing false
-premature spikes can restore late evidence. Prediction still uses
-``v_max.argmax``. This task-level loss changes neither the neuron's threshold,
-shunting nor internal autograd, and does not apply cross-entropy to ``t_spike``
-values containing ``inf``.
+The example uses cross-entropy on ``5*v_max/v_threshold`` plus a linear threshold penalty for misfiring outputs, and classifies with ``v_max.argmax``.
 
-The solver uses internal FP64 and eager execution. Bounded event blocks evaluate
-states, stationary points and first-upcrossing candidates across the entire batch;
-simultaneous inputs are aggregated once. Blocks contain up to 128 event groups on
-CPU and 512 on CUDA. Local time-difference matrices replace tiny per-event
-operations without a uniform time grid. Torch reference matrix memory scales with
-batch size and squared block width: larger blocks trade memory for fewer launches.
-Backward processes events across the batch, recomputing only required analytic
-derivatives, with unchanged saved-tensor sizes. When Triton is installed, CUDA
-automatically uses fused FP64 kernels for affine prefix-scan block states, threshold
-roots and weight-only peak-voltage backward. The scan composes exact continuous
-voltage/current transitions in chronological order and uses linear block storage,
-avoiding the quadratic response matrices. It changes floating-point reduction
-order, without introducing temporal sampling. Other analytic derivatives use
-PyTorch. Without Triton, the same Torch reference runs on CUDA. Block-level synchronization remains;
-this is not a fused full-model implementation or CUDA Graph execution. Historical
-accuracy/speed do not describe the new dynamics.
+The Tempotron solver uses FP64 internally; CUDA uses fused implementations when Triton is installed.
 
 The example defaults to a maximum of 40 epochs; use ``--epoch 100`` for an explicit
 full reproduction. Two completed single-seed 100-epoch runs reached a test plateau
@@ -249,32 +228,7 @@ SRM kernels; no general speed advantage is claimed.
 Complete partitions and a third PSP model
 -----------------------------------------
 
-:func:`spikingjelly.timing_based.solver.first_spike_time` solves the earliest
-upward zero crossing of a continuous total threshold residual. Its small
-interface accepts a callable, complete monotone boundaries and explicit tensor
-parameters. The callable receives FP32 query times and original piece indices,
-and returns ``(F, partial_F/partial_t)``. Each leading index is an independent
-time axis; the last dimension contains either all interval queries or one
-selected query. Left/right local-extremum/plateau-end flags are separate for every interval,
-so a knot can have different one-sided derivatives. The kernel must certify
-window endpoint types too; horizontal inflections are not extrema.
-
-A value/derivative callable alone cannot prove that no hidden peak crosses the
-threshold. The caller must supply all stationary points of the weighted total
-response, not just the union of individual PSP extrema. The solver trusts this
-mathematical contract; format checks cannot certify a black-box partition.
-It chooses the earliest valid interval, runs FP32 bracketed Newton/bisection, checks convergence
-and residuals, and returns inf for silence. Grazing is excluded and an endpoint
-upcrossing counts. Its first-order backward recomputes
-``dt/dp=-F_p/F_t``; bisection is not differentiated. Differentiable previous output
-times must be explicit parameters, so their chain rule is preserved. The solver
-owns neither neuron history nor reset/shunting or event capacity. Higher-order
-backward is unsupported; singular requested derivatives raise, without clipping.
-Partitions select branches and receive no derivative.
-
-With Triton installed, CUDA fuses general root updates and cubic polynomial
-evaluation; otherwise it uses Torch. Partition ordering compares only the two
-interior stationary points, preserving stable ties.
+:func:`spikingjelly.timing_based.solver.first_spike_time` finds the earliest upward crossing. The caller must provide all stationary points of the weighted total response; the solver does not verify partition completeness.
 
 .. code-block:: python
 
@@ -436,6 +390,8 @@ of process medians (peak memory is the maximum observed across processes):
      - 104.59
      - 104.00
      - 1583.22
+
+Historical documentation record: `7341418a <https://github.com/fangwei123456/spikingjelly/commit/7341418a>`_ (2026-10-14); Tesla V100S (Torch 2.7.1+cu118, Triton 3.3.1); not rerun on current V2.
 
 The unfold reference is restricted to one event per pixel and uses the same
 cubic solver and output packing; it is not a time-step model. The multi-event
