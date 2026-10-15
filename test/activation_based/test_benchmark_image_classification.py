@@ -74,3 +74,20 @@ def test_clif_current_provider_diagnostic_errors_are_preserved(monkeypatch):
     args = SimpleNamespace(case="clif-tinyimagenet", amp=False)
     with pytest.raises(RuntimeError, match="Triton unavailable"):
         benchmark._clif_execution(args, torch.device("cuda"), False)
+
+
+def test_clif_correctness_failure_restores_pool_and_training_mode():
+    pool = torch.nn.AdaptiveAvgPool2d((7, 7))
+    net = torch.nn.Sequential(pool, torch.nn.Flatten(), torch.nn.Linear(147, 200))
+    net.eval()
+    args = SimpleNamespace(case="clif-tinyimagenet", amp=False, time_steps=1)
+    with pytest.raises(ValueError, match="2x2"):
+        benchmark._check(
+            net,
+            torch.zeros(2, 3, 3, 3),
+            torch.zeros(2, dtype=torch.long),
+            args,
+            torch.device("cpu"),
+        )
+    assert net[0] is pool
+    assert not net.training
