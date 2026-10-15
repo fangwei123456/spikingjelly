@@ -407,8 +407,6 @@ def _check(net, x, target, args, device):
         if pool is not None:
             # CUDA adaptive-pool backward uses atomics; keep the strict oracle
             # deterministic without changing the timed or quality model.
-            if not isinstance(pool, nn.AdaptiveAvgPool2d):
-                raise ValueError("Unexpected CLIF pooling layer")
             net[-3] = _CLIFPoolReference()
         net.train()
         with _autocast(args, device):

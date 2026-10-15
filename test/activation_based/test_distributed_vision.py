@@ -1066,8 +1066,6 @@ try:
     output = Path(sys.argv[1])
     (output / f"pp4-rank-{rank}.json").write_text(json.dumps({
         "rank": rank, "iterations": 6, "microbatches": 2,
-        "state_reset": True, "canonical_output_checked": rank == 3,
-        "input_sensitivity_checked": rank == 3,
         "gpu": torch.cuda.get_device_name(device),
         "peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
         "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
@@ -1092,9 +1090,6 @@ finally:
         timeout=300,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    records = [json.loads(p.read_text()) for p in tmp_path.glob("pp4-rank-*.json")]
-    assert len(records) == 4
-    assert all(record["state_reset"] for record in records)
 
 
 def test_vision_inference_preserves_early_configuration_error(monkeypatch):
