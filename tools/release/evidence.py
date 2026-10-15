@@ -103,6 +103,7 @@ def _compare(
                 measurement["input_sha256"],
                 report["parameters"],
                 measurement["precision"],
+                measurement.get("correctness_pooling", "production"),
                 measurement["indices"],
                 [report["configuration"][k] for k in config_keys],
                 [report["environment"][k] for k in env_keys],

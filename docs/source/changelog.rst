@@ -75,6 +75,24 @@ Fixes
 Features
 ~~~~~~~~
 
+CLIF Triton Execution
+^^^^^^^^^^^^^^^^^^^^^
+
+Module: ``spikingjelly.activation_based.functional`` and
+``spikingjelly.activation_based.neuron``.
+
+- CLIF uses optional Triton charge, complementary decay, and reset kernels with
+  autograd support for CUDA eager FP32, FP16 and BF16 execution, preserving the
+  supplied spike function,
+  per-operation state rounding and checkpoint layout. CPU and compiled execution
+  retain the Torch formulas. Auto mode uses Triton with gradients disabled and
+  keeps Torch when gradients are enabled, preserving existing training defaults.
+  Training can explicitly set ``SJ_CLIF_CUDA_IMPLEMENTATION=triton``; small batches
+  may be slower, so compare the selected workload before enabling it.
+- The CLIF benchmark uses an equivalent deterministic pooling reference only for
+  correctness packets, avoiding nondeterministic CUDA pooling gradients while
+  retaining strict comparisons. Timing and quality runs keep the original model.
+
 Plasticity MNIST Example
 ^^^^^^^^^^^^^^^^^^^^^^^^
 

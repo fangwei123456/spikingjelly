@@ -95,8 +95,11 @@ def neuron_implementation(
 
     查询神经元在指定设备和执行路径上的绑定实现。CPU 返回 Torch 参考实现；CUDA
     查询会初始化并缓存对应路径的选择，不执行神经元计算，也不改变模块状态。
+    CLIF 的编译路径固定返回 Torch 参考实现，其 Triton 实现仅用于 CUDA eager。
+    CLIF 的自动选择还依据当前梯度模式：启用梯度时保留 Torch；禁用梯度时可选择
+    Triton。显式请求 Triton 可用于训练。
 
-    :param neuron_type: ``if``、``lif``、``plif``、``qif``、``eif``、``izhikevich``、``ilif``、``activation_aware_if`` 或 ``stbif``。
+    :param neuron_type: ``if``、``lif``、``plif``、``qif``、``eif``、``izhikevich``、``ilif``、``activation_aware_if`` 、``stbif`` 或 ``clif``。
     :type neuron_type: str
     :param device: CPU 或 NVIDIA CUDA 设备；省略 CUDA 索引时使用当前设备。
     :type device: torch.device
@@ -117,8 +120,12 @@ def neuron_implementation(
     Query the bound implementation for a neuron on a device and execution path.
     CPU returns the Torch reference. A CUDA query initializes and caches the
     corresponding path's selection without computation or module-state changes.
+    CLIF compilation queries return the Torch reference; its Triton implementation
+    is restricted to CUDA eager execution. CLIF automatic selection also uses the
+    current gradient mode: gradient-enabled execution keeps Torch; disabled
+    gradients allow Triton. An explicit Triton request enables training.
 
-    :param neuron_type: One of ``if``, ``lif``, ``plif``, ``qif``, ``eif``, ``izhikevich``, ``ilif``, ``activation_aware_if``, or ``stbif``.
+    :param neuron_type: One of ``if``, ``lif``, ``plif``, ``qif``, ``eif``, ``izhikevich``, ``ilif``, ``activation_aware_if``, ``stbif``, or ``clif``.
     :type neuron_type: str
     :param device: CPU or NVIDIA CUDA device; an omitted CUDA index uses the current device.
     :type device: torch.device
@@ -142,6 +149,7 @@ def neuron_implementation(
         "ilif": "ilif",
         "activation_aware_if": "activation_aware_if",
         "stbif": "stbif",
+        "clif": "clif",
     }
     if neuron_type not in packages:
         raise ValueError(f"Unknown neuron type {neuron_type!r}.")
@@ -152,6 +160,30 @@ def neuron_implementation(
     if device.type != "cuda":
         raise ValueError(f"Unsupported neuron device {device}.")
     package = importlib.import_module(f"..._ops.{packages[neuron_type]}", __package__)
+    if neuron_type == "clif" and (execution == "compile" or torch.version.hip):
+        if package._selection._requested not in ("auto", "torch"):
+            package._require_automatic_torch(
+                package._selection,
+                device,
+                "CLIF requires matching CUDA eager FP32/FP16/BF16 tensors",
+            )
+        return {
+            "implementation": "torch-reference",
+            "unavailable": {
+                "triton": "CLIF Triton requires NVIDIA CUDA eager execution"
+            },
+        }
+    if (
+        neuron_type == "clif"
+        and package._selection._requested == "auto"
+        and torch.is_grad_enabled()
+    ):
+        return {
+            "implementation": "torch-reference",
+            "unavailable": {
+                "triton": "CLIF auto keeps Torch with gradients enabled; select triton explicitly"
+            },
+        }
     return package._selection.diagnostics(device, execution=execution)
 
 
@@ -1737,6 +1769,13 @@ def clif_step(
     执行一次 ComplementaryLIF 状态转移，返回脉冲、下一膜电位和下一互补电位。
     输入状态须已物化；函数不读取 module memory，也不原地修改输入状态。
     ``spike_function`` 由调用者按训练或推理模式选择。
+    对同形状、同设备、同 dtype 的 CUDA FP32/FP16/BF16 张量，eager 模式自动
+    选择可用的 Triton 充电与复位算子，保持原有逐算子 dtype 舍入；放电函数及其
+    自定义梯度仍由调用者提供。``SJ_CLIF_CUDA_IMPLEMENTATION`` 可设为
+    ``auto``（默认）、``triton`` 或 ``torch``。自动模式在启用梯度时保留 Torch，
+    在禁用梯度时选择 Triton；训练可显式设为 ``triton``，小 batch 可能更慢。
+    CPU、编译及其他输入使用 Torch
+    公式；显式请求不支持的 CUDA profile 会报错。函数不融合不同时间步。
 
     :param x: 当前输入，形状为 ``[N, *]``。
     :type x: torch.Tensor
@@ -1752,6 +1791,7 @@ def clif_step(
     :type spike_function: Callable[[torch.Tensor], torch.Tensor]
     :return: ``(spike, v_next, m_next)``，各张量形状与 ``x`` 相同。
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises RuntimeError: 显式请求的 CUDA 实现不可用，或非 Torch 实现不支持当前输入或编译模式。
 
     ----
 
@@ -1763,6 +1803,15 @@ def clif_step(
     voltage, and next complementary voltage. States must be materialized. The
     function does not read module memory or mutate input states. The caller
     selects ``spike_function`` for training or inference.
+    CUDA eager execution automatically uses available Triton charge/reset operators
+    for matching FP32/FP16/BF16 shapes, devices and dtypes, preserving per-operation
+    dtype rounding. The supplied spike function retains its custom gradient.
+    ``SJ_CLIF_CUDA_IMPLEMENTATION`` accepts ``auto`` (default), ``triton`` or
+    ``torch``. Auto mode keeps Torch when gradients are enabled and selects Triton
+    when they are disabled. Training can explicitly request ``triton``; small
+    batches may be slower. CPU, compiled execution and other inputs use the Torch formulas;
+    explicitly requesting an unsupported CUDA profile raises an error. Time steps
+    are not fused.
 
     :param x: Current input shaped ``[N, *]``.
     :type x: torch.Tensor
@@ -1779,13 +1828,12 @@ def clif_step(
     :type spike_function: Callable[[torch.Tensor], torch.Tensor]
     :return: ``(spike, v_next, m_next)`` with tensors shaped like ``x``.
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises RuntimeError: An explicitly requested CUDA implementation is unavailable,
+        or a non-Torch implementation does not support the inputs or compiled mode.
     """
-    charged = lif_charge(x, v, tau, False, None)
-    m_next = m * torch.sigmoid(charged / tau)
-    spike = spike_function(charged - v_threshold)
-    m_next = m_next + spike
-    v_next = charged - spike * (v_threshold + torch.sigmoid(m_next))
-    return spike, v_next, m_next
+    from ..._ops.clif import step
+
+    return step(x, v, m, tau, v_threshold, spike_function)
 
 
 def sliding_psn_step(

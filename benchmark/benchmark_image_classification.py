@@ -12,8 +12,10 @@ import argparse
 import copy
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 import math
+import os
 import platform
 import random
 import shutil
@@ -377,11 +379,37 @@ def _learning_rate(args, epoch):
     )
 
 
+class _CLIFPoolReference(nn.Module):
+    def forward(self, x):
+        if x.shape[-2:] != (2, 2):
+            raise ValueError("CLIF correctness pooling expects 2x2 spike rates")
+        bounds = ((0, 1),) * 3 + ((0, 2),) + ((1, 2),) * 3
+        output = torch.stack(
+            [
+                torch.stack([x[..., a:b, c:d].mean((-2, -1)) for c, d in bounds], -1)
+                for a, b in bounds
+            ],
+            -2,
+        )
+        with torch.no_grad():
+            torch.testing.assert_close(
+                output, F.adaptive_avg_pool2d(x, (7, 7)), rtol=0, atol=0
+            )
+        return output
+
+
 def _check(net, x, target, args, device):
     state = copy.deepcopy(net.state_dict())
     mode = net.training
     x = x.detach().clone().requires_grad_()
+    pool = net[-3] if args.case == "clif-tinyimagenet" else None
     try:
+        if pool is not None:
+            # CUDA adaptive-pool backward uses atomics; keep the strict oracle
+            # deterministic without changing the timed or quality model.
+            if not isinstance(pool, nn.AdaptiveAvgPool2d):
+                raise ValueError("Unexpected CLIF pooling layer")
+            net[-3] = _CLIFPoolReference()
         net.train()
         with _autocast(args, device):
             output = _forward(net, x, args)
@@ -421,11 +449,30 @@ def _check(net, x, target, args, device):
         with torch.no_grad(), _autocast(args, device):
             torch.testing.assert_close(_forward(net, x, args), output.detach())
     finally:
+        if pool is not None:
+            net[-3] = pool
         functional.reset_net(net)
         net.load_state_dict(state)
         net.zero_grad(set_to_none=True)
         net.train(mode)
     return packet
+
+
+def _clif_execution(args, device, training):
+    if args.case != "clif-tinyimagenet":
+        return None
+    # Paired runs load this script with the older, Torch-only CLIF package.
+    selected = "torch-reference"
+    if importlib.util.find_spec("spikingjelly._ops.clif") is not None:
+        with torch.set_grad_enabled(training):
+            selected = functional.neuron_implementation("clif", device)[
+                "implementation"
+            ]
+    return {
+        "requested": os.environ.get("SJ_CLIF_CUDA_IMPLEMENTATION", "auto"),
+        "selected": selected,
+        "state_dtype": "torch.float16" if training and args.amp else "torch.float32",
+    }
 
 
 def _benchmark(net, evaluation, args, device):
@@ -484,6 +531,11 @@ def _benchmark(net, evaluation, args, device):
         raise RuntimeError("Non-finite model parameters after measurement")
     if not all(math.isfinite(v) and v > 0 for v in gpu_ms + wall_ms):
         raise RuntimeError("Invalid timing samples.")
+    execution = _clif_execution(args, device, training)
+    if execution is not None:
+        execution["correctness_state_dtypes"] = sorted(
+            {str(v.dtype) for v in packet["states"].values()}
+        )
     return dict(
         phase=args.phase,
         precision="fp16"
@@ -493,6 +545,10 @@ def _benchmark(net, evaluation, args, device):
         amp_scale_end=scaler.get_scale(),
         scope="fixed real-input batch; excludes loader and augmentation",
         correctness="output/gradient/reset checked outside timing",
+        correctness_pooling="deterministic CLIF window reference"
+        if args.case == "clif-tinyimagenet"
+        else "production",
+        clif_execution=execution,
         correctness_file=correctness.name,
         correctness_batch_size=len(x),
         state_samples=min(2, len(x)),
@@ -660,6 +716,12 @@ def _main():
             cudnn_benchmark=torch.backends.cudnn.benchmark,
             cudnn_allow_tf32=torch.backends.cudnn.allow_tf32,
             matmul_allow_tf32=torch.backends.cuda.matmul.allow_tf32,
+        ),
+        clif_execution=_clif_execution(
+            args,
+            device,
+            args.mode == "train"
+            or (args.mode == "benchmark" and args.phase == "training"),
         ),
         parameters=sum(p.numel() for p in net.parameters()),
         train_samples=len(train),
