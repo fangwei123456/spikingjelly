@@ -987,7 +987,10 @@ def test_pp4_repeated_inference_matches_canonical_and_resets_state(tmp_path):
     script = tmp_path / "pp4_inference.py"
     script.write_text(
         """
+import json
 import os
+from pathlib import Path
+import sys
 
 import torch
 import torch.distributed as dist
@@ -1060,6 +1063,13 @@ try:
                 elif iteration % 2 == 0:
                     torch.testing.assert_close(actual, first, rtol=0, atol=0)
     torch.cuda.synchronize(device)
+    output = Path(sys.argv[1])
+    (output / f"pp4-rank-{rank}.json").write_text(json.dumps({
+        "rank": rank, "iterations": 6, "microbatches": 2,
+        "gpu": torch.cuda.get_device_name(device),
+        "peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
+        "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
+    }, indent=2))
 finally:
     dist.destroy_process_group()
 """,
@@ -1073,6 +1083,7 @@ finally:
             "--standalone",
             "--nproc_per_node=4",
             str(script),
+            str(tmp_path),
         ],
         capture_output=True,
         text=True,
