@@ -5,6 +5,10 @@ are Git-tracked. Scripts exist; vision quality/performance orchestration is in [
 Previous-release API adapters remain pending; FP8 release projects are deferred.
 Qwen quick conversion/PPL is integrated in the release profiles.
 
+Use the [release benchmark report template](../tools/release/benchmark-report-template.md)
+to summarize selected tasks, quality, performance, evidence and limitations for
+each formal release. It reuses runner outputs and does not add mandatory tasks.
+
 ## Core task benchmarks
 
 Select release cases from real CIFAR-scale or larger tasks, or language tasks.
@@ -31,6 +35,15 @@ training budget, not convergence or a published full-training accuracy.
 The previous formal release remains the only version baseline. Quality tolerances
 and the 2% efficiency gate are separate. New capabilities without a previous
 counterpart need an explicit N/A decision and absolute results.
+
+Release quality benchmarks detect drift against our own version baseline;
+matching a paper's reported accuracy is not an acceptance requirement. Papers
+remain references for model/recipe implementation. Separate fixed-checkpoint
+evaluation drift from retraining variability: lock data, preprocessing, weights,
+precision and environment for the former; use matched seeds and training budgets
+for the latter, adding paired seeds when needed to resolve training noise.
+Report accuracy changes in percentage points and predeclare task-specific
+tolerances. Stable accuracy does not replace numerical correctness checks.
 
 [benchmark_snn_single_gpu.py](benchmark_snn_single_gpu.py) remains useful for
 controlled full-model timing, but its random-input results do not establish real

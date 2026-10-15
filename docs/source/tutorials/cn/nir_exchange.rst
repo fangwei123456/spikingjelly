@@ -5,12 +5,12 @@
 
 English version: :doc:`../en/nir_exchange`
 
-`Neuromorphic intermediate representation (NIR) <https://neuroir.org/docs/index.html>`_ 是一组计算原语，以图（节点+边）的形式描述了 SNN 的模块和连接，在不同的神经形态框架和技术栈之间通用。目前，NIR `被多个模拟器和硬件平台支持 <https://neuroir.org/docs/support.html>`_ 。SpikingJelly 的 ``nir_exchange`` 包支持在可转换的 SpikingJelly 模型与 NIR 图之间双向转换。
+`Neuromorphic intermediate representation (NIR) <https://neuroir.org/docs/index.html>`_ 是一组计算原语，以图（节点+边）的形式描述了 SNN 的模块和连接，在不同的神经形态框架和技术栈之间通用。目前，NIR `被多个模拟器和硬件平台支持 <https://neuroir.org/docs/support/>`_ 。SpikingJelly 的 ``nir_exchange`` 包支持在可转换的 SpikingJelly 模型与 NIR 图之间双向转换。
 
 .. figure:: ../../_static/tutorials/nir_exchange/nir-schema.png
     :width: 100%
 
-    图片来源： `What is the Neuromorphic Intermediate Representation (NIR)? <https://neuroir.org/docs/what.html>`_
+    图片来源： `What is the Neuromorphic Intermediate Representation (NIR)? <https://neuroir.org/docs/what/>`_
 
 SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 

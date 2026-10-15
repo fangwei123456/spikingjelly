@@ -5,6 +5,10 @@ Run in a uv-managed project environment. Release entry points live in
 
 ## Release validation
 
+The [benchmark report template](release/benchmark-report-template.md) summarizes
+the selected workloads and their evidence for each release; runner JSON and raw
+artifacts remain the measurement records.
+
 | Entry | Purpose | Status |
 | --- | --- | --- |
 | [validate.py](release/validate.py) + [profiles.toml](release/profiles.toml) | Execute profiles; retain commands/logs/JUnit; enforce time budget; alternate three candidate/baseline benchmark pairs; aggregate attempts | Implemented; CI self-check covers startup failure, timeout and skip gating; formal runs require Linux, clean tracked source/config and fixed inputs |

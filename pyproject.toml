@@ -53,7 +53,10 @@ license-files = ["LICENSE", "LICENSES/NOTICE"]
 triton = ["triton>=3.2.0"]
 nir = ["nir>=1.0.7,<2", "nirtorch>=2.6,<2.7"]
 lightning = ["lightning", "jsonargparse[signatures]"]
-megatron = ["megatron-core==0.18.2; python_version >= '3.12'"]
+megatron = [
+    "megatron-core==0.18.2; python_version >= '3.12'",
+    "psutil; python_version >= '3.12'",
+]
 sglang = [
     # SGLang 0.5.17's FA4 backend targets this beta API.
     "flash-attn-4==4.0.0b19; sys_platform == 'linux'",

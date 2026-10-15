@@ -115,7 +115,8 @@ html_theme_options = {
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
-    "PyTorch": ("https://docs.pytorch.org/docs/stable/", None),
+    # Match the supported baseline; stable uses HTML redirects without API anchors.
+    "PyTorch": ("https://docs.pytorch.org/docs/2.6/", None),
 }
 
 show_authors = True
