@@ -205,6 +205,22 @@ def _extract(sdist, destination):
     return roots[0]
 
 
+def _dependency_pins():
+    pins = set()
+    for distribution in importlib.metadata.distributions():
+        name = distribution.metadata["Name"]
+        version = distribution.version
+        if not name or not version:
+            raise ValueError(
+                f"Installed distribution under {distribution.locate_file('')} has "
+                "missing Name/Version metadata; repair the environment before validation."
+            )
+        name = name.lower().replace("_", "-")
+        if name != "spikingjelly":
+            pins.add(f"{name}=={version}")
+    return sorted(pins)
+
+
 def _package(args, case_dir, deadline, native=False):
     commands = []
 
@@ -262,19 +278,7 @@ def _package(args, case_dir, deadline, native=False):
         )
     else:
         pins = case_dir / "environment.constraints"
-        pins.write_text(
-            "\n".join(
-                sorted(
-                    {
-                        f"{name}=={importlib.metadata.version(name)}"
-                        for d in importlib.metadata.distributions()
-                        if (name := d.metadata["Name"].lower().replace("_", "-"))
-                        != "spikingjelly"
-                    }
-                )
-            )
-            + "\n"
-        )
+        pins.write_text("\n".join(_dependency_pins()) + "\n")
         if args.torch_index:
             torch_packages = [
                 f"{name}=={importlib.metadata.version(name)}"
@@ -1131,6 +1135,42 @@ def _self_check(output):
                 assert not accepted
             else:
                 assert accepted
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as directory:
+        metadata = Path(directory) / "fixture-1.0.dist-info"
+        metadata.mkdir()
+        distribution = importlib.metadata.PathDistribution(metadata)
+        with patch.object(
+            importlib.metadata, "distributions", return_value=[distribution]
+        ):
+            for index, content in enumerate(("Version: 1.0\n", "Name: fixture\n")):
+                (metadata / "METADATA").write_text(content)
+                try:
+                    _dependency_pins()
+                except ValueError as error:
+                    assert "missing Name/Version metadata" in str(error)
+                    with patch.object(
+                        sys.modules[__name__], "_package", side_effect=error
+                    ):
+                        result = _run_case(
+                            f"metadata-{index}",
+                            {"kind": "package", "group": "package"},
+                            None,
+                            output,
+                            time.monotonic() + 5,
+                            {"python": "3.11", "packages": {"torch": "2.6"}},
+                        )
+                    assert result["status"] == "blocked"
+                    assert "missing Name/Version metadata" in result["reason"]
+                else:
+                    raise AssertionError(
+                        "Invalid installed metadata must fail validation"
+                    )
+            (metadata / "METADATA").write_text("Name: fixture_pkg\nVersion: 1.0\n")
+            assert _dependency_pins() == ["fixture-pkg==1.0"]
+            (metadata / "METADATA").write_text("Name: SpikingJelly\nVersion: 2.0.0\n")
+            assert _dependency_pins() == []
     records = []
     for name, argv, seconds, expected in (
         ("failure", [sys.executable, "-c", "raise SystemExit(7)"], 5, "fail"),
