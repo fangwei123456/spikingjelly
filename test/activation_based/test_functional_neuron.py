@@ -1411,17 +1411,25 @@ def test_clif_fused_configurable_surrogate(dtype, surrogate_class, monkeypatch):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
-def test_clif_fused_rect_endpoints_and_heaviside_gradients(monkeypatch):
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+def test_clif_fused_rect_endpoints_and_heaviside_gradients(monkeypatch, dtype):
     from spikingjelly._ops.clif import _selection, reference as clif_reference
 
     monkeypatch.setattr(_selection, "_requested", "triton")
     monkeypatch.setattr(_selection, "_selections", {})
-    for spike in (surrogate.Rect(), surrogate.heaviside):
-        inputs = [torch.tensor([0.5, 1.5, 1.0], device="cuda", requires_grad=True)]
+    for spike in (surrogate.Rect(alpha=1.3), surrogate.heaviside):
+        inputs = [
+            torch.tensor(
+                [-0.5 / 1.3, 0.5 / 1.3, 0.0],
+                device="cuda",
+                dtype=dtype,
+                requires_grad=True,
+            )
+        ]
         inputs += [torch.zeros_like(inputs[0], requires_grad=True) for _ in range(2)]
         refs = [x.detach().clone().requires_grad_() for x in inputs]
-        actual = functional.clif_step(*inputs, 2.0, 1.0, spike)
-        expected = clif_reference.step(*refs, 2.0, 1.0, spike)
+        actual = functional.clif_step(*inputs, 2.0, 0.0, spike)
+        expected = clif_reference.step(*refs, 2.0, 0.0, spike)
         assert actual[0].requires_grad == expected[0].requires_grad
         ga = torch.autograd.grad(sum(x.sum() for x in actual), inputs)
         gr = torch.autograd.grad(sum(x.sum() for x in expected), refs)
