@@ -53,7 +53,7 @@ def _backward_kernel(
     M,
     MO,
     GX,
-    GVI,
+    GV_LEAK,
     GMI,
     N,
     TAU: tl.constexpr,
@@ -135,7 +135,7 @@ def _backward_kernel(
     gh = ((gv + gh_spike).to(dtype).to(tl.float32) + gh_decay).to(dtype).to(tl.float32)
     leak_grad = (gh * (-1.0 / TAU)).to(dtype).to(tl.float32)
     tl.store(GX + i, gh, mask)
-    tl.store(GVI + i, leak_grad, mask)
+    tl.store(GV_LEAK + i, leak_grad, mask)
     tl.store(GMI + i, gm * a, mask)
 
 
@@ -194,7 +194,7 @@ def _backward_impl(
     _kernel_wrapper=None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     _check(h, (gs, gv, gm, m, m_next), tau, threshold, alpha, surrogate_id)
-    gx, gv_init, gm_init = (
+    gx, gv_leak, gm_init = (
         torch.empty_like(h, memory_format=torch.contiguous_format) for _ in range(3)
     )
     if h.numel():
@@ -211,7 +211,7 @@ def _backward_impl(
                 m.contiguous(),
                 m_next.contiguous(),
                 gx,
-                gv_init,
+                gv_leak,
                 gm_init,
                 h.numel(),
                 tau,
@@ -221,4 +221,4 @@ def _backward_impl(
                 256,
                 enable_fp_fusion=False,
             )
-    return gx, gv_init, gm_init
+    return gx, gv_leak, gm_init
