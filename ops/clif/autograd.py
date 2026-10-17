@@ -79,12 +79,13 @@ def _register_ops(forward_name: str, backward_name: str, *, register_fake: bool 
                 tuple(next(gradients) if t.requires_grad else None for t in inputs)
                 + (None,) * 4
             )
+        m_is_used = gv is not None or gm is not None
         h, m_next, _, _, _, m = ctx.saved_tensors
         gs, gv, gm = (
             torch.zeros_like(h) if grad is None else grad for grad in (gs, gv, gm)
         )
         gx, gv_leak, gm = backward_op(gs, gv, gm, h, m, m_next, *ctx.parameters)
-        return gx, gx, gv_leak, gm, None, None, None, None
+        return gx, gx, gv_leak, gm if m_is_used else None, None, None, None, None
 
     torch.library.register_autograd(
         forward_name, backward, setup_context=_setup_context

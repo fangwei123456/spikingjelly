@@ -1451,3 +1451,27 @@ def test_clif_registered_opcheck_and_inductor(monkeypatch):
     gr = torch.autograd.grad(sum(x.sum() for x in expected), refs)
     for a, r in zip(actual + ga, expected + gr):
         torch.testing.assert_close(a, r)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+@pytest.mark.parametrize("create_graph", [False, True])
+def test_clif_spike_only_loss_preserves_unused_complementary_state(
+    monkeypatch, create_graph
+):
+    from spikingjelly._ops.clif import _selection, reference as clif_reference
+
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    inputs = [torch.randn(2, 31, device="cuda", requires_grad=True) for _ in range(3)]
+    refs = [x.detach().clone().requires_grad_() for x in inputs]
+    spike = surrogate.Sigmoid()
+    actual = functional.clif_step(*inputs, 2.0, 1.0, spike)[0]
+    expected = clif_reference.step(*refs, 2.0, 1.0, spike)[0]
+    ga = torch.autograd.grad(
+        actual.sum(), inputs, allow_unused=True, create_graph=create_graph
+    )
+    gr = torch.autograd.grad(
+        expected.sum(), refs, allow_unused=True, create_graph=create_graph
+    )
+    assert ga[2] is gr[2] is None
+    for a, r in zip(ga[:2], gr[:2]):
+        torch.testing.assert_close(a, r)
