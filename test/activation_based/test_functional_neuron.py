@@ -1300,11 +1300,25 @@ def test_clif_compile_preserves_reference_contract(device_type, monkeypatch):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
-def test_clif_auto_uses_fused_training_and_inference(monkeypatch):
+@pytest.mark.parametrize("accelerator_available", [False, True])
+def test_clif_auto_selects_available_training_and_inference(
+    monkeypatch, accelerator_available
+):
+    import importlib
+
     from spikingjelly._ops.clif import _selection, reference as clif_reference
 
     monkeypatch.setattr(_selection, "_requested", "auto")
     monkeypatch.setattr(_selection, "_selections", {})
+    if not accelerator_available:
+        import_module = importlib.import_module
+
+        def without_accelerators(name, package=None):
+            if package == "spikingjelly._ops.clif" and name in (".triton", ".native"):
+                raise ImportError("Accelerator unavailable for fallback regression")
+            return import_module(name, package)
+
+        monkeypatch.setattr(importlib, "import_module", without_accelerators)
     for training in (False, True):
         with torch.set_grad_enabled(training):
             inputs = [
@@ -1314,12 +1328,9 @@ def test_clif_auto_uses_fused_training_and_inference(monkeypatch):
             refs = [x.detach().clone().requires_grad_(training) for x in inputs]
             actual = functional.clif_step(*inputs, 2.0, 1.0, surrogate.Rect())
             expected = clif_reference.step(*refs, 2.0, 1.0, surrogate.Rect())
-            assert (
-                functional.neuron_implementation("clif", inputs[0].device)[
-                    "implementation"
-                ]
-                == "triton"
-            )
+            assert functional.neuron_implementation("clif", inputs[0].device)[
+                "implementation"
+            ] == ("triton" if accelerator_available else "torch")
             for a, e in zip(actual, expected):
                 torch.testing.assert_close(a, e)
             if training:
