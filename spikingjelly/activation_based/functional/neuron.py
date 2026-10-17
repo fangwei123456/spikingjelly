@@ -1776,11 +1776,12 @@ def clif_step(
     :type tau: float
     :param v_threshold: 放电阈值。
     :type v_threshold: float
-    :param spike_function: 已选定路径的放电函数；可携带替代梯度。
+    :param spike_function: 已选定路径的放电函数；可携带替代梯度。融合路径要求标准替代函数的 alpha 为有限正数。
     :type spike_function: Callable[[torch.Tensor], torch.Tensor]
     :return: ``(spike, v_next, m_next)``，各张量形状与 ``x`` 相同。
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises RuntimeError: 显式请求的 CUDA 实现不可用，或非 Torch 实现不支持当前输入或编译模式。
+    :raises ValueError: 融合路径的标量参数或实现配置不合法。
 
     ----
 
@@ -1815,12 +1816,13 @@ def clif_step(
     :param v_threshold: Firing threshold.
     :type v_threshold: float
     :param spike_function: Firing function for the selected path, possibly with
-        a surrogate gradient.
+        a surrogate gradient. Fused standard surrogates require finite positive alpha.
     :type spike_function: Callable[[torch.Tensor], torch.Tensor]
     :return: ``(spike, v_next, m_next)`` with tensors shaped like ``x``.
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises RuntimeError: An explicitly requested CUDA implementation is unavailable,
         or a non-Torch implementation does not support the inputs or compiled mode.
+    :raises ValueError: Invalid fused scalar parameters or implementation configuration.
     """
     from ..._ops.clif import _forward, _selection
     from ..._ops.clif.reference import step

@@ -1199,7 +1199,7 @@ def test_clif_triton_matches_torch_states_and_all_gradients(
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
 @pytest.mark.parametrize("create_graph", [False, True])
-def test_clif_triton_preserves_custom_derivative_boundaries_and_higher_order(
+def test_clif_fused_higher_order_matches_standard_surrogates(
     monkeypatch,
     create_graph,
 ):
