@@ -3,7 +3,7 @@ import triton
 import triton.language as tl
 from triton.language.extra import libdevice
 
-from . import cpu
+from . import reference as _reference
 
 
 @triton.jit
@@ -188,6 +188,6 @@ def _forward_impl(x, v, m, tau, threshold, spike_function, *, _kernel_wrapper=No
     m = decayed_m + spike
     # Keep gradient accumulation at the same branch points as the Torch graph.
     if spike.shape != h.shape or spike.dtype != h.dtype:
-        return spike, cpu._reset(h, spike, m, threshold), m
+        return spike, _reference._reset(h, spike, m, threshold), m
     v = _Reset.apply(h, spike.contiguous(), m, threshold)
     return spike, v, m
