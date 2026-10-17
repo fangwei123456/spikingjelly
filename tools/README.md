@@ -7,9 +7,7 @@ Run in a uv-managed project environment. Release entry points live in
 
 The [benchmark report template](release/benchmark-report-template.md) summarizes
 the selected workloads and their evidence for each release; runner JSON and raw
-artifacts remain the measurement records. The [2.0.0 review and manual signoff
-checklist](release/reports/2.0.0.md) records this release's acceptance scope; the
-inventory below describes reusable tooling, not outstanding 2.0.0 tasks.
+artifacts remain the measurement records.
 
 | Entry | Purpose | Status |
 | --- | --- | --- |
