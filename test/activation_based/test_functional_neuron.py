@@ -1140,10 +1140,10 @@ def test_multistep_trajectory_uses_sequence_operator_and_preserves_gradients(
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("layout", ["contiguous", "transpose", "expand"])
-@pytest.mark.parametrize("source_rectangle", [False, True])
+@pytest.mark.parametrize("alpha", [1.0, 2.0])
 @pytest.mark.parametrize("tau", [2.0, 3.7])
 def test_clif_triton_matches_torch_states_and_all_gradients(
-    dtype, layout, source_rectangle, tau, monkeypatch
+    dtype, layout, alpha, tau, monkeypatch
 ):
     from spikingjelly._ops.clif import _selection, reference as clif_reference
 
@@ -1162,18 +1162,13 @@ def test_clif_triton_matches_torch_states_and_all_gradients(
             return x.expand(7, -1)
         return x
 
-    if source_rectangle:
-        from benchmark.benchmark_image_classification import _SourceRectangle
-
-        spike_function = _SourceRectangle(alpha=1.0)
-    else:
-        spike_function = surrogate.Rect(alpha=1.0)
+    spike_function = surrogate.Rect(alpha=alpha)
     actual = tuple(map(view, actual_inputs))
     reference = tuple(map(view, reference_inputs))
     actual_outputs, reference_outputs = [], []
     for _ in range(6):
         actual = functional.clif_step(*actual, tau, 1.0, spike_function)
-        reference = clif_reference._forward_impl(*reference, tau, 1.0, spike_function)
+        reference = clif_reference.step(*reference, tau, 1.0, spike_function)
         actual_outputs.extend(actual)
         reference_outputs.extend(reference)
     weights = [torch.randn_like(x) for x in actual_outputs]
@@ -1208,17 +1203,16 @@ def test_clif_triton_preserves_custom_derivative_boundaries_and_higher_order(
     monkeypatch,
     create_graph,
 ):
-    from benchmark.benchmark_image_classification import _SourceRectangle
     from spikingjelly._ops.clif import _selection, reference as clif_reference
 
     monkeypatch.setattr(_selection, "_requested", "triton")
     monkeypatch.setattr(_selection, "_selections", {})
-    for spike in (surrogate.Rect(), _SourceRectangle(), torch.sigmoid):
+    for spike in (surrogate.Rect(), surrogate.ATan(), surrogate.Sigmoid()):
         inputs = [torch.tensor([0.5, 1.5, -0.2], device="cuda", requires_grad=True)]
         inputs += [torch.zeros_like(inputs[0], requires_grad=True) for _ in range(2)]
         reference = [x.detach().clone().requires_grad_() for x in inputs]
         actual = functional.clif_step(*inputs, 3.7, 1.0, spike)
-        expected = clif_reference._forward_impl(*reference, 3.7, 1.0, spike)
+        expected = clif_reference.step(*reference, 3.7, 1.0, spike)
         ga = torch.autograd.grad(
             sum(x.square().sum() for x in actual), inputs, create_graph=create_graph
         )
@@ -1277,7 +1271,7 @@ def test_clif_triton_empty_outputs_and_unsupported_profile(monkeypatch):
     outputs = functional.clif_step(*inputs, 2.0, 1.0, surrogate.Rect())
     gradients = torch.autograd.grad(sum(x.sum() for x in outputs), inputs)
     assert all(x.numel() == 0 for x in outputs + gradients)
-    with pytest.raises(RuntimeError, match="matching CUDA eager"):
+    with pytest.raises(RuntimeError, match="matching CUDA"):
         functional.clif_step(*(x.double() for x in inputs), 2.0, 1.0, surrogate.Rect())
 
 
@@ -1298,7 +1292,7 @@ def test_clif_compile_preserves_reference_contract(device_type, monkeypatch):
         return functional.clif_step(x, v, m, 2.0, 1.0, spike)
 
     actual = torch.compile(step, backend="aot_eager", fullgraph=True)(*inputs)
-    expected = clif_reference._forward_impl(*reference, 2.0, 1.0, spike)
+    expected = clif_reference.step(*reference, 2.0, 1.0, spike)
     ga = torch.autograd.grad(sum(x.sum() for x in actual), inputs)
     gr = torch.autograd.grad(sum(x.sum() for x in expected), reference)
     for a, r in zip(actual + ga, expected + gr):
@@ -1306,49 +1300,60 @@ def test_clif_compile_preserves_reference_contract(device_type, monkeypatch):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
-def test_clif_auto_preserves_training_and_accelerates_without_gradients(monkeypatch):
+def test_clif_auto_uses_fused_training_and_inference(monkeypatch):
     from spikingjelly._ops.clif import _selection, reference as clif_reference
 
     monkeypatch.setattr(_selection, "_requested", "auto")
     monkeypatch.setattr(_selection, "_selections", {})
+    for training in (False, True):
+        with torch.set_grad_enabled(training):
+            inputs = [
+                torch.randn(2, 31, device="cuda", requires_grad=training)
+                for _ in range(3)
+            ]
+            refs = [x.detach().clone().requires_grad_(training) for x in inputs]
+            actual = functional.clif_step(*inputs, 2.0, 1.0, surrogate.Rect())
+            expected = clif_reference.step(*refs, 2.0, 1.0, surrogate.Rect())
+            assert (
+                functional.neuron_implementation("clif", inputs[0].device)[
+                    "implementation"
+                ]
+                == "triton"
+            )
+            for a, e in zip(actual, expected):
+                torch.testing.assert_close(a, e)
+            if training:
+                ga = torch.autograd.grad(sum(x.sum() for x in actual), inputs)
+                gr = torch.autograd.grad(sum(x.sum() for x in expected), refs)
+                for a, e in zip(ga, gr):
+                    torch.testing.assert_close(a, e)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+def test_clif_custom_surrogate_keeps_reference_or_rejects_explicit_fusion(monkeypatch):
+    from spikingjelly._ops.clif import _selection, reference as clif_reference
+
     inputs = [torch.randn(2, 31, device="cuda", requires_grad=True) for _ in range(3)]
-    spike = surrogate.Rect()
-    expected = clif_reference._forward_impl(*inputs, 2.0, 1.0, spike)
-    with monkeypatch.context() as unavailable:
-
-        def no_accelerator(device):
-            raise AssertionError("Auto gradient-enabled CLIF must not require Triton")
-
-        unavailable.setattr(_selection, "get_cuda_forward", no_accelerator)
-        actual = functional.clif_step(*inputs, 2.0, 1.0, spike)
-        assert (
-            functional.neuron_implementation("clif", inputs[0].device)["implementation"]
-            == "torch-reference"
-        )
-        for a, e in zip(actual, expected):
-            torch.testing.assert_close(a, e, rtol=0, atol=0)
-        gradients = torch.autograd.grad(sum(x.sum() for x in actual), inputs)
-        assert all(torch.isfinite(x).all() for x in gradients)
-    with torch.no_grad():
-        actual = functional.clif_step(*inputs, 2.0, 1.0, spike)
-        assert (
-            functional.neuron_implementation("clif", inputs[0].device)["implementation"]
-            == "triton"
-        )
-        for a, e in zip(actual, expected):
-            torch.testing.assert_close(a, e)
+    refs = [x.detach().clone().requires_grad_() for x in inputs]
+    monkeypatch.setattr(_selection, "_requested", "auto")
+    actual = functional.clif_step(*inputs, 2.0, 1.0, torch.sigmoid)
+    expected = clif_reference.step(*refs, 2.0, 1.0, torch.sigmoid)
+    ga = torch.autograd.grad(sum(x.sum() for x in actual), inputs, create_graph=True)
+    gr = torch.autograd.grad(sum(x.sum() for x in expected), refs, create_graph=True)
+    for a, e in zip(actual + ga, expected + gr):
+        torch.testing.assert_close(a, e, rtol=0, atol=0)
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    with pytest.raises(RuntimeError, match="supported surrogate"):
+        functional.clif_step(*inputs, 2.0, 1.0, torch.sigmoid)
 
 
-@pytest.mark.parametrize("profile", ["compile", "hip"])
 @pytest.mark.parametrize("requested", ["auto", "torch", "triton", "cuda"])
-def test_clif_diagnostics_reject_explicit_unsupported_profile(
-    profile, requested, monkeypatch
-):
+def test_clif_diagnostics_reject_explicit_unsupported_profile(requested, monkeypatch):
     from spikingjelly._ops.clif import _selection
 
     monkeypatch.setattr(_selection, "_requested", requested)
-    monkeypatch.setattr(torch.version, "hip", "test" if profile == "hip" else None)
-    execution = "compile" if profile == "compile" else "eager"
+    monkeypatch.setattr(torch.version, "hip", "test")
+    execution = "eager"
     if requested in ("auto", "torch"):
         assert (
             functional.neuron_implementation(
@@ -1361,3 +1366,88 @@ def test_clif_diagnostics_reject_explicit_unsupported_profile(
             functional.neuron_implementation(
                 "clif", torch.device("cuda:0"), execution=execution
             )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+@pytest.mark.parametrize(
+    "surrogate_class",
+    [
+        surrogate.Sigmoid,
+        surrogate.ATan,
+        surrogate.PiecewiseQuadratic,
+        surrogate.PiecewiseExp,
+        surrogate.SoftSign,
+        surrogate.SuperSpike,
+        surrogate.Erf,
+    ],
+)
+def test_clif_fused_configurable_surrogate(dtype, surrogate_class, monkeypatch):
+    from spikingjelly._ops.clif import _selection, reference as clif_reference
+
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    monkeypatch.setattr(_selection, "_selections", {})
+    torch.manual_seed(31)
+    inputs = [
+        torch.randn(3, 47, device="cuda", dtype=dtype, requires_grad=True)
+        for _ in range(3)
+    ]
+    refs = [x.detach().clone().requires_grad_() for x in inputs]
+    spike = surrogate_class(alpha=1.3)
+    actual = functional.clif_step(*inputs, 3.7, 1.0, spike)
+    expected = clif_reference.step(*refs, 3.7, 1.0, spike)
+    weights = [torch.randn_like(x) for x in actual]
+    ga = torch.autograd.grad(actual, inputs, weights)
+    gr = torch.autograd.grad(expected, refs, weights)
+    rtol, atol = (
+        (1e-6, 1e-6)
+        if dtype == torch.float32
+        else (1e-3, 1e-5)
+        if dtype == torch.float16
+        else (1.6e-2, 1e-5)
+    )
+    for a, r in zip(actual + ga, expected + gr):
+        torch.testing.assert_close(a, r, rtol=rtol, atol=atol)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+def test_clif_fused_rect_endpoints_and_heaviside_gradients(monkeypatch):
+    from spikingjelly._ops.clif import _selection, reference as clif_reference
+
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    monkeypatch.setattr(_selection, "_selections", {})
+    for spike in (surrogate.Rect(), surrogate.heaviside):
+        inputs = [torch.tensor([0.5, 1.5, 1.0], device="cuda", requires_grad=True)]
+        inputs += [torch.zeros_like(inputs[0], requires_grad=True) for _ in range(2)]
+        refs = [x.detach().clone().requires_grad_() for x in inputs]
+        actual = functional.clif_step(*inputs, 2.0, 1.0, spike)
+        expected = clif_reference.step(*refs, 2.0, 1.0, spike)
+        assert actual[0].requires_grad == expected[0].requires_grad
+        ga = torch.autograd.grad(sum(x.sum() for x in actual), inputs)
+        gr = torch.autograd.grad(sum(x.sum() for x in expected), refs)
+        for a, r in zip(actual + ga, expected + gr):
+            torch.testing.assert_close(a, r)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+def test_clif_registered_opcheck_and_inductor(monkeypatch):
+    from spikingjelly._ops.clif import _forward, _selection, reference as clif_reference
+
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    monkeypatch.setattr(_selection, "_selections", {})
+    monkeypatch.setattr(_selection, "_compiled_selections", {})
+    inputs = [torch.randn(3, 47, device="cuda", requires_grad=True) for _ in range(3)]
+    x, v, m = inputs
+    torch.library.opcheck(_forward, (x, v, v, m, 2.0, 1.0, 1.0, 7))
+    spike = surrogate.Rect()
+
+    def step(x, v, m):
+        return functional.clif_step(x, v, m, 2.0, 1.0, spike)
+
+    actual = torch.compile(step, fullgraph=True)(*inputs)
+    refs = [x.detach().clone().requires_grad_() for x in inputs]
+    expected = clif_reference.step(*refs, 2.0, 1.0, spike)
+    ga = torch.autograd.grad(sum(x.sum() for x in actual), inputs)
+    gr = torch.autograd.grad(sum(x.sum() for x in expected), refs)
+    for a, r in zip(actual + ga, expected + gr):
+        torch.testing.assert_close(a, r)

@@ -104,14 +104,6 @@ class _TinyValidation(Dataset):
         return self.transform(datasets.folder.default_loader(path)), target
 
 
-class _SourceRectangle(surrogate.Rect):
-    @staticmethod
-    def spiking_function(x, alpha):
-        # Author Rectangle uses inclusive endpoints; SJ Rect/paper use strict ones.
-        proxy = x.clamp(-alpha / 2, alpha / 2) / alpha
-        return surrogate.heaviside(x) + (proxy - proxy.detach())
-
-
 def _clif_vgg():
     modules, channels = [], 3
     for output_channels in (64, 128, 256, 512, 512):
@@ -121,7 +113,7 @@ def _clif_vgg():
                     layer.Conv2d(channels, output_channels, 3, padding=1),
                     layer.BatchNorm2d(output_channels),
                     neuron.ComplementaryLIFNode(
-                        tau=2.0, surrogate_function=_SourceRectangle(alpha=1.0)
+                        tau=2.0, surrogate_function=surrogate.Rect(alpha=1.0)
                     ),
                     layer.Dropout(p=0.0),
                 ]

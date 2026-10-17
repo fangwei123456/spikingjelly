@@ -13,6 +13,7 @@ from .native_loader import _check_native_device
 
 _NEURON_NAMESPACES = (
     "sj_activation_aware_if",
+    "sj_clif",
     "sj_eif",
     "sj_if",
     "sj_ilif",
