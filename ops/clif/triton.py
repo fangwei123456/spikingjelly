@@ -21,7 +21,7 @@ def _forward_kernel(
     THRESHOLD: tl.constexpr,
     BLOCK: tl.constexpr,
 ):
-    i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+    i = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
     dtype: tl.constexpr = X.dtype.element_ty
     x = tl.load(X + i, mask, 0).to(tl.float32)
@@ -62,7 +62,7 @@ def _backward_kernel(
     SURROGATE: tl.constexpr,
     BLOCK: tl.constexpr,
 ):
-    i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+    i = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
     dtype: tl.constexpr = H.dtype.element_ty
     gs = tl.load(GS + i, mask, 0).to(tl.float32)

@@ -1476,3 +1476,32 @@ def test_clif_spike_only_loss_preserves_unused_complementary_state(
     assert ga[2] is gr[2] is None
     for a, r in zip(ga[:2], gr[:2]):
         torch.testing.assert_close(a, r)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+def test_clif_fused_offsets_beyond_int32(monkeypatch):
+    from spikingjelly._ops.clif import _selection, reference as clif_reference
+
+    if torch.cuda.mem_get_info()[0] < 64 * 1024**3:
+        pytest.skip("CLIF large-offset validation requires 64 GiB free CUDA memory")
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    n = 2**31 + 17
+    x = torch.zeros(n, device="cuda", dtype=torch.float16, requires_grad=True)
+    v = torch.zeros_like(x, requires_grad=True)
+    m = torch.zeros_like(x, requires_grad=True)
+    with torch.no_grad():
+        x[-1] = 1
+    spike, voltage, complementary = functional.clif_step(
+        x, v, m, 2.0, 1.0, surrogate.Rect()
+    )
+    with torch.no_grad():
+        expected = clif_reference.step(
+            x[-2:], v[-2:], m[-2:], 2.0, 1.0, surrogate.Rect()
+        )
+        for actual, reference in zip((spike, voltage, complementary), expected):
+            torch.testing.assert_close(actual[-2:], reference, rtol=0, atol=0)
+    del voltage, complementary
+    gx, gv, gm = torch.autograd.grad(spike[-1], (x, v, m), allow_unused=True)
+    assert gm is None
+    torch.testing.assert_close(gx[-2:], x.new_tensor([0.0, 1.0]), rtol=0, atol=0)
+    torch.testing.assert_close(gv[-2:], x.new_tensor([0.0, 0.5]), rtol=0, atol=0)
