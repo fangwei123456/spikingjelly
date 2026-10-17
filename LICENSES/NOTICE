@@ -57,7 +57,7 @@ flash-snn and Flash Linear Attention (MIT)
 Copyright (c) 2025 Yifan Huang
 Copyright (c) 2023-2025 Songlin Yang
 License: MIT terms below
-  activation_based/triton_kernel/triton_utils.py: contiguous/device guard
+  ../ops/triton_runtime.py: contiguous/device guard
   and automatic mixed precision helpers
 References:
   https://github.com/AllenYolk/flash-snn/tree/e31d0c332536425bf6a3d5e4c5ff0dba44678552

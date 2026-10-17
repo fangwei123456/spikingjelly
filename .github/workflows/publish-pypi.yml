@@ -1,0 +1,83 @@
+name: Publish to PyPI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-pypi
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'fangwei123456/spikingjelly' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Require successful CI for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for workflow in ci.yml changelog.yml; do
+            gh run list --repo "$GITHUB_REPOSITORY" --commit "$GITHUB_SHA" \
+              --workflow "$workflow" --event push --json conclusion \
+              --jq 'map(select(.conclusion == "success")) | length' | grep -Eq '^[1-9][0-9]*$'
+          done
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11.16"
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: "0.9.24"
+      - name: Check release metadata
+        run: |
+          uv run --no-project python - <<'PYTHON'
+          import datetime
+          import pathlib
+          import re
+          import tomllib
+
+          version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
+          assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version), "Expected a final release version"
+          heading = next(line for line in pathlib.Path("CHANGELOG.md").read_text().splitlines() if line.startswith("## "))
+          prefix = f"## {version} - "
+          assert heading.startswith(prefix), "Changelog must start with this release"
+          datetime.date.fromisoformat(heading.removeprefix(prefix))
+          PYTHON
+          uv run --no-project python tools/generate_changelog_rst.py --check
+      - name: Build and check distributions
+        run: |
+          uv build --out-dir dist --build-constraints .github/ci-constraints.txt
+          uv run --no-project python tools/release/package_check.py artifacts --wheel dist/*.whl --sdist dist/*.tar.gz
+          uvx --from twine==6.2.0 twine check --strict dist/*
+          sha256sum dist/* >> "$GITHUB_STEP_SUMMARY"
+          echo "Source commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pypi-distributions
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/spikingjelly/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: pypi-distributions
+          path: dist/
+      - name: Publish distributions with Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2

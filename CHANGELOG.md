@@ -7,7 +7,7 @@ For older releases, see the historical fatal-bug record in
 [bugs.md](https://github.com/fangwei123456/spikingjelly/blob/master/bugs.md)
 and the archived documentation linked from the project README.
 
-## Unreleased
+## 2.0.0 - 2026-10-18
 
 ### Fixes
 
