@@ -1430,10 +1430,11 @@ def test_clif_fused_rect_endpoints_and_heaviside_gradients(monkeypatch):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
-def test_clif_registered_opcheck_and_inductor(monkeypatch):
+@pytest.mark.parametrize("implementation", ["triton", "torch"])
+def test_clif_registered_opcheck_and_inductor(monkeypatch, implementation):
     from spikingjelly._ops.clif import _forward, _selection, reference as clif_reference
 
-    monkeypatch.setattr(_selection, "_requested", "triton")
+    monkeypatch.setattr(_selection, "_requested", implementation)
     monkeypatch.setattr(_selection, "_selections", {})
     monkeypatch.setattr(_selection, "_compiled_selections", {})
     inputs = [torch.randn(3, 47, device="cuda", requires_grad=True) for _ in range(3)]
