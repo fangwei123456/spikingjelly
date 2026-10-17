@@ -24,13 +24,14 @@ def _forward_kernel(
     i = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
     dtype: tl.constexpr = X.dtype.element_ty
+    tau_inv = tl.div_rn(1.0, tl.full((), TAU, tl.float32))
     x = tl.load(X + i, mask, 0).to(tl.float32)
     v = tl.load(V + i, mask, 0).to(tl.float32)
     m = tl.load(M + i, mask, 0).to(tl.float32)
     leak_v = tl.load(LEAK_V + i, mask, 0).to(tl.float32)
-    leak = tl.div_rn(leak_v, TAU).to(dtype).to(tl.float32)
+    leak = (leak_v * tau_inv).to(dtype).to(tl.float32)
     h = ((v - leak).to(dtype).to(tl.float32) + x).to(dtype).to(tl.float32)
-    q = tl.div_rn(h, TAU).to(dtype).to(tl.float32)
+    q = (h * tau_inv).to(dtype).to(tl.float32)
     a = tl.div_rn(1.0, 1.0 + libdevice.exp(-q)).to(dtype).to(tl.float32)
     decayed_m = (m * a).to(dtype).to(tl.float32)
     z = (h - THRESHOLD).to(dtype).to(tl.float32)
@@ -65,6 +66,7 @@ def _backward_kernel(
     i = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
     dtype: tl.constexpr = H.dtype.element_ty
+    tau_inv = tl.div_rn(1.0, tl.full((), TAU, tl.float32))
     gs = tl.load(GS + i, mask, 0).to(tl.float32)
     gv = tl.load(GV + i, mask, 0).to(tl.float32)
     gm = tl.load(GM + i, mask, 0).to(tl.float32)
@@ -80,12 +82,12 @@ def _backward_kernel(
     gm_reset = (gm_reset * b).to(dtype).to(tl.float32)
     gm = (gm + gm_reset).to(dtype).to(tl.float32)
     gs = ((gs + gs_reset).to(dtype).to(tl.float32) + gm).to(dtype).to(tl.float32)
-    q = tl.div_rn(h, TAU).to(dtype).to(tl.float32)
+    q = (h * tau_inv).to(dtype).to(tl.float32)
     a = tl.div_rn(1.0, 1.0 + libdevice.exp(-q)).to(dtype).to(tl.float32)
     gh_decay = (gm * m).to(dtype).to(tl.float32)
     gh_decay = (gh_decay * (1.0 - a).to(dtype).to(tl.float32)).to(dtype).to(tl.float32)
     gh_decay = (gh_decay * a).to(dtype).to(tl.float32)
-    gh_decay = tl.div_rn(gh_decay, TAU).to(dtype).to(tl.float32)
+    gh_decay = (gh_decay * tau_inv).to(dtype).to(tl.float32)
     if SURROGATE == 0:
         u = (z * ALPHA).to(dtype).to(tl.float32)
         s = tl.div_rn(1.0, 1.0 + libdevice.exp(-u)).to(dtype).to(tl.float32)
@@ -133,7 +135,7 @@ def _backward_kernel(
     else:
         gh_spike = tl.full((BLOCK,), 0.0, tl.float32)
     gh = ((gv + gh_spike).to(dtype).to(tl.float32) + gh_decay).to(dtype).to(tl.float32)
-    leak_grad = (gh * (-1.0 / TAU)).to(dtype).to(tl.float32)
+    leak_grad = (gh * -tau_inv).to(dtype).to(tl.float32)
     tl.store(GX + i, gh, mask)
     tl.store(GV_LEAK + i, leak_grad, mask)
     tl.store(GMI + i, gm * a, mask)

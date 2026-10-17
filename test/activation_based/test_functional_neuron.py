@@ -1513,3 +1513,26 @@ def test_clif_fused_offsets_beyond_int32(monkeypatch):
     assert gm is None
     torch.testing.assert_close(gx[-2:], x.new_tensor([0.0, 1.0]), rtol=0, atol=0)
     torch.testing.assert_close(gv[-2:], x.new_tensor([0.0, 0.5]), rtol=0, atol=0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+@pytest.mark.parametrize("tau", [1.03, 1.1, 3.7])
+def test_clif_scalar_division_matches_torch_at_threshold(tau, monkeypatch):
+    from spikingjelly._ops.clif import _selection, reference as clif_reference
+
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    v = torch.tensor([0.0, 1.0, 7.0], device="cuda", requires_grad=True)
+    x = (1.0 - (v.detach() - v.detach() / tau)).requires_grad_()
+    m = torch.zeros_like(v, requires_grad=True)
+    inputs = (x, v, m)
+    refs = [t.detach().clone().requires_grad_() for t in inputs]
+    actual = functional.clif_step(*inputs, tau, 1.0, surrogate.Rect())
+    expected = clif_reference.step(*refs, tau, 1.0, surrogate.Rect())
+    torch.testing.assert_close(actual[0], expected[0], rtol=0, atol=0)
+    for a, r in zip(actual[1:], expected[1:]):
+        torch.testing.assert_close(a, r, rtol=1e-6, atol=1e-6)
+    ga = torch.autograd.grad(actual[0].sum() * 1000, inputs, allow_unused=True)
+    gr = torch.autograd.grad(expected[0].sum() * 1000, refs, allow_unused=True)
+    assert ga[2] is gr[2] is None
+    for a, r in zip(ga[:2], gr[:2]):
+        torch.testing.assert_close(a, r, rtol=1e-6, atol=1e-6)
