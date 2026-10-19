@@ -32,15 +32,16 @@ class STBIFNode(base.MemoryModule):
 
         SpikeZIP QANN-to-SNN 转换使用的 signed ternary BIF 神经元。它从
         QANN quantizer 的尺度 ``q_threshold`` 和量化边界构造状态动力学。
-        当前步内部输出 ``cur_output`` 取值为 ``-1``、``0`` 或 ``1``，最终
-        返回值为 ``cur_output * q_threshold``，因此通常不是二值 ``0/1``
-        spike。``acc_q`` 记录已累计释放的量化整数，并被限制在
+        每步返回 ``-q_threshold``、``0`` 或 ``q_threshold``，因此通常不是二值
+        ``0/1`` spike。仅保留 ``q`` 和 ``acc_q`` 两个跨步状态；``reset()``
+        清空它们，下一次输入时重新初始化。``acc_q`` 记录已累计释放的量化整数，
+        并被限制在
         ``[neg_min, pos_max]`` 内；``q`` 是量化残差，初始化为 ``0.5`` 以对应
         round-to-nearest 的量化偏置。
 
         该神经元仅用于推理阶段的 QANN-to-SNN 转换结果执行，不支持训练：
-        Torch 路径包含 ``detach``、``round`` 和离散状态更新；Triton 单步和
-        多步 kernel 也没有实现 backward。
+        构造参数会复制并与计算图分离。前向输入、状态或 buffer 需要梯度时会
+        抛出异常；Torch、Triton 和原生 CUDA 路径均没有实现 backward。
 
         :param q_threshold: QANN quantizer scale。
         :type q_threshold: float or torch.Tensor
@@ -65,18 +66,20 @@ class STBIFNode(base.MemoryModule):
 
         Signed ternary BIF neuron used by SpikeZIP QANN-to-SNN conversion. It
         builds its state dynamics from the QANN quantizer scale
-        ``q_threshold`` and quantization bounds. The internal current output
-        ``cur_output`` is ``-1``, ``0`` or ``1``. The returned value is
-        ``cur_output * q_threshold``, so it is generally not a binary ``0/1``
-        spike. ``acc_q`` stores the accumulated released quantized integer and
+        ``q_threshold`` and quantization bounds. Each step returns
+        ``-q_threshold``, ``0`` or ``q_threshold``, so it is generally not a binary
+        ``0/1`` spike. Only ``q`` and ``acc_q`` persist across steps; ``reset()``
+        clears both, and the next input initializes them again. ``acc_q`` stores
+        the accumulated released quantized integer and
         is clamped by the effective ``[neg_min, pos_max]`` bounds. ``q`` is the
         quantized residual and starts from ``0.5`` to match round-to-nearest
         quantization.
 
         This neuron is intended only for executing QANN-to-SNN conversion results
-        during inference and does not support training: the Torch path contains
-        ``detach``, ``round``, and discrete state updates; the Triton single-step
-        and multi-step kernels do not implement backward.
+        during inference and does not support training. Constructor parameters
+        are copied and detached. Forward inputs, states or buffers requiring
+        gradients raise an error. Torch, Triton and native CUDA paths do not
+        implement backward.
 
         :param q_threshold: QANN quantizer scale.
         :type q_threshold: float or torch.Tensor
@@ -116,7 +119,6 @@ class STBIFNode(base.MemoryModule):
         self.step_mode = step_mode
         self.register_memory("q", None)
         self.register_memory("acc_q", None)
-        self.register_memory("cur_output", None)
 
     @classmethod
     def from_quantizer(cls, quantizer: nn.Module) -> "STBIFNode":
@@ -139,16 +141,14 @@ class STBIFNode(base.MemoryModule):
         step_mode: str,
     ) -> tuple[object, ...]:
         x = inputs[0] if step_mode == "s" else inputs[0][0]
-        q, acc_q, cur_output = states
+        q, acc_q = states
         if q is None or q.shape != x.shape:
             q = torch.full_like(x, 0.5)
             acc_q = torch.zeros_like(x)
-            cur_output = torch.zeros_like(x)
         else:
             q = q.to(x)
             acc_q = acc_q.to(x)
-            cur_output = cur_output.to(x)
-        return q, acc_q, cur_output
+        return q, acc_q
 
     def single_step_functional_forward(
         self,
@@ -157,8 +157,8 @@ class STBIFNode(base.MemoryModule):
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x = inputs[0]
-        q, acc_q, cur_output = states
-        out, q, acc_q, cur_output = functional.stbif_step(
+        q, acc_q = states
+        out, q, acc_q = functional.stbif_step(
             x,
             q,
             acc_q,
@@ -166,7 +166,7 @@ class STBIFNode(base.MemoryModule):
             self.pos_max,
             self.neg_min,
         )
-        return (out,), (q, acc_q, cur_output)
+        return (out,), (q, acc_q)
 
     def multi_step_functional_forward(
         self,
@@ -175,8 +175,8 @@ class STBIFNode(base.MemoryModule):
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x_seq = inputs[0]
-        q, acc_q, cur_output = states
-        out_seq, q, acc_q, cur_output = functional.stbif_multi_step(
+        q, acc_q = states
+        out_seq, q, acc_q = functional.stbif_multi_step(
             x_seq,
             q,
             acc_q,
@@ -184,7 +184,7 @@ class STBIFNode(base.MemoryModule):
             self.pos_max,
             self.neg_min,
         )
-        return (out_seq,), (q, acc_q, cur_output)
+        return (out_seq,), (q, acc_q)
 
     @property
     def accumulated(self) -> torch.Tensor:
