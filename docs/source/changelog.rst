@@ -12,6 +12,25 @@ For older releases, see the historical fatal-bug record in
 `bugs.md <https://github.com/fangwei123456/spikingjelly/blob/master/bugs.md>`__
 and the archived documentation linked from the project README.
 
+Unreleased
+----------
+
+Changes
+~~~~~~~
+
+- ``activation_based.neuron.STBIFNode`` now retains only the residual membrane
+  potential and accumulated spike count. The ``cur_output`` attribute is removed;
+  consume the returned scaled spikes instead. ``functional.stbif_step`` and
+  ``functional.stbif_multi_step`` now return ``(out, q, acc_q)`` rather than four
+  tensors. Update tuple unpacking, rebuild native CUDA extensions, and regenerate
+  compiled/exported graphs when upgrading. Reverting requires restoring the
+  previous package and rebuilding its native extensions.
+- ST-BIF rounds the initial accumulated count once per sequence and avoids
+  allocating or writing a separate last-spike tensor in CUDA/Triton kernels.
+  Registered Torch sequence execution preallocates its output instead of
+  stacking per-step outputs. Spike values, quantization bounds and residual-state updates are
+  unchanged.
+
 2.0.0 - 2026-10-18
 ------------------
 

@@ -409,7 +409,7 @@ Synthetic RoBERTa parity 示例
 
 .. code-block:: shell
 
-    {"accumulated_sequence_shape": [32, 3, 2], "max_abs_diff": 3.2782554626464844e-07, "mean_abs_diff": 8.630255621255856e-08, "recipe": "SpikeZIPTFQANNRecipe", "stbif_state": {"last_step_spike_values": [0.0], "max_accumulated": 0.75, "min_accumulated": -1.0}}
+    {"accumulated_sequence_shape": [32, 3, 2], "max_abs_diff": 3.2782554626464844e-07, "mean_abs_diff": 8.630255621255856e-08, "recipe": "SpikeZIPTFQANNRecipe", "stbif_state": {"max_accumulated": 0.75, "min_accumulated": -1.0}}
 
 下表结果在 CPU 上通过上面的命令测得。它说明：只要输入已经是 SpikeZIP-compatible QANN，SpikeZIP 路径就能完成 RoBERTa 风格语言 Transformer 的转换。
 
