@@ -82,7 +82,7 @@ def api_name(x: torch.Tensor, scale: Optional[float] = None) -> torch.Tensor:
 ## Change Log
 
 - Starting with V2, record user-visible changes to features, APIs, dependencies or installation, semantics, migration, or compatibility in `CHANGELOG.md`. Purely internal refactoring usually needs no entry, except when it changes the public module structure, documentation entry points, or recommended usage.
-- Write user-facing English descriptions. Do not list changes commit by commit or describe temporary implementation steps. Give each bullet one specific change; give major features their own entries and avoid vague entries such as “other improvements.” Group `Features` by functional area and name the Python module for each new feature block. State the scope of experimental capabilities without presenting them as stable support.
+- Write user-facing English, grouped by module; label experimental scope. Keep each bullet to one short sentence (aim for 30 words): what changed and its effect. Add a second sentence only for required migration. Merge duplicates; put implementation history and validation details in linked PRs or docs.
 - Edit only `CHANGELOG.md` by hand, not the generated `docs/source/changelog.rst`. After editing, run:
 
 ```bash
