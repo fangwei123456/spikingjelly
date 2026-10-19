@@ -1081,6 +1081,22 @@ def test_stbif_sequence_resumes_from_two_states_without_mutating_inputs():
     torch.testing.assert_close(acc_final, acc_next)
 
 
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_stbif_reference_promotes_low_precision_residual(dtype):
+    x = torch.tensor([[0.5, -0.5], [0.0, 0.0]], dtype=dtype)
+    q = torch.full_like(x[0], 0.5)
+    acc_q = torch.zeros_like(q)
+    parameters = tuple(torch.tensor(v) for v in (0.25, 3.0, -4.0))
+
+    out, q_next, acc_next = functional.stbif_multi_step(x, q, acc_q, *parameters)
+
+    torch.testing.assert_close(
+        out, torch.tensor([[0.25, -0.25], [0.25, -0.25]], dtype=dtype)
+    )
+    torch.testing.assert_close(q_next, torch.tensor([0.5, 0.5], dtype=torch.float32))
+    torch.testing.assert_close(acc_next, torch.tensor([2.0, -2.0], dtype=dtype))
+
+
 def _stbif_reference(x, q, acc_q, threshold, pos_max, neg_min):
     normalized = x / threshold
     q_next = q + normalized

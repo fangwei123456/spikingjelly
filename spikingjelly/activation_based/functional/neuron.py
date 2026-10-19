@@ -3505,7 +3505,8 @@ def stbif_multi_step(
     :type neg_min: torch.Tensor
     :return: (out, q_final, acc_q_final)；out 与输入同形状和 dtype。
         注册算子的状态为 FP32；Torch 参考实现的 ``q_final`` 至少为 FP32，
-        ``acc_q_final`` 与输入 dtype 相同。所有输出均与输入同 device。
+        因为软复位使用 FP32 脉冲掩码；``acc_q_final`` 与输入 dtype 相同。
+        所有输出均与输入同 device。
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: 标量参数或实现配置无效。
     :raises RuntimeError: 张量约束不满足或没有可用设备实现。
@@ -3538,7 +3539,8 @@ def stbif_multi_step(
     :type neg_min: torch.Tensor
     :return: (out, q_final, acc_q_final); out matches input shape/dtype.
         Registered operators return FP32 states. The Torch reference returns
-        ``q_final`` in at least FP32 and ``acc_q_final`` in the input dtype.
+        ``q_final`` in at least FP32 because soft reset uses FP32 spike masks;
+        ``acc_q_final`` retains the input dtype.
         All outputs are on the input device.
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: Invalid scalar parameters or implementation configuration.
