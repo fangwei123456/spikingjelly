@@ -149,13 +149,11 @@ def write_output(path, payload):
 
 
 def collect_stbif_state(model: nn.Module):
-    values = set()
     min_accumulated = None
     max_accumulated = None
     for module in model.modules():
-        if not isinstance(module, STBIFNode) or module.cur_output is None:
+        if not isinstance(module, STBIFNode) or module.acc_q is None:
             continue
-        values.update(float(x) for x in torch.unique(module.cur_output).cpu())
         accumulated = module.accumulated.detach()
         current_min = float(accumulated.min().cpu())
         current_max = float(accumulated.max().cpu())
@@ -169,13 +167,12 @@ def collect_stbif_state(model: nn.Module):
             if max_accumulated is None
             else max(max_accumulated, current_max)
         )
-    if not values and min_accumulated is None and max_accumulated is None:
+    if min_accumulated is None:
         raise RuntimeError(
-            "collect_stbif_state found no STBIFNode with cur_output set; "
+            "collect_stbif_state found no STBIFNode with accumulated state; "
             "the SpikeZIPTFQANNRecipe conversion likely did not run."
         )
     return {
-        "last_step_spike_values": sorted(values),
         "min_accumulated": min_accumulated,
         "max_accumulated": max_accumulated,
     }
@@ -278,10 +275,6 @@ def main():
         raise RuntimeError(
             "SpikeZIP QANN parity failed: "
             f"max_abs_diff={max_abs_diff} > parity_atol={args.parity_atol}."
-        )
-    if not set(stbif_state["last_step_spike_values"]).issubset({-1.0, 0.0, 1.0}):
-        raise RuntimeError(
-            f"Unexpected ST-BIF spike values: {stbif_state['last_step_spike_values']}."
         )
     write_output(args.output, payload)
 

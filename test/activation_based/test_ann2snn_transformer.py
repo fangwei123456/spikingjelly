@@ -776,9 +776,9 @@ def test_spikezip_stbif_matches_quantizer_accumulation():
     for step in range(16):
         delta = x if step == 0 else torch.zeros_like(x)
         out = neuron(delta)
+        assert set(torch.unique(out).tolist()).issubset({-0.25, 0.0, 0.25})
         accumulated = out if accumulated is None else accumulated + out
     assert torch.allclose(accumulated, expected)
-    assert set(torch.unique(neuron.cur_output).tolist()).issubset({-1.0, 0.0, 1.0})
 
 
 def test_spikezip_stbif_state_follows_module_dtype():
@@ -793,7 +793,22 @@ def test_spikezip_stbif_state_follows_module_dtype():
     assert y.dtype == torch.float64
     assert neuron.q.dtype == torch.float64
     assert neuron.acc_q.dtype == torch.float64
-    assert neuron.cur_output.dtype == torch.float64
+
+
+def test_spikezip_stbif_explicit_state_and_reset():
+    neuron = STBIFNode(1.0, level=8, sym=True)
+    x = torch.tensor([0.75])
+    (out,), states = neuron.functional_forward((x,), (None, None))
+    q, acc_q = states
+    torch.testing.assert_close(out, torch.tensor([1.0]))
+    torch.testing.assert_close(q, torch.tensor([0.25]))
+    torch.testing.assert_close(acc_q, torch.tensor([1.0]))
+    (correction,), _ = neuron.functional_forward((torch.tensor([-0.5]),), states)
+    torch.testing.assert_close(correction, torch.tensor([-1.0]))
+
+    torch.testing.assert_close(neuron(x), out)
+    neuron.reset()
+    torch.testing.assert_close(neuron(x), out)
 
 
 @pytest.mark.parametrize("sym", [False, True])
@@ -815,7 +830,6 @@ def test_spikezip_stbif_optimized_torch_matches_single_step_reference(sym, x):
     loop_seq = torch.stack([reference.single_step_forward(x_t) for x_t in x_seq], dim=0)
     loop_q = reference.q.clone()
     loop_acc_q = reference.acc_q.clone()
-    loop_cur_output = reference.cur_output.clone()
 
     neuron = STBIFNode.from_quantizer(quantizer)
     functional.set_step_mode(neuron, "m")
@@ -824,7 +838,6 @@ def test_spikezip_stbif_optimized_torch_matches_single_step_reference(sym, x):
     assert torch.allclose(y_seq, loop_seq, atol=1e-6, rtol=1e-6)
     assert torch.allclose(neuron.q, loop_q, atol=1e-6, rtol=1e-6)
     assert torch.allclose(neuron.acc_q, loop_acc_q, atol=1e-6, rtol=1e-6)
-    assert torch.allclose(neuron.cur_output, loop_cur_output, atol=1e-6, rtol=1e-6)
     assert torch.allclose(
         neuron.accumulated, reference.accumulated, atol=1e-6, rtol=1e-6
     )
@@ -844,23 +857,17 @@ def test_spikezip_stbif_cuda_matches_torch(dtype, time_steps):
     x = (torch.randn(7, 13, device="cuda", dtype=dtype) * 0.2).contiguous()
     x_seq = _first_real_then_zero_sequence(x, time_steps=time_steps)
 
-    torch_neuron = STBIFNode.from_quantizer(quantizer).cuda()
+    torch_neuron = STBIFNode.from_quantizer(quantizer)
     functional.set_step_mode(torch_neuron, "m")
-    torch_seq = torch_neuron(x_seq)
+    torch_seq = torch_neuron(x_seq.cpu())
 
     cuda_neuron = STBIFNode.from_quantizer(quantizer).cuda()
     functional.set_step_mode(cuda_neuron, "m")
     cuda_seq = cuda_neuron(x_seq)
 
-    assert torch.allclose(cuda_seq, torch_seq, atol=1e-3, rtol=1e-3)
-    assert torch.allclose(cuda_neuron.q, torch_neuron.q, atol=1e-3, rtol=1e-3)
-    assert torch.equal(cuda_neuron.acc_q, torch_neuron.acc_q)
-    assert torch.allclose(
-        cuda_neuron.cur_output,
-        torch_neuron.cur_output,
-        atol=1e-3,
-        rtol=1e-3,
-    )
+    assert torch.allclose(cuda_seq.cpu(), torch_seq, atol=1e-3, rtol=1e-3)
+    assert torch.allclose(cuda_neuron.q.cpu(), torch_neuron.q, atol=1e-3, rtol=1e-3)
+    assert torch.equal(cuda_neuron.acc_q.cpu(), torch_neuron.acc_q)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
@@ -900,60 +907,52 @@ def test_spikezip_stbif_single_step_cuda_matches_torch(dtype):
     )
     level_indices = torch.arange(8 * 7 * 13, device="cuda").reshape(8, 7, 13)
     x_seq = normalized_levels[level_indices % normalized_levels.numel()] * 0.25
-    torch_neuron = STBIFNode.from_quantizer(quantizer).cuda()
+    torch_neuron = STBIFNode.from_quantizer(quantizer)
     cuda_neuron = STBIFNode.from_quantizer(quantizer).cuda()
 
-    torch_out = torch.stack([torch_neuron(x) for x in x_seq])
+    torch_out = torch.stack([torch_neuron(x) for x in x_seq.cpu()])
     cuda_out = torch.stack([cuda_neuron(x) for x in x_seq])
 
-    assert torch.allclose(cuda_out, torch_out, atol=1e-3, rtol=1e-3)
+    assert torch.allclose(cuda_out.cpu(), torch_out, atol=1e-3, rtol=1e-3)
     state_tol = {
         torch.float32: 1e-6,
         torch.float16: 5e-3,
         torch.bfloat16: 2e-2,
     }[dtype]
-    assert torch.allclose(cuda_neuron.q, torch_neuron.q, atol=state_tol, rtol=state_tol)
-    assert torch.equal(cuda_neuron.acc_q, torch_neuron.acc_q)
     assert torch.allclose(
-        cuda_neuron.cur_output,
-        torch_neuron.cur_output,
-        atol=1e-3,
-        rtol=1e-3,
+        cuda_neuron.q.cpu(), torch_neuron.q, atol=state_tol, rtol=state_tol
     )
+    assert torch.equal(cuda_neuron.acc_q.cpu(), torch_neuron.acc_q)
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_spikezip_stbif_cuda_rounds_half_to_even():
-    dtype = torch.float32
-    if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
-        pytest.skip("CUDA device does not support bfloat16")
-    x = torch.zeros(6, device="cuda", dtype=dtype)
-    q = torch.full_like(x, 0.5)
-    acc_q = torch.tensor([0.5, 1.5, 2.5, -0.5, -1.5, -2.5], device="cuda", dtype=dtype)
-    q_threshold = torch.tensor(0.1, device="cuda")
-    pos_max = torch.tensor(10.0, device="cuda")
-    neg_min = torch.tensor(-10.0, device="cuda")
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+def test_spikezip_stbif_rounds_initial_count_half_to_even(device):
+    x = torch.zeros(4, 6, device=device)
+    q = torch.full_like(x[0], 0.5)
+    acc_q = torch.tensor([0.5, 1.5, 2.5, -0.5, -1.5, -2.5], device=device)
+    parameters = tuple(torch.tensor(v, device=device) for v in (0.1, 10.0, -10.0))
 
-    expected = functional.stbif_step(
-        x,
-        q,
-        acc_q,
-        q_threshold,
-        pos_max,
-        neg_min,
+    out, q_next, acc_next = functional.stbif_multi_step(x, q, acc_q, *parameters)
+
+    torch.testing.assert_close(out, torch.zeros_like(x))
+    torch.testing.assert_close(q_next, q)
+    torch.testing.assert_close(
+        acc_next, torch.tensor([0.0, 2.0, 2.0, 0.0, -2.0, -2.0], device=device)
     )
-    actual_multi = functional.stbif_multi_step(
-        x.unsqueeze(0),
-        q,
-        acc_q,
-        q_threshold,
-        pos_max,
-        neg_min,
+    torch.testing.assert_close(
+        acc_q, torch.tensor([0.5, 1.5, 2.5, -0.5, -1.5, -2.5], device=device)
     )
-
-    torch.testing.assert_close(actual_multi[0][0], expected[0])
-    for actual, reference in zip(actual_multi[1:4], expected[1:]):
-        torch.testing.assert_close(actual, reference)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

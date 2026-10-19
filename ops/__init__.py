@@ -1,3 +1,3 @@
 """Private operator implementations, installed as :mod:`spikingjelly._ops`."""
 
-_NATIVE_ABI = 4
+_NATIVE_ABI = 5
