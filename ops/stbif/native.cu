@@ -11,7 +11,7 @@
 #include <tuple>
 namespace {
 using at::Tensor;
-std::tuple<Tensor, Tensor, Tensor, Tensor>
+std::tuple<Tensor, Tensor, Tensor>
 forward(const Tensor &source_x, const Tensor &source_q, const Tensor &source_acc_q,
         const Tensor &source_q_threshold, const Tensor &source_pos_max,
         const Tensor &source_neg_min) {
@@ -45,11 +45,11 @@ forward(const Tensor &source_x, const Tensor &source_q, const Tensor &source_acc
     const auto &pos_max = source_pos_max;
     const auto &neg_min = source_neg_min;
     auto out = sj_empty_like(x);
-    auto vo = sj_empty_like(q), wo = sj_empty_like(vo), cur = sj_empty_like(vo);
+    auto vo = sj_empty_like(q), wo = sj_empty_like(q);
     const int64_t T = x.size(0), N = q.numel();
     const int blocks = std::min<int64_t>((N + 255) / 256, 65535);
     auto stream = at::cuda::getCurrentCUDAStream(x.get_device());
-    sj_launch_layout<7>(x, {&x, &q, &acc_q, &out, &vo, &wo, &cur}, [&](auto layout) {
+    sj_launch_layout<6>(x, {&x, &q, &acc_q, &out, &vo, &wo}, [&](auto layout) {
         AT_DISPATCH_FLOATING_TYPES_AND2(
             at::kHalf, at::kBFloat16, x.scalar_type(), "sj_stbif_forward", [&] {
                 stbif_forward<scalar_t><<<blocks, 256, 0, stream>>>(
@@ -57,16 +57,16 @@ forward(const Tensor &source_x, const Tensor &source_q, const Tensor &source_acc
                     acc_q.const_data_ptr<float>(), q_threshold.const_data_ptr<float>(),
                     pos_max.const_data_ptr<float>(), neg_min.const_data_ptr<float>(),
                     out.mutable_data_ptr<scalar_t>(), vo.mutable_data_ptr<float>(),
-                    wo.mutable_data_ptr<float>(), cur.mutable_data_ptr<float>(), T, N,
+                    wo.mutable_data_ptr<float>(), T, N,
                     layout);
             });
     });
     C10_CUDA_KERNEL_LAUNCH_CHECK();
-    return {out, vo, wo, cur};
+    return {out, vo, wo};
 }
 } // namespace
 TORCH_LIBRARY_FRAGMENT(sj_stbif, m) {
     m.def("native_forward(Tensor x, Tensor q, Tensor acc_q, Tensor q_threshold, "
-          "Tensor pos_max, Tensor neg_min) -> (Tensor, Tensor, Tensor, Tensor)");
+          "Tensor pos_max, Tensor neg_min) -> (Tensor, Tensor, Tensor)");
 }
 TORCH_LIBRARY_IMPL(sj_stbif, CUDA, m) { m.impl("native_forward", &forward); }

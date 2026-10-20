@@ -2161,7 +2161,7 @@ def stbif_step(
     q_threshold: torch.Tensor,
     pos_max: torch.Tensor,
     neg_min: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
     **API Language** - :ref:`中文 <stbif_step-cn>` | :ref:`English <stbif_step-en>`
 
@@ -2171,31 +2171,34 @@ def stbif_step(
 
     * **中文**
 
-    执行 ``STBIFNode`` 的单步显式状态转移。函数接收当前输入 ``x``、已物化的
-    量化残差 ``q`` 和累计释放量 ``acc_q``，以及量化尺度与边界 tensor，返回
-    ``(out, q_next, acc_q_next, cur_output_next)``。量化尺度和边界会在函数入口
-    转换到 ``x`` 的 device/dtype。
+    执行 ST-BIF 单步推理，返回缩放后的三值脉冲和两个更新后的状态。
+    输入除以量化尺度后累加到 ``q``；``acc_q`` 按 ties-to-even 取整，
+    再根据残差和累计边界决定发放正、负或零脉冲，并执行软复位。
+    不修改输入或模块 memory；不支持输入、状态或参数梯度。
 
-    该函数保持 SpikeZIP STBIF 的推理语义：输入先除以 ``q_threshold``，累加到
-    ``q`` 时使用 ``detach``；``acc_q`` 在判断边界前执行 ``round``；输出
-    ``cur_output_next * q_threshold``。函数不读取或写入 ``MemoryModule`` memory，
-    不负责 ``training/eval`` 或 ``step_mode``，也不原地修改传入
-    state。
-
-    :param x: 当前输入张量
+    :param x: 当前步浮点输入 ``[N, ...]``，神经元维度非空。
+        CPU/NVIDIA CUDA FP32、FP16、BF16 的注册算子要求 FP32 状态和参数；
+        其他支持的 dtype 使用 Torch 参考路径，状态须与输入 dtype 相同。
     :type x: torch.Tensor
-    :param q: 当前量化残差 state，shape 与 ``x`` 相同
+    :param q: 与 ``x`` 同形状、同设备的归一化残余膜电位。
     :type q: torch.Tensor
-    :param acc_q: 当前累计释放量 state，shape 与 ``x`` 相同
+    :param acc_q: 与 ``q`` 同形状、同设备、同 dtype 的累计净脉冲数。
     :type acc_q: torch.Tensor
-    :param q_threshold: 可广播到 ``x`` 的量化 scale tensor
+    :param q_threshold: 单元素浮点量化尺度，应为正值；注册算子要求与输入
+        同设备的 FP32，参考路径转换到输入 device/dtype。
     :type q_threshold: torch.Tensor
-    :param pos_max: 可广播到 ``x`` 的正向累计量化上界 tensor
+    :param pos_max: 单元素浮点累计上界，采用与 ``q_threshold`` 相同的
+        device/dtype 约束；整数边界应包含初始累计值。
     :type pos_max: torch.Tensor
-    :param neg_min: 可广播到 ``x`` 的负向累计量化下界 tensor
+    :param neg_min: 单元素浮点累计下界，采用与 ``pos_max`` 相同的约束。
     :type neg_min: torch.Tensor
-    :return: ``(out, q_next, acc_q_next, cur_output_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: ``(out, q_next, acc_q_next)``，均与输入同形状、同设备；
+        ``out`` 与输入同 dtype，取值为 ``-q_threshold``、``0`` 或
+        ``q_threshold``。状态遵循 :func:`stbif_multi_step` 的 dtype 规则。
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises ValueError: 标量参数、状态形状或实现配置无效。
+    :raises RuntimeError: 输入、状态或参数需要梯度，张量约束不满足，
+        或没有可用设备实现。
 
     ----
 
@@ -2203,48 +2206,45 @@ def stbif_step(
 
     * **English**
 
-    Run one explicit state transition for ``STBIFNode``. The function receives
-    current input ``x``, materialized quantized residual ``q`` and accumulated
-    released quantity ``acc_q``, plus ``q_threshold``, ``pos_max``, and
-    ``neg_min`` tensors. It returns
-    ``(out, q_next, acc_q_next, cur_output_next)``. The scale and bounds are
-    converted to the device and dtype of ``x`` at function entry.
+    Run one ST-BIF inference step, returning a scaled ternary spike and two
+    updated states. Divide the input by the quantization scale and add it to
+    ``q``; round ``acc_q`` with ties-to-even, decide the positive, negative or
+    zero spike from the residual and accumulated bounds, then apply soft reset.
+    Inputs and module memory are not mutated. Input, state and parameter
+    gradients are unsupported.
 
-    This function preserves SpikeZIP STBIF inference semantics: the input is
-    divided by ``q_threshold``; the addition into ``q`` uses ``detach``;
-    ``acc_q`` is rounded before bound checks; and the output is
-    ``cur_output_next * q_threshold``. The function does not read or write
-    ``MemoryModule`` memory, does not manage ``training/eval`` or ``step_mode``, and does not mutate input
-    states in place.
-
-    :param x: Current input tensor
+    :param x: Floating-point input ``[N, ...]`` with nonempty neuron dimensions.
+        Registered CPU/NVIDIA CUDA operators accept FP32, FP16 and BF16 inputs
+        with FP32 states and parameters. Other supported dtypes use the Torch
+        reference path, which requires states with the input dtype.
     :type x: torch.Tensor
-    :param q: Current quantized residual state with the same shape as ``x``
+    :param q: Normalized residual membrane potential, matching ``x`` shape/device.
     :type q: torch.Tensor
-    :param acc_q: Current accumulated released-quantity state with the same
-        shape as ``x``
+    :param acc_q: Accumulated net spike count, matching ``q`` shape/device/dtype.
     :type acc_q: torch.Tensor
-    :param q_threshold: Quantization-scale tensor broadcastable to ``x``
+    :param q_threshold: Single-element floating-point quantization scale, expected
+        positive. Registered operators require FP32 on the input device; the
+        reference path converts it to the input device/dtype.
     :type q_threshold: torch.Tensor
-    :param pos_max: Positive accumulated-quantization-bound tensor broadcastable
-        to ``x``
+    :param pos_max: Single-element floating-point accumulated upper bound, with
+        the device/dtype constraints of ``q_threshold``. Integer bounds should
+        contain the initial accumulated count.
     :type pos_max: torch.Tensor
-    :param neg_min: Negative accumulated-quantization-bound tensor broadcastable
-        to ``x``
+    :param neg_min: Single-element floating-point accumulated lower bound, with
+        the same constraints as ``pos_max``.
     :type neg_min: torch.Tensor
-    :return: ``(out, q_next, acc_q_next, cur_output_next)``
-    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
-
-    .. note::
-
-       本函数没有独立 Torch 多步形式；Torch 多步执行由调用者逐步循环。
-       This function has no independent Torch multi-step form; callers iterate it
-       for Torch sequence execution.
+    :return: ``(out, q_next, acc_q_next)``, all matching the input shape/device.
+        ``out`` matches the input dtype and takes values ``-q_threshold``, ``0``
+        or ``q_threshold``. State dtypes follow :func:`stbif_multi_step`.
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    :raises ValueError: Invalid scalar parameters, state shapes or configuration.
+    :raises RuntimeError: Inputs, states or parameters require gradients, tensor
+        constraints are violated, or no device implementation is available.
     """
-    out_seq, q_next, acc_q_next, cur_output_next = stbif_multi_step(
+    out_seq, q_next, acc_q_next = stbif_multi_step(
         x.unsqueeze(0), q, acc_q, q_threshold, pos_max, neg_min
     )
-    return out_seq[0], q_next, acc_q_next, cur_output_next
+    return out_seq[0], q_next, acc_q_next
 
 
 def lif_multi_step(
@@ -3477,7 +3477,7 @@ def stbif_multi_step(
     q_threshold: torch.Tensor,
     pos_max: torch.Tensor,
     neg_min: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
     **API Language** - :ref:`中文 <stbif_multi_step-cn>` | :ref:`English <stbif_multi_step-en>`
 
@@ -3503,9 +3503,11 @@ def stbif_multi_step(
     :type pos_max: torch.Tensor
     :param neg_min: 单元素浮点负释放下界张量；注册算子要求与状态同设备的 FP32。
     :type neg_min: torch.Tensor
-    :return: (out, q_final, acc_q_final, cur_output)；out 与输入同形状和 dtype。
-        注册算子的状态为 FP32，Torch 参考实现的状态 dtype 与输入一致；所有输出均与输入同 device。
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :return: (out, q_final, acc_q_final)；out 与输入同形状和 dtype。
+        注册算子的状态为 FP32；Torch 参考实现的 ``q_final`` 至少为 FP32，
+        因为软复位使用 FP32 脉冲掩码；``acc_q_final`` 与输入 dtype 相同。
+        所有输出均与输入同 device。
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: 标量参数或实现配置无效。
     :raises RuntimeError: 张量约束不满足或没有可用设备实现。
 
@@ -3535,10 +3537,12 @@ def stbif_multi_step(
     :type pos_max: torch.Tensor
     :param neg_min: Single-element floating-point negative release bound. Registered operators require FP32 on the input device.
     :type neg_min: torch.Tensor
-    :return: (out, q_final, acc_q_final, cur_output); out matches input shape/dtype.
-        Registered operators return FP32 states; the Torch reference matches the input dtype.
+    :return: (out, q_final, acc_q_final); out matches input shape/dtype.
+        Registered operators return FP32 states. The Torch reference returns
+        ``q_final`` in at least FP32 because soft reset uses FP32 spike masks;
+        ``acc_q_final`` retains the input dtype.
         All outputs are on the input device.
-    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     :raises ValueError: Invalid scalar parameters or implementation configuration.
     :raises RuntimeError: Tensor constraints violated or no available device implementation.
     """
@@ -3568,12 +3572,11 @@ def stbif_multi_step(
             _selection, x_seq.device, "Torch reference implementation required"
         )
         outputs = []
+        acc_q = acc_q.round()
         for current in x_seq:
-            output, q, acc_q, cur_output = step(
-                current, q, acc_q, q_threshold, pos_max, neg_min
-            )
+            output, q, acc_q = step(current, q, acc_q, q_threshold, pos_max, neg_min)
             outputs.append(output.to(x_seq.dtype))
-        return torch.stack(outputs), q, acc_q, cur_output
+        return torch.stack(outputs), q, acc_q
     if any(parameter.numel() != 1 for parameter in (q_threshold, pos_max, neg_min)):
         raise ValueError("parameters must be scalar tensors")
     if (

@@ -90,5 +90,4 @@ def _forward_fake(
         _fake_empty_like(x, strided=_strided),
         _fake_empty_like(q, strided=_strided),
         _fake_empty_like(q, strided=_strided),
-        _fake_empty_like(q, strided=_strided),
     )

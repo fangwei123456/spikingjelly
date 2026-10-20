@@ -407,7 +407,7 @@ The expected stdout contains a near-zero parity error and an ST-BIF state summar
 
 .. code-block:: shell
 
-    {"accumulated_sequence_shape": [32, 3, 2], "max_abs_diff": 3.2782554626464844e-07, "mean_abs_diff": 8.630255621255856e-08, "recipe": "SpikeZIPTFQANNRecipe", "stbif_state": {"last_step_spike_values": [0.0], "max_accumulated": 0.75, "min_accumulated": -1.0}}
+    {"accumulated_sequence_shape": [32, 3, 2], "max_abs_diff": 3.2782554626464844e-07, "mean_abs_diff": 8.630255621255856e-08, "recipe": "SpikeZIPTFQANNRecipe", "stbif_state": {"max_accumulated": 0.75, "min_accumulated": -1.0}}
 
 The result below was measured on CPU with the command above. It shows that the SpikeZIP path can convert a RoBERTa-style language Transformer when the input is already a SpikeZIP-compatible QANN.
 

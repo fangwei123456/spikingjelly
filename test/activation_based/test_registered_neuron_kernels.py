@@ -311,16 +311,16 @@ def test_stbif_sequence_single_step_and_bounds(device, dtype):
     actual = functional.stbif_multi_step(x, q, acc, scale, pos, neg)
     outputs = []
     for current in x.float():
-        out, q, acc, cur = functional.stbif_step(current, q, acc, scale, pos, neg)
+        out, q, acc = functional.stbif_step(current, q, acc, scale, pos, neg)
         outputs.append(out.to(dtype))
-    _assert_outputs(actual, (torch.stack(outputs), q, acc, cur))
+    _assert_outputs(actual, (torch.stack(outputs), q, acc))
     q0 = torch.tensor([0.5, 0.0, -0.5, 0.0], device=device)
     a0 = torch.tensor([0.5, 1.5, -0.5, -1.5], device=device)
     singles = []
     for current in x:
-        out, q0, a0, cur0 = functional.stbif_step(current, q0, a0, scale, pos, neg)
+        out, q0, a0 = functional.stbif_step(current, q0, a0, scale, pos, neg)
         singles.append(out)
-    _assert_outputs((torch.stack(singles), q0, a0, cur0), actual)
+    _assert_outputs((torch.stack(singles), q0, a0), actual)
 
 
 @pytest.mark.parametrize("kind", ["qif", "eif", "izhikevich", "ilif"])

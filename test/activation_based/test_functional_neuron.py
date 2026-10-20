@@ -1057,6 +1057,46 @@ def test_gated_lif_step_matches_module_sequence():
     _assert_close(module.v, v)
 
 
+def test_stbif_sequence_resumes_from_two_states_without_mutating_inputs():
+    x = torch.tensor([[0.75], [-0.5], [2.0], [0.0], [-3.0], [0.0]])
+    q = torch.tensor([0.5])
+    acc_q = torch.tensor([0.0])
+    parameters = tuple(torch.tensor(v) for v in (1.0, 2.0, -2.0))
+
+    out, q_next, acc_next = functional.stbif_multi_step(x, q, acc_q, *parameters)
+    torch.testing.assert_close(
+        out, torch.tensor([[1.0], [-1.0], [1.0], [1.0], [-1.0], [-1.0]])
+    )
+    torch.testing.assert_close(q_next, torch.tensor([-0.25]))
+    torch.testing.assert_close(acc_next, torch.tensor([0.0]))
+    torch.testing.assert_close(q, torch.tensor([0.5]))
+    torch.testing.assert_close(acc_q, torch.tensor([0.0]))
+
+    first, q_mid, acc_mid = functional.stbif_multi_step(x[:3], q, acc_q, *parameters)
+    last, q_final, acc_final = functional.stbif_multi_step(
+        x[3:], q_mid, acc_mid, *parameters
+    )
+    torch.testing.assert_close(torch.cat((first, last)), out)
+    torch.testing.assert_close(q_final, q_next)
+    torch.testing.assert_close(acc_final, acc_next)
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_stbif_reference_promotes_low_precision_residual(dtype):
+    x = torch.tensor([[0.5, -0.5], [0.0, 0.0]], dtype=dtype)
+    q = torch.full_like(x[0], 0.5)
+    acc_q = torch.zeros_like(q)
+    parameters = tuple(torch.tensor(v) for v in (0.25, 3.0, -4.0))
+
+    out, q_next, acc_next = functional.stbif_multi_step(x, q, acc_q, *parameters)
+
+    torch.testing.assert_close(
+        out, torch.tensor([[0.25, -0.25], [0.25, -0.25]], dtype=dtype)
+    )
+    torch.testing.assert_close(q_next, torch.tensor([0.5, 0.5], dtype=torch.float32))
+    torch.testing.assert_close(acc_next, torch.tensor([2.0, -2.0], dtype=dtype))
+
+
 def _stbif_reference(x, q, acc_q, threshold, pos_max, neg_min):
     normalized = x / threshold
     q_next = q + normalized
@@ -1066,7 +1106,7 @@ def _stbif_reference(x, q, acc_q, threshold, pos_max, neg_min):
     acc_q_next = acc_q + current
     q_next = torch.where(positive, q_next - 1, q_next)
     q_next = torch.where(negative, q_next + 1, q_next)
-    return current * threshold, q_next, acc_q_next, current
+    return current * threshold, q_next, acc_q_next
 
 
 def test_stbif_step_matches_reference_sequence():
