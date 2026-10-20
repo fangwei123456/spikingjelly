@@ -30,13 +30,13 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 
 :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` 支持转换以下模块：
 
-* ``torch.nn.Linear``, :class:`layer.Linear <spikingjelly.activation_based.layer.Linear>`
-* ``torch.nn.Conv1d``, :class:`layer.Conv1d <spikingjelly.activation_based.layer.Conv1d>`
-* ``torch.nn.Conv2d``, :class:`layer.Conv2d <spikingjelly.activation_based.layer.Conv2d>`
-* ``torch.nn.AvgPool2d``, :class:`layer.AvgPool2d <spikingjelly.activation_based.layer.AvgPool2d>`
-* ``torch.nn.Flatten``, :class:`layer.Flatten <spikingjelly.activation_based.layer.Flatten>`
+* ``torch.nn.Linear``、:class:`layer.Linear <spikingjelly.activation_based.layer.Linear>`
+* ``torch.nn.Conv1d``、:class:`layer.Conv1d <spikingjelly.activation_based.layer.Conv1d>`
+* ``torch.nn.Conv2d``、:class:`layer.Conv2d <spikingjelly.activation_based.layer.Conv2d>`
+* ``torch.nn.AvgPool2d``、:class:`layer.AvgPool2d <spikingjelly.activation_based.layer.AvgPool2d>`
+* ``torch.nn.Flatten``、:class:`layer.Flatten <spikingjelly.activation_based.layer.Flatten>`
 * :class:`IFNode <spikingjelly.activation_based.neuron.IFNode>`
-* :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>` and :class:`ParametricLIFNode <spikingjelly.activation_based.neuron.ParametricLIFNode>`
+* :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>` 和 :class:`ParametricLIFNode <spikingjelly.activation_based.neuron.ParametricLIFNode>`
 * :class:`CUBALIFNode <spikingjelly.activation_based.neuron.CUBALIFNode>`
 
 以下面的 SNN 模型为例：
@@ -152,7 +152,7 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 
 目前， :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` 仅支持以下 NIR 节点类型：
 
-* ``nir.Linear``, ``nir.Affine``
+* ``nir.Linear``、``nir.Affine``
 * ``nir.Conv1d``
 * ``nir.Conv2d``
 * ``nir.AvgPool2d``

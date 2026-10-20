@@ -17,7 +17,7 @@ STDP(Spike Timing Dependent Plasticity)
 
 A classic experimental study of STDP(Spike Timing Dependent Plasticity) is [#STDP]_, which is a synaptic plasticity rule found in biological \
 neural system. The experiments in the biological neural systems find that the weight of synapse is influenced by the firing time of spikes \
-of the pre and post neuron. More specific, STDP can be formulated as:
+of the pre and post neuron. More specifically, the rule is:
 
 If the pre neuron fires early and the post neuron fires later, then the weight will increase;
 If the pre neuron fires later while the post neuron fires early, then the weight will decrease.
@@ -43,7 +43,7 @@ We can use the following equation to describe STDP:
 
 where :math:`A, B` are the maximum of weight variation, and :math:`\tau_{+}, \tau_{-}` are time constants.
 
-However, the above equation is seldom used in practicals because it needs to record all firing times of pre and post neurons.\
+However, the above equation is seldom used in practice because it needs to record all firing times of pre and post neurons.\
 The trace method [#Trace]_  is a more popular method to implement STDP.
 
 For the pre neuron :math:`i` and the post neuron :math:`j`, we use the traces :math:`tr_{pre}[i]` and :math:`tr_{post}[j]` to track their firing. The update of \
@@ -55,7 +55,7 @@ traces are similar to the LIF neuron:
 
     tr_{post}[j][t] = tr_{post}[j][t-1] -\frac{tr_{post}[j][t-1]}{\tau_{post}} + s[j][t]
 
-where :math:`\tau_{pre}, \tau_{post}` are time constants of the pre and post neuron. :math:`s[i][t], s[j][t]` are the \
+where :math:`\tau_{pre}, \tau_{post}` are the decay time constants of the pre- and postsynaptic traces. :math:`s[i][t], s[j][t]` are the \
 spikes at time-step :math:`t` of the pre neuron :math:`i` and the post neuron :math:`j`, which can only be 0 or 1.
 
 The update of weight is:
@@ -70,12 +70,13 @@ The implementation uses ``W[post, pre]``; the biological notation above uses
 pre=i and post=j. STDP uses ``1-1/tau`` decay with finite ``tau>=1``. Current spikes
 enter traces before computing updates. Batch, convolution positions and multi-step
 time are summed; callers adjust ``scale`` explicitly. Simultaneous-spike cancellation
-depends on weight modulation. Fixed-weight sequence accumulation is not stepwise learning.
+depends on weight modulation. Fixed-weight sequence accumulation is not stepwise
+learning. MSTDP additionally requires ``reset()`` before a batch-size change.
 
 STDP Learner
 -----------------------------------------------------
 :class:`spikingjelly.activation_based.learning.STDPLearner` can apply STDP learning on convolutional or linear layers. \
-Please read the api doc first to learn how to use it.
+See :class:`spikingjelly.activation_based.learning.STDPLearner` for the full API.
 
 Now let us use ``STDPLearner`` to build a ``4x3`` network, initializing weights to ``0.4``:
 
@@ -328,98 +329,9 @@ to delimit independent episodes. ``step()`` already consumes activity records; u
         stdp_learners[i].reset()
 
 
-The complete codes are as follows:
+Release the hooks when the experiment is finished:
 
 .. code-block:: python
-
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-    from torch.optim import SGD, Adam
-    from spikingjelly.activation_based import learning, layer, neuron, functional
-
-    T = 8
-    N = 2
-    C = 3
-    H = 32
-    W = 32
-    lr = 0.1
-    tau_pre = 2.
-    tau_post = 100.
-    step_mode = 'm'
-
-    def f_weight(x):
-        return torch.clamp(x, -1, 1.)
-
-
-    net = nn.Sequential(
-        layer.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False),
-        neuron.IFNode(),
-        layer.MaxPool2d(2, 2),
-        layer.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False),
-        neuron.IFNode(),
-        layer.MaxPool2d(2, 2),
-        layer.Flatten(),
-        layer.Linear(16 * 8 * 8, 64, bias=False),
-        neuron.IFNode(),
-        layer.Linear(64, 10, bias=False),
-        neuron.IFNode(),
-    )
-
-    functional.set_step_mode(net, step_mode)
-
-    instances_stdp = (layer.Conv2d, )
-
-    stdp_learners = []
-
-    for i in range(net.__len__()):
-        if isinstance(net[i], instances_stdp):
-            stdp_learners.append(
-                learning.STDPLearner(step_mode=step_mode, synapse=net[i], sn=net[i+1], tau_pre=tau_pre, tau_post=tau_post,
-                                    f_pre=f_weight, f_post=f_weight)
-            )
-
-
-    params_stdp = []
-    for m in net.modules():
-        if isinstance(m, instances_stdp):
-            for p in m.parameters():
-                params_stdp.append(p)
-
-    params_stdp_set = set(params_stdp)
-    params_gradient_descent = []
-    for p in net.parameters():
-        if p not in params_stdp_set:
-            params_gradient_descent.append(p)
-
-    optimizer_gd = Adam(params_gradient_descent, lr=lr)
-    optimizer_stdp = SGD(params_stdp, lr=lr, momentum=0.)
-
-
-
-    x_seq = (torch.rand([T, N, C, H, W]) > 0.5).float()
-    target = torch.randint(low=0, high=10, size=[N])
-
-    optimizer_gd.zero_grad()
-    optimizer_stdp.zero_grad()
-
-    y = net(x_seq).mean(0)
-    loss = F.cross_entropy(y, target)
-    loss.backward()
-
-
-
-    optimizer_stdp.zero_grad()
-
-    for i in range(stdp_learners.__len__()):
-        stdp_learners[i].step(on_grad=True)
-
-    optimizer_gd.step()
-    optimizer_stdp.step()
-
-    functional.reset_net(net)
-    for i in range(stdp_learners.__len__()):
-        stdp_learners[i].reset()
 
     for learner in stdp_learners:
         learner.close()
@@ -441,7 +353,8 @@ MSTDP/MSTDPET use ``exp(-1/tau)`` decay; ordinary STDP uses ``1-1/tau``.
 Call reward step immediately after each forward. ``reward[t]`` modulates previous
 eligibility; the first update is zero. An empty step does not advance time; reward
 after final activity needs another forward. MSTDP accepts scalar or ``[M]`` reward;
-MSTDPET accepts scalar reward. Remove ``batch_size`` from MSTDP construction.
+MSTDPET accepts scalar reward. Remove ``batch_size`` from MSTDP construction;
+reset the network's temporal state as well when starting independent samples.
 
 Complete MNIST example
 ----------------------
@@ -548,14 +461,6 @@ workflow; use the full test set when reporting performance.
 Measured results
 ^^^^^^^^^^^^^^^^
 
-Independent validation selected the recipe and one epoch: same-width Poisson full
-training gave 88.76%; IF evaluation of that frozen model gave 89.16%; fresh IF short
-training gave 86.72%/control 82.94%; fresh IF full training gave 89.58%/control 83.04%.
-These four measurements come from separate training or evaluation stages. Seeds 1/2
-then trained from scratch with the selected recipe and epoch count. All three models/maps
-were fixed before official testing. Test scores did not select the recipe, and all seeds
-are included in the report.
-
 The frozen feedforward control receives identical initial weights and input spikes,
 disabling only STDP weight updates. Its B still adapts during training, its fast
 dynamics remain active, and its neuron classes are assigned independently afterwards.
@@ -580,6 +485,14 @@ The example targets a three-seed mean of at least 90%; individual seeds may fall
      - 90.06%
      - 84.06%
      - +6.00
+
+Independent validation selected the recipe and one epoch: same-width Poisson full
+training gave 88.76%; IF evaluation of that frozen model gave 89.16%; fresh IF short
+training gave 86.72%/control 82.94%; fresh IF full training gave 89.58%/control 83.04%.
+These four measurements come from separate training or evaluation stages. Seeds 1/2
+then trained from scratch with the selected recipe and epoch count. All three models/maps
+were fixed before official testing. Test scores did not select the recipe, and all seeds
+are included in the report.
 
 Historical documentation record: `da6ff9a9 <https://github.com/fangwei123456/spikingjelly/commit/da6ff9a9>`_ (2026-10-12); V100S-PCIE-32GB; not rerun on current V2.
 

@@ -204,7 +204,7 @@ kernel 错误时会直接报告。
 --------------
 
 * 多步输入的首维是时间维 ``T``；``T == 0`` 会被拒绝。
-* 自动选择的 ``hop`` 和 ``triton`` 路径用于 ``step_mode="m"``；单步模式直接执行 core。
+* 单步模式直接执行 core；自动 CUDA 融合只用于 ``step_mode="m"``。
 * 修改 step mode 会保留最终状态，但清除派生的 ``state_seqs``。
 * 旧构造参数 ``num_inputs``、``num_outputs``、``example_inputs``、
   ``example_outputs`` 和 ``requires_grad`` 已删除。
@@ -215,7 +215,7 @@ kernel 错误时会直接报告。
 ----------------------------
 
 下面的训练示例使用可训练静态输入并保存完整轨迹。反向和参数更新后重置独立
-batch；连续序列可保留状态。最后一次显式状态调用保留模块 memory：
+batch；连续序列可保留状态。最后一次显式状态调用不改变模块的托管状态：
 
 .. code-block:: python
 

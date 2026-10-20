@@ -13,7 +13,7 @@ Usage
 -------------------------------------------
 All monitors have similar usage. Let us take :class:`spikingjelly.activation_based.monitor.OutputMonitor` as the example.
 
-Firstly, let us build a simple multi-step network. To avoid no spikes, we set all weights to be positive:
+Firstly, let us build a simple multi-step network. To encourage firing, we set all weights to positive values:
 
 .. code-block:: python
 
@@ -45,7 +45,7 @@ Firstly, let us build a simple multi-step network. To avoid no spikes, we set al
         with torch.no_grad():
             net(x_seq)
 
-The recorded data will be stored in ``.records`` whose type is ``list``. The data are recorded by the order in how they are created:
+The recorded data will be stored in ``.records`` whose type is ``list``. Records follow the order in which outputs are produced:
 
 .. code-block:: python
 
@@ -138,7 +138,7 @@ reference the monitor.
 
 
 :class:`OutputMonitor <spikingjelly.activation_based.monitor.OutputMonitor>` can also process the data when recording, which is implemented by ``function_on_output``. \
-The default value of ``function_on_output`` is ``lambda x: x``, which means record the origin data. If we want to record the firing rates, we can define the \
+The default value of ``function_on_output`` is ``lambda x: x``, which means record the original data. If we want to record the firing rates, we can define the \
 function of calculating the firing rates:
 
 .. code-block:: python
@@ -229,12 +229,16 @@ Neurons wrapped in :class:`LinearRecurrentContainer <spikingjelly.activation_bas
 called once per time-step, so a monitor on such a neuron records ``T`` times during one multi-step forward. With \
 ``store_v_seq = True`` the voltage of every step is appended to ``v_seq`` until ``functional.reset_net(net)``, so the \
 neuron's last record, e.g. ``v_seq_monitor[name][-1]``, holds the complete ``[T, N, *]`` sequence, while its ``T`` per-step \
-``OutputMonitor`` records can be combined with ``torch.stack(spike_seq_monitor[name])``. Because every per-step record of the \
+``OutputMonitor`` records can be combined with ``torch.stack(spike_seq_monitor[name])``.
+
+Because every per-step record of the \
 wrapped neuron is a growing snapshot of ``v_seq``, keeping all ``T`` records costs :math:`O(T^2)` memory and holds each \
 snapshot's autograd graph when gradients are enabled. To record only the current step's voltage, use \
 ``monitor.AttributeMonitor('v_seq', pre_forward=False, net=recurrent, instance=neuron.IFNode, function_on_attribute=lambda v_seq: v_seq[-1].clone())``, \
 where ``recurrent`` is the container module, and rebuild the sequence with ``torch.stack(v_seq_monitor[name])``, or call \
-``v_seq_monitor.clear_recorded_data()`` between forwards. The ``.clone()`` matters: ``v_seq[-1]`` alone is a view that keeps \
+``v_seq_monitor.clear_recorded_data()`` between forwards.
+
+The ``.clone()`` matters: ``v_seq[-1]`` alone is a view that keeps \
 the whole snapshot alive, so cloning it (or ``v_seq[-1].detach().clone()`` when gradients are not needed) is what makes the \
 retained memory :math:`O(T)`. The monitor is scoped to the container because passing the whole \
 network would also apply the lambda to unwrapped multi-step neurons and collapse their ``[T, N, *]`` ``v_seq`` to the last step.
@@ -276,9 +280,9 @@ The outputs are:
 
             [[0.4966, 0.6030]]])]
 
-Record the Input Gradients :math:`\frac{\partial L}{\partial Y}`
+Record the Output Gradients :math:`\frac{\partial L}{\partial Y}`
 --------------------------------------------------------------------------------------
-We can use :class:`spikingjelly.activation_based.monitor.GradOutputMonitor` to record the input gradients :math:`\frac{\partial L}{\partial S}` of each module:
+We can use :class:`spikingjelly.activation_based.monitor.GradOutputMonitor` to record the output gradients :math:`\frac{\partial L}{\partial S}` of each module:
 
 .. code-block:: python
 
@@ -290,7 +294,7 @@ We can use :class:`spikingjelly.activation_based.monitor.GradOutputMonitor` to r
 
 The outputs are:
 
-.. code-block:: python
+.. code-block:: text
 
     spike_seq_grad_monitor.records=
     [tensor([[[1., 1.]],
@@ -307,11 +311,11 @@ The outputs are:
 
             [[ 0.3704,  0.4747,  0.2201,  0.0596]]])]
 
-Note that the input gradients of the last layer's output spikes are all ``1`` because we use ``.sum().backward()``.
+Note that the output gradients of the last layer's output spikes are all ``1`` because we use ``.sum().backward()``.
 
-Record the Output Gradients :math:`\frac{\partial L}{\partial X}`
+Record the Input Gradients :math:`\frac{\partial L}{\partial X}`
 --------------------------------------------------------------------------------------
-We can use :class:`spikingjelly.activation_based.monitor.GradInputMonitor` to record the output gradients :math:`\frac{\partial L}{\partial X}` of each module.
+We can use :class:`spikingjelly.activation_based.monitor.GradInputMonitor` to record the input gradients :math:`\frac{\partial L}{\partial X}` of each module.
 
 Let us build a deep SNN, tune ``alpha`` for surrogate functions, and compare the effect:
 
@@ -398,9 +402,11 @@ detach at record time:
 
 .. code-block:: python
 
-    spike_seq_monitor = monitor.OutputMonitor(
+    with monitor.OutputMonitor(
         net, neuron.IFNode, function_on_output=torch.Tensor.detach
-    )
+    ) as spike_seq_monitor:
+        with torch.no_grad():
+            net(x_seq)
 
 Bit-packing spike records
 -------------------------------------------
@@ -427,14 +433,20 @@ the packed record so it can be restored later:
 
 .. code-block:: python
 
-    spike_monitor = monitor.OutputMonitor(
+    with monitor.OutputMonitor(
         net,
         neuron.IFNode,
-        function_on_output=lambda value: functional.bit_spike_compress(value.detach()),
-    )
-    net(x_seq)
-    packed = spike_monitor.records[0]
-    spike = functional.bit_spike_decompress(packed, (T, N, C), torch.float32)
+        function_on_output=lambda value: (
+            functional.bit_spike_compress(value.detach()),
+            tuple(value.shape),
+            value.dtype,
+        ),
+    ) as spike_monitor:
+        with torch.no_grad():
+            net(x_seq)
+
+    packed, shape, dtype = spike_monitor.records[0]
+    spike = functional.bit_spike_decompress(packed, shape, dtype)
 
 Packing supports CPU and CUDA inputs. For sparse data that need further
 compression, move the packed bytes to CPU before using a general-purpose codec.

@@ -8,12 +8,11 @@ Translator: `Qiu Haonan <https://github.com/Maybe2022>`_, `fangwei123456 <https:
 
 This tutorial introduces ``spikingjelly.activation_based``. It is recommended that all users read this tutorial before using SpikingJelly.
 
-Spikingjelly is a deep learning framework for Spiking Neural Network (SNN) based on PyTorch. Users who want to use SpikingJelly should first be familiar with the usage of PyTorch.\
-If the user doesn't know much about PyTorch, we recommend that the user can learn the basic tutorial of PyTorch first `PyTorch Tutorials <https://pytorch.org/tutorials/>`_ 。
+SpikingJelly is a PyTorch-based framework for spiking neural networks (SNNs). If you are new to PyTorch, start with the `PyTorch Tutorials <https://pytorch.org/tutorials/>`_.
 
 Activation-based Representation
 -------------------------------------------
-``spikingjelly.activation_based`` uses tensors whose element is only 0 or 1 to represent spikes. For example:
+The IF/LIF examples in ``spikingjelly.activation_based`` represent binary spikes with tensors whose element is only 0 or 1. For example:
 
 .. code-block:: python
 
@@ -27,7 +26,7 @@ Activation-based Representation
 
 Data Format
 -------------------------------------------
-In ``spikingjelly.activation_based``, There are two formats of data:
+In ``spikingjelly.activation_based``, data has two formats:
 
 * Data in a single time-step with ``shape = [N, *]``, where ``N`` is the batch dimension, ``*`` represents any extra dimensions.
 * Data in many time-steps with ``shape = [T, N, *]``, where ``T`` is the time-step dimension, ``N`` is the batch dimension and `*` represents any additional dimensions.
@@ -111,7 +110,7 @@ IFNode, LIFNode and common layers in ``layer`` default to single-step mode; modu
 
 Saving and Resetting of States
 -------------------------------------------
-Similar to RNN, neurons and other modules in SNN have hidden states, and their outputs :math:`Y[t]` are determined not only by the input :math: `X[t]` at the current time-step `t`, \
+Similar to RNN, neurons and other modules in SNN have hidden states, and their outputs :math:`Y[t]` are determined not only by the input :math:`X[t]` at the current time-step `t`, \
 but also by the state :math:`H[t-1]` at last time-step `t-1`, which is :math:`Y[t] = f(X[t], H[t-1])`.
 
 In PyTorch, RNN outputs not only :math:`Y` but also :math:`H`. Refer to :class:`torch.nn.RNN` for more details. Different from PyTorch, the states are stored inside the module in ``spikingjelly.activation_based``. \
@@ -147,7 +146,7 @@ For example, let us create a new layer of IF neurons, set them to single-step mo
 
 After initialization, the ``v`` of the IF neurons layer is set to 0 and is automatically broadcast to have the same ``shape`` as the input.
 
-If we give a new input sample, we should clear the previous states of the neurons and reset the neurons to the initialization states, which can be done by calling the module's ``self.reset()`` function:
+Before a new independent sample or sequence, we should clear the previous states of the neurons and reset them to the initialization states, which can be done by calling the module's ``self.reset()`` function. State is retained between time steps of the same continuous sequence:
 
 
 .. code-block:: python
@@ -208,6 +207,7 @@ If all modules in a network are single-step modules, the computation graph of th
 
 .. code-block:: python
 
+    y_seq_step_by_step = []
     for t in range(T):
         x = x_seq[t]
         y = net(x)
@@ -240,12 +240,13 @@ If all modules in a network are multi-step modules, the computation graph of the
         for i in range(net.__len__()):
             y_seq_layer_by_layer = net[i](y_seq_layer_by_layer)
 
-In most cases, we don't need an explicit implementation of ``for i in range(net.__len__())``, because :class:`torch.nn.Sequential` has already done that for us. \
-So, we write codes in the following simple style:
+In this example, :class:`torch.nn.Sequential` already calls the layers in order, so you do not need an explicit ``for i in range(net.__len__())`` loop:
 
-.. code-block:: python 
+.. code-block:: python
     
-    y_seq_layer_by_layer = net(x_seq)
+    functional.reset_net(net)
+    with torch.no_grad():
+        y_seq_layer_by_layer = net(x_seq)
 
 The two execution orders produce the same results in this example. Training-mode BatchNorm uses different batch statistics (N versus T×N), so its results differ:
 

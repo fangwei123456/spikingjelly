@@ -16,6 +16,13 @@ English version: :doc:`../en/lif_fc_mnist`
 
 .. code-block:: python
 
+    import torch
+    import torch.nn as nn
+    import time
+    import torch.nn.functional as F
+    from torch.cuda import amp
+    from spikingjelly.activation_based import layer, neuron, surrogate, encoding, functional
+
     nn.Sequential(
         nn.Flatten(),
         nn.Linear(28 * 28, 10, bias=False),
@@ -26,7 +33,8 @@ English version: :doc:`../en/lif_fc_mnist`
 
 .. code-block:: python
 
-    nn.Sequential(
+    tau = 2.0
+    net = nn.Sequential(
         layer.Flatten(),
         layer.Linear(28 * 28, 10, bias=False),
         neuron.LIFNode(tau=tau, surrogate_function=surrogate.ATan())
@@ -43,6 +51,7 @@ English version: :doc:`../en/lif_fc_mnist`
 
 .. code-block:: python
 
+    lr = 1e-3
     # 使用Adam优化器
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     # 使用泊松编码器
@@ -58,7 +67,7 @@ English version: :doc:`../en/lif_fc_mnist`
 
 3. 每次网络仿真结束后，需要\ **重置**\ 网络状态
 
-结合以上三点，得到训练循环的核心代码如下：
+结合以上三点，得到训练循环的核心代码如下。以下片段使用 :mod:`spikingjelly.activation_based.examples.lif_fc_mnist` 中的参数、DataLoader 和 AMP scaler 初始化：
 
 .. code-block:: python
 
@@ -115,7 +124,7 @@ English version: :doc:`../en/lif_fc_mnist`
 
     uv run --no-sync python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
 
-需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 不一定带来更好的训练效果。\ ``T``
+训练该 SNN 所需的显存与仿真步数 ``T`` 线性相关，更长的 ``T`` 不一定带来更好的训练效果。\ ``T``
 太大时，SNN在时间上展开后会变成一个非常深的网络，这将导致BPTT计算梯度时容易衰减或爆炸。
 
 另外由于我们使用了泊松编码器，因此需要较大的 ``T``\ 保证编码带来的噪声不太大。

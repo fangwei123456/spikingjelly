@@ -43,11 +43,13 @@ backend 选项。下面的 IF、LIF 和 PLIF 训练代码可在 CPU 或 NVIDIA C
 CPU 使用 Torch 参考实现。CUDA 在每个设备首次使用某条执行路径时检查兼容性，
 随后复用已选实现。这个过程不进行在线测速，导入 SpikingJelly 也不会初始化 CUDA。
 eager 按原生 CUDA、Triton、Torch 的顺序检查；Inductor 编译展开按 Triton、原生
-CUDA、Torch 的顺序检查。各 GPU 架构使用相同的顺序，兼容性会影响可用实现，
-具体 workload 的速度仍需实测。
+CUDA、Torch 的顺序检查。各 GPU 架构使用相同的顺序，兼容性会影响可用实现。
+高阶梯度在所有设备上都使用 Torch 参考公式。
 
-自动分发覆盖 IF、LIF、PLIF、QIF、EIF、Izhikevich、I-LIF、ActivationAwareIF 和
-STBIF。各类支持的训练模式、dtype 和替代梯度不同，详见对应 API。其他神经元
+自动分发覆盖 IF、LIF、PLIF、QIF、EIF、Izhikevich、I-LIF、ActivationAwareIF、
+STBIF 和 CLIF。CLIF 只有 Triton 实现，没有原生 CUDA 内核，且其 kernel 要求连续
+输入，不适用下节的 strided 布局契约。各类支持的训练模式、dtype 和替代梯度不同，
+详见对应 API。其他神经元
 沿用各自的执行方式，其中一些没有独立 CUDA 内核。
 
 普通融合路径接受 FP32/FP16/BF16 输入，要求状态为 FP32，替代梯度为受支持的内置

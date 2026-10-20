@@ -20,6 +20,18 @@ run this SNN on Loihi. The workflow is:
 
 The modules related to Lava are defined in :class:`spikingjelly.activation_based.lava_exchange`.
 
+.. note::
+
+    Lava-DL is optional. SpikingJelly does not install it, and there is no
+    ``spikingjelly[lava]`` extra. ``TNX_to_NXT``, ``to_lava_neuron``,
+    ``BlockContainer`` and the other conversion callables are defined only
+    when ``import lava.lib.dl.slayer`` succeeds; otherwise those names are
+    missing.
+
+    PyPI ``lava-dl==0.6.0`` requires Python >=3.10,<3.11 and torch>=2.3.1,<2.4,
+    while SpikingJelly 2.0.0 requires Python >=3.11 and torch>=2.6. The
+    examples below were not run in a 2.0.0 environment.
+
 
 Basic Conversion
 -------------------------------------------
@@ -58,8 +70,7 @@ The outputs are:
 
 Neuron Conversion
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Neurons in SpikingJelly can be converted to neurons in Lava DL. Due to the limited time and energy of developers, SpikingJelly only supports the IF neuron \
-and the LIF neuron, which are two of the most popular neurons in spiking deep learning. Other neurons will be considered to add according to user requirements.
+SpikingJelly currently supports converting IF and LIF neurons to Lava DL neurons.
 
 
 We can use :class:`to_lava_neuron <spikingjelly.activation_based.lava_exchange.to_lava_neuron>` to convert. Here is an example:
@@ -82,18 +93,7 @@ We can use :class:`to_lava_neuron <spikingjelly.activation_based.lava_exchange.t
     print('output of sj(reshaped to NXT):\n', lava_exchange.TNX_to_NXT(if_sj(x_seq_sj)))
     print('output of lava:\n', if_la(x_seq_la))
 
-The outputs are:
-
-.. code-block:: shell
-
-    output of sj(reshaped to NXT):
-    tensor([[[0., 0., 1., 0., 1., 0., 0., 0.]],
-
-            [[0., 1., 0., 1., 0., 1., 0., 1.]]])
-    output of lava:
-    tensor([[[0., 0., 1., 0., 1., 0., 0., 0.]],
-
-            [[0., 1., 0., 1., 0., 1., 0., 1.]]])
+For the same input, the two spike tensors match. Both the IF and LIF examples use unseeded ``torch.rand``, so their printed values vary between runs.
 
 Here is an example of using the LIF neuron:
 
@@ -116,18 +116,6 @@ Here is an example of using the LIF neuron:
     print('output of sj:\n', lava_exchange.TNX_to_NXT(if_sj(x_seq_sj)))
     print('output of lava:\n', if_la(x_seq_la))
 
-The outputs are:
-
-.. code-block:: shell
-
-    output of sj:
-    tensor([[[0., 1., 0., 1., 0., 0., 1., 0.]],
-
-            [[0., 0., 1., 0., 0., 1., 0., 1.]]])
-    output of lava:
-    tensor([[[0., 1., 0., 1., 0., 0., 1., 0.]],
-
-            [[0., 0., 1., 0., 0., 1., 0., 1.]]])
 
 Synapse Conversion
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -158,7 +146,7 @@ The outputs are:
 
 .. code-block:: shell
 
-    WARNING:root:The lava slayer pool layer applies sum pooling, rather than average pooling. `avgpool2d_to_lava_synapse_pool` will return a sum pooling layer.
+    The Lava-DL pooling layer applies sum pooling; returning a sum-pooling layer instead of average pooling.
     conv_la=Conv(3, 4, kernel_size=(3, 3, 1), stride=(1, 1, 1), bias=False)
     fc_la=Dense(4, 2, kernel_size=(1, 1, 1), stride=(1, 1, 1), bias=False)
     sp_la=Pool(1, 1, kernel_size=(2, 2, 1), stride=(2, 2, 1), bias=False)
@@ -301,7 +289,7 @@ We add a conversion function to convert the SNN to Lava DL format, which can be 
         return nn.Sequential(*ret)
 
 
-Then, we train this SNN. The training process has no much difference from other SNNs. Note that the quantization inside ``lava_exchange.BlockContainer`` will 
+Then, we train this SNN. The training process is similar to that of other SNNs. Note that the quantization inside ``lava_exchange.BlockContainer`` will
 reduce accuracy. An example of the training codes is:
 
 .. code-block:: python

@@ -82,7 +82,7 @@ Transformer 模型包含仿射投影、LayerNorm 或 RMSNorm、GELU 或 SiLU、a
 
 * 原 ANN 的 ``model(x)`` 是一次完整的 ANN 推理，不包含时间展开；
 * 转换后模型在 ``step_mode="s"`` 下的一次调用只执行一个差分时间步，外层时间循环需由用户编写；转换后的模块每次调用接收当前时间步的差分输入 :math:`x^{(t)}`，并在内部维护累计输入 :math:`X^{(t-1)}` 和累计输出 :math:`f(X^{(t-1)})`，以此实现差分计算；
-* ``step_mode="m"`` 时，转换后模型接收首个维度为时间维的完整差分序列张量，并返回完整输出序列；此时通常能够沿时间维度并行（或向量化）计算，速度显著快于单步模式；
+* ``step_mode="m"`` 时，转换后模型接收首个维度为时间维的完整差分序列张量，并返回完整输出序列；此时通常能够沿时间维度并行（或向量化）计算；
 
 对普通 ANN 样本 :math:`x` 做推理时，常用的差分输入序列是 :math:`x^{(0)}=x`、后续时间步皆为 0，正如上面的例子所示。而如果输入本身已经是时间序列，则直接传入对应的差分序列。
 
@@ -176,7 +176,7 @@ Accuracy 下降 0.000 个百分点。评测前，示例会先在前两个 batch 
 Path 2: STA 转换
 -----------------------------------------------
 
-从 Path 1 的差分等价基线往前一步，Spatio-Temporal Approximation (STA) 扩展了差分思想。它仍然依赖显式 step-mode 和最终时间维求和读出，但在选定的非线性与 attention 输出处加入校准后的 spike encoder。STA 的在线差分等价部分就是 Path 1 中不带脉冲的 TD-equivalent 累计差分思路；本节只补充 STA 相比差分等价基线新增的 spike encoder、校准和模型级实验。
+STA 沿用 Path 1 的累计差分、显式步进模式和时间维求和读出，并在选定的非线性与 attention 输出处加入校准后的脉冲编码器。本节介绍编码器、校准和模型级实验。此 recipe 使用累计浮点算子和校准后的输出编码器，未复现论文完整的 UGO/TCSA pipeline；下文结果针对本实现。
 
 STA spike encoder
 ^^^^^^^^^^^^^^^^^
@@ -351,7 +351,7 @@ ViT-B/16 ImageNet 示例
 
 历史文档记录： `d7ed92d8 <https://github.com/fangwei123456/spikingjelly/commit/d7ed92d8>`_ （2026-07-05）；NVIDIA A100-SXM4-80GB；未在当前 V2 上复测。
 
-Top-1 下降 0.368 个百分点。本次 ``batch_size=16`` 的完整运行中，ANN baseline 推理耗时约 181.6 秒，STA 转换模型耗时约 1834.0 秒。wall-clock time 对运行环境比较敏感；如需对比 single-step 和 multi-step 耗时，请使用专门的 step-mode benchmark。
+Top-1 下降 0.368 个百分点。本次 ``batch_size=16`` 的完整运行中，ANN baseline 推理耗时约 181.6 秒，STA 转换模型耗时约 1834.0 秒。如需对比 single-step 和 multi-step 耗时，请使用专门的 step-mode benchmark。
 
 关键 stdout 行如下：
 
@@ -387,7 +387,7 @@ recipe 会把 QANN 侧的 quantizers 和 Transformer 算子替换为透明的 SN
 
 用户可以通过 ``functional.set_step_mode`` 控制 single-step 或 multi-step 执行，并显式传入单个时间步或首维为时间维的序列 tensor。
 
-SpikeZIP 使用的 ST-BIF 神经元只用于推理。它适合运行已经转换好的 QANN-to-SNN 模型，不应用于端到端梯度训练或微调。
+SpikeZIP 使用的 ST-BIF 神经元只用于推理。构造参数会被复制并与计算图分离；前向输入、状态或 buffer 需要梯度时会抛出异常，Torch、Triton 和原生 CUDA 路径都没有实现 backward。它适合运行已经转换好的 QANN-to-SNN 模型，不应用于端到端梯度训练或微调。
 
 Synthetic RoBERTa parity 示例
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -491,21 +491,19 @@ SpikingJelly 的 TD RMSNorm、TD linear、TD SiLU/product、TD SDPA 和基于
 
 转换后的 SNN 显式使用 ``[T,B,S,H]`` 时间布局，并按照
 ``layerwise_offline_multistep`` 调度。因此总调度更接近 :math:`L T`，而不是在线
-T 步推理；本路径不声称支持 Qwen single-step。独立 prompt 前应调用
+T 步推理。独立 prompt 前应调用
 ``functional.reset_net(model)``，KV cache continuation 通过 ``past_key_values``
 显式传递。
 
-公共 Qwen2 路径只提供真实的 ``signed_if`` 时间序列执行（以及用于等价性检查的
+公共 Qwen2 路径提供真实的 ``signed_if`` 时间序列执行（以及用于等价性检查的
 ``exact_td``），质量评测不会用 count-domain 快路径替代脉冲序列。
 
 转换后得到什么模型
 ^^^^^^^^^^^^^^^^^^^^
 
 转换不会改变 Qwen2 的 token embedding、decoder 层数、hidden size、GQA head
-布局、LM head 的权重与维度或原有的权重共享关系，也不会训练新的权重。它冻结
-全部参数，并把每个 decoder block 中的 RMSNorm、linear、SiLU/SwiGLU product
-和 SDPA 换成前文介绍的 TD 实现。在这些 TD 算子之间，Qwen2 recipe 新增
-signed QCFS 编码边界：
+布局、LM head 的权重与维度或原有的权重共享关系，也不会训练新的权重。
+在这些 TD 算子之间，Qwen2 recipe 新增 signed QCFS 编码边界：
 
 LM head 的模块表示也会复制为 ``TDLinear``，但最终 forward 在沿 T 求和后使用其
 保留的权重计算 logits；权重数值、维度以及与 embedding 的共享关系不变。
@@ -556,9 +554,9 @@ RMSNorm、linear、SiLU/product 和 attention 传播的是浮点 temporal differ
 边界使用真实 IF 动力学和 spike-count 表示，同时用 TD 算子保持 Transformer
 运算语义，而不是把 Qwen 的所有运算都变成二值事件。
 
-产物模型只支持只读推理：必须先调用 ``eval()``，并在 ``torch.no_grad()`` 或
-``torch.inference_mode()`` 中执行。training mode 或启用 autograd 时，
-``forward()`` 会直接报错。
+运行下文的推理示例时，必须先调用 ``eval()``，并在 ``torch.no_grad()`` 或
+``torch.inference_mode()`` 中执行。转换保留可训练参数；公共模型还支持用于后训练的
+可微 QCFS 计数重建模式 ``qcfs_sg``。
 
 Signed QCFS encoder 与 IF 神经元
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -671,11 +669,16 @@ Q/K/V 编码边界时才分别求和并重新编码。类似地，一个 block �
      - 正、负 IF 分别接收 ``ReLU(x)/T`` 与 ``ReLU(-x)/T`` 后产生的 signed spikes
      - 是
      - 重建为量化并裁剪后的 :math:`x`
+   * - ``qcfs_sg``
+     - QCFS 计数重建，等价于编码脉冲序列的时间求和，本身不是脉冲序列
+     - 否，跳过神经元时间循环
+     - 以多级脉冲计数替代梯度可微地重建同样的量化并裁剪后的 :math:`x`
 
 ``exact_td`` 分支不会调用 ``SignedQCFSSequenceEncoder`` 或其中的 IF 神经元；
 模型对象虽然仍持有这些模块，但该次 forward 会绕过它们。因此 ``exact_td`` 与
 dense Qwen 之间只应剩下浮点和算子实现误差，而 ``signed_if`` 还包含每个编码
-边界的舍入和饱和误差。
+边界的舍入和饱和误差。``qcfs_sg`` 跳过神经元时间循环并以可微方式重建同一个计数，
+因此它不是严格的二值多步重放；下文质量结果使用 ``signed_if``。
 
 T、校准 levels 与量化误差
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -726,8 +729,8 @@ Qwen2 校准会为每个通道估计绝对激活边界 :math:`R`。当
 ^^^^^^^^^^^^^^^^^^^^
 
 下面的示例从本地加载 Qwen2.5 checkpoint，校准逐通道 scale，转换完整 decoder，
-并执行真实的多步路径。这里的小型 prompt 集只用于演示 API；若要复现后文质量结果，
-需使用 ``benchmark/snn_llm/qwen_conversion`` 中固定的 WikiText-2 校准协议。
+并执行真实的多步路径。这里的小型 prompt 集只用于演示 API；后文质量结果是历史
+测量值，完整运行配置未记录，因此不是当前 runner 的精确复现目标。
 
 .. code-block:: python
 
@@ -833,7 +836,8 @@ dense accuracy 减去 SNN accuracy 的百分点。
 
 这些结果只证明离线逐层调度的质量，不代表延迟或能耗优势。在 A100 实测中，高 T
 路径仍显著慢于 dense Qwen。3B checkpoint 受 Qwen Research License 约束，
-SpikingJelly 不重新分发该权重。运行方式见 ``benchmark/snn_llm/qwen_conversion/README.md``。
+SpikingJelly 不重新分发该权重。当前 runner 的运行方式见
+``benchmark/snn_llm/qwen_conversion/README.md``。
 
 .. [#sta] Jiang Y., et al., "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers", ICLR 2024.
 
