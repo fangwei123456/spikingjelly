@@ -104,8 +104,12 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
 
 
 def spike_similar_loss(
-    spikes: Tensor, labels: Tensor, kernel_type="linear", loss_type="mse", *args
-):
+    spikes: Tensor,
+    labels: Tensor,
+    kernel_type: str = "linear",
+    loss_type: str = "mse",
+    *args: float,
+) -> Tensor:
     r"""
     **API Language** - :ref:`中文 <spike_similar_loss-cn>` | :ref:`English <spike_similar_loss-en>`
 
@@ -149,7 +153,7 @@ def spike_similar_loss(
     :type spikes: torch.Tensor
 
     :param labels: shape=[N, C]，N个数据的标签， ``labels[i][k] == 1`` 表示数据i属于
-        第k类，反之亦然，允许多标签
+        第k类，反之亦然，允许多标签。标签应与脉冲位于同一设备；计算时转换为相似度矩阵的浮点数据类型。
     :type labels: torch.Tensor
 
     :param kernel_type: 使用内积来衡量两个脉冲之间的相似性， ``kernel_type`` 是计算内积时，
@@ -204,7 +208,8 @@ def spike_similar_loss(
 
     :param labels: shape=[N, C], labels of inputs, ``labels[i][k] == 1`` means
         the i-th input belongs to the k-th category and vice versa.
-        Multi-label input is allowed.
+        Multi-label input is allowed. Labels must be on the same device as
+        spikes and are converted to the similarity matrix's floating-point dtype.
     :type labels: torch.Tensor
 
     :param kernel_type: Type of kernel function used when calculating inner
@@ -227,7 +232,7 @@ def spike_similar_loss(
         spikes_len = spikes.norm(p=2, dim=1, keepdim=True)
         sim_p = sim_p / ((spikes_len.mm(spikes_len.t())) + 1e-8)
 
-    labels = labels.float()
+    labels = labels.to(dtype=sim_p.dtype)
     sim = labels.mm(labels.t()).clamp_max(
         1
     )  # labels.mm(labels.t())[i][j]位置的元素表现输入数据i和数据数据j有多少个相同的标签

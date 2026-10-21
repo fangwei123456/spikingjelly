@@ -12,6 +12,14 @@ Changes since ``2.0.0.dev0``. For older releases, see
 Unreleased
 ----------
 
+Fixes
+~~~~~
+
+spikingjelly.activation_based.functional
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``spike_similar_loss`` matches target precision to spike similarities, enabling float64 MSE gradients and BCE evaluation.
+
 Changes
 ~~~~~~~
 
