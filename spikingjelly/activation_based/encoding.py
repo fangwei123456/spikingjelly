@@ -623,8 +623,10 @@ class WeightedPhaseEncoder(StatefulEncoder):
 
         单步编码函数。将输入 ``x`` 按照二进制加权相位编码方式展开为脉冲序列。
 
-        :param x: 输入数据，取值范围应为 ``[0, 1 - 2^{-T}]``
+        :param x: 浮点输入数据，取值范围应为 ``[0, 1 - 2^{-T}]``；不会被原地修改。
         :type x: torch.Tensor
+        :return: 形状为 ``[T, *x.shape]`` 的脉冲序列，与 ``x`` 的数据类型和设备相同。
+        :rtype: torch.Tensor
         :raises AssertionError: 当 ``x`` 不在 ``[0, 1 - 2^{-T}]`` 范围内时
 
         ----
@@ -636,14 +638,17 @@ class WeightedPhaseEncoder(StatefulEncoder):
         Single-step encoding function. Encodes the input ``x`` into spike trains using the
         weighted phase encoding scheme based on binary decomposition.
 
-        :param x: input data, which should be in the range ``[0, 1 - 2^{-T}]``
+        :param x: Floating-point input in ``[0, 1 - 2^{-T}]``; not modified in place.
         :type x: torch.Tensor
+        :return: Spike sequence with shape ``[T, *x.shape]``, preserving the dtype
+            and device of ``x``.
+        :rtype: torch.Tensor
         :raises AssertionError: if ``x`` is not in the range ``[0, 1 - 2^{-T}]``
         """
         assert (x >= 0).all() and (x <= 1 - 2 ** (-self.T)).all()
         inputs = x.clone()
         spike = torch.empty(
-            (self.T,) + x.shape, device=x.device
+            (self.T,) + x.shape, device=x.device, dtype=x.dtype
         )  # Encoding to [T, batch_size, *]
         w = 0.5
         for i in range(self.T):

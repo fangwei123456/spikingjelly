@@ -6,6 +6,12 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 ## Unreleased
 
+### Fixes
+
+#### spikingjelly.activation_based.encoding
+
+- `WeightedPhaseEncoder` preserves input precision so encoded spikes can feed layers with matching floating-point dtypes.
+
 ### Changes
 
 - ST-BIF uses one-third less FP32 state memory and fewer inference allocations.
