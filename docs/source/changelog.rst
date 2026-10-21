@@ -19,6 +19,7 @@ spikingjelly.datasets
 ^^^^^^^^^^^^^^^^^^^^^
 
 - Fixed-duration integration preserves final boundary events in a new frame and accepts nonempty samples with zero timestamp span.
+  To apply this fix to existing datasets, remove and rebuild only the processed ``duration_<duration>`` cache while retaining raw events.
 
 Changes
 ~~~~~~~

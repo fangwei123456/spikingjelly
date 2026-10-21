@@ -795,7 +795,10 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
 
     * **中文**
 
-    按每帧固定时间时长将事件积分到帧中并保存。
+    按每帧固定时间时长将事件积分到帧中并保存。区间从最早时间戳开始，左闭右开；
+    最后一个事件位于边界时归入新帧，非空且时间跨度为零的样本产生一帧。
+    返回帧数，并保存到 ``output_dir/<input_stem>_<frame_count>.npz``；
+    文件名中的帧数也遵循上述区间规则。
 
     :param loader: 一个可以从 `events_np_file` 加载事件的函数
     :type loader: Callable
@@ -828,7 +831,10 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
 
     * **English**
 
-    Integrate events to frames by fixed time duration of each frame.
+    Integrate events into half-open duration intervals starting at the earliest
+    timestamp and save them. A final boundary event starts a new frame; a nonempty
+    zero-span sample produces one frame. Return the frame count and save to
+    ``output_dir/<input_stem>_<frame_count>.npz``, with that count in the filename.
 
     :param loader: a function that can load events from `events_np_file`
     :type loader: Callable
