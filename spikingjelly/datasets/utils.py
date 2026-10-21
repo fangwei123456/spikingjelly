@@ -712,7 +712,8 @@ def integrate_events_by_fixed_duration(
 
     * **中文**
 
-    按每帧固定时间时长将事件积分到帧中。
+    按每帧固定时间时长将事件积分到帧中。时间区间从最早时间戳开始，左闭右开；
+    最后一个事件恰好位于区间边界时归入新帧。非空且时间跨度为零的样本产生一帧。
 
     :param events: 一个字典，其键为 ``['t', 'x', 'y', 'p']``，值为 ``numpy.ndarray``
     :type events: dict
@@ -735,7 +736,9 @@ def integrate_events_by_fixed_duration(
 
     * **English**
 
-    Integrate events to frames by fixed time duration of each frame.
+    Integrate events into half-open duration intervals starting at the earliest
+    timestamp. A final boundary event starts a new frame; a nonempty sample with
+    zero time span produces one frame.
 
     :param events: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :type events: dict
@@ -760,7 +763,7 @@ def integrate_events_by_fixed_duration(
 
     t = t - t.min()
 
-    frames_num = math.ceil(t[-1] / duration)
+    frames_num = int(t[-1] // duration) + 1
     frames = np.zeros([frames_num, 2, H, W])
     frame_index = t // duration
     left = 0

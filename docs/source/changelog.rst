@@ -12,6 +12,14 @@ Changes since ``2.0.0.dev0``. For older releases, see
 Unreleased
 ----------
 
+Fixes
+~~~~~
+
+spikingjelly.datasets
+^^^^^^^^^^^^^^^^^^^^^
+
+- Fixed-duration integration preserves final boundary events in a new frame and accepts nonempty samples with zero timestamp span.
+
 Changes
 ~~~~~~~
 
