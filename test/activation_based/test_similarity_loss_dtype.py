@@ -9,6 +9,7 @@ from spikingjelly.activation_based.functional.loss import spike_similar_loss
 @pytest.mark.parametrize("label_dtype", [torch.bool, torch.int64, torch.float32])
 @pytest.mark.parametrize("loss_type", ["mse", "l1", "bce"])
 def test_spike_similarity_loss_dtype_and_gradient(dtype, label_dtype, loss_type):
+    """Match pairwise loss values and spike gradients across label dtypes."""
     spikes = torch.tensor(
         [[[1, 0], [0, 1]], [[0, 1], [1, 0]], [[1, 1], [0, 1]]],
         dtype=dtype,
