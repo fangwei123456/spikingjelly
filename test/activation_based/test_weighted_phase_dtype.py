@@ -10,6 +10,7 @@ from spikingjelly.activation_based.encoding import WeightedPhaseEncoder
 )
 @pytest.mark.parametrize("step_mode", ["s", "m"])
 def test_weighted_phase_preserves_input_dtype(dtype, step_mode):
+    """Preserve dtype, binary fractions and state cycles in both step modes."""
     x = torch.tensor([[0, 0.25, 0.5], [0.75, 0.9375, 0.125]], dtype=dtype)
     original = x.clone()
     expected = torch.tensor(
@@ -34,6 +35,7 @@ def test_weighted_phase_preserves_input_dtype(dtype, step_mode):
 
 
 def test_weighted_phase_can_feed_double_linear_and_backpropagate():
+    """Train a double Linear layer directly from double encoded spikes."""
     encoder = WeightedPhaseEncoder(4)
     linear = torch.nn.Linear(2, 1, dtype=torch.float64)
     x = torch.tensor([[0.5, 0.25]], dtype=torch.float64)
