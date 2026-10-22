@@ -35,7 +35,7 @@ if triton is not None:
         BLOCK: tl.constexpr,
     ):
         index = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
-        N = N.to(tl.int64)
+        N = tl.cast(N, tl.int64)
         valid = index < N
         v = tl.load(X + index, valid, 0)
         if ROUTE == 1:

@@ -669,7 +669,8 @@ def test_few_spike_fused_offsets_beyond_int32():
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_few_spike_public_forward_executes_fused_kernel(tmp_path):
+@pytest.mark.parametrize("n", [1, 512])
+def test_few_spike_public_forward_executes_fused_kernel(tmp_path, n):
     import json
     from spikingjelly._ops import few_spike
 
@@ -678,7 +679,7 @@ def test_few_spike_public_forward_executes_fused_kernel(tmp_path):
     for kind in ("fs", "oat", "hg"):
         for mode in ("s", "m"):
             node = _routing_node(kind, mode).cuda()
-            x = torch.ones((3, 512) if mode == "m" else (512,), device="cuda")
+            x = torch.ones((3, n) if mode == "m" else (n,), device="cuda")
             with torch.no_grad():
                 node(x)
                 torch.cuda.synchronize()
