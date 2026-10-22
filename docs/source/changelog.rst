@@ -18,7 +18,9 @@ Fixes
 spikingjelly.activation_based.functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- ``spike_similar_loss`` matches target precision to spike similarities, enabling float64 MSE gradients and BCE evaluation.
+- ``spike_similar_loss`` matches target dtype to similarities for float64 MSE/BCE
+  compatibility; with autocast disabled, explicit FP16/BF16 inputs now produce
+  matching low-precision MSE/L1 losses instead of FP32.
 
 Changes
 ~~~~~~~
