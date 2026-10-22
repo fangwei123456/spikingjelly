@@ -10,7 +10,8 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 #### spikingjelly.activation_based.encoding
 
-- `WeightedPhaseEncoder` preserves input precision so encoded spikes can feed layers with matching floating-point dtypes.
+- `WeightedPhaseEncoder` outputs spikes in the input floating-point dtype instead
+  of the global default dtype, allowing direct use with layers of matching dtype.
 
 ### Changes
 

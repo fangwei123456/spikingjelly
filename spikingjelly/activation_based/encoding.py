@@ -647,9 +647,7 @@ class WeightedPhaseEncoder(StatefulEncoder):
         """
         assert (x >= 0).all() and (x <= 1 - 2 ** (-self.T)).all()
         inputs = x.clone()
-        spike = torch.empty(
-            (self.T,) + x.shape, device=x.device, dtype=x.dtype
-        )  # Encoding to [T, batch_size, *]
+        spike = torch.empty((self.T,) + x.shape, device=x.device, dtype=x.dtype)
         w = 0.5
         for i in range(self.T):
             spike[i] = inputs >= w
