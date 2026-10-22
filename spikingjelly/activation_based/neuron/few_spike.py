@@ -144,7 +144,9 @@ class FewSpikeNode(nn.Module, base.StepModule):
     CUDA 上无梯度、连续 FP32 输入和同设备连续 FP32 表可使用可选 Triton
     推理融合，覆盖七种注册二值 surrogate 和 DeterministicPass；有 forward hook
     时保留 Torch。其他 dtype、布局、surrogate、梯度模式及外层 torch.compile
-    继续使用参考递推。多步输入求和仍由 PyTorch 执行。
+    继续使用参考递推。带逻辑取负标记的 gate 或表、节点子类、forward AD 和
+    functorch 变换也使用参考递推。多步输入求和仍由 PyTorch 执行。
+    融合针对 Torch 递推；部分形状下 torch.compile 仍可能更快。
 
     该实现对应 Stöckl 和 Maass 提出的 Few-Spikes (FS) 神经元，参见
     `Stöckl and Maass (2021) <https://doi.org/10.1038/s42256-021-00311-4>`__。
@@ -175,7 +177,10 @@ class FewSpikeNode(nn.Module, base.StepModule):
     gradients, with contiguous FP32 tables on the same device and one of the seven
     registered binary surrogates or DeterministicPass, without forward hooks.
     Other dtypes, layouts, surrogates, gradient modes and enclosing torch.compile
-    use the reference recurrence. PyTorch still sums multi-step inputs.
+    use the reference recurrence, as do gates or tables with a lazy negative bit,
+    node subclasses, forward AD and functorch transforms. PyTorch still sums
+    multi-step inputs. Fusion targets the Torch recurrence; torch.compile can
+    remain faster for some shapes.
 
     This implementation corresponds to the Few-Spikes (FS) neuron proposed by
     Stöckl and Maass; see `Stöckl and Maass (2021)
@@ -258,6 +263,7 @@ class FewSpikeNode(nn.Module, base.StepModule):
             and torch.autograd.forward_ad.unpack_dual(gate).tangent is None
             and gate.dtype == torch.float32
             and gate.is_contiguous()
+            and not gate.is_neg()
             and gate.numel() > 0
             and type(self) in (FewSpikeNode, OutlierAwareThresholdNode, HGNode)
         ):
@@ -281,6 +287,7 @@ class FewSpikeNode(nn.Module, base.StepModule):
                     and value.dtype == torch.float32
                     and value.device == gate.device
                     and value.is_contiguous()
+                    and not value.is_neg()
                     and torch.autograd.forward_ad.unpack_dual(value).tangent is None
                     for value in self.buffers()
                 )

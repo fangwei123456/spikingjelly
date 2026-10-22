@@ -50,6 +50,10 @@ CUDA、Torch 的顺序检查。各 GPU 架构使用相同的顺序，兼容性�
 STBIF。各类支持的训练模式、dtype 和替代梯度不同，详见对应 API。其他神经元
 沿用各自的执行方式，其中一些没有独立 CUDA 内核。
 
+FewSpikeNode、OutlierAwareThresholdNode 和 HGNode 有独立的可选 Triton 路径，
+用于禁用梯度时的连续 FP32 CUDA 推理，并要求兼容的编码表和 surrogate；
+它们不接受 ``SJ_<NEURON>_CUDA_IMPLEMENTATION`` 覆盖。参考路径条件详见对应 API。
+
 普通融合路径接受 FP32/FP16/BF16 输入，要求状态为 FP32，替代梯度为受支持的内置
 类型。低精度状态和自定义替代梯度可使用 Torch 参考公式。未显式配置精度时，
 模块的膜电位跟随输入 dtype，已有 FP32 状态也会转换。因此普通 FP16/BF16

@@ -106,7 +106,7 @@ def _forward(
             other_theta,
             other_h,
             other_d,
-            gates if gates is not None else theta,
+            gates if gates is not None else theta,  # Unused outside HG (ROUTE 2).
             output,
             gate.numel(),
             k,

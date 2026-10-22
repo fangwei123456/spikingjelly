@@ -609,3 +609,34 @@ def test_few_spike_no_grad_does_not_silently_discard_forward_ad(device):
         dual = torch.autograd.forward_ad.make_dual(x, torch.ones_like(x))
         with pytest.raises(NotImplementedError, match="jvp"):
             node(dual)
+
+
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("kind", ["fs", "oat", "hg"])
+@pytest.mark.parametrize("mode", ["s", "m"])
+@pytest.mark.parametrize("negative_view", ["input", "buffers"])
+def test_few_spike_lazy_negative_views(device, kind, mode, negative_view):
+    node = _routing_node(kind, mode).to(device)
+    x = torch.tensor(1 + 1j, device=device).conj().imag
+    assert x.is_neg() and x.is_contiguous() and x.item() == -1.0
+    if mode == "m":
+        x = torch._neg_view(torch.tensor([1.0, 0.0, 0.0], device=device))
+    if negative_view == "buffers":
+        x = torch.full((3,) if mode == "m" else (), 0.75, device=device)
+        for name, value in list(node.named_buffers()):
+            setattr(node, name, torch._neg_view(-value))
+        assert all(value.is_neg() and value.is_contiguous() for value in node.buffers())
+    with torch.no_grad():
+        expected = _reference_decode(node, x)
+        torch.testing.assert_close(node(x), expected, rtol=0, atol=0)

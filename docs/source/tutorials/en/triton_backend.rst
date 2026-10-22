@@ -54,6 +54,11 @@ ActivationAwareIF and STBIF. Training modes, dtypes and surrogate support vary
 by family; consult the corresponding API. Other neurons retain their own
 execution paths, some without dedicated CUDA kernels.
 
+FewSpikeNode, OutlierAwareThresholdNode and HGNode use a dedicated optional
+Triton path for contiguous FP32 CUDA inference under disabled gradients, with
+compatible tables and surrogates; they have no ``SJ_<NEURON>_CUDA_IMPLEMENTATION``
+override. See their API for reference-path conditions.
+
 Ordinary fused paths accept FP32/FP16/BF16 inputs with FP32 state and supported
 built-in surrogates. Low-precision state and custom surrogates can use Torch
 reference equations. Without explicit precision configuration, modules keep
