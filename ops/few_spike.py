@@ -34,7 +34,8 @@ if triton is not None:
         SEQUENCE: tl.constexpr,
         BLOCK: tl.constexpr,
     ):
-        index = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+        index = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
+        N = N.to(tl.int64)
         valid = index < N
         v = tl.load(X + index, valid, 0)
         if ROUTE == 1:
@@ -51,7 +52,7 @@ if triton is not None:
         readout = tl.full((BLOCK,), 0, tl.float32)
         for k in range(K):
             if ROUTE == 2:
-                offset = region * K + k
+                offset = region.to(tl.int64) * K + k
                 theta = tl.load(THETA + offset, valid, 0)
                 h = tl.load(H + offset, valid, 0)
                 d = tl.load(D + offset, valid, 0)
@@ -91,6 +92,8 @@ def _forward(
     if triton is None:
         return None
     k = theta.shape[-1]
+    if gates is not None and gates.numel() != theta.shape[0] - 1:
+        return None
     output = torch.empty(
         (k, *gate.shape) if return_sequence else gate.shape,
         dtype=gate.dtype,

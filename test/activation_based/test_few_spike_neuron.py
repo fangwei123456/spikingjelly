@@ -640,3 +640,84 @@ def test_few_spike_lazy_negative_views(device, kind, mode, negative_view):
     with torch.no_grad():
         expected = _reference_decode(node, x)
         torch.testing.assert_close(node(x), expected, rtol=0, atol=0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_few_spike_fused_offsets_beyond_int32():
+    from spikingjelly._ops import few_spike
+
+    if few_spike.triton is None:
+        pytest.skip("Triton required")
+    if torch.cuda.mem_get_info()[0] < 20 * 1024**3:
+        pytest.skip("Large-offset validation requires 20 GiB free CUDA memory")
+    k, n = 32, 2**26 + 17
+    node = neuron.FewSpikeNode(
+        neuron.FewSpikeTable([0.5] * k, [0.0] * k, list(range(1, k + 1))),
+        step_mode="m",
+    ).cuda()
+    x = torch.zeros((k, n), device="cuda")
+    x[0, -1] = 1.0
+    with torch.no_grad():
+        result = node(x)
+        expected = _reference_decode(node, x[:, -64:])
+        assert result.numel() > 2**31
+        torch.testing.assert_close(result[:, -64:], expected, rtol=0, atol=0)
+        torch.testing.assert_close(
+            result[:, :64], torch.zeros_like(expected), rtol=0, atol=0
+        )
+        torch.cuda.synchronize()
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_few_spike_public_forward_executes_fused_kernel(tmp_path):
+    import json
+    from spikingjelly._ops import few_spike
+
+    if few_spike.triton is None:
+        pytest.skip("Triton required")
+    for kind in ("fs", "oat", "hg"):
+        for mode in ("s", "m"):
+            node = _routing_node(kind, mode).cuda()
+            x = torch.ones((3, 512) if mode == "m" else (512,), device="cuda")
+            with torch.no_grad():
+                node(x)
+                torch.cuda.synchronize()
+                with torch.profiler.profile(
+                    activities=[
+                        torch.profiler.ProfilerActivity.CPU,
+                        torch.profiler.ProfilerActivity.CUDA,
+                    ]
+                ) as profile:
+                    actual = node(x)
+                    torch.cuda.synchronize()
+                torch.testing.assert_close(
+                    actual, _reference_decode(node, x), rtol=0, atol=0
+                )
+            trace = tmp_path / f"{kind}-{mode}.json"
+            profile.export_chrome_trace(str(trace))
+            events = json.loads(trace.read_text())["traceEvents"]
+            assert any(
+                event.get("cat") == "kernel" and "_few_spike_inference" in event["name"]
+                for event in events
+            )
+
+
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("thresholds", [[], [0.0]])
+def test_hg_replaced_shorter_gate_thresholds_use_reference(device, thresholds):
+    node = _routing_node("hg", "s").to(device)
+    node.gate_thresholds = torch.tensor(thresholds, device=device)
+    x = torch.tensor([-2.0, 0.0, 2.0], device=device)
+    with torch.no_grad():
+        torch.testing.assert_close(node(x), _reference_decode(node, x), rtol=0, atol=0)
