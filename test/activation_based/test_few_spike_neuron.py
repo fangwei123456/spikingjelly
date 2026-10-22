@@ -650,7 +650,8 @@ def test_few_spike_fused_offsets_beyond_int32():
         pytest.skip("Triton required")
     if torch.cuda.mem_get_info()[0] < 20 * 1024**3:
         pytest.skip("Large-offset validation requires 20 GiB free CUDA memory")
-    k, n = 32, 2**26 + 17
+    k = 32
+    n = 2**31 // (k - 1) + 17
     node = neuron.FewSpikeNode(
         neuron.FewSpikeTable([0.5] * k, [0.0] * k, list(range(1, k + 1))),
         step_mode="m",
@@ -660,7 +661,7 @@ def test_few_spike_fused_offsets_beyond_int32():
     with torch.no_grad():
         result = node(x)
         expected = _reference_decode(node, x[:, -64:])
-        assert result.numel() > 2**31
+        assert (k - 1) * n > 2**31
         torch.testing.assert_close(result[:, -64:], expected, rtol=0, atol=0)
         torch.testing.assert_close(
             result[:, :64], torch.zeros_like(expected), rtol=0, atol=0
