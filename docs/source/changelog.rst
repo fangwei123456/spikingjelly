@@ -12,6 +12,16 @@ Changes since ``2.0.0.dev0``. For older releases, see
 Unreleased
 ----------
 
+Fixes
+~~~~~
+
+spikingjelly.activation_based.functional
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``spike_similar_loss`` matches target dtype to similarities for float64 MSE/BCE
+  compatibility; with autocast disabled, explicit FP16/BF16 inputs now produce
+  matching low-precision MSE/L1 losses instead of FP32.
+
 Changes
 ~~~~~~~
 
