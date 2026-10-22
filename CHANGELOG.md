@@ -14,6 +14,11 @@ Changes since `2.0.0.dev0`. For older releases, see
   compatibility; with autocast disabled, explicit FP16/BF16 inputs now produce
   matching low-precision MSE/L1 losses instead of FP32.
 
+#### spikingjelly.activation_based.encoding
+
+- `WeightedPhaseEncoder` outputs spikes in the input floating-point dtype instead
+  of the global default dtype, allowing direct use with layers of matching dtype.
+
 ### Changes
 
 - ST-BIF uses one-third less FP32 state memory and fewer inference allocations.
