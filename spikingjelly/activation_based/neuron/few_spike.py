@@ -143,8 +143,8 @@ class FewSpikeNode(nn.Module, base.StepModule):
 
     CUDA 上无梯度、连续 FP32 输入和同设备连续 FP32 表可使用可选原生 CUDA 或 Triton
     推理融合，覆盖七种注册二值 surrogate 和 DeterministicPass；有 forward hook
-    时在自动模式下保留 Torch。其他 dtype、布局、surrogate、梯度模式及外层 torch.compile
-    继续使用参考递推。带逻辑取负标记的 gate 或表、节点子类、forward AD 和
+    时在自动模式下保留 Torch。其他 dtype、布局、surrogate、梯度模式及外层
+    torch.compile / TorchScript tracing 继续使用参考递推。带逻辑取负标记的 gate 或表、节点子类、forward AD 和
     functorch 变换也使用参考递推。多步输入求和仍由 PyTorch 执行。
     融合针对 Torch 递推；部分形状下 torch.compile 仍可能更快。
     在新进程中设置 ``SJ_FEW_SPIKE_CUDA_IMPLEMENTATION=auto|cuda|triton|torch``；
@@ -181,8 +181,8 @@ class FewSpikeNode(nn.Module, base.StepModule):
     Optional native CUDA or Triton fusion handles contiguous FP32 CUDA inference under disabled
     gradients, with contiguous FP32 tables on the same device and one of the seven
     registered binary surrogates or DeterministicPass, without forward hooks.
-    Under auto/torch, other dtypes, layouts, surrogates, gradient modes and enclosing torch.compile
-    use the reference recurrence, as do gates or tables with a lazy negative bit,
+    Under auto/torch, other dtypes, layouts, surrogates, gradient modes and enclosing
+    torch.compile / TorchScript tracing use the reference recurrence, as do gates or tables with a lazy negative bit,
     node subclasses, forward AD and functorch transforms. PyTorch still sums
     multi-step inputs. Fusion targets the Torch recurrence; torch.compile can
     remain faster for some shapes.
@@ -270,6 +270,7 @@ class FewSpikeNode(nn.Module, base.StepModule):
             and not torch.version.hip
             and not torch.is_grad_enabled()
             and not torch.compiler.is_compiling()
+            and not torch.jit.is_tracing()
             and not torch._C._are_functorch_transforms_active()
             and torch.autograd.forward_ad.unpack_dual(gate).tangent is None
             and gate.dtype == torch.float32
@@ -337,7 +338,7 @@ class FewSpikeNode(nn.Module, base.StepModule):
                 _require_automatic_torch(
                     _selection,
                     gate.device,
-                    "few-spike fusion requires ordinary contiguous FP32 inference tensors, supported tables/surrogates, no hooks/AD/subclasses, and no enclosing compile",
+                    "few-spike fusion requires ordinary contiguous FP32 inference tensors, supported tables/surrogates, no hooks/AD/subclasses, and no enclosing compile or tracing",
                 )
         return self._forward_from_gate(gate, return_sequence)
 

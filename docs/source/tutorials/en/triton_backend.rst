@@ -58,8 +58,10 @@ FewSpikeNode, OutlierAwareThresholdNode and HGNode use optional native CUDA or
 Triton fusion for compatible contiguous FP32 inference. Set
 ``SJ_FEW_SPIKE_CUDA_IMPLEMENTATION=auto|cuda|triton|torch`` in a new process;
 ``auto`` checks native CUDA, Triton, then Torch. Explicit fused requests fail
-for unavailable providers or unsupported profiles. CPU and outer compile use
+for unavailable providers or unsupported profiles. CPU, outer compile and tracing use
 Torch; see the API for gradient, hook, subclass and tensor-view limits.
+Automatic Triton selection requires NVIDIA compute capability 8.0 or newer;
+older devices retain a compatible native or Torch provider.
 Native builds use the installation guide's ``SJ_BUILD_NATIVE_CUDA=1`` command.
 
 Ordinary fused paths accept FP32/FP16/BF16 inputs with FP32 state and supported

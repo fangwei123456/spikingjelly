@@ -54,7 +54,9 @@ FewSpikeNode、OutlierAwareThresholdNode 和 HGNode 对兼容的连续 FP32 推�
 使用可选原生 CUDA 或 Triton 融合。在新进程中设置
 ``SJ_FEW_SPIKE_CUDA_IMPLEMENTATION=auto|cuda|triton|torch``；``auto`` 依次检查
 原生 CUDA、Triton、Torch。显式融合请求在实现不可用或执行范围不支持时失败。
-CPU 和外层 compile 使用 Torch；梯度、hook、子类和张量视图限制详见 API。
+CPU、外层 compile 和 tracing 使用 Torch；梯度、hook、子类和张量视图限制详见 API。
+自动选择 Triton 要求 NVIDIA 计算能力不低于 8.0；旧设备保留兼容的原生 CUDA
+或 Torch 实现。
 原生构建使用安装指南中的 ``SJ_BUILD_NATIVE_CUDA=1`` 命令。
 
 普通融合路径接受 FP32/FP16/BF16 输入，要求状态为 FP32，替代梯度为受支持的内置

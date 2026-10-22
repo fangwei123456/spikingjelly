@@ -938,3 +938,48 @@ def test_few_spike_provider_current_stream(few_spike_provider):
         expected = _reference_decode(node, x)
     stream.synchronize()
     torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize("failure", [AttributeError, RuntimeError])
+def test_few_spike_incompatible_triton_import_is_optional(monkeypatch, failure):
+    import builtins
+    import runpy
+    from pathlib import Path
+    from spikingjelly._ops import few_spike
+
+    original_import = builtins.__import__
+
+    def incompatible(name, *args, **kwargs):
+        if name == "triton":
+            raise failure("incompatible Triton initialization")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", incompatible)
+    with pytest.raises(
+        ImportError, match="incompatible Triton initialization"
+    ) as error:
+        runpy.run_path(str(Path(few_spike.__file__).with_name("triton.py")))
+    assert isinstance(error.value.__cause__, failure)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("kind", ["fs", "oat", "hg"])
+@pytest.mark.parametrize("mode", ["s", "m"])
+def test_few_spike_trace_uses_reference(kind, mode, few_spike_provider, monkeypatch):
+    from spikingjelly._ops import few_spike
+
+    node = _routing_node(kind, mode).cuda()
+    x = torch.linspace(-1.5, 1.5, 33, device="cuda")
+    if mode == "m":
+        x = torch.stack((x, torch.zeros_like(x), torch.zeros_like(x)))
+    with torch.no_grad():
+        # The fixture warms a real provider; auto must bypass it while tracing.
+        monkeypatch.setattr(few_spike._selection, "_requested", "auto")
+        traced = torch.jit.trace(node, x)
+        for value in (x, x.flip(-1) * 0.75):
+            torch.testing.assert_close(
+                traced(value), _reference_decode(node, value), rtol=0, atol=0
+            )
+        monkeypatch.setattr(few_spike._selection, "_requested", few_spike_provider)
+        with pytest.raises(RuntimeError, match="tracing"):
+            torch.jit.trace(node, x)

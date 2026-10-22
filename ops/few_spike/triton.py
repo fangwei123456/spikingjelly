@@ -1,6 +1,10 @@
 import torch
-import triton
-import triton.language as tl
+
+try:
+    import triton
+    import triton.language as tl
+except (AttributeError, RuntimeError) as error:
+    raise ImportError(f"Optional Triton initialization failed: {error}") from error
 
 
 @triton.jit
