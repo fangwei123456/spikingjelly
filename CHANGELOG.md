@@ -8,6 +8,8 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 ### Changes
 
+- Few-spike, outlier-aware and hierarchically gated neurons fuse eligible FP32 CUDA inference with Triton; other profiles retain Torch execution.
+
 - ST-BIF uses one-third less FP32 state memory and fewer inference allocations.
 - Removed `STBIFNode.cur_output`; `functional.stbif_step` and
   `functional.stbif_multi_step` return `(out, q, acc_q)`. Consume returned spikes,

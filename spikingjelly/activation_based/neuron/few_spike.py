@@ -141,6 +141,11 @@ class FewSpikeNode(nn.Module, base.StepModule):
     输入必须为浮点 tensor。编码表参数注册为 buffer，会随模块 ``to(device/dtype)`` 迁移；
     若输入 dtype 与 buffer dtype 不同，遵循 PyTorch 的 dtype promotion 规则。
 
+    CUDA 上无梯度、连续 FP32 输入和同设备连续 FP32 表可使用可选 Triton
+    推理融合，覆盖七种注册二值 surrogate 和 DeterministicPass；有 forward hook
+    时保留 Torch。其他 dtype、布局、surrogate、梯度模式及外层 torch.compile
+    继续使用参考递推。多步输入求和仍由 PyTorch 执行。
+
     该实现对应 Stöckl 和 Maass 提出的 Few-Spikes (FS) 神经元，参见
     `Stöckl and Maass (2021) <https://doi.org/10.1038/s42256-021-00311-4>`__。
 
@@ -165,6 +170,12 @@ class FewSpikeNode(nn.Module, base.StepModule):
     Inputs must be floating point tensors. Coding table parameters are registered
     as buffers and follow module ``to(device/dtype)`` conversions. If the input
     dtype differs from the buffer dtype, PyTorch dtype promotion rules apply.
+
+    Optional Triton fusion handles contiguous FP32 CUDA inference under disabled
+    gradients, with contiguous FP32 tables on the same device and one of the seven
+    registered binary surrogates or DeterministicPass, without forward hooks.
+    Other dtypes, layouts, surrogates, gradient modes and enclosing torch.compile
+    use the reference recurrence. PyTorch still sums multi-step inputs.
 
     This implementation corresponds to the Few-Spikes (FS) neuron proposed by
     Stöckl and Maass; see `Stöckl and Maass (2021)
@@ -236,6 +247,72 @@ class FewSpikeNode(nn.Module, base.StepModule):
     ) -> torch.Tensor:
         return self._run_table(gate, self.theta, self.h, self.d, return_sequence)
 
+    def _decode(self, gate: torch.Tensor, return_sequence: bool) -> torch.Tensor:
+        if (
+            type(gate) is torch.Tensor
+            and gate.is_cuda
+            and not torch.version.hip
+            and not torch.is_grad_enabled()
+            and not torch.compiler.is_compiling()
+            and not torch._C._are_functorch_transforms_active()
+            and torch.autograd.forward_ad.unpack_dual(gate).tangent is None
+            and gate.dtype == torch.float32
+            and gate.is_contiguous()
+            and gate.numel() > 0
+            and type(self) in (FewSpikeNode, OutlierAwareThresholdNode, HGNode)
+        ):
+            from ..._ops.surrogate import _surrogate_spec
+
+            sg = self.surrogate_function
+            supported = _surrogate_spec(sg) is not None or (
+                type(sg) is surrogate.DeterministicPass and sg.spiking
+            )
+            if (
+                supported
+                and not (
+                    "forward" in sg.__dict__
+                    or sg._forward_hooks
+                    or sg._forward_pre_hooks
+                    or nn.modules.module._global_forward_hooks
+                    or nn.modules.module._global_forward_pre_hooks
+                )
+                and all(
+                    type(value) is torch.Tensor
+                    and value.dtype == torch.float32
+                    and value.device == gate.device
+                    and value.is_contiguous()
+                    and torch.autograd.forward_ad.unpack_dual(value).tangent is None
+                    for value in self.buffers()
+                )
+            ):
+                from ..._ops.few_spike import _forward
+
+                if type(self) is HGNode:
+                    result = _forward(
+                        gate,
+                        self.region_theta,
+                        self.region_h,
+                        self.region_d,
+                        return_sequence,
+                        gates=self.gate_thresholds,
+                    )
+                elif type(self) is OutlierAwareThresholdNode:
+                    result = _forward(
+                        gate,
+                        self.theta,
+                        self.h,
+                        self.d,
+                        return_sequence,
+                        outlier=(self.outlier_theta, self.outlier_h, self.outlier_d),
+                        split_threshold=self.split_threshold,
+                        clamp_value=self.clamp_value,
+                    )
+                else:
+                    result = _forward(gate, self.theta, self.h, self.d, return_sequence)
+                if result is not None:
+                    return result
+        return self._forward_from_gate(gate, return_sequence)
+
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         r"""
         **API Language** - :ref:`中文 <FewSpikeNode.single_step_forward-cn>` | :ref:`English <FewSpikeNode.single_step_forward-en>`
@@ -271,7 +348,7 @@ class FewSpikeNode(nn.Module, base.StepModule):
         :raises TypeError: Raised when ``x`` is not a floating point tensor.
         """
         self._check_input(x, "x")
-        return self._forward_from_gate(x, return_sequence=False)
+        return self._decode(x, return_sequence=False)
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         r"""
@@ -318,7 +395,7 @@ class FewSpikeNode(nn.Module, base.StepModule):
             raise ValueError(
                 f"x_seq.shape[0] must equal K={self.K}, but got {x_seq.shape[0]}."
             )
-        return self._forward_from_gate(x_seq.sum(dim=0), return_sequence=True)
+        return self._decode(x_seq.sum(dim=0), return_sequence=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.step_mode == "s":
