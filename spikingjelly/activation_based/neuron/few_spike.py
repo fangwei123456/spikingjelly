@@ -141,12 +141,17 @@ class FewSpikeNode(nn.Module, base.StepModule):
     输入必须为浮点 tensor。编码表参数注册为 buffer，会随模块 ``to(device/dtype)`` 迁移；
     若输入 dtype 与 buffer dtype 不同，遵循 PyTorch 的 dtype promotion 规则。
 
-    CUDA 上无梯度、连续 FP32 输入和同设备连续 FP32 表可使用可选 Triton
+    CUDA 上无梯度、连续 FP32 输入和同设备连续 FP32 表可使用可选原生 CUDA 或 Triton
     推理融合，覆盖七种注册二值 surrogate 和 DeterministicPass；有 forward hook
-    时保留 Torch。其他 dtype、布局、surrogate、梯度模式及外层 torch.compile
+    时在自动模式下保留 Torch。其他 dtype、布局、surrogate、梯度模式及外层 torch.compile
     继续使用参考递推。带逻辑取负标记的 gate 或表、节点子类、forward AD 和
     functorch 变换也使用参考递推。多步输入求和仍由 PyTorch 执行。
     融合针对 Torch 递推；部分形状下 torch.compile 仍可能更快。
+    在新进程中设置 ``SJ_FEW_SPIKE_CUDA_IMPLEMENTATION=auto|cuda|triton|torch``；
+    默认 ``auto`` 依次检查原生 CUDA、Triton、Torch，并按设备缓存选择。
+    原生扩展由 ``SJ_BUILD_NATIVE_CUDA=1`` 显式构建，import 不触发构建。
+    显式 ``cuda``/``triton`` 不可用或遇到不支持的 CUDA 执行范围时抛出
+    RuntimeError，不静默切换。CPU 不受该 CUDA 选择影响。
 
     该实现对应 Stöckl 和 Maass 提出的 Few-Spikes (FS) 神经元，参见
     `Stöckl and Maass (2021) <https://doi.org/10.1038/s42256-021-00311-4>`__。
@@ -173,14 +178,20 @@ class FewSpikeNode(nn.Module, base.StepModule):
     as buffers and follow module ``to(device/dtype)`` conversions. If the input
     dtype differs from the buffer dtype, PyTorch dtype promotion rules apply.
 
-    Optional Triton fusion handles contiguous FP32 CUDA inference under disabled
+    Optional native CUDA or Triton fusion handles contiguous FP32 CUDA inference under disabled
     gradients, with contiguous FP32 tables on the same device and one of the seven
     registered binary surrogates or DeterministicPass, without forward hooks.
-    Other dtypes, layouts, surrogates, gradient modes and enclosing torch.compile
+    Under auto/torch, other dtypes, layouts, surrogates, gradient modes and enclosing torch.compile
     use the reference recurrence, as do gates or tables with a lazy negative bit,
     node subclasses, forward AD and functorch transforms. PyTorch still sums
     multi-step inputs. Fusion targets the Torch recurrence; torch.compile can
     remain faster for some shapes.
+    In a new process, set ``SJ_FEW_SPIKE_CUDA_IMPLEMENTATION=auto|cuda|triton|torch``.
+    The default ``auto`` checks native CUDA, Triton, then Torch and caches selection
+    per device. Native extensions are built explicitly with ``SJ_BUILD_NATIVE_CUDA=1``;
+    import does not build them. Explicit ``cuda``/``triton`` requests raise
+    RuntimeError for unavailable implementations or unsupported CUDA execution
+    profiles instead of silently switching. CPU is unaffected by this CUDA selection.
 
     This implementation corresponds to the Few-Spikes (FS) neuron proposed by
     Stöckl and Maass; see `Stöckl and Maass (2021)
@@ -318,6 +329,16 @@ class FewSpikeNode(nn.Module, base.StepModule):
                     result = _forward(gate, self.theta, self.h, self.d, return_sequence)
                 if result is not None:
                     return result
+        if gate.is_cuda:
+            from ..._ops.few_spike import _selection
+            from ..._ops.selection import _require_automatic_torch
+
+            if _selection._requested not in ("auto", "torch"):
+                _require_automatic_torch(
+                    _selection,
+                    gate.device,
+                    "few-spike fusion requires ordinary contiguous FP32 inference tensors, supported tables/surrogates, no hooks/AD/subclasses, and no enclosing compile",
+                )
         return self._forward_from_gate(gate, return_sequence)
 
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:

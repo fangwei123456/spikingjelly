@@ -54,10 +54,13 @@ ActivationAwareIF and STBIF. Training modes, dtypes and surrogate support vary
 by family; consult the corresponding API. Other neurons retain their own
 execution paths, some without dedicated CUDA kernels.
 
-FewSpikeNode, OutlierAwareThresholdNode and HGNode use a dedicated optional
-Triton path for contiguous FP32 CUDA inference under disabled gradients, with
-compatible tables and surrogates; they have no ``SJ_<NEURON>_CUDA_IMPLEMENTATION``
-override. See their API for reference-path conditions.
+FewSpikeNode, OutlierAwareThresholdNode and HGNode use optional native CUDA or
+Triton fusion for compatible contiguous FP32 inference. Set
+``SJ_FEW_SPIKE_CUDA_IMPLEMENTATION=auto|cuda|triton|torch`` in a new process;
+``auto`` checks native CUDA, Triton, then Torch. Explicit fused requests fail
+for unavailable providers or unsupported profiles. CPU and outer compile use
+Torch; see the API for gradient, hook, subclass and tensor-view limits.
+Native builds use the installation guide's ``SJ_BUILD_NATIVE_CUDA=1`` command.
 
 Ordinary fused paths accept FP32/FP16/BF16 inputs with FP32 state and supported
 built-in surrogates. Low-precision state and custom surrogates can use Torch
