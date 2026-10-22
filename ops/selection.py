@@ -132,6 +132,10 @@ class _CudaSelection:
                 if name == "torch":
                     module_name = "cpu"
                 try:
+                    if name == "triton" and capability < (8, 0):
+                        raise ImportError(
+                            "Triton requires NVIDIA compute capability 8.0+"
+                        )
                     module = importlib.import_module(f".{module_name}", self._package)
                     if name == "cuda":
                         _check_native_device(module._build_info, index)

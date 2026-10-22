@@ -336,3 +336,650 @@ def test_hg_node_does_not_register_unused_parent_table_buffers():
         "region_d",
         "gate_thresholds",
     }
+
+
+def _reference_decode(node, x):
+    # Frozen e18a95aa equations: keep the oracle independent of fused execution.
+    sequence = node.step_mode == "m"
+    gate = x.sum(0) if sequence else x
+    sign = None
+    if isinstance(node, neuron.OutlierAwareThresholdNode):
+        if node.clamp_value is not None:
+            gate = gate.clamp(-node.clamp_value, node.clamp_value)
+        sign = gate.sign().detach()
+        gate = gate.abs()
+        normal = gate <= node.split_threshold
+        tables = [
+            [torch.where(normal, a, b) for a, b in zip(first, second)]
+            for first, second in (
+                (node.theta, node.outlier_theta),
+                (node.h, node.outlier_h),
+                (node.d, node.outlier_d),
+            )
+        ]
+    elif isinstance(node, neuron.HGNode):
+        region = torch.bucketize(gate.detach(), node.gate_thresholds)
+        tables = [
+            [table[:, k][region] for k in range(node.K)]
+            for table in (node.region_theta, node.region_h, node.region_d)
+        ]
+    else:
+        tables = node.theta, node.h, node.d
+    v = gate
+    readout = torch.zeros_like(gate)
+    outputs = []
+    for theta, h, d in zip(*tables):
+        spike = node.surrogate_function(v - theta)
+        value = d * spike
+        outputs.append(value)
+        readout = readout + value
+        v = v - h * spike
+    result = torch.stack(outputs) if sequence else readout
+    if sign is not None:
+        result = result * (sign.unsqueeze(0) if sequence else sign)
+    return result
+
+
+def _routing_node(kind, mode, sg=None):
+    table = neuron.FewSpikeTable([0.25, 0.5, 0.75], [0.2, 0.3, 0.4], [1, 2, 4])
+    other = neuron.FewSpikeTable([0.1, 0.4, 0.8], [0.1, 0.4, 0.2], [2, 4, 8])
+    options = dict(step_mode=mode, surrogate_function=sg)
+    if kind == "oat":
+        return neuron.OutlierAwareThresholdNode(table, other, 0.5, 1.0, **options)
+    if kind == "hg":
+        low = neuron.FewSpikeTable([-1.0, -0.5, 0.0], [0.25, 0.25, 0.25], [-1, -2, -4])
+        return neuron.HGNode([low, table, other], [-0.5, 0.5], **options)
+    return neuron.FewSpikeNode(table, **options)
+
+
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("kind", ["fs", "oat", "hg"])
+@pytest.mark.parametrize("mode", ["s", "m"])
+@pytest.mark.parametrize(
+    "dtype,layout",
+    [
+        (torch.float32, "contiguous"),
+        (torch.float32, "strided"),
+        (torch.float16, "contiguous"),
+        (torch.bfloat16, "contiguous"),
+        (torch.float64, "empty"),
+    ],
+)
+def test_few_spike_decode_preserves_boundaries_dtype_and_layout(
+    device, kind, mode, dtype, layout
+):
+    node = _routing_node(kind, mode).to(device=device, dtype=dtype)
+    edge = torch.tensor(
+        [-1.0, -0.5, 0.0, 0.25, 0.5, 0.75, 1.0], device=device, dtype=dtype
+    )
+    values = torch.cat(
+        (
+            edge,
+            torch.nextafter(edge, torch.full_like(edge, -torch.inf)),
+            torch.nextafter(edge, torch.full_like(edge, torch.inf)),
+            edge.new_tensor([torch.nan, torch.inf, -torch.inf]),
+        )
+    )
+    x = values.repeat(2, 1)
+    if layout == "strided":
+        x = x.t()
+    elif layout == "empty":
+        x = x[:0]
+    if mode == "m":
+        x = torch.stack((x, torch.zeros_like(x), torch.zeros_like(x)))
+    with torch.no_grad():
+        expected = _reference_decode(node, x)
+        actual = node(x)
+        repeated = node(x)
+    assert actual.dtype == expected.dtype
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0, equal_nan=True)
+    torch.testing.assert_close(repeated, expected, rtol=0, atol=0, equal_nan=True)
+
+
+@pytest.mark.parametrize("kind", ["fs", "oat", "hg"])
+@pytest.mark.parametrize("mode", ["s", "m"])
+@pytest.mark.parametrize("spiking", [True, False])
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+def test_few_spike_decode_preserves_surrogate_input_gradients(
+    kind, mode, spiking, device
+):
+    node = _routing_node(kind, mode, surrogate.Sigmoid(spiking=spiking)).to(
+        device=device, dtype=torch.float64
+    )
+    x = (
+        torch.linspace(-0.9, 1.2, 30, dtype=torch.float64, device=device)
+        .reshape(3, 2, 5)
+        .requires_grad_()
+    )
+    expected_x = x.detach().clone().requires_grad_()
+    actual = node(x)
+    expected = _reference_decode(node, expected_x)
+    gradient = torch.linspace(
+        -1, 1, actual.numel(), dtype=actual.dtype, device=device
+    ).reshape(actual.shape)
+    actual_grad = torch.autograd.grad(actual, x, gradient)[0]
+    expected_grad = torch.autograd.grad(expected, expected_x, gradient)[0]
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    torch.testing.assert_close(actual_grad, expected_grad, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("kind", ["fs", "oat", "hg"])
+def test_few_spike_surrogate_hooks_remain_observable(device, kind):
+    node = _routing_node(kind, "m").to(device)
+    handle = node.surrogate_function.register_forward_hook(
+        lambda module, inputs, output: torch.zeros_like(output)
+    )
+    try:
+        with torch.no_grad():
+            result = node(torch.ones(3, 5, device=device))
+        torch.testing.assert_close(result, torch.zeros_like(result), rtol=0, atol=0)
+    finally:
+        handle.remove()
+
+
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+def test_few_spike_subnormal_thresholds(device):
+    tiny = torch.nextafter(torch.tensor(0.0), torch.tensor(1.0))
+    table = neuron.FewSpikeTable(torch.stack((tiny, tiny)), [0.0, 0.0], [1.0, 2.0])
+    node = neuron.FewSpikeNode(table).to(device)
+    x = torch.tensor([0.0, tiny.item(), -tiny.item()], device=device)
+    with torch.no_grad():
+        torch.testing.assert_close(
+            node(x), x.new_tensor([0.0, 3.0, 0.0]), rtol=0, atol=0
+        )
+
+
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("kind", ["fs", "oat", "hg"])
+@pytest.mark.parametrize(
+    "input_dtype,table_dtype",
+    [(torch.float16, torch.float32), (torch.float32, torch.float64)],
+)
+def test_few_spike_mixed_dtype_promotion(device, kind, input_dtype, table_dtype):
+    node = _routing_node(kind, "s").to(device=device, dtype=table_dtype)
+    for shape in ((), (2, 3)):
+        x = torch.full(shape, 0.625, dtype=input_dtype, device=device)
+        with torch.no_grad():
+            expected = _reference_decode(node, x)
+            actual = node(x)
+        assert actual.dtype == expected.dtype
+        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("kind", ["fs", "oat", "hg"])
+def test_few_spike_fullgraph_keeps_reference_outputs(kind):
+    node = _routing_node(kind, "s").cuda()
+    x = torch.linspace(-1, 2, 33, device="cuda")
+    with torch.no_grad():
+        expected = _reference_decode(node, x)
+        actual = torch.compile(node, fullgraph=True)(x)
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("kind", ["fs", "oat", "hg"])
+def test_few_spike_fp32_cuda_gradients_are_preserved(kind):
+    node = _routing_node(kind, "m").cuda()
+    x = torch.linspace(-0.9, 1.2, 30, device="cuda").reshape(3, 2, 5).requires_grad_()
+    expected_x = x.detach().clone().requires_grad_()
+    actual = node(x)
+    expected = _reference_decode(node, expected_x)
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    torch.testing.assert_close(
+        torch.autograd.grad(actual.sum(), x)[0],
+        torch.autograd.grad(expected.sum(), expected_x)[0],
+        rtol=0,
+        atol=0,
+    )
+
+
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+def test_few_spike_no_grad_does_not_silently_discard_forward_ad(device):
+    node = _routing_node("fs", "s").to(device)
+    x = torch.ones(5, device=device)
+    with torch.autograd.forward_ad.dual_level(), torch.no_grad():
+        dual = torch.autograd.forward_ad.make_dual(x, torch.ones_like(x))
+        with pytest.raises(NotImplementedError, match="jvp"):
+            node(dual)
+
+
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("kind", ["fs", "oat", "hg"])
+@pytest.mark.parametrize("mode", ["s", "m"])
+@pytest.mark.parametrize("negative_view", ["input", "buffers"])
+def test_few_spike_lazy_negative_views(device, kind, mode, negative_view):
+    node = _routing_node(kind, mode).to(device)
+    x = torch.tensor(1 + 1j, device=device).conj().imag
+    assert x.is_neg() and x.is_contiguous() and x.item() == -1.0
+    if mode == "m":
+        x = torch._neg_view(torch.tensor([1.0, 0.0, 0.0], device=device))
+    if negative_view == "buffers":
+        x = torch.full((3,) if mode == "m" else (), 0.75, device=device)
+        for name, value in list(node.named_buffers()):
+            setattr(node, name, torch._neg_view(-value))
+        assert all(value.is_neg() and value.is_contiguous() for value in node.buffers())
+    with torch.no_grad():
+        expected = _reference_decode(node, x)
+        torch.testing.assert_close(node(x), expected, rtol=0, atol=0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_few_spike_fused_offsets_beyond_int32():
+    from spikingjelly._ops import few_spike
+
+    if (
+        few_spike._selection.diagnostics(torch.device("cuda"))["implementation"]
+        == "torch"
+    ):
+        pytest.skip("CUDA fusion unavailable")
+    if torch.cuda.mem_get_info()[0] < 20 * 1024**3:
+        pytest.skip("Large-offset validation requires 20 GiB free CUDA memory")
+    k = 32
+    n = 2**31 // (k - 1) + 17
+    node = neuron.FewSpikeNode(
+        neuron.FewSpikeTable([0.5] * k, [0.0] * k, list(range(1, k + 1))),
+        step_mode="m",
+    ).cuda()
+    x = torch.zeros((k, n), device="cuda")
+    x[0, -1] = 1.0
+    with torch.no_grad():
+        result = node(x)
+        expected = _reference_decode(node, x[:, -64:])
+        assert (k - 1) * n > 2**31
+        torch.testing.assert_close(result[:, -64:], expected, rtol=0, atol=0)
+        torch.testing.assert_close(
+            result[:, :64], torch.zeros_like(expected), rtol=0, atol=0
+        )
+        torch.cuda.synchronize()
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("n", [1, 512])
+def test_few_spike_public_forward_executes_fused_kernel(tmp_path, n):
+    import json
+    from spikingjelly._ops import few_spike
+
+    if (
+        few_spike._selection.diagnostics(torch.device("cuda"))["implementation"]
+        == "torch"
+    ):
+        pytest.skip("CUDA fusion unavailable")
+    for kind in ("fs", "oat", "hg"):
+        for mode in ("s", "m"):
+            node = _routing_node(kind, mode).cuda()
+            x = torch.ones((3, n) if mode == "m" else (n,), device="cuda")
+            with torch.no_grad():
+                node(x)
+                torch.cuda.synchronize()
+                with torch.profiler.profile(
+                    activities=[
+                        torch.profiler.ProfilerActivity.CPU,
+                        torch.profiler.ProfilerActivity.CUDA,
+                    ]
+                ) as profile:
+                    actual = node(x)
+                    torch.cuda.synchronize()
+                torch.testing.assert_close(
+                    actual, _reference_decode(node, x), rtol=0, atol=0
+                )
+            trace = tmp_path / f"{kind}-{mode}.json"
+            profile.export_chrome_trace(str(trace))
+            events = json.loads(trace.read_text())["traceEvents"]
+            assert any(
+                event.get("cat") == "kernel"
+                and any(
+                    name in event["name"]
+                    for name in ("_few_spike_inference", "few_spike_native_kernel")
+                )
+                for event in events
+            )
+
+
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("thresholds", [[], [0.0]])
+def test_hg_replaced_shorter_gate_thresholds_use_reference(device, thresholds):
+    node = _routing_node("hg", "s").to(device)
+    node.gate_thresholds = torch.tensor(thresholds, device=device)
+    x = torch.tensor([-2.0, 0.0, 2.0], device=device)
+    with torch.no_grad():
+        torch.testing.assert_close(node(x), _reference_decode(node, x), rtol=0, atol=0)
+
+
+def test_few_spike_cpu_implementation_query():
+    from spikingjelly.activation_based import functional
+
+    for execution in ("eager", "compile"):
+        assert (
+            functional.neuron_implementation(
+                "few_spike", torch.device("cpu"), execution=execution
+            )["implementation"]
+            == "torch-reference"
+        )
+
+
+@pytest.fixture(params=["cuda", "triton"])
+def few_spike_provider(request, monkeypatch):
+    import importlib
+    from spikingjelly._ops import few_spike
+    from spikingjelly.activation_based import functional
+
+    try:
+        with monkeypatch.context() as context:
+            context.setenv("SJ_FEW_SPIKE_CUDA_IMPLEMENTATION", request.param)
+            importlib.reload(few_spike)
+            try:
+                functional.neuron_implementation("few_spike", torch.device("cuda"))
+            except RuntimeError as error:
+                if not str(error).startswith("No available sj_few_spike"):
+                    raise
+                pytest.skip(str(error))
+            yield request.param
+    finally:
+        importlib.reload(few_spike)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("kind", ["fs", "oat", "hg", "oat_unclamped", "hg_single"])
+@pytest.mark.parametrize("mode", ["s", "m"])
+def test_few_spike_explicit_provider(kind, mode, few_spike_provider, tmp_path):
+    import json
+    from spikingjelly.activation_based import functional
+
+    node = _routing_node(kind, mode).cuda()
+    if kind == "oat_unclamped":
+        node = _routing_node("oat", mode).cuda()
+        node.clamp_value = None
+    elif kind == "hg_single":
+        table = neuron.FewSpikeTable([0.25, 0.5, 0.75], [0.2, 0.3, 0.4], [1, 2, 4])
+        node = neuron.HGNode([table], [], step_mode=mode).cuda()
+    x = torch.tensor(
+        [-float("inf"), -1.0, 0.0, 0.25, 0.5, 0.75, 1.0, float("inf"), float("nan")],
+        device="cuda",
+    )
+    if mode == "m":
+        x = torch.stack((x, torch.zeros_like(x), torch.zeros_like(x)))
+    with torch.no_grad():
+        expected = _reference_decode(node, x)
+        node(x)
+        torch.cuda.synchronize()
+        with torch.profiler.profile(
+            activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,
+            ]
+        ) as profile:
+            actual = node(x)
+            torch.cuda.synchronize()
+        torch.testing.assert_close(actual, expected, rtol=0, atol=0, equal_nan=True)
+    assert (
+        functional.neuron_implementation("few_spike", x.device)["implementation"]
+        == few_spike_provider
+    )
+    trace = tmp_path / "provider.json"
+    profile.export_chrome_trace(str(trace))
+    kernels = [
+        e["name"]
+        for e in json.loads(trace.read_text())["traceEvents"]
+        if e.get("cat") == "kernel"
+    ]
+    expected_kernel = (
+        "few_spike_native_kernel"
+        if few_spike_provider == "cuda"
+        else "_few_spike_inference"
+    )
+    other = (
+        "_few_spike_inference"
+        if few_spike_provider == "cuda"
+        else "few_spike_native_kernel"
+    )
+    assert any(expected_kernel in name for name in kernels)
+    assert not any(other in name for name in kernels)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_few_spike_explicit_provider_rejects_unsupported_profile(few_spike_provider):
+    from spikingjelly.activation_based import functional
+
+    node = _routing_node("fs", "s").cuda()
+    with (
+        torch.no_grad(),
+        pytest.raises(RuntimeError, match="cannot run this execution profile"),
+    ):
+        node(torch.ones(2, device="cuda", dtype=torch.float64))
+    with pytest.raises(RuntimeError, match="cannot run this execution profile"):
+        node(torch.ones(2, device="cuda", requires_grad=True))
+    with pytest.raises(RuntimeError, match="cannot run this execution profile"):
+        functional.neuron_implementation(
+            "few_spike", torch.device("cuda"), execution="compile"
+        )
+
+
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+def test_few_spike_no_grad_accepts_requires_grad_input(device):
+    node = _routing_node("fs", "s").to(device)
+    x = torch.ones(3, device=device, requires_grad=True)
+    with torch.no_grad():
+        actual = node(x)
+        torch.testing.assert_close(actual, _reference_decode(node, x), rtol=0, atol=0)
+    assert not actual.requires_grad
+
+
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+def test_few_spike_oversized_clamp_preserves_reference_error(device):
+    node = _routing_node("oat", "s").to(device)
+    node.clamp_value = 1e100
+    with torch.no_grad(), pytest.raises(RuntimeError, match="overflow"):
+        node(torch.ones(3, device=device))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("provider", ["cuda", "triton"])
+def test_few_spike_explicit_unavailable_provider_errors(provider, monkeypatch):
+    import importlib
+    from spikingjelly._ops import few_spike
+    from spikingjelly.activation_based import functional
+
+    try:
+        with monkeypatch.context() as context:
+            context.setenv("SJ_FEW_SPIKE_CUDA_IMPLEMENTATION", provider)
+            importlib.reload(few_spike)
+            node = _routing_node("fs", "s").cuda()
+            x = torch.ones(2, device="cuda")
+            try:
+                info = functional.neuron_implementation("few_spike", x.device)
+            except RuntimeError as error:
+                if not str(error).startswith("No available sj_few_spike"):
+                    raise
+                with (
+                    torch.no_grad(),
+                    pytest.raises(RuntimeError, match="No available sj_few_spike"),
+                ):
+                    node(x)
+            else:
+                assert info["implementation"] == provider
+                with torch.no_grad():
+                    torch.testing.assert_close(
+                        node(x), _reference_decode(node, x), rtol=0, atol=0
+                    )
+    finally:
+        importlib.reload(few_spike)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_few_spike_provider_subnormal(few_spike_provider):
+    tiny = torch.finfo(torch.float32).tiny / 2
+    node = neuron.FewSpikeNode(neuron.FewSpikeTable([tiny], [0.0], [1.0])).cuda()
+    x = torch.tensor([0.0, tiny, 2 * tiny], device="cuda", dtype=torch.float32)
+    with torch.no_grad():
+        torch.testing.assert_close(
+            node(x), x.new_tensor([0.0, 1.0, 1.0]), rtol=0, atol=0
+        )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_few_spike_provider_current_stream(few_spike_provider):
+    node = _routing_node("oat", "m").cuda()
+    stream = torch.cuda.Stream()
+    with torch.cuda.stream(stream), torch.no_grad():
+        x = torch.full((3, 1024), 0.25, device="cuda")
+        actual = node(x)
+        expected = _reference_decode(node, x)
+    stream.synchronize()
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize("failure", [AttributeError, RuntimeError])
+def test_few_spike_incompatible_triton_import_is_optional(monkeypatch, failure):
+    import builtins
+    import runpy
+    from pathlib import Path
+    from spikingjelly._ops import few_spike
+
+    original_import = builtins.__import__
+
+    def incompatible(name, *args, **kwargs):
+        if name == "triton":
+            raise failure("incompatible Triton initialization")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", incompatible)
+    with pytest.raises(
+        ImportError, match="incompatible Triton initialization"
+    ) as error:
+        runpy.run_path(str(Path(few_spike.__file__).with_name("triton.py")))
+    assert isinstance(error.value.__cause__, failure)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("kind", ["fs", "oat", "hg"])
+@pytest.mark.parametrize("mode", ["s", "m"])
+def test_few_spike_trace_uses_reference(kind, mode, few_spike_provider, monkeypatch):
+    from spikingjelly._ops import few_spike
+
+    node = _routing_node(kind, mode).cuda()
+    x = torch.linspace(-1.5, 1.5, 33, device="cuda")
+    if mode == "m":
+        x = torch.stack((x, torch.zeros_like(x), torch.zeros_like(x)))
+    with torch.no_grad():
+        # The fixture warms a real provider; auto must bypass it while tracing.
+        monkeypatch.setattr(few_spike._selection, "_requested", "auto")
+        traced = torch.jit.trace(node, x)
+        for value in (x, x.flip(-1) * 0.75):
+            torch.testing.assert_close(
+                traced(value), _reference_decode(node, value), rtol=0, atol=0
+            )
+        monkeypatch.setattr(few_spike._selection, "_requested", few_spike_provider)
+        with pytest.raises(RuntimeError, match="tracing"):
+            torch.jit.trace(node, x)

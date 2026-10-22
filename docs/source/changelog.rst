@@ -31,6 +31,10 @@ spikingjelly.activation_based.encoding
 Changes
 ~~~~~~~
 
+- Few-spike, outlier-aware and hierarchically gated neurons add optional native CUDA alongside Triton for eligible FP32 inference, with explicit provider selection and reference fallbacks.
+
+- Neuron dispatch rejects unsupported Triton architectures; few-spike tracing and incompatible optional Triton imports retain reference execution in automatic mode.
+
 - ST-BIF uses one-third less FP32 state memory and fewer inference allocations.
 - Removed ``STBIFNode.cur_output``; ``functional.stbif_step`` and
   ``functional.stbif_multi_step`` return ``(out, q, acc_q)``. Consume returned spikes,

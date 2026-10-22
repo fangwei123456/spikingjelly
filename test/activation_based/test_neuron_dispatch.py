@@ -573,3 +573,28 @@ def test_native_binary_and_ptx_compatibility(
     else:
         with pytest.raises(ImportError, match="no supported binary/PTX"):
             _check_native_device(info, 0)
+
+
+@pytest.mark.parametrize("family", [*FAMILIES, "few_spike", "clif"])
+def test_unsupported_triton_device_falls_back_or_reports_unavailable(
+    monkeypatch, family
+):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from spikingjelly._ops import selection
+
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda index: (7, 0))
+    monkeypatch.setattr(torch.cuda, "device", lambda index: nullcontext())
+    monkeypatch.setattr(selection, "_DEFAULT_CUDA_PRIORITY", ("triton", "torch"))
+    module = SimpleNamespace(_forward_impl=lambda *args: None)
+    monkeypatch.setattr(selection.importlib, "import_module", lambda *args: module)
+    variable = "SJ_TEST_CUDA_IMPLEMENTATION"
+    monkeypatch.setenv(variable, "auto")
+    selected = selection._CudaSelection(family, family, variable, module._forward_impl)
+    info = selected.diagnostics(torch.device("cuda", 0))
+    assert info["implementation"] == "torch"
+    assert "8.0" in info["unavailable"]["triton"]
+    monkeypatch.setenv(variable, "triton")
+    forced = selection._CudaSelection(family, family, variable, module._forward_impl)
+    with pytest.raises(RuntimeError, match="8.0"):
+        forced.diagnostics(torch.device("cuda", 0))
