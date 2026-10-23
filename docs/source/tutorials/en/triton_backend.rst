@@ -49,6 +49,20 @@ expansion checks Triton, native CUDA and Torch. These orders are the same across
 GPU architectures; compatibility can change which implementation is available.
 Measure the workload you intend to run.
 
+When selection reaches Triton, its distribution metadata must satisfy the
+``triton>=3.2.0`` installation contract. In auto mode, the 3.2 release series
+uses a compute-capability floor of 7.0; 3.3 and later use the current 8.0 policy.
+Pre-release/local suffixes do not change the release series: 3.3rc/dev belongs
+to 3.3, while 3.2.0rc still fails the separate minimum-version check.
+Explicit Triton requests bypass this auto architecture policy, not input,
+numerical or device constraints, and never silently switch providers.
+Missing or invalid version metadata makes auto skip Triton; explicit requests
+log that the version cannot be verified and attempt the installed provider.
+Repair the package metadata and use ``uv pip check`` to check the environment.
+These floors restore selection eligibility, not verified old-GPU support or
+complete compatibility: an older compiler may not recognize a newer GPU.
+Kernel/JIT/OOM errors after selection still propagate. No probe is run.
+
 Automatic dispatch covers IF, LIF, PLIF, QIF, EIF, Izhikevich, I-LIF,
 ActivationAwareIF and STBIF. Training modes, dtypes and surrogate support vary
 by family; consult the corresponding API. Other neurons retain their own
@@ -60,8 +74,6 @@ Triton fusion for compatible contiguous FP32 inference. Set
 ``auto`` checks native CUDA, Triton, then Torch. Explicit fused requests fail
 for unavailable providers or unsupported profiles. CPU, outer compile and tracing use
 Torch; see the API for gradient, hook, subclass and tensor-view limits.
-Automatic Triton selection requires NVIDIA compute capability 8.0 or newer;
-older devices retain a compatible native or Torch provider.
 Native builds use the installation guide's ``SJ_BUILD_NATIVE_CUDA=1`` command.
 
 Ordinary fused paths accept FP32/FP16/BF16 inputs with FP32 state and supported

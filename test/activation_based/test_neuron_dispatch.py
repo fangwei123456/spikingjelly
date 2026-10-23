@@ -1,6 +1,7 @@
 """The shared device operator is the public execution seam."""
 
 import importlib
+from importlib import metadata
 
 import pytest
 import torch
@@ -405,6 +406,7 @@ def test_availability_priority_is_cached_per_device_and_strict_override(monkeypa
     with pytest.raises(ValueError, match="execution"):
         functional.neuron_implementation("lif", torch.device("cpu"), execution="other")
 
+    monkeypatch.setattr(metadata, "version", lambda name: "3.3.0")
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda index: (8, index))
     monkeypatch.setattr(torch.cuda, "device", lambda index: nullcontext())
     monkeypatch.setattr(selection, "_DEFAULT_CUDA_PRIORITY", ("triton", "torch"))
@@ -575,26 +577,244 @@ def test_native_binary_and_ptx_compatibility(
             _check_native_device(info, 0)
 
 
-@pytest.mark.parametrize("family", [*FAMILIES, "few_spike", "clif"])
-def test_unsupported_triton_device_falls_back_or_reports_unavailable(
-    monkeypatch, family
-):
+@pytest.fixture
+def triton_selection_environment(monkeypatch):
     from contextlib import nullcontext
     from types import SimpleNamespace
     from spikingjelly._ops import selection
 
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda index: (7, 0))
     monkeypatch.setattr(torch.cuda, "device", lambda index: nullcontext())
-    monkeypatch.setattr(selection, "_DEFAULT_CUDA_PRIORITY", ("triton", "torch"))
-    module = SimpleNamespace(_forward_impl=lambda *args: None)
-    monkeypatch.setattr(selection.importlib, "import_module", lambda *args: module)
-    variable = "SJ_TEST_CUDA_IMPLEMENTATION"
-    monkeypatch.setenv(variable, "auto")
-    selected = selection._CudaSelection(family, family, variable, module._forward_impl)
-    info = selected.diagnostics(torch.device("cuda", 0))
+    monkeypatch.setattr(metadata, "version", lambda name: "3.2.0")
+
+    def load(name, package):
+        if name == ".native":
+            raise ImportError("native not built")
+        forward = lambda *args, **kwargs: name
+        return SimpleNamespace(
+            _forward_impl=forward,
+            _roots_impl=forward,
+            _states_impl=forward,
+            _weight_gradient_impl=forward,
+        )
+
+    monkeypatch.setattr(selection.importlib, "import_module", load)
+
+    def make(requested="auto", namespace="sj_lif", forward_name="_forward_impl"):
+        monkeypatch.setenv("SJ_TEST_CUDA_IMPLEMENTATION", requested)
+        return selection._CudaSelection(
+            "test",
+            namespace,
+            "SJ_TEST_CUDA_IMPLEMENTATION",
+            lambda *args: "cpu",
+            forward_name=forward_name,
+        )
+
+    return make
+
+
+@pytest.mark.parametrize(
+    "namespace,forward_name",
+    [
+        *[
+            (f"sj_{name}", "_forward_impl")
+            for name in (
+                "if",
+                "lif",
+                "plif",
+                "qif",
+                "eif",
+                "izhikevich",
+                "ilif",
+                "activation_aware_if",
+                "stbif",
+                "clif",
+                "few_spike",
+                "spike_compress",
+            )
+        ],
+        *[
+            (f"sj_tempotron_{name}", f"_{name}_impl")
+            for name in (
+                "roots",
+                "states",
+                "weight_gradient",
+            )
+        ],
+    ],
+)
+@pytest.mark.parametrize("execution", ["eager", "compile"])
+def test_triton_32_cc7_remains_a_shared_candidate(
+    triton_selection_environment, namespace, forward_name, execution
+):
+    selected = triton_selection_environment(
+        namespace=namespace, forward_name=forward_name
+    )
+    assert (
+        selected.diagnostics(torch.device("cuda", 0), execution=execution)[
+            "implementation"
+        ]
+        == "triton"
+    )
+
+
+@pytest.mark.parametrize(
+    "version,capability,requested,expected",
+    [
+        ("3.2.0", (7, 0), "auto", "triton"),
+        ("3.2.0", (6, 1), "auto", "torch"),
+        ("3.2.1+local", (7, 5), "auto", "triton"),
+        ("3.3.0", (7, 5), "auto", "torch"),
+        ("3.3.0rc1", (7, 5), "auto", "torch"),
+        ("3.3.0.dev1", (7, 5), "auto", "torch"),
+        ("3.3.0+local", (8, 0), "auto", "triton"),
+        ("4.0.0.dev1", (8, 0), "auto", "triton"),
+        ("4.0.0", (7, 5), "auto", "torch"),
+        ("3.2.0rc1", (8, 0), "auto", "torch"),
+        ("3.1.0", (8, 0), "auto", "torch"),
+        ("3.2.0", (7, 0), "triton", "triton"),
+        ("3.3.0", (7, 0), "triton", "triton"),
+        ("3.2.0rc1", (8, 0), "triton", "error"),
+        ("3.1.0", (8, 0), "triton", "error"),
+    ],
+)
+def test_triton_release_series_policy(
+    monkeypatch, triton_selection_environment, version, capability, requested, expected
+):
+    monkeypatch.setattr(metadata, "version", lambda name: version)
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda index: capability)
+    selected = triton_selection_environment(requested)
+    if expected == "error":
+        with pytest.raises(RuntimeError, match="Triton >=3.2.0"):
+            selected.diagnostics(torch.device("cuda", 0))
+    else:
+        info = selected.diagnostics(torch.device("cuda", 0))
+        assert info["implementation"] == expected
+        if expected == "torch":
+            assert version in info["unavailable"]["triton"]
+
+
+@pytest.mark.parametrize("version", [None, "", "broken", "missing"])
+def test_unverified_triton_metadata_is_diagnosed(
+    monkeypatch, triton_selection_environment, loguru_records, version
+):
+    def read(name):
+        if version == "missing":
+            raise metadata.PackageNotFoundError(name)
+        return version
+
+    monkeypatch.setattr(metadata, "version", read)
+    auto = triton_selection_environment()
+    info = auto.diagnostics(torch.device("cuda", 0))
     assert info["implementation"] == "torch"
-    assert "8.0" in info["unavailable"]["triton"]
-    monkeypatch.setenv(variable, "triton")
-    forced = selection._CudaSelection(family, family, variable, module._forward_impl)
-    with pytest.raises(RuntimeError, match="8.0"):
-        forced.diagnostics(torch.device("cuda", 0))
+    assert "Cannot verify Triton version" in info["unavailable"]["triton"]
+    explicit = triton_selection_environment("triton")
+    assert explicit.diagnostics(torch.device("cuda", 0))["implementation"] == "triton"
+    assert any(
+        "Cannot verify Triton version" in r["message"] and "explicit" in r["message"]
+        for r in loguru_records
+    )
+
+
+def test_triton_policy_preserves_selection_cache_and_execution_errors(
+    monkeypatch, triton_selection_environment
+):
+    selected = triton_selection_environment()
+    device = torch.device("cuda", 0)
+    assert selected.get_cuda_forward(device)() == ".triton"
+    monkeypatch.setattr(metadata, "version", lambda name: "3.3.0")
+    assert selected.get_cuda_forward(device)() == ".triton"
+    assert (
+        selected.diagnostics(device, execution="compile")["implementation"] == "torch"
+    )
+    assert selected.diagnostics(torch.device("cuda", 1))["implementation"] == "torch"
+    error = RuntimeError("kernel failure must escape")
+
+    def failed(*args):
+        raise error
+
+    selected = triton_selection_environment("triton")
+    from types import SimpleNamespace
+    from spikingjelly._ops import selection
+
+    monkeypatch.setattr(
+        selection.importlib,
+        "import_module",
+        lambda *args: SimpleNamespace(_forward_impl=failed),
+    )
+    with pytest.raises(RuntimeError) as caught:
+        selected.get_cuda_forward(device)()
+    assert caught.value is error
+
+
+def test_torch_and_cpu_selection_do_not_read_triton_metadata(
+    monkeypatch, triton_selection_environment
+):
+    from spikingjelly.activation_based import functional
+
+    def forbidden(*args):
+        raise AssertionError("Triton metadata must not be consulted")
+
+    monkeypatch.setattr(metadata, "version", forbidden)
+    selected = triton_selection_environment("torch")
+    assert selected.get_cuda_forward(torch.device("cuda", 0))() == ".cpu"
+    monkeypatch.setattr(torch.cuda, "get_device_capability", forbidden)
+    assert selected.get_trace_forward(torch.device("cpu"))() == "cpu"
+    assert (
+        functional.neuron_implementation("few_spike", torch.device("cpu"))[
+            "implementation"
+        ]
+        == "torch-reference"
+    )
+
+
+def test_native_priority_does_not_consult_triton_metadata(
+    monkeypatch, triton_selection_environment
+):
+    from types import SimpleNamespace
+    from spikingjelly._ops import selection
+
+    def native(*args):
+        return "native"
+
+    def forbidden(*args):
+        raise AssertionError("native selection must not inspect Triton")
+
+    monkeypatch.setattr(metadata, "version", forbidden)
+    monkeypatch.setattr(selection, "_check_native_device", lambda *args: None)
+    monkeypatch.setattr(
+        selection.importlib,
+        "import_module",
+        lambda *args: SimpleNamespace(_build_info={}),
+    )
+    monkeypatch.setattr(
+        torch.ops,
+        "sj_policy_native",
+        SimpleNamespace(native_forward=SimpleNamespace(default=native)),
+    )
+    selected = triton_selection_environment(namespace="sj_policy_native")
+    assert selected.get_cuda_forward(torch.device("cuda", 0))() == "native"
+    assert (
+        triton_selection_environment("cuda", "sj_policy_native").get_cuda_forward(
+            torch.device("cuda", 0)
+        )()
+        == "native"
+    )
+
+
+def test_optional_triton_import_failure_keeps_auto_and_explicit_distinct(
+    monkeypatch, triton_selection_environment
+):
+    from types import SimpleNamespace
+    from spikingjelly._ops import selection
+
+    def missing(name, package):
+        if name != ".cpu":
+            raise ImportError("provider not installed")
+        return SimpleNamespace(_forward_impl=lambda *args: "torch")
+
+    monkeypatch.setattr(selection.importlib, "import_module", missing)
+    device = torch.device("cuda", 0)
+    assert triton_selection_environment().get_cuda_forward(device)() == "torch"
+    with pytest.raises(RuntimeError, match="provider not installed"):
+        triton_selection_environment("triton").get_cuda_forward(device)
