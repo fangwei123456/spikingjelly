@@ -260,6 +260,9 @@ class PeriodicEncoder(StatefulEncoder):
 
         单步模式下，首次调用或重置后不传入脉冲时，使用构造时提供的序列；显式传入的序列优先。默认序列会跟随模块的设备和浮点类型转换，但不会加入 ``state_dict``。
 
+        复制模块时适用 PyTorch 张量的深复制限制：跟踪梯度的非叶默认张量不能深复制。
+        对于叶默认张量，复制前先重置编码器以清除缓存的计算图；副本具有独立的默认张量和梯度。
+
         .. warning::
 
             不要忘记调用 :meth:`reset` ，因为这个编码器是有状态的。
@@ -279,6 +282,11 @@ class PeriodicEncoder(StatefulEncoder):
         The periodic encoder that outputs ``spike[t % T]`` at ``t`` -th calling, where ``T = spike.shape[0]``.
 
         In single-step mode, omitting the input on the first call or after reset uses the constructor sequence; an explicit sequence takes precedence. The default sequence follows module device and floating dtype conversions, but is not included in ``state_dict``.
+
+        PyTorch tensor deepcopy restrictions apply: an autograd-tracked non-leaf
+        default cannot be deep-copied. For leaf defaults, reset the encoder before
+        copying to clear the cached computation graph; the copy has an independent
+        default tensor and gradients.
 
         .. admonition:: Warning
             :class: warning
