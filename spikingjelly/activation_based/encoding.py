@@ -1,4 +1,3 @@
-import math
 from abc import abstractmethod
 
 import torch
@@ -319,7 +318,9 @@ class PeriodicEncoder(StatefulEncoder):
 
 
 class LatencyEncoder(StatefulEncoder):
-    def __init__(self, T: int, enc_function="linear", step_mode="s"):
+    def __init__(
+        self, T: int, enc_function: str = "linear", step_mode: str = "s"
+    ) -> None:
         r"""
         **API Language** - :ref:`中文 <LatencyEncoder.__init__-cn>` | :ref:`English <LatencyEncoder.__init__-en>`
 
@@ -339,7 +340,7 @@ class LatencyEncoder(StatefulEncoder):
             .. math::
                 t_f(x) = (T - 1) - \text{ln}(\alpha * x + 1)
 
-        其中 :math:`\alpha` 满足 :math:`t_f(1) = T - 1`
+        其中 :math:`\alpha = \mathrm{exp}(T - 1) - 1`。计算使用等价的对数域形式，避免大编码周期或低精度输入导致指数溢出。
 
         .. warning::
 
@@ -375,7 +376,7 @@ class LatencyEncoder(StatefulEncoder):
             .. math::
                 t_f(x) = (T - 1) - \text{ln}(\alpha * x + 1)
 
-        where :math:`\alpha` satisfies :math:`t_f(1) = T - 1`
+        where :math:`\alpha = \mathrm{exp}(T - 1) - 1`. Computation uses an equivalent log-domain form to avoid exponential overflow for long periods or low-precision inputs.
 
         .. admonition:: Warning
             :class: warning
@@ -410,9 +411,7 @@ class LatencyEncoder(StatefulEncoder):
                 print(encoder(x))
         """
         super().__init__(T, step_mode)
-        if enc_function == "log":
-            self.alpha = math.exp(T - 1.0) - 1.0
-        elif enc_function != "linear":
+        if enc_function not in ("linear", "log"):
             raise NotImplementedError
 
         self.enc_function = enc_function
@@ -445,7 +444,15 @@ class LatencyEncoder(StatefulEncoder):
         :type x: torch.Tensor
         """
         if self.enc_function == "log":
-            t_f = (self.T - 1.0 - torch.log(self.alpha * x + 1.0)).round().long()
+            # t_f = -log(x + (1 - x) * exp(-(T - 1))). Work in log
+            # space so neither exp(T - 1) nor its product with x can overflow.
+            values = (
+                x.float()
+                if x.dtype in (torch.float16, torch.bfloat16, torch.bool)
+                else x
+            )
+            t_f = -torch.logaddexp(values.log(), torch.log1p(-values) - (self.T - 1))
+            t_f = t_f.round().long()
         else:
             t_f = ((self.T - 1.0) * (1.0 - x)).round().long()
 

@@ -15,6 +15,11 @@ Unreleased
 Fixes
 ~~~~~
 
+spikingjelly.activation_based.encoding
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``LatencyEncoder`` evaluates logarithmic firing times without exponential overflow for long periods and low-precision inputs.
+
 spikingjelly.activation_based.functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
