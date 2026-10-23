@@ -1,5 +1,6 @@
 import math
 from abc import abstractmethod
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -245,7 +246,7 @@ class StatefulEncoder(base.MemoryModule):
 
 
 class PeriodicEncoder(StatefulEncoder):
-    def __init__(self, spike: torch.Tensor, step_mode="s"):
+    def __init__(self, spike: torch.Tensor, step_mode: str = "s") -> None:
         r"""
         **API Language** - :ref:`中文 <PeriodicEncoder.__init__-cn>` | :ref:`English <PeriodicEncoder.__init__-en>`
 
@@ -255,7 +256,9 @@ class PeriodicEncoder(StatefulEncoder):
 
         * **中文**
 
-        周期性编码器，在第 ``t`` 次调用时输出 ``spike[t % T]``，其中 ``T = spike.shape[0]``
+        周期性编码器，在第 ``t`` 次调用时输出 ``spike[t % T]``，其中 ``T = spike.shape[0]``。
+
+        单步模式下，首次调用或重置后不传入脉冲时，使用构造时提供的序列；显式传入的序列优先。默认序列会跟随模块的设备和浮点类型转换，但不会加入 ``state_dict``。
 
         .. warning::
 
@@ -273,7 +276,9 @@ class PeriodicEncoder(StatefulEncoder):
 
         * **English**
 
-        The periodic encoder that outputs ``spike[t % T]`` at ``t`` -th calling, where ``T = spike.shape[0]``
+        The periodic encoder that outputs ``spike[t % T]`` at ``t`` -th calling, where ``T = spike.shape[0]``.
+
+        In single-step mode, omitting the input on the first call or after reset uses the constructor sequence; an explicit sequence takes precedence. The default sequence follows module device and floating dtype conversions, but is not included in ``state_dict``.
 
         .. admonition:: Warning
             :class: warning
@@ -287,8 +292,9 @@ class PeriodicEncoder(StatefulEncoder):
         :type step_mode: str
         """
         super().__init__(spike.shape[0], step_mode)
+        self.register_buffer("_initial_spike", spike, persistent=False)
 
-    def single_step_encode(self, spike: torch.Tensor) -> torch.Tensor:
+    def single_step_encode(self, spike: Optional[torch.Tensor] = None) -> torch.Tensor:
         r"""
         **API Language** - :ref:`中文 <PeriodicEncoder.single_step_encode-cn>` | :ref:`English <PeriodicEncoder.single_step_encode-en>`
 
@@ -298,10 +304,12 @@ class PeriodicEncoder(StatefulEncoder):
 
         * **中文**
 
-        设置周期性编码器的脉冲序列。将输入的 ``spike`` 作为编码器的脉冲序列，并将编码周期 ``T`` 设置为 ``spike.shape[0]``。
+        返回用于编码的脉冲序列。``spike`` 为 ``None`` 时返回构造时提供的默认序列。
 
-        :param spike: 脉冲张量，其第0维为编码周期
-        :type spike: torch.Tensor
+        :param spike: 脉冲张量，其第0维为编码周期；默认 ``None`` 使用构造时的序列
+        :type spike: Optional[torch.Tensor]
+        :return: 原样返回选定的脉冲序列
+        :rtype: torch.Tensor
 
         ----
 
@@ -309,13 +317,14 @@ class PeriodicEncoder(StatefulEncoder):
 
         * **English**
 
-        Sets the spike sequence for the periodic encoder. The input ``spike`` is used as the encoder's
-        spike sequence, and the encoding period ``T`` is set to ``spike.shape[0]``.
+        Return the spike sequence to encode. If ``spike`` is ``None``, return the default sequence supplied at construction.
 
-        :param spike: the spike tensor, whose 0-th dimension is the encoding period
-        :type spike: torch.Tensor
+        :param spike: spike tensor whose 0-th dimension is the period; default ``None`` uses the constructor sequence
+        :type spike: Optional[torch.Tensor]
+        :return: the selected spike sequence, unchanged
+        :rtype: torch.Tensor
         """
-        return spike
+        return self._initial_spike if spike is None else spike
 
 
 class LatencyEncoder(StatefulEncoder):

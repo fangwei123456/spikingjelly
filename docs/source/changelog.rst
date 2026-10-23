@@ -15,6 +15,11 @@ Unreleased
 Fixes
 ~~~~~
 
+spikingjelly.activation_based.encoding
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``PeriodicEncoder`` uses its constructor sequence for omitted single-step inputs, including after reset, while retaining explicit input precedence and module device/dtype conversion.
+
 spikingjelly.activation_based.functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
