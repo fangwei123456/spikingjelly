@@ -29,6 +29,8 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
 
     - ``gaussian`` ，高斯内积， :math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \mathrm{exp}(- \frac{||\boldsymbol{x_{i}} - \boldsymbol{y_{j}}||^{2}}{2\sigma^{2}})` ，其中 :math:`\sigma = args[0]`。
 
+    高斯核的平方距离会截断为非负值，避免浮点舍入使核值超过1。
+
     :param x: shape=[N, M]的tensor，看作是N个M维向量
     :type x: torch.Tensor
 
@@ -60,6 +62,8 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
     - ``sigmoid`` -- Sigmoid kernel, :math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \mathrm{sigmoid}(\alpha \boldsymbol{x_{i}}^{T}\boldsymbol{y_{j}})`, where :math:`\alpha = args[0]`.
 
     - ``gaussian`` -- Gaussian kernel, :math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \mathrm{exp}(- \frac{||\boldsymbol{x_{i}} - \boldsymbol{y_{j}}||^{2}}{2\sigma^{2}})`, where :math:`\sigma = args[0]`.
+
+    Gaussian squared distances are clamped to nonnegative values so rounding cannot make the kernel exceed one.
 
     :param x: Tensor of shape=[N, M]
     :type x: torch.Tensor
@@ -98,7 +102,7 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
         d_xy = x2.unsqueeze(1).repeat(1, N) + y2.unsqueeze(0).repeat(N, 1) - 2 * xy
         # d_xy[i][j]的元素是x[i]的平方和，加上y[j]的平方和，减去2倍的sum_{k} x[i][k]y[j][k]，因此
         # d_xy[i][j]就是x[i]和y[j]相减，平方，求和
-        return torch.exp(-d_xy / (2 * sigma * sigma))
+        return torch.exp(-d_xy.clamp_min(0) / (2 * sigma * sigma))
     else:
         raise NotImplementedError
 
@@ -138,8 +142,6 @@ def spike_similar_loss(
 
     当使用Sigmoid或高斯内积时，内积的取值范围均在[0, 1]之间；而使用线性内积时，为了保证内积取值仍然在[0, 1]之间，会进行归一化，按照 :math:`\text{sim}_p[i][j]=\frac{\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}})}{||\boldsymbol{x_{i}}|| · ||\boldsymbol{y_{j}}||}`。
 
-    线性归一化相似度的上界会截断为1，避免浮点舍入导致相似度超过二值交叉熵的有效概率范围。
-
     对于相似的数据，根据输入的 ``loss_type`` ，返回度量 ``sim`` 与 ``sim_p`` 差异的损失：
 
     - ``mse`` -- 返回sim与sim_p的均方误差（也就是l2误差）。
@@ -166,9 +168,8 @@ def spike_similar_loss(
     :type loss_type: str
 
     :param args: 用于计算内积的额外参数
-    :type args: float
 
-    :return: 标量相似损失；dtype由相似度和当前自动混合精度规则确定。
+    :return: shape=[1]的tensor，相似损失
     :rtype: torch.Tensor
 
     ----
@@ -192,8 +193,6 @@ def spike_similar_loss(
     - ``gaussian``, Gaussian kernel，:math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \mathrm{exp}(- \frac{||\boldsymbol{x_{i}} - \boldsymbol{y_{j}}||^{2}}{2\sigma^{2}})`, where :math:`\sigma = args[0]`.
 
     When Sigmoid or Gaussian kernel is applied, the inner product naturally lies in :math:`[0, 1]`. To make the value consistent when using linear kernel, the result will be normalized as: :math:`\text{sim}_p[i][j]=\frac{\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}})}{||\boldsymbol{x_{i}}|| · ||\boldsymbol{y_{j}}||}`.
-
-    Linear normalized similarities are capped at 1 so floating-point roundoff does not exceed the valid probability range for binary cross entropy.
 
     For similar data, return the specified discrepancy loss between ``sim`` and ``sim_p`` according to ``loss_type``.
 
@@ -225,9 +224,8 @@ def spike_similar_loss(
     :type loss_type: str
 
     :param args: Extra parameters for inner product
-    :type args: float
 
-    :return: Scalar similarity loss; its dtype follows similarities and active autocast rules.
+    :return: shape=[1], similarity loss
     :rtype: torch.Tensor
     """
     spikes = spikes.flatten(start_dim=1)
@@ -236,7 +234,7 @@ def spike_similar_loss(
 
     if kernel_type == "linear":
         spikes_len = spikes.norm(p=2, dim=1, keepdim=True)
-        sim_p = (sim_p / ((spikes_len.mm(spikes_len.t())) + 1e-8)).clamp_max(1)
+        sim_p = sim_p / ((spikes_len.mm(spikes_len.t())) + 1e-8)
 
     labels = labels.to(dtype=sim_p.dtype)
     sim = labels.mm(labels.t()).clamp_max(

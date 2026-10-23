@@ -18,8 +18,8 @@ Fixes
 spikingjelly.activation_based.functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- ``spike_similar_loss`` caps normalized linear similarities at one, preventing
-  roundoff from making BCE reject valid spike trains.
+- ``kernel_dot_product`` keeps Gaussian squared distances nonnegative, preventing
+  rounded self-similarities above one and resulting BCE failures.
 
 - ``spike_similar_loss`` matches target dtype to similarities for float64 MSE/BCE
   compatibility; with autocast disabled, explicit FP16/BF16 inputs now produce
