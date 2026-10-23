@@ -8,10 +8,6 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 ### Fixes
 
-#### spikingjelly.activation_based.encoding
-
-- `PeriodicEncoder` uses its constructor sequence for omitted single-step inputs, including after reset, while retaining explicit input precedence and module device/dtype conversion.
-
 #### spikingjelly.activation_based.functional
 
 - `spike_similar_loss` matches target dtype to similarities for float64 MSE/BCE
@@ -19,6 +15,8 @@ Changes since `2.0.0.dev0`. For older releases, see
   matching low-precision MSE/L1 losses instead of FP32.
 
 #### spikingjelly.activation_based.encoding
+
+- `PeriodicEncoder` uses its constructor sequence for omitted single-step inputs, including after reset, while retaining explicit input precedence and module device/dtype conversion.
 
 - `WeightedPhaseEncoder` outputs spikes in the input floating-point dtype instead
   of the global default dtype, allowing direct use with layers of matching dtype.

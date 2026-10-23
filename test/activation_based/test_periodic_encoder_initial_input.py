@@ -1,6 +1,7 @@
 import pytest
 import torch
 
+from spikingjelly.activation_based import base, functional
 from spikingjelly.activation_based.encoding import PeriodicEncoder
 
 
@@ -67,3 +68,55 @@ def test_constructor_sequence_preserves_autograd_through_multiple_cycles():
 def test_constructor_sequence_does_not_add_state_dict_keys():
     encoder = PeriodicEncoder(torch.ones((3, 2)))
     assert not encoder.state_dict()
+
+
+@pytest.mark.parametrize("kind", ["leaf", "nonleaf", "view"])
+@pytest.mark.parametrize("detach_net", [False, True])
+def test_detaching_state_preserves_constructor_autograd(kind, detach_net):
+    leaf = torch.arange(6.0, requires_grad=True)
+    if kind == "leaf":
+        initial = leaf
+    elif kind == "nonleaf":
+        initial = leaf * 2
+    else:
+        initial = leaf.view(3, 2)
+    encoder = PeriodicEncoder(initial)
+    encoder()
+
+    if detach_net:
+        functional.detach_net(encoder)
+    else:
+        encoder.detach()
+
+    assert initial.requires_grad
+    assert not encoder.spike.requires_grad
+    encoder.reset()
+    sum(encoder().sum() for _ in range(initial.shape[0])).backward()
+    torch.testing.assert_close(
+        leaf.grad, torch.full_like(leaf, 2.0 if kind == "nonleaf" else 1.0)
+    )
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+@pytest.mark.parametrize("explicit", [False, True])
+def test_functional_forward_matches_default_and_explicit_cycles(wrapped, explicit):
+    initial = torch.arange(6.0).view(3, 2)
+    replacement = torch.arange(4.0).view(2, 2) + 10
+    encoder = PeriodicEncoder(initial)
+    forward = (
+        base.to_functional_forward(encoder) if wrapped else encoder.functional_forward
+    )
+    sequence = replacement if explicit else initial
+    states = (None, 0)
+    actual = []
+
+    for t in range(7):
+        inputs = (replacement,) if explicit and t == 0 else ()
+        outputs, states = forward(inputs, states)
+        actual.append(outputs[0])
+
+    torch.testing.assert_close(
+        torch.stack(actual), sequence[torch.arange(7) % len(sequence)]
+    )
+    assert encoder.spike is None
+    assert encoder.t == 0

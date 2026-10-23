@@ -186,7 +186,7 @@ class StatefulEncoder(base.MemoryModule):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         spike, t = states
         if spike is None:
-            spike = self.single_step_encode(inputs[0])
+            spike = self.single_step_encode(inputs[0] if inputs else None)
         output = spike[t]
         return (output,), (spike, (t + 1) % spike.shape[0])
 
@@ -304,11 +304,11 @@ class PeriodicEncoder(StatefulEncoder):
 
         * **中文**
 
-        返回用于编码的脉冲序列。``spike`` 为 ``None`` 时返回构造时提供的默认序列。
+        返回用于编码的脉冲序列。``spike`` 为 ``None`` 时复制构造时提供的默认序列，避免分离状态时修改默认序列的梯度连接。
 
         :param spike: 脉冲张量，其第0维为编码周期；默认 ``None`` 使用构造时的序列
         :type spike: Optional[torch.Tensor]
-        :return: 原样返回选定的脉冲序列
+        :return: 默认序列的副本，或原样返回显式传入的序列；保留梯度连接
         :rtype: torch.Tensor
 
         ----
@@ -317,14 +317,14 @@ class PeriodicEncoder(StatefulEncoder):
 
         * **English**
 
-        Return the spike sequence to encode. If ``spike`` is ``None``, return the default sequence supplied at construction.
+        Return the spike sequence to encode. If ``spike`` is ``None``, copy the constructor sequence so detaching state does not alter the default sequence's gradient connection.
 
         :param spike: spike tensor whose 0-th dimension is the period; default ``None`` uses the constructor sequence
         :type spike: Optional[torch.Tensor]
-        :return: the selected spike sequence, unchanged
+        :return: a copy of the default sequence, or the explicit sequence unchanged; gradient connections are preserved
         :rtype: torch.Tensor
         """
-        return self._initial_spike if spike is None else spike
+        return self._initial_spike.clone() if spike is None else spike
 
 
 class LatencyEncoder(StatefulEncoder):
