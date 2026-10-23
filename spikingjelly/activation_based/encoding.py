@@ -1,5 +1,6 @@
 import math
 from abc import abstractmethod
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -185,7 +186,7 @@ class StatefulEncoder(base.MemoryModule):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         spike, t = states
         if spike is None:
-            spike = self.single_step_encode(inputs[0])
+            spike = self.single_step_encode(inputs[0] if inputs else None)
         output = spike[t]
         return (output,), (spike, (t + 1) % spike.shape[0])
 
@@ -245,7 +246,7 @@ class StatefulEncoder(base.MemoryModule):
 
 
 class PeriodicEncoder(StatefulEncoder):
-    def __init__(self, spike: torch.Tensor, step_mode="s"):
+    def __init__(self, spike: torch.Tensor, step_mode: str = "s") -> None:
         r"""
         **API Language** - :ref:`中文 <PeriodicEncoder.__init__-cn>` | :ref:`English <PeriodicEncoder.__init__-en>`
 
@@ -255,7 +256,12 @@ class PeriodicEncoder(StatefulEncoder):
 
         * **中文**
 
-        周期性编码器，在第 ``t`` 次调用时输出 ``spike[t % T]``，其中 ``T = spike.shape[0]``
+        周期性编码器，在第 ``t`` 次调用时输出 ``spike[t % T]``，其中 ``T = spike.shape[0]``。
+
+        单步模式下，首次调用或重置后不传入脉冲时，使用构造时提供的序列；显式传入的序列优先。默认序列会跟随模块的设备和浮点类型转换，但不会加入 ``state_dict``。
+
+        复制模块时适用 PyTorch 张量的深复制限制：跟踪梯度的非叶默认张量不能深复制。
+        对于叶默认张量，复制前先重置编码器以清除缓存的计算图；副本具有独立的默认张量和梯度。
 
         .. warning::
 
@@ -273,7 +279,14 @@ class PeriodicEncoder(StatefulEncoder):
 
         * **English**
 
-        The periodic encoder that outputs ``spike[t % T]`` at ``t`` -th calling, where ``T = spike.shape[0]``
+        The periodic encoder that outputs ``spike[t % T]`` at ``t`` -th calling, where ``T = spike.shape[0]``.
+
+        In single-step mode, omitting the input on the first call or after reset uses the constructor sequence; an explicit sequence takes precedence. The default sequence follows module device and floating dtype conversions, but is not included in ``state_dict``.
+
+        PyTorch tensor deepcopy restrictions apply: an autograd-tracked non-leaf
+        default cannot be deep-copied. For leaf defaults, reset the encoder before
+        copying to clear the cached computation graph; the copy has an independent
+        default tensor and gradients.
 
         .. admonition:: Warning
             :class: warning
@@ -287,8 +300,9 @@ class PeriodicEncoder(StatefulEncoder):
         :type step_mode: str
         """
         super().__init__(spike.shape[0], step_mode)
+        self.register_buffer("_initial_spike", spike, persistent=False)
 
-    def single_step_encode(self, spike: torch.Tensor) -> torch.Tensor:
+    def single_step_encode(self, spike: Optional[torch.Tensor] = None) -> torch.Tensor:
         r"""
         **API Language** - :ref:`中文 <PeriodicEncoder.single_step_encode-cn>` | :ref:`English <PeriodicEncoder.single_step_encode-en>`
 
@@ -298,10 +312,12 @@ class PeriodicEncoder(StatefulEncoder):
 
         * **中文**
 
-        设置周期性编码器的脉冲序列。将输入的 ``spike`` 作为编码器的脉冲序列，并将编码周期 ``T`` 设置为 ``spike.shape[0]``。
+        返回用于编码的脉冲序列。``spike`` 为 ``None`` 时复制构造时提供的默认序列，避免分离状态时修改默认序列的梯度连接。
 
-        :param spike: 脉冲张量，其第0维为编码周期
-        :type spike: torch.Tensor
+        :param spike: 脉冲张量，其第0维为编码周期；默认 ``None`` 使用构造时的序列
+        :type spike: Optional[torch.Tensor]
+        :return: 默认序列的副本，或原样返回显式传入的序列；保留梯度连接
+        :rtype: torch.Tensor
 
         ----
 
@@ -309,13 +325,14 @@ class PeriodicEncoder(StatefulEncoder):
 
         * **English**
 
-        Sets the spike sequence for the periodic encoder. The input ``spike`` is used as the encoder's
-        spike sequence, and the encoding period ``T`` is set to ``spike.shape[0]``.
+        Return the spike sequence to encode. If ``spike`` is ``None``, copy the constructor sequence so detaching state does not alter the default sequence's gradient connection.
 
-        :param spike: the spike tensor, whose 0-th dimension is the encoding period
-        :type spike: torch.Tensor
+        :param spike: spike tensor whose 0-th dimension is the period; default ``None`` uses the constructor sequence
+        :type spike: Optional[torch.Tensor]
+        :return: a copy of the default sequence, or the explicit sequence unchanged; gradient connections are preserved
+        :rtype: torch.Tensor
         """
-        return spike
+        return self._initial_spike.clone() if spike is None else spike
 
 
 class LatencyEncoder(StatefulEncoder):
