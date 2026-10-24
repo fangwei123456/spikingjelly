@@ -312,7 +312,7 @@ and zero-valued inputs do not reduce its energy. Its main limits are:
 * with the default ``activity_mode="dense"``, runtime spike sparsity does not reduce energy;
 * ``activity_mode="event"`` selects ``spikingjelly_spikesim_event_v1``
   model using SpikeSim constants and SpikingJelly's documented A/R/Z sparse formula;
-* ``require_if_lif_neurons=True`` accepts only IF/LIF-style neurons.
+* The default ``require_if_lif_neurons=True`` accepts only IF/LIF-style neurons.
 
 Energy Estimation Example
 +++++++++++++++++++++++++++++++++++
@@ -522,10 +522,3 @@ Run the benchmark manually with:
 Case inputs, paired scores, metrics, and version information are available in
 the :download:`case-level CSV <../../_static/tutorials/op_counter/energy_model_validation.csv>`.
 The benchmark depends on pinned external repositories and does not run in CI.
-
-Summary
-++++++++++++++++++++++++
-
-``op_counter`` records the executed work for a given input. Use basic counters
-for operations and traffic, and energy estimators for relative comparisons
-within their stated scope. Do not compare absolute values across estimators.

@@ -11,8 +11,8 @@ SpikingJelly 有三条精度配置路径，应根据使用场景选择入口：
 * ``distributed.llm`` 使用 Megatron Core 自己的 ``TransformerConfig`` 和
   ``OptimizerConfig``，不使用 ``PrecisionConfig``。
 
-模型级 FP16、BF16 和 FP8 与 自动分发的神经元精度是两个独立维度：
-普通层可以使用 BF16，同时让 自动分发的神经元保持 FP32。
+模型级 FP16、BF16 和 FP8 与 Triton 神经元精度是两个独立维度：
+普通层可以使用 BF16，同时让 Triton 神经元保持 FP32。
 
 安装
 ----
@@ -23,7 +23,7 @@ BF16 和 FP16 只需要 PyTorch。模型级 FP8 需要 Transformer Engine：
 
     uv pip install --editable ".[fp8]"
 
-自动分发的神经元 mixed precision 另外需要：
+Triton 神经元 mixed precision 另外需要：
 
 .. code-block:: bash
 
@@ -188,8 +188,10 @@ dtype，以及前后向计算 dtype。下表说明多步 IFNode、LIFNode 和 Pa
         mode="bf16", neuron_storage="bf16", neuron_fwd="bf16", neuron_bwd="fp32"
     )
 
-显式神经元精度使用 Triton，不给模块添加 backend 参数。``neuron_fwd`` 和
-``neuron_bwd`` 可取 ``fp8``、``fp16``、``bf16`` 或 ``fp32``，但并非任意组合都有效。
+显式神经元精度使用 Triton。``neuron_storage`` 可取 ``fp32``、``fp16``、``bf16``、
+``float8_e4m3fn`` 或 ``float8_e5m2``；``neuron_fwd`` 或 ``neuron_bwd`` 取默认值
+``fp32`` 之外的值时必须设置它；二者可取 ``fp8``、``fp16``、``bf16`` 或 ``fp32``，
+但并非任意组合都有效。
 FP8 算术要求状态存储为 ``float8_e4m3fn`` 或 ``float8_e5m2``。指数和敏感 surrogate
 计算在 kernel 内使用 FP32。七种受支持的替代梯度见 :doc:`./surrogate`。
 不支持的显式配置报错，不以另一种数值策略替代。
@@ -241,7 +243,7 @@ Inductor 还可能改变低精度运算的融合与舍入，因此结果可能�
         --batch-size 32 --max-steps 10
 
 ``distributed.vision`` 会在 DDP 包装和 optimizer 创建前准备精度，并用 DDP 进程组
-同步 Transformer Engine 的 scaling metadata。模型 FP8 和 自动分发的神经元 mixed
+同步 Transformer Engine 的 scaling metadata。模型 FP8 和 Triton 神经元 mixed
 precision 目前只支持 DDP，且 TP=PP=1。Vision PP 只支持 FP32 和 BF16；普通
 FP32/BF16 不受这个实验性精度限制。
 
@@ -290,12 +292,12 @@ MCore ``TransformerConfig`` 和 ``OptimizerConfig`` 设置，二者必须一致�
 FP8 何时更快
 ------------
 
-FP8 的收益来自大矩阵，不来自 dtype 名称本身。FC-SNN 是否受益取决于神经元后端和
+FP8 的收益来自大矩阵。FC-SNN 是否受益取决于神经元执行路径和
 Linear--神经元边界；Spikformer 的卷积、BatchNorm 和神经元占比更高，目前单卡仍未
 越过 FP16/BF16。
 
 Dense Linear 和 2 卡 DDP 的历史结果测于 2026-08-29，使用 Transformer Engine
-2.18.0；下面替换后的 FC-SNN 以及新增的单卡 Spikformer 结果测于 2026-08-30，
+2.18.0；FC-SNN 及单卡 Spikformer 结果测于 2026-08-30，
 使用 PyTorch 2.11.0+cu128、Transformer Engine 2.17.1 和一张 RTX 5090 32 GiB。
 后者是因为该镜像中的 TE 2.18.0 extension 无法加载，不能把两套软件栈的数字混为一谈。
 FC-SNN/Spikformer 每个稳态 case 运行三次并取独立进程 median；吞吐至少提高 5% 才算
@@ -350,22 +352,20 @@ FP8 也不等于固定省显存。在 4096×3200×8 的交叉点，FP8 训练/�
     * - workload
       - 训练 FP8 / FP16、BF16
       - 推理 FP8 / FP16、BF16
-    * - FC-SNN：T16, batch 256, width 4096, depth 20（automatically dispatched LIF，FP16 fallback）
+    * - FC-SNN：T16, batch 256, width 4096, depth 20（Triton LIF，FP16 fallback）
       - 1.533x / 1.677x
       - 1.578x / 1.786x
-    * - FC-SNN：T16, batch 256, width 8192, depth 10（automatically dispatched LIF，FP32 fallback）
+    * - FC-SNN：T16, batch 256, width 8192, depth 10（Triton LIF，FP32 fallback）
       - 1.544x / 1.468x
       - 1.648x / 1.471x
 
 这里的比值仍依次为 ``FP8 / FP16`` 和 ``FP8 / BF16``，且是端到端吞吐比值。两组
-FC-SNN 都使用自动分发的 LIF；FP8 神经元 ``neuron_storage`` 未启用，神经元计算仍
-保持高精度。W4096 使用 ``fp8_fallback_dtype="fp16"``，训练/推理峰值 allocated
-memory 为 4279.1/1460.3 MiB；W8192 是未启用外层 autocast 的既有结果。因此，这些
-结果说明“FP8 Linear + automatically dispatched LIF”已经在该规模上超过 FP16/BF16，而不是说明所有
-神经元都已经用 FP8，也不能据此假定 FP8 固定节省显存。
-
-旧教程中的慢速 FC-SNN 数字来自 Torch LIF，只保留在 nsys 根因报告中，不再作为
-FC-SNN 的推荐 benchmark。
+FC-SNN 都通过 ``SJ_LIF_CUDA_IMPLEMENTATION=triton`` 固定使用 Triton LIF；FP8 神经元
+``neuron_storage`` 未启用，神经元计算仍保持高精度。W4096 使用
+``fp8_fallback_dtype="fp16"``，训练/推理峰值 allocated memory 为
+4279.1/1460.3 MiB；W8192 来自同一次 2026-08-30 测量中尚未启用外层 autocast 的较早一轮。因此，这些结果说明
+“FP8 Linear + Triton LIF”已经在该规模上超过 FP16/BF16，而不是说明所有神经元都已经用
+FP8，也不能据此假定 FP8 固定节省显存。
 
 W4096/depth20 的 requested FP8 tracked dense-MAC coverage 为 100%。
 
@@ -383,9 +383,10 @@ W4096/depth20 的 requested FP8 tracked dense-MAC coverage 为 100%。
 单卡 Spikformer
 ~~~~~~~~~~~~~~~~
 
-``spikformer_ti`` 使用 ``T=4``、输入 ``224``、eager、automatically dispatched LIF，在 RTX 5090 上的
-端到端结果如下。训练行使用 1024 类仅用于满足当前 TE FP8 backward 的 16 对齐要求；
-真实 1000 类 head 的 FP8 训练会触发 ``lda % 16 == 0``，当前不支持。
+``spikformer_ti`` 使用 ``T=4``、输入 ``224``、eager、Triton LIF，在 RTX 5090 上的
+端到端结果如下。训练行使用 1024 类仅用于满足 Transformer Engine 2.17.1 的 FP8
+backward 16 对齐要求；真实 1000 类 head 的 FP8 训练在该版本上会触发
+``lda % 16 == 0``。
 
 .. list-table::
     :header-rows: 1
@@ -504,7 +505,8 @@ dense-MAC coverage 为 41.98%。当前 RTX 5090 软件栈没有 FP8 Conv2d，不
 如何选择
 --------
 
-默认先用 BF16。FC-SNN 只有在使用 automatically dispatched LIF 且矩阵达到表中规模后才建议测试 FP8；
+默认先用 BF16。FC-SNN 只有在使用 Triton LIF（``SJ_LIF_CUDA_IMPLEMENTATION=triton``）
+且矩阵达到表中规模后才建议测试 FP8；
 在本页测量配置下，Spikformer 使用 FP16/BF16 更快。
 profile 必须以端到端 step 为准；FP8 的显存也可能高于 BF16，不应把它当作显存优化开关。
 

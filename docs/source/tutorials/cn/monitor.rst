@@ -228,11 +228,15 @@ English version: :doc:`../en/monitor`
 在一次多步前向传播中会被逐个时间步调用 ``T`` 次，因此针对这类神经元的监视器也会记录 ``T`` 次。设置 ``store_v_seq = True`` 后，\
 每个时间步的电压都会被追加到 ``v_seq`` 中，直到调用 ``functional.reset_net(net)`` ，因此该神经元的最后一条记录（例如 \
 ``v_seq_monitor[name][-1]`` ）就是完整的 ``[T, N, *]`` 电压序列；而 ``OutputMonitor`` 对该神经元记录的 ``T`` 个单步输出可以用 \
-``torch.stack(spike_seq_monitor[name])`` 拼接。由于该神经元的每条单步记录都是 ``v_seq`` 不断增长的快照，保留全部 ``T`` 条记录需要 \
+``torch.stack(spike_seq_monitor[name])`` 拼接。
+
+由于该神经元的每条单步记录都是 ``v_seq`` 不断增长的快照，保留全部 ``T`` 条记录需要 \
 :math:`O(T^2)` 的内存，并且在启用梯度时会保留每个快照的计算图。若只想记录当前时间步的电压，可以使用 \
 ``monitor.AttributeMonitor('v_seq', pre_forward=False, net=recurrent, instance=neuron.IFNode, function_on_attribute=lambda v_seq: v_seq[-1].clone())`` \
 （其中 ``recurrent`` 是容器模块），再用 ``torch.stack(v_seq_monitor[name])`` 重建完整序列；或者在每次前向传播之间调用 \
-``v_seq_monitor.clear_recorded_data()`` 。这里的 ``.clone()`` 不可省略：单独的 ``v_seq[-1]`` 只是一个视图，会让整个快照一直存活，\
+``v_seq_monitor.clear_recorded_data()`` 。
+
+这里的 ``.clone()`` 不可省略：单独的 ``v_seq[-1]`` 只是一个视图，会让整个快照一直存活，\
 因此对其克隆（或在不需要梯度时使用 ``v_seq[-1].detach().clone()`` ）才是让保留内存降为 :math:`O(T)` 的关键。\
 监视器只作用于容器，是因为若传入整个网络，该函数也会作用于未被包裹的多步神经元，\
 把它们的 ``[T, N, *]`` 电压序列 ``v_seq`` 压缩为最后一个时间步。
@@ -273,9 +277,9 @@ English version: :doc:`../en/monitor`
 
             [[0.4966, 0.6030]]])]
 
-记录模块的输入梯度 :math:`\frac{\partial L}{\partial Y}`
+记录模块的输出梯度 :math:`\frac{\partial L}{\partial Y}`
 --------------------------------------------------------------------------------------
-如果我们想要记录每一层脉冲神经元的输入梯度 :math:`\frac{\partial L}{\partial S}`，则可以使用 \
+如果我们想要记录每一层脉冲神经元的输出梯度 :math:`\frac{\partial L}{\partial S}`，则可以使用 \
 :class:`spikingjelly.activation_based.monitor.GradOutputMonitor` 轻松实现：
 
 .. code-block:: python
@@ -288,7 +292,7 @@ English version: :doc:`../en/monitor`
 
 输出为：
 
-.. code-block:: python
+.. code-block:: text
 
     spike_seq_grad_monitor.records=
     [tensor([[[1., 1.]],
@@ -308,9 +312,9 @@ English version: :doc:`../en/monitor`
 由于我们使用 ``.sum().backward()``，因而损失传给最后一层输出脉冲的梯度全为1。
 
 
-记录模块的输出梯度 :math:`\frac{\partial L}{\partial X}`
+记录模块的输入梯度 :math:`\frac{\partial L}{\partial X}`
 --------------------------------------------------------------------------------------
-使用 :class:`spikingjelly.activation_based.monitor.GradInputMonitor` 可以轻松记录模块的输出梯度 :math:`\frac{\partial L}{\partial X}`。
+使用 :class:`spikingjelly.activation_based.monitor.GradInputMonitor` 可以轻松记录模块的输入梯度 :math:`\frac{\partial L}{\partial X}`。
 
 让我们构建一个深度网络，调节替代函数的 ``alpha`` 并比较不同 ``alpha`` 下的梯度的幅值：
 
@@ -395,9 +399,11 @@ GPU 利用率采样
 
 .. code-block:: python
 
-    spike_seq_monitor = monitor.OutputMonitor(
+    with monitor.OutputMonitor(
         net, neuron.IFNode, function_on_output=torch.Tensor.detach
-    )
+    ) as spike_seq_monitor:
+        with torch.no_grad():
+            net(x_seq)
 
 脉冲记录位压缩
 -------------------------------------------
@@ -422,14 +428,20 @@ GPU 利用率采样
 
 .. code-block:: python
 
-    spike_monitor = monitor.OutputMonitor(
+    with monitor.OutputMonitor(
         net,
         neuron.IFNode,
-        function_on_output=lambda value: functional.bit_spike_compress(value.detach()),
-    )
-    net(x_seq)
-    packed = spike_monitor.records[0]
-    spike = functional.bit_spike_decompress(packed, (T, N, C), torch.float32)
+        function_on_output=lambda value: (
+            functional.bit_spike_compress(value.detach()),
+            tuple(value.shape),
+            value.dtype,
+        ),
+    ) as spike_monitor:
+        with torch.no_grad():
+            net(x_seq)
+
+    packed, shape, dtype = spike_monitor.records[0]
+    spike = functional.bit_spike_decompress(packed, shape, dtype)
 
 CPU 和 CUDA 输入均支持位压缩。如果稀疏脉冲还需要进一步压缩，先将打包后的字节移至
 CPU，再使用通用压缩库。

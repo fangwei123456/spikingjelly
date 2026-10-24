@@ -178,6 +178,18 @@ Sequential FashionMNIST上的对比实验
         def forward(self, x: torch.Tensor):
             return self.fc(x).mean(0)
 
+这三个网络都按列读取图像，因此输入是一个以图像宽度为时间维的序列。三者的使用方式相同：
+
+.. code:: python
+
+    net = FeedBackNet()
+    # 'functional.set_step_mode' 不会把 LinearRecurrentContainer 内的神经元设为 step_mode = 'm'
+    functional.set_step_mode(net, step_mode='m')
+    img = img.squeeze(1).permute(2, 0, 1)  # [N, 1, H, W] -> [W, N, H]，视作 [T, N, H]
+    out_fr = net(img)
+    # SNN 的神经元带有“记忆”，因此每个 batch 结束后需要重置
+    functional.reset_net(net)
+
 下图展示了3种网络的结构：
 
 .. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/ppt/nets.png

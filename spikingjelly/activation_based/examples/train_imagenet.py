@@ -39,7 +39,7 @@ class SResNetTrainer(train_classify.Trainer):
     - Data preprocessing: expands input from ``[N, C, H, W]`` to ``[T, N, C, H, W]``, where ``T``
       is the total number of time-steps.
     - Model output processing: averages outputs over ``T`` time-steps along the time dimension as
-      the final prediction (firing rate).
+      the final prediction (the time-averaged logits of the final linear readout).
     - Model loading: supports loading various spiking ResNet models from :mod:`spiking_resnet`.
     - Extra CLI arguments: adds ``--T`` (number of time-steps).
     """
@@ -57,7 +57,7 @@ class SResNetTrainer(train_classify.Trainer):
         )  # [N, C, H, W] -> [T, N, C, H, W]
 
     def process_model_output(self, args, y: torch.Tensor):
-        return y.mean(0)  # return firing rate
+        return y.mean(0)  # average logits over time
 
     def get_args_parser(self, add_help=True):
         parser = super().get_args_parser(add_help=add_help)

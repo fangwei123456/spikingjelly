@@ -96,6 +96,8 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
 
 .. code-block:: python
 
+  from spikingjelly.activation_based.examples.common import train_classify
+
   class MyTrainer(train_classify.Trainer):
       def set_optimizer(self, args, parameters):
           opt_name = args.opt.lower()
@@ -118,8 +120,9 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
 
   class MyTrainer(train_classify.Trainer):
       def get_args_parser(self, add_help=True):
-          parser = super().get_args_parser()
+          parser = super().get_args_parser(add_help=add_help)
           parser.add_argument('--do-something', type=str, help="do something")
+          return parser
 
 :class:`Trainer <spikingjelly.activation_based.examples.common.train_classify.Trainer>` 的许多其他函数都可以进行补充修改或覆盖，方法类似，不再赘述。
 
@@ -127,7 +130,9 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
 
 .. code-block:: python
 
-    trainer = Trainer()
+    from spikingjelly.activation_based.examples.common import train_classify
+
+    trainer = train_classify.Trainer()  # 或 MyTrainer() 使用自定义子类
     args = trainer.get_args_parser().parse_args()
     trainer.main(args)
 
@@ -159,10 +164,10 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
           return x.unsqueeze(0).expand(args.T, -1, -1, -1, -1)  # [N, C, H, W] -> [T, N, C, H, W]
 
       def process_model_output(self, args, y: torch.Tensor):
-          return y.mean(0)  # return firing rate
+          return y.mean(0)  # 对时间维取平均的 logits
 
       def get_args_parser(self, add_help=True):
-          parser = super().get_args_parser()
+          parser = super().get_args_parser(add_help=add_help)
           parser.add_argument('--T', type=int, help="total time-steps")
           return parser
 

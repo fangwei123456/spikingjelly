@@ -186,6 +186,7 @@ def main():
         start_epoch = checkpoint["epoch"] + 1
         max_test_acc = checkpoint["max_test_acc"]
         if args.save_es is not None and args.save_es != "":
+            net.eval()
             encoder = net.spiking_encoder()
             with torch.no_grad():
                 for img, label in test_data_loader:

@@ -121,7 +121,7 @@ where :math:`N` is the spike count in the time window :math:`T`, and :math:`\fra
 .. math::
     r = a- \frac{ V_T-V_0 }{T V_{threshold}}
 
-Therefore, when the simulation time step :math:`T` is infinite:
+Therefore, as the number of simulation steps :math:`T` tends to infinity:
 
 .. math::
     r = a (a>0)
@@ -138,7 +138,7 @@ Converting to spiking neural network
 
 Conversion addresses two problems:
 
-1. During inference, BN is a fixed affine transformation that can be folded into the preceding convolution, removing the separate BN module after conversion.
+1. In evaluation mode, BatchNorm with available running mean and variance is a fixed affine transformation that can be folded into the preceding convolution, removing the separate BN module after conversion. ``RateCodingRecipe`` switches the model to eval before fusion. BN with ``track_running_stats=False`` cannot be folded by this path.
 
 2. According to the conversion theory, each layer's inputs and outputs must lie within [0, 1], requiring parameter scaling (model normalization).
 
@@ -191,6 +191,8 @@ The minimal rate-coding call is:
 
 .. code-block:: python
 
+    from spikingjelly.activation_based import ann2snn
+
     recipe = ann2snn.RateCodingRecipe(dataloader=train_loader, mode="max")
     snn = ann2snn.FXConverter(recipe=recipe).convert(ann)
 
@@ -238,6 +240,9 @@ The complete runnable example is ``spikingjelly.activation_based.ann2snn.example
 
 .. code-block:: python
 
+    import torch
+    import torch.nn as nn
+
     class CNN(nn.Module):
         def __init__(self):
             super().__init__()
@@ -283,6 +288,8 @@ Set the runtime options:
 
 .. code-block:: python
 
+    import torchvision
+
     train_data_dataset = torchvision.datasets.MNIST(
         root=dataset_dir,
         train=True,
@@ -313,6 +320,7 @@ The example script downloads a pretrained checkpoint. Load the weights and valid
         DEFAULT_CHECKPOINT_PATH,
         DEFAULT_CHECKPOINT_URL,
         download_checkpoint,
+        val,
     )
     from spikingjelly.activation_based.ann2snn.sample_models import mnist_cnn
 
@@ -328,7 +336,6 @@ ANN accuracy:
 
     ANN Validating Accuracy: 0.9870
 
-
 Make the conversion with the converter
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -342,18 +349,12 @@ The ANN is trained and validated. Select the rate-coding recipe, pass the determ
 
 ``snn_model`` is the converted SNN model. The ``BatchNorm2d`` modules have disappeared because the default rate-coding recipe fuses BatchNorm parameters into the preceding Conv layers before calibration:
 
-.. code-block:: python
+.. code-block:: text
 
     CNN(
       (network): Module(
         (0): Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1))
-        (3): AvgPool2d(kernel_size=2, stride=2, padding=0)
-        (4): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-        (7): AvgPool2d(kernel_size=2, stride=2, padding=0)
-        (8): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-        (11): AvgPool2d(kernel_size=2, stride=2, padding=0)
-        (12): Flatten(start_dim=1, end_dim=-1)
-        (13): Linear(in_features=32, out_features=10, bias=True)
+        ...
         (spiking_0): Module(
           (scaler0): VoltageScaler(0.193247)
           (if_node): IFNode(
@@ -362,24 +363,11 @@ The ANN is trained and validated. Select the rate-coding recipe, pass the determ
           )
           (scaler1): VoltageScaler(5.174733)
         )
-        (spiking_1): Module(
-          (scaler0): VoltageScaler(0.325697)
-          (if_node): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
-            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
-          )
-          (scaler1): VoltageScaler(3.070336)
-        )
-        (spiking_2): Module(
-          (scaler0): VoltageScaler(0.121967)
-          (if_node): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
-            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
-          )
-          (scaler1): VoltageScaler(8.198915)
-        )
+        ...
       )
     )
+
+Each calibrated ReLU is replaced by one such ``scaler0 -> IFNode -> scaler1`` group.
 
 Other recipes and custom recipes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -436,53 +424,48 @@ Following this example, we can compare timestep convergence curves for different
       --time-steps 50 \
       --plot-mode-sweep
 
-Historical documentation record: `237dde3e <https://github.com/fangwei123456/spikingjelly/commit/237dde3e>`_ (2026-06-26); NVIDIA GeForce RTX 4090; not rerun on current V2.
+Historical documentation record: `237dde3e <https://github.com/fangwei123456/spikingjelly/commit/237dde3e>`_ (2026-06-26); NVIDIA GeForce RTX 4090; not rerun on current V2. The current script no longer prints per-stage timings or saves the figure.
 
-The following output was measured with ``T=50`` on an NVIDIA GeForce RTX 4090:
+A pre-2.0 run of this experiment (``T=50`` on an NVIDIA GeForce RTX 4090) measured:
 
-.. code-block:: shell
+The ANN validates at 0.9870 accuracy. The normalization modes give:
 
-    ANN Validating Accuracy: 0.9870
-    ---------------------------------------------
-    Converting using MaxNorm
-    Calibration: 3.76s
-    Simulating...
-    Simulation: 7.61s
-    SNN accuracy (simulation 50 time-steps): 0.9771
-    ---------------------------------------------
-    Converting using RobustNorm
-    Calibration: 12.08s
-    Simulating...
-    Simulation: 7.31s
-    SNN accuracy (simulation 50 time-steps): 0.9848
-    ---------------------------------------------
-    Converting using 1/2 max(activation) as scales
-    Calibration: 3.73s
-    Simulating...
-    Simulation: 7.28s
-    SNN accuracy (simulation 50 time-steps): 0.9846
-    ---------------------------------------------
-    Converting using 1/3 max(activation) as scales
-    Calibration: 3.72s
-    Simulating...
-    Simulation: 7.29s
-    SNN accuracy (simulation 50 time-steps): 0.9825
-    ---------------------------------------------
-    Converting using 1/4 max(activation) as scales
-    Calibration: 3.75s
-    Simulating...
-    Simulation: 7.27s
-    SNN accuracy (simulation 50 time-steps): 0.9734
-    ---------------------------------------------
-    Converting using 1/5 max(activation) as scales
-    Calibration: 3.70s
-    Simulating...
-    Simulation: 7.26s
-    SNN accuracy (simulation 50 time-steps): 0.9472
+.. list-table:: Normalization mode comparison
+    :header-rows: 1
+    :widths: 34 20 20 26
+
+    * - Mode
+      - Calibration
+      - Simulation
+      - SNN accuracy
+    * - MaxNorm
+      - 3.76s
+      - 7.61s
+      - 0.9771
+    * - RobustNorm
+      - 12.08s
+      - 7.31s
+      - 0.9848
+    * - 1/2 max(activation)
+      - 3.73s
+      - 7.28s
+      - 0.9846
+    * - 1/3 max(activation)
+      - 3.72s
+      - 7.29s
+      - 0.9825
+    * - 1/4 max(activation)
+      - 3.75s
+      - 7.27s
+      - 0.9734
+    * - 1/5 max(activation)
+      - 3.70s
+      - 7.26s
+      - 0.9472
 
 .. image:: ../../_static/tutorials/5_ann2snn/accuracy_mode_recipe_api.png
 
-Different normalization modes trade off early-timestep convergence against final accuracy. Choose based on latency and accuracy requirements.
+In this run RobustNorm reached high accuracy earliest and ended highest. Scaling the maximum down by 1/4 or 1/5 converged earlier but ended 1-3 points lower.
 
 Conversion recipe comparison
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -495,7 +478,7 @@ Besides the basic ``RateCodingRecipe``, SpikingJelly also provides ``LocalThresh
       --time-steps 32 \
       --output /tmp/ann2snn_mnist_t32.json
 
-The table below is generated by this command. RobustNorm uses ``RateCodingRecipe(dataloader=..., mode="99.9%")``. LTB uses ``LocalThresholdBalancingRecipe(dataloader=...)``. This MNIST run uses all 60000 training samples for calibration and evaluates on the full 10000-image test set:
+The table below is produced by this command; its JSON output is ``/tmp/ann2snn_mnist_t32.json``. RobustNorm uses ``RateCodingRecipe(dataloader=..., mode="99.9%")``. LTB uses ``LocalThresholdBalancingRecipe(dataloader=...)``. This MNIST run uses all 60000 training samples for calibration and evaluates on the full 10000-image test set:
 
 .. list-table:: MNIST CNN conversion results
     :header-rows: 1

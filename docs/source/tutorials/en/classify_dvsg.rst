@@ -62,7 +62,7 @@ All networks in [#PLIF]_ are defined in :class:`spikingjelly.activation_based.mo
 
 Train
 -------------------------------------------
-How to define the training method, loss function, and classification result are identical to previous tutorials, and we will not introduce them in this tutorial. We will only introduce the difference.
+The training loop follows :doc:`./conv_fashion_mnist`; this section shows the changes for DVS Gesture.
 
 We use multi-step mode for faster training speed, and use automatic device-based neuron execution:
 
@@ -174,57 +174,8 @@ The outputs are:
 
     Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
     DVSGestureNet(
-    (conv_fc): Sequential(
-        (0): Conv2d(2, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
-        (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-        (2): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
-        (4): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
-        (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-        (6): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
-        (8): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
-        (9): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-        (10): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (11): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
-        (12): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
-        (13): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-        (14): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (15): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
-        (16): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
-        (17): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-        (18): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (19): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
-        (20): Flatten(start_dim=1, end_dim=-1, step_mode=m)
-        (21): Dropout(p=0.5)
-        (22): Linear(in_features=2048, out_features=512, bias=True)
-        (23): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (24): Dropout(p=0.5)
-        (25): Linear(in_features=512, out_features=110, bias=True)
-        (26): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (27): VotingLayer(voting_size=10, step_mode=m)
-    )
+    (conv_fc): Sequential(...)
+    ...
     )
     The directory [/datasets/DVSGesture/frames_number_16_split_by_number] already exists.
     The directory [/datasets/DVSGesture/frames_number_16_split_by_number] already exists.
@@ -249,7 +200,7 @@ The outputs are:
     train speed = 100.4324 images/s, test speed = 121.0402 images/s
     escape time = 2022-05-25 21:30:51
 
-Finally, ``max_test_acc = 0.9375`` is achieved. Higher accuracy can be achieved if the hyper-parameters are carefully adjusted with more training epochs.
+Finally, ``max_test_acc = 0.9375`` is achieved.
 
 The following figure shows the accuracy curves during the training process:
 
@@ -258,4 +209,4 @@ The following figure shows the accuracy curves during the training process:
     :width: 100%
 
 
-.. [#PLIF] Fang, Wei, et al. "Incorporating learnable membrane time constant to enhance learning of spiking neural networks." Proceedings of t
+.. [#PLIF] Fang, Wei, et al. "Incorporating learnable membrane time constant to enhance learning of spiking neural networks." Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2021, pp. 2661-2671. `CVF <https://openaccess.thecvf.com/content/ICCV2021/html/Fang_Incorporating_Learnable_Membrane_Time_Constant_To_Enhance_Learning_of_Spiking_ICCV_2021_paper.html>`_

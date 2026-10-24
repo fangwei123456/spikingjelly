@@ -626,7 +626,7 @@ class NonSpikingBaseNode(nn.Module, base.MultiStepModule):
             return mem
         elif self.decode == "mean-mem":
             return torch.mean(torch.stack(v_seq, 0), 0)
-        elif self.decode == "last_mem":
+        elif self.decode == "last-mem":
             return v_seq[-1]
         else:
             return v_seq

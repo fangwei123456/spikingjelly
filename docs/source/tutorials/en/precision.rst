@@ -202,12 +202,15 @@ in the example with:
         mode="bf16", neuron_storage="bf16", neuron_fwd="bf16", neuron_bwd="fp32"
     )
 
-Explicit neuron precision uses Triton without module backend parameters.
-``neuron_fwd``/``neuron_bwd`` accept ``fp8``, ``fp16``, ``bf16`` or ``fp32``;
-not every combination is valid. FP8 arithmetic requires ``float8_e4m3fn`` or
-``float8_e5m2`` state storage. Exponentials and sensitive surrogate computations
-use FP32 inside kernels. See :doc:`./surrogate` for the seven supported surrogates.
-Unsupported explicit policies fail rather than silently changing numerics.
+Explicit neuron precision uses Triton. ``neuron_storage`` accepts ``fp32``,
+``fp16``, ``bf16``, ``float8_e4m3fn`` or ``float8_e5m2``, and is required
+whenever ``neuron_fwd`` or ``neuron_bwd`` differs from their ``fp32`` default;
+those two accept ``fp8``, ``fp16``, ``bf16`` or ``fp32``, and not every
+combination is valid. FP8 arithmetic requires
+``float8_e4m3fn`` or ``float8_e5m2`` state storage. Exponentials and sensitive
+surrogate computations use FP32 inside kernels. See :doc:`./surrogate` for the
+seven supported surrogates. Unsupported explicit policies fail rather than
+silently changing numerics.
 
 An execution query reports the ordinary path's selection. Check support for
 the precision policy you intend to use. Prepare precision before compilation;
@@ -317,8 +320,8 @@ convolution, BatchNorm, and neuron share and does not cross the FP16/BF16
 baseline on one GPU yet.
 
 The dense Linear and two-GPU DDP results below were measured on 2026-08-29 with
-Transformer Engine 2.18.0. The replacement FC-SNN rows and the new single-GPU
-Spikformer rows were measured on 2026-08-30 with PyTorch 2.11.0+cu128,
+Transformer Engine 2.18.0. The FC-SNN and single-GPU
+Spikformer results were measured on 2026-08-30 with PyTorch 2.11.0+cu128,
 Transformer Engine 2.17.1, and one 32-GiB RTX 5090. The latter used 2.17.1
 because the image's TE 2.18.0 extension could not load; the two software stacks
 must not be conflated. Each FC-SNN/Spikformer steady-state case used three
@@ -376,24 +379,22 @@ End-to-end SNN and DDP
     * - workload
       - training FP8 / FP16, BF16
       - inference FP8 / FP16, BF16
-    * - FC-SNN: T16, batch 256, width 4096, depth 20 (automatically dispatched LIF, FP16 fallback)
+    * - FC-SNN: T16, batch 256, width 4096, depth 20 (Triton LIF, FP16 fallback)
       - 1.533x / 1.677x
       - 1.578x / 1.786x
-    * - FC-SNN: T16, batch 256, width 8192, depth 10 (automatically dispatched LIF, FP32 fallback)
+    * - FC-SNN: T16, batch 256, width 8192, depth 10 (Triton LIF, FP32 fallback)
       - 1.544x / 1.468x
       - 1.648x / 1.471x
 
 The ratios are end-to-end throughput ratios in the order ``FP8 / FP16`` and
-``FP8 / BF16``. Both FC-SNN cases use the existing automatically dispatched LIF; Triton neuron
-storage is not enabled and neuron computation remains high precision. W4096
-uses ``fp8_fallback_dtype="fp16"`` and its training/inference peak allocated
-memory is 4279.1/1460.3 MiB; W8192 is the earlier result without an outer
-autocast. Thus “FP8 Linear + automatically dispatched LIF” wins at these sizes, but this does not
-mean that all neuron state is FP8 or that FP8 always saves memory.
-
-The slower FC-SNN numbers previously shown in this tutorial used Torch LIF and
-are retained only in the Nsight root-cause report, not as the recommended
-FC-SNN benchmark.
+``FP8 / BF16``. Both FC-SNN cases force Triton LIF with
+``SJ_LIF_CUDA_IMPLEMENTATION=triton``; Triton neuron storage is not enabled and
+neuron computation remains high precision. W4096 uses
+``fp8_fallback_dtype="fp16"`` and its training/inference peak allocated memory
+is 4279.1/1460.3 MiB; W8192 is from an earlier iteration of the same 2026-08-30
+run, before the outer autocast was added.
+Thus "FP8 Linear + Triton LIF" wins at these sizes, but this does not mean that
+all neuron state is FP8 or that FP8 always saves memory.
 
 Requested FP8 tracked dense-MAC coverage for W4096/depth20 is 100%.
 
@@ -412,7 +413,7 @@ Single-GPU Spikformer
 ~~~~~~~~~~~~~~~~~~~~~
 
 For ``spikformer_ti`` with ``T=4``, input size ``224``, eager execution, and
-automatically dispatched LIF, the RTX 5090 end-to-end results are:
+Triton LIF, the RTX 5090 end-to-end results are:
 
 .. list-table::
     :header-rows: 1
@@ -484,8 +485,8 @@ automatically dispatched LIF, the RTX 5090 end-to-end results are:
       - 0.778x / 0.918x
       - 4398.4 MiB
 
-The training row uses 1024 classes only to satisfy the current TE FP8 backward
-16-alignment requirement; an ImageNet-1000 head currently fails with
+The training row uses 1024 classes only to satisfy the Transformer Engine 2.17.1
+FP8 backward 16-alignment requirement; an ImageNet-1000 head failed there with
 ``lda % 16 == 0``. For the FP32 fallback configuration, Nsight shows that FP8 autocast covers only TE pointwise
 Conv1d/Linear modules; patch-stem Conv2d, BatchNorm, and LIF outputs fall back
 to FP32, adding elementwise, copy, and layout kernels. FP16/BF16 is faster for Spikformer in the configurations measured here; do not infer a Spikformer win from the
@@ -536,8 +537,9 @@ this workload.
 Choosing a mode
 ---------------
 
-Start with BF16. Try FP8 for FC-SNN only with automatically dispatched LIF and matrix sizes near
-the table's crossover. FP16/BF16 is faster for Spikformer in the configurations measured here. Profile against the
+Start with BF16. Try FP8 for FC-SNN only with Triton LIF
+(``SJ_LIF_CUDA_IMPLEMENTATION=triton``) and matrix sizes near the table's
+crossover. FP16/BF16 is faster for Spikformer in the configurations measured here. Profile against the
 end-to-end step; FP8 memory may exceed BF16 and is not a memory-optimization
 switch.
 
