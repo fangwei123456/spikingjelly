@@ -520,14 +520,11 @@ def cal_fixed_frames_number_segment_index(
 
     elif split_by == "time":
         dt = (events_t[-1] - events_t[0]) // frames_num
-        idx = np.arange(N)
         for i in range(frames_num):
             t_l = dt * i + events_t[0]
             t_r = t_l + dt
-            mask = np.logical_and(events_t >= t_l, events_t < t_r)
-            idx_masked = idx[mask]
-            j_l[i] = idx_masked[0]
-            j_r[i] = idx_masked[-1] + 1
+            j_l[i] = np.searchsorted(events_t, t_l, side="left")
+            j_r[i] = np.searchsorted(events_t, t_r, side="left")
 
         j_r[-1] = N
     else:
