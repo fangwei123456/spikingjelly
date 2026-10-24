@@ -17,6 +17,7 @@ from spikingjelly.datasets import utils
 def test_time_segmentation_preserves_events_with_empty_bins(
     timestamps: list[int], frames_num: int, left: list[int], right: list[int]
 ) -> None:
+    """Preserve event counts when time bins are empty or have zero width."""
     events_t = np.array(timestamps)
     actual_left, actual_right = utils.cal_fixed_frames_number_segment_index(
         events_t, split_by="time", frames_num=frames_num
