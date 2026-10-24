@@ -903,12 +903,6 @@
       "code_urls": []
     },
     {
-      "title": "Fully Spiking Actor Network with Intra-layer Connections for Reinforcement Learning",
-      "paper_url": "https://arxiv.org/abs/2401.05444",
-      "publisher": "",
-      "code_urls": []
-    },
-    {
       "title": "Sampling complex topology structures for spiking neural networks",
       "paper_url": "https://www.sciencedirect.com/science/article/pii/S0893608024000352",
       "publisher": "Neural Networks",
@@ -1117,12 +1111,6 @@
     {
       "title": "Energy-Efficient Visual Search by Eye Movement and Low-Latency Spiking Neural Network",
       "paper_url": "https://arxiv.org/abs/2310.06578",
-      "publisher": "",
-      "code_urls": []
-    },
-    {
-      "title": "Gaining the Sparse Rewards by Exploring Binary Lottery Tickets in Spiking Neural Network",
-      "paper_url": "https://arxiv.org/abs/2309.13302",
       "publisher": "",
       "code_urls": []
     },
@@ -2047,12 +2035,6 @@
       "code_urls": []
     },
     {
-      "title": "基于脉冲神经元膜电位增量的 数据分布统计量及批归一化 (Data distribution statistics and batch normalization based on membrane potential increments of spiking neurons)",
-      "paper_url": "https://research.ebsco.com/c/kpguhl/search/details/durlvzeo3n?db=asn",
-      "publisher": "计算机应用研究(Application Research of Computers)",
-      "code_urls": []
-    },
-    {
       "title": "Efficiently Training Time-to-First-Spike Spiking Neural Networks from Scratch",
       "paper_url": "https://arxiv.org/abs/2410.23619",
       "publisher": "",
@@ -2542,12 +2524,6 @@
       "title": "Understanding SNN and Its Recent Advancements",
       "paper_url": "https://engrxiv.org/preprint/view/3652",
       "publisher": "",
-      "code_urls": []
-    },
-    {
-      "title": "SVFormer: A Direct Training Spiking",
-      "paper_url": "https://books.google.com/books?hl=zh-CN&lr=&id=Aw1YEQAAQBAJ&oi=fnd&pg=PA161&dq=spikingjelly&ots=g6rCaFTILh&sig=XceD7M0IQMnN03Caf_VXeCJ3zf0",
-      "publisher": "Human Brain and Artificial Intelligence",
       "code_urls": []
     },
     {
@@ -3105,14 +3081,6 @@
       "code_urls": []
     },
     {
-      "title": "High-Performance Temporal Reversible Spiking Neural Networks with $ O (L) $ Training Memory and $ O (1) $ Inference Cost.",
-      "paper_url": "https://arxiv.org/abs/2405.16466",
-      "publisher": "ICML2024",
-      "code_urls": [
-        "https://github.com/BICLab/T-RevSNN"
-      ]
-    },
-    {
       "title": "Ftbc: Forward temporal bias correction for optimizing ann-snn conversion",
       "paper_url": "https://idp.springer.com/authorize?response_type=cookie&client_id=springerlink&redirect_uri=https%3A%2F%2Flink.springer.com%2Fcontent%2Fpdf%2F10.1007%2F978-3-031-72890-7_10.pdf",
       "publisher": "ECCV 2024",
@@ -3416,12 +3384,6 @@
       "title": "Energy-Efficient Drowsiness Detection with Spiking Neural Networks",
       "paper_url": "https://ieeexplore.ieee.org/abstract/document/11416827/",
       "publisher": "2026 International Conference on Computing, Networking and Communications (ICNC)",
-      "code_urls": []
-    },
-    {
-      "title": "Dynamic Loading Simulation Method for Large-scale Spiking Neural Network",
-      "paper_url": "https://dc-china-simulation.researchcommons.org/journal/vol37/iss2/20/",
-      "publisher": "Journal of System Simulation",
       "code_urls": []
     },
     {
