@@ -55,7 +55,10 @@ def test_log_latency_cycles_and_resets_after_encoding(period):
     )
 
 
-@pytest.mark.parametrize("dtype", [torch.bool, torch.int64])
+@pytest.mark.parametrize(
+    "dtype",
+    [torch.bool, torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64],
+)
 @pytest.mark.parametrize("period", [4, 1000])
 def test_log_latency_preserves_binary_input_support(dtype, period):
     x = torch.tensor([0, 1], dtype=dtype)

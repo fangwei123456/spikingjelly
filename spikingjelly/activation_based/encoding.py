@@ -376,7 +376,9 @@ class LatencyEncoder(StatefulEncoder):
             .. math::
                 t_f(x) = (T - 1) - \text{ln}(\alpha * x + 1)
 
-        where :math:`\alpha = \mathrm{exp}(T - 1) - 1`. Computation uses an equivalent log-domain form to avoid exponential overflow for long periods or low-precision inputs.
+        where :math:`\alpha = \mathrm{exp}(T - 1) - 1`. Computation uses an
+        equivalent log-domain form to avoid exponential overflow for long periods
+        or low-precision inputs.
 
         .. admonition:: Warning
             :class: warning
@@ -448,7 +450,8 @@ class LatencyEncoder(StatefulEncoder):
             # space so neither exp(T - 1) nor its product with x can overflow.
             values = (
                 x.float()
-                if x.dtype in (torch.float16, torch.bfloat16, torch.bool)
+                if x.dtype in (torch.float16, torch.bfloat16)
+                or not x.is_floating_point()
                 else x
             )
             t_f = -torch.logaddexp(values.log(), torch.log1p(-values) - (self.T - 1))

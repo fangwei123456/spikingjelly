@@ -18,7 +18,10 @@ Fixes
 spikingjelly.activation_based.encoding
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- ``LatencyEncoder`` evaluates logarithmic firing times without exponential overflow for long periods and low-precision inputs.
+- ``LatencyEncoder`` evaluates logarithmic firing times without exponential overflow
+  for long periods and low-precision inputs, including binary integer inputs.
+- ``WeightedPhaseEncoder`` outputs spikes in the input floating-point dtype instead
+  of the global default dtype, allowing direct use with layers of matching dtype.
 
 spikingjelly.activation_based.functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -26,12 +29,6 @@ spikingjelly.activation_based.functional
 - ``spike_similar_loss`` matches target dtype to similarities for float64 MSE/BCE
   compatibility; with autocast disabled, explicit FP16/BF16 inputs now produce
   matching low-precision MSE/L1 losses instead of FP32.
-
-spikingjelly.activation_based.encoding
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-- ``WeightedPhaseEncoder`` outputs spikes in the input floating-point dtype instead
-  of the global default dtype, allowing direct use with layers of matching dtype.
 
 Changes
 ~~~~~~~
