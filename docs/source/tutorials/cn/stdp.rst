@@ -69,10 +69,11 @@ STDP可以使用如下公式进行拟合：
 STDP 采用 ``1-1/tau`` 衰减，要求有限 ``tau>=1``；当前脉冲先加入 trace 再计算更新。
 更新按 batch、卷积空间位置和多步时间求和，调用者需要显式调整 ``scale``。
 同时发放是否抵消取决于权重调制函数；固定权重的序列累计不等于逐步改权重。
+MSTDP 改变 batch 大小前还需要调用 ``reset()``。
 
 STDP学习器
 -----------------------------------------------------
-:class:`spikingjelly.activation_based.learning.STDPLearner` 提供了STDP学习器的实现，支持卷积和全连接层，请读者先阅读其API文档以获取使用方法。
+:class:`spikingjelly.activation_based.learning.STDPLearner` 提供了STDP学习器的实现，支持卷积和全连接层，完整接口见该类的 API 文档。
 
 我们使用 ``STDPLearner`` 搭建一个简单的 ``4x3`` 网络，并且将权重设置为 ``0.4``：
 
@@ -180,7 +181,7 @@ STDP学习器
 
 与梯度下降混合使用
 -----------------------------------------------------
-在SNN中一种广泛使用STDP的做法是，使用STDP和梯度下降分别训练网路中的不同层。下面介绍如何使用 ``STDPLearner`` 实现这一做法。
+在SNN中一种广泛使用STDP的做法是，使用STDP和梯度下降分别训练网络中的不同层。下面介绍如何使用 ``STDPLearner`` 实现这一做法。
 
 我们的目标是搭建一个深度卷积SNN，使用STDP训练卷积层，使用梯度下降法训练全连接层。首先定义超参数：
 
@@ -311,7 +312,7 @@ STDP学习器
 
 以 ``STDPLearner`` 为代表的所有学习器都是 ``MemoryModule`` 的子类，其内部记忆状态包括了突触前后神经元的迹 ``trace_pre, trace_post`` ；\
 另外，学习器内部用于记录神经元活动的监视器存储了突触前后神经元的发放历史；这些发放历史也可以视作学习器的内部记忆状态。因此，必须及时调用学习器的 ``reset()`` 方法，\
-来清空其学习状态。``step()`` 已消费活动记录；未消费的记录才会继续积累。通常的做法是：在每个batch结束后，将学习器和网络一起重制：
+来清空其学习状态。``step()`` 已消费活动记录；未消费的记录才会继续积累。通常的做法是：在每个batch结束后，将学习器和网络一起重置：
 
 .. code-block:: python
 
@@ -320,98 +321,9 @@ STDP学习器
         stdp_learners[i].reset()
 
 
-完整的示例代码如下：
+实验结束时释放 hook：
 
 .. code-block:: python
-
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-    from torch.optim import SGD, Adam
-    from spikingjelly.activation_based import learning, layer, neuron, functional
-
-    T = 8
-    N = 2
-    C = 3
-    H = 32
-    W = 32
-    lr = 0.1
-    tau_pre = 2.
-    tau_post = 100.
-    step_mode = 'm'
-
-    def f_weight(x):
-        return torch.clamp(x, -1, 1.)
-
-
-    net = nn.Sequential(
-        layer.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False),
-        neuron.IFNode(),
-        layer.MaxPool2d(2, 2),
-        layer.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False),
-        neuron.IFNode(),
-        layer.MaxPool2d(2, 2),
-        layer.Flatten(),
-        layer.Linear(16 * 8 * 8, 64, bias=False),
-        neuron.IFNode(),
-        layer.Linear(64, 10, bias=False),
-        neuron.IFNode(),
-    )
-
-    functional.set_step_mode(net, step_mode)
-
-    instances_stdp = (layer.Conv2d, )
-
-    stdp_learners = []
-
-    for i in range(net.__len__()):
-        if isinstance(net[i], instances_stdp):
-            stdp_learners.append(
-                learning.STDPLearner(step_mode=step_mode, synapse=net[i], sn=net[i+1], tau_pre=tau_pre, tau_post=tau_post,
-                                    f_pre=f_weight, f_post=f_weight)
-            )
-
-
-    params_stdp = []
-    for m in net.modules():
-        if isinstance(m, instances_stdp):
-            for p in m.parameters():
-                params_stdp.append(p)
-
-    params_stdp_set = set(params_stdp)
-    params_gradient_descent = []
-    for p in net.parameters():
-        if p not in params_stdp_set:
-            params_gradient_descent.append(p)
-
-    optimizer_gd = Adam(params_gradient_descent, lr=lr)
-    optimizer_stdp = SGD(params_stdp, lr=lr, momentum=0.)
-
-
-
-    x_seq = (torch.rand([T, N, C, H, W]) > 0.5).float()
-    target = torch.randint(low=0, high=10, size=[N])
-
-    optimizer_gd.zero_grad()
-    optimizer_stdp.zero_grad()
-
-    y = net(x_seq).mean(0)
-    loss = F.cross_entropy(y, target)
-    loss.backward()
-
-
-
-    optimizer_stdp.zero_grad()
-
-    for i in range(stdp_learners.__len__()):
-        stdp_learners[i].step(on_grad=True)
-
-    optimizer_gd.step()
-    optimizer_stdp.step()
-
-    functional.reset_net(net)
-    for i in range(stdp_learners.__len__()):
-        stdp_learners[i].reset()
 
     for learner in stdp_learners:
         learner.close()
@@ -431,7 +343,8 @@ STDP学习器
 MSTDP/MSTDPET 使用 ``exp(-1/tau)`` 衰减，普通 STDP 使用 ``1-1/tau``。
 每次前向后立即调用 reward step；``reward[t]`` 调制上一时刻 eligibility，首次更新为零。
 无记录不推进时间，最终活动后的 reward 需后续前向。MSTDP 接受标量或 ``[M]`` reward，
-MSTDPET 接受标量；创建 MSTDP 不再传 ``batch_size``。
+MSTDPET 接受标量；创建 MSTDP 不再传 ``batch_size``；
+开始独立样本时同时重置网络的时间状态。
 
 完整 MNIST 实例
 ----------------------
@@ -523,12 +436,6 @@ STDP pre/post trace 均为 20 步，使用当前脉冲加入后的 trace。
 实测结果
 ^^^^^^^^^^^^^^^^^^^^^^
 
-配方与一轮训练由独立验证选择：同规模随机编码完整训练验证 88.76%，
-冻结该模型仅改 IF 评估编码为 89.16%，IF 从头短训练为 86.72%/冻结对照 82.94%，
-IF 从头完整训练为 89.58%/对照 83.04%。这四项分别来自不同训练或评估阶段。
-选定配方和轮数后，seed 1、2 从头训练；三个模型和映射全部固定，再评估官方测试集。
-测试分数不参与配方选择，报告包含全部种子。
-
 冻结前馈对照保留相同初始化和逐位相同的输入脉冲，只关闭 STDP 权重更新；
 训练期间仍适应 B，保留相同快动力学，并独立进行训练后的类别指派。
 实例目标为三种子平均正确率至少 90%；不要求每个种子都达到 90%。
@@ -552,6 +459,12 @@ IF 从头完整训练为 89.58%/对照 83.04%。这四项分别来自不同训�
      - 90.06%
      - 84.06%
      - +6.00
+
+配方与一轮训练由独立验证选择：同规模随机编码完整训练验证 88.76%，
+冻结该模型仅改 IF 评估编码为 89.16%，IF 从头短训练为 86.72%/冻结对照 82.94%，
+IF 从头完整训练为 89.58%/对照 83.04%。这四项分别来自不同训练或评估阶段。
+选定配方和轮数后，seed 1、2 从头训练；三个模型和映射全部固定，再评估官方测试集。
+测试分数不参与配方选择，报告包含全部种子。
 
 历史文档记录： `da6ff9a9 <https://github.com/fangwei123456/spikingjelly/commit/da6ff9a9>`_ （2026-10-12）；V100S-PCIE-32GB；未在当前 V2 上复测。
 

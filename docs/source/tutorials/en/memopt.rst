@@ -5,7 +5,7 @@ Author: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_
 
 中文版： :doc:`../cn/memopt`
 
-Our new work `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ was published at ICLR 2026. In this work, we propose an automatic memory optimization tool for deep SNN training based on gradient checkpointing and spike compression (source code available on `GitHub <https://github.com/AllenYolk/snn-gradient-checkpointing>`_). A few lines of code can substantially reduce deep SNN training memory; see the experiments below for accuracy and speed effects.
+Our new work `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ was published at ICLR 2026. In this work, we propose an automatic memory optimization tool for deep SNN training based on gradient checkpointing and spike compression (source code available on `GitHub <https://github.com/AllenYolk/snn-gradient-checkpointing>`_). See the experiments below for memory, accuracy, and speed effects.
 
 The toolkit is available in ``spikingjelly.activation_based.memopt`` with interfaces for manual checkpointing, automatic search, and distributed training.
 
@@ -44,7 +44,7 @@ Fig. 2(b) illustrates the forward/backward workflow after applying gradient chec
 Adaptive Adjustment of Checkpoint Structures
 ---------------------------------------------------------------
 
-After applying per-layer gradient checkpointing and spike compression, the memory evolution within one training iteration looks like the orange curve in Fig. 3. Although the peak is already far lower than vanilla BPTT (blue curve), the global peak is still much higher than the temporary memory usage in other layers. To address this, we design a series of checkpoint splitting strategies. These strategies shrink the size of critical GC segments at the cost of caching more inputs. Additionally, we selectively revert some GC segments back to normal layers to slightly increase temporary memory but speed up training without raising the peak memory. The procedure is:
+After applying per-layer gradient checkpointing and spike compression, the memory evolution within one training iteration looks like the orange curve in Fig. 3. Although the peak is already far lower than vanilla BPTT (blue curve), the global peak is still much higher than the temporary memory usage in other layers. Splitting critical GC segments reduces their size at the cost of caching more inputs. Reverting selected GC segments to normal layers increases temporary memory but speeds up training without raising peak memory. The procedure is:
 
 1. **Spatial splitting**: Locate the GC segment corresponding to peak memory and split it spatially into two smaller segments. Repeat this until peak memory can no longer be reduced. See Fig. 2(c).
 2. **Temporal splitting**: Locate the peak memory segment and split it along the time dimension into :math:`k` smaller segments. Repeat until no further memory reduction. See Fig. 2(d).
@@ -222,7 +222,7 @@ tensor. The search only sees this run, so use a representative sample.
 respectively. Candidates are ordered by input size, with model order breaking
 ties.
 
-When ``compress`` is enabled, the preset uses bit compression only if every rank
+When ``compress`` is enabled, which is the default, the preset uses bit compression only if every rank
 in the relevant process group observes a strictly binary input. ``split_fn`` must
 return at least two non-overlapping registered descendants, or an empty tuple when
 it does not apply. ``can_chunk`` should accept only modules that are genuinely

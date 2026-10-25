@@ -18,6 +18,16 @@ Lava框架简介
 
 与Lava相关的模块，都定义在 :class:`spikingjelly.activation_based.lava_exchange` 中。
 
+.. note::
+
+    Lava-DL 是可选依赖。SpikingJelly 不安装它，也没有 ``spikingjelly[lava]``
+    这个 extra。``TNX_to_NXT``、``to_lava_neuron``、``BlockContainer`` 等转换
+    函数只在 ``import lava.lib.dl.slayer`` 成功时定义，否则这些名字不存在。
+
+    PyPI 上的 ``lava-dl==0.6.0`` 要求 Python >=3.10,<3.11 和 torch>=2.3.1,<2.4，
+    而 SpikingJelly 2.0.0 要求 Python >=3.11 和 torch>=2.6。下面的示例没有在
+    2.0.0 环境中运行过。
+
 基本转换
 -------------------------------------------
 
@@ -55,7 +65,7 @@ Lava DL默认数据格式为 ``shape = [N, *, T]``，其中 ``N`` 是batch维度
 
 神经元转换
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-SpikingJelly中的神经元可以直接转换为Lava DL中的神经元。由于开发者精力有限，目前仅支持最常用的IF神经元和LIF神经元，其他神经元将在视用户需求添加。
+当前支持将 SpikingJelly 的 IF 和 LIF 神经元转换为 Lava DL 神经元。
 
 使用 :class:`to_lava_neuron <spikingjelly.activation_based.lava_exchange.to_lava_neuron>` 进行转换，示例如下：
 
@@ -77,18 +87,7 @@ SpikingJelly中的神经元可以直接转换为Lava DL中的神经元。由于�
     print('output of sj(reshaped to NXT):\n', lava_exchange.TNX_to_NXT(if_sj(x_seq_sj)))
     print('output of lava:\n', if_la(x_seq_la))
 
-输出为：
-
-.. code-block:: shell
-
-    output of sj(reshaped to NXT):
-    tensor([[[0., 0., 1., 0., 1., 0., 0., 0.]],
-
-            [[0., 1., 0., 1., 0., 1., 0., 1.]]])
-    output of lava:
-    tensor([[[0., 0., 1., 0., 1., 0., 0., 0.]],
-
-            [[0., 1., 0., 1., 0., 1., 0., 1.]]])
+对于相同的输入，两者的脉冲张量相同。本节 IF 和 LIF 示例都使用未设随机种子的 ``torch.rand``，打印数值会随运行变化。
 
 使用LIF神经元的示例如下：
 
@@ -111,18 +110,6 @@ SpikingJelly中的神经元可以直接转换为Lava DL中的神经元。由于�
     print('output of sj:\n', lava_exchange.TNX_to_NXT(if_sj(x_seq_sj)))
     print('output of lava:\n', if_la(x_seq_la))
 
-输出为：
-
-.. code-block:: shell
-
-    output of sj:
-    tensor([[[0., 1., 0., 1., 0., 0., 1., 0.]],
-
-            [[0., 0., 1., 0., 0., 1., 0., 1.]]])
-    output of lava:
-    tensor([[[0., 1., 0., 1., 0., 0., 1., 0.]],
-
-            [[0., 0., 1., 0., 0., 1., 0., 1.]]])
 
 突触转换
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -153,7 +140,7 @@ SpikingJelly中的神经元可以直接转换为Lava DL中的神经元。由于�
 
 .. code-block:: shell
 
-    WARNING:root:The lava slayer pool layer applies sum pooling, rather than average pooling. `avgpool2d_to_lava_synapse_pool` will return a sum pooling layer.
+    The Lava-DL pooling layer applies sum pooling; returning a sum-pooling layer instead of average pooling.
     conv_la=Conv(3, 4, kernel_size=(3, 3, 1), stride=(1, 1, 1), bias=False)
     fc_la=Dense(4, 2, kernel_size=(1, 1, 1), stride=(1, 1, 1), bias=False)
     sp_la=Pool(1, 1, kernel_size=(2, 2, 1), stride=(2, 2, 1), bias=False)

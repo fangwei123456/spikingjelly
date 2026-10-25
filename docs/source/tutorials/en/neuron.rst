@@ -64,7 +64,7 @@ We can find that ``if_layer.v`` is ``0.0`` because we have not given the neurons
 
 Call ``reset()`` before a new independent sample; see below for continuous sequences.
 
-What is the relationship between :math:`V[t]` and :math:`X[t]`? In spiking neurons, :math:`V[t]` is not determined by the input :math:`X[t]` at the current time-step ``t``, but also by the membrane potential :math:`V[t-1]` at the last time-step ``t-1``.
+What is the relationship between :math:`V[t]` and :math:`X[t]`? In spiking neurons, :math:`V[t]` is determined not only by the input :math:`X[t]` at the current time-step ``t``, but also by the membrane potential :math:`V[t-1]` at the last time-step ``t-1``.
 
 We use the sub-threshold neuronal dynamics :math:`\frac{\mathrm{d}V(t)}{\mathrm{d}t} = f(V(t), X(t))` to describe the charging of continuous-time spiking neurons. For the IF neuron, the charging function is:
 
@@ -128,7 +128,7 @@ If we set ``v_reset = None``, then the neuron will use the soft reset.
 
 Three equations for describing spiking neurons
 ------------------------------------------------------
-Now we can use the three equations: neuronal charge, neuronal fire, and neuronal reset, to describe all kinds of spiking neurons:
+Now we can use the three equations: neuronal charge, neuronal fire, and neuronal reset, to describe the binary IF neurons in this section:
 
 
 .. math::

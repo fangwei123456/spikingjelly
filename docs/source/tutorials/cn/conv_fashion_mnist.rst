@@ -59,7 +59,7 @@ English version: :doc:`../en/conv_fashion_mnist`
             neuron.IFNode(surrogate_function=surrogate.ATan()),
             )
 
-为了更快的训练速度，我们将网络设置成多步模式，并根据设备自动选择神经元实现：
+为了更快的训练速度，我们将网络设置成多步模式，并根据设备自动选择神经元实现。在上面的构造函数末尾添加如下代码：
 
 .. code-block:: python
 
@@ -70,11 +70,11 @@ English version: :doc:`../en/conv_fashion_mnist`
             # ...
             functional.set_step_mode(self, step_mode='m')
 
-将图片直接输入到SNN，而不是编码后在输入，是近年来深度SNN的常见做法，我们在此教程中也使用这样的方法。在这种情况下，实际的 ``图片-脉冲`` 编码是由网络中的前三层，也就是 \
+将图片直接输入到SNN，而不是编码后再输入，是近年来深度SNN的常见做法，我们在此教程中也使用这样的方法。在这种情况下，实际的 ``图片-脉冲`` 编码是由网络中的前三层，也就是 \
 ``{Conv2d-BatchNorm2d-IFNode}`` 完成。
 
 网络的输入直接是 ``shape=[N, C, H, W]`` 的图片，我们将其添加时间维度，并扩展为 ``shape=[T, N, C, H, W]`` 的序列，然后送入到网络层。网络的输出定义为最后一层脉冲神经元的\
-脉冲发放频率。因而，网络的前向传播定义为：
+脉冲发放频率。因而，在同一个 ``CSNN`` 类中添加如下的前向传播方法：
 
 .. code-block:: python
 
@@ -90,7 +90,7 @@ English version: :doc:`../en/conv_fashion_mnist`
 
 网络训练
 -------------------------------------------
-网络的训练方式、损失函数定义、分类结果的确定均与上一节教程相同，不再赘述。唯一的区别是，使用Fashion-MNIST数据集：
+沿用 :doc:`./lif_fc_mnist` 的 MSE 损失、分类规则和每批次状态重置。训练和评估时，将泊松编码及外部 T 步累加、平均替换为 ``out_fr = net(img)``；``CSNN.forward()`` 已执行 T 步并取平均。数据集改为 Fashion-MNIST：
 
 .. code-block:: python
 
@@ -148,7 +148,7 @@ English version: :doc:`../en/conv_fashion_mnist`
     train speed = 7627.8147 images/s, test speed = 7868.9090 images/s
     escape time = 2022-05-24 21:42:16
 
-最终获得了 ``max_test_acc = 0.9308`` 的性能。如果精心调整超参数，通常还可以获得更高的性能。
+最终获得了 ``max_test_acc = 0.9308`` 的性能。
 
 下图展示了训练过程中正确率的变化：
 
@@ -158,7 +158,7 @@ English version: :doc:`../en/conv_fashion_mnist`
 可视化编码器
 -------------------------------------------
 如前所述，我们将图片直接送入网络，实际的编码过程是由网络中的首个 ``{Conv2d-BatchNorm2d-IFNode}`` 实现的。现在让我们提取出网络中的编码器，输入图片，\
-并将输出脉冲可视化，代码如下：
+并将输出脉冲可视化。在同一个 ``CSNN`` 类中添加如下的方法：
 
 .. code-block:: python
 
@@ -177,6 +177,7 @@ English version: :doc:`../en/conv_fashion_mnist`
             start_epoch = checkpoint['epoch'] + 1
             max_test_acc = checkpoint['max_test_acc']
             if args.save_es is not None and args.save_es != '':
+                net.eval()
                 encoder = net.spiking_encoder()
                 with torch.no_grad():
                     for img, label in test_data_loader:
@@ -222,7 +223,7 @@ English version: :doc:`../en/conv_fashion_mnist`
 
 .. note::
 
-    检查点使用 ``batch_size=256`` 进行训练（检查点路径中的 ``b256`` 表示），而上述推理命令使用 ``batch_size=4`` 仅保存4个样本用于可视化。
+    检查点使用 ``batch_size=256`` 进行训练（检查点路径中的 ``b256`` 表示），而上述推理命令使用 ``batch_size=4`` 仅保存4个样本用于可视化。网络处于 ``eval()`` 模式，BatchNorm 使用训练阶段学到的运行统计量。
 
 
 运行后图片会保存到 ``./logs/visualization`` 文件夹中。下面展示2个输入图片，和对应的编码后的脉冲：

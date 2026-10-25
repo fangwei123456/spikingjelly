@@ -30,6 +30,9 @@ Changes since `2.0.0.dev0`. For older releases, see
 - Removed `STBIFNode.cur_output`; `functional.stbif_step` and
   `functional.stbif_multi_step` return `(out, q, acc_q)`. Consume returned spikes,
   update tuple unpacking, rebuild native extensions and regenerate compiled/exported graphs.
+- `NonSpikingBaseNode(decode=...)` and the noisy variants accept `last-mem` instead
+  of `last_mem`; `last-mem` now returns the last membrane voltage like the other
+  three decoders.
 
 ## 2.0.0 - 2026-10-18
 

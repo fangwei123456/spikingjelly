@@ -70,7 +70,7 @@ The outputs are:
     x.grad=tensor([0.9351, 0.4231, 0.6557, 0.5158, 0.7451, 0.4759, 0.4943, 0.7913])
 
 All surrogate functions have a module style API, e.g., :class:`spikingjelly.activation_based.surrogate.Sigmoid`, and a functional style API, e.g., :class:`spikingjelly.activation_based.surrogate.sigmoid`.\ 
-The module style API uses Camel-Case to name modules, while the functional API uses Snake-Case to name functions. Their relation are similar to ``torch.nn`` and ``torch.nn.functional``.\ 
+The module style API uses Camel-Case to name modules, while the functional API uses Snake-Case to name functions. Their relationship is similar to ``torch.nn`` and ``torch.nn.functional``.\
 Here are some examples:
 
 ===============  ===============

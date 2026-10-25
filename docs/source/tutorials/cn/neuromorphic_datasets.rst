@@ -5,8 +5,7 @@
 
 English version: :doc:`../en/neuromorphic_datasets`
 
-``spikingjelly.datasets`` 中集成了常用的神经形态数据集，包括 N-MNIST [#NMNIST]_, CIFAR10-DVS [#CIFAR10DVS]_, DVS128 Gesture [#DVS128Gesture]_, N-Caltech101 [#NMNIST]_, ASLDVS [#ASLDVS]_ 等。所有数据集的处理都遵循类似的步骤，开发人员也可以很轻松的添加新数据集代码。在本节教程中，我
-们将以 DVS128 Gesture 为例，展示如何使用惊蜇框架处理神经形态数据集。
+``spikingjelly.datasets`` 中集成了常用的神经形态数据集，包括 N-MNIST [#NMNIST]_, CIFAR10-DVS [#CIFAR10DVS]_, DVS128 Gesture [#DVS128Gesture]_, N-Caltech101 [#NMNIST]_, ASLDVS [#ASLDVS]_ 等。所有数据集的处理都遵循类似的步骤，开发人员也可以很轻松的添加新数据集代码。在本节教程中，我们将以 DVS128 Gesture 为例，展示如何使用惊蜇框架处理神经形态数据集。
 
 自动下载和手动下载
 -----------------------
@@ -36,7 +35,7 @@ CIFAR10-DVS等数据集支持自动下载。支持自动下载的数据集，在
     resource, url, md5
      [('DvsGesture.tar.gz', 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', '8a5c71fb11e24e5ca5b11866ca6c00a1'), ('gesture_mapping.csv', 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', '109b2ae64a0e1f3ef535b18ad7367fd1'), ('LICENSE.txt', 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', '065e10099753156f18f51941e6e44b66'), ('README.txt', 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', 'a0663d3b1d8307c329a43d949ee32d19')]
 
-DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 函数会打印出获取下载地址的网址。DVS128 Gesture数据集可以从 https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794 进行下载。box网站不支持在不登陆的情况下使用代码直接下载，因此用户需要手动从网站上下载。将数据集下载到 ``E:/datasets/DVS128Gesture/download``，下载完成后这个文件夹的目录结构为
+DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 函数会打印出获取下载地址的网址。DVS128 Gesture数据集可以从 https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794 进行下载。box网站不支持在不登陆的情况下使用代码直接下载，因此用户需要手动从网站上下载。将数据集下载到 ``D:/datasets/DVS128Gesture/download``，下载完成后这个文件夹的目录结构为
 
 .. code:: bash
 
@@ -49,7 +48,7 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
 .. Note::
 
-    不同框架对DVS128 Gesture数据集的预处理方式可能不同，这或许导致不同的训练集和测试机样本数量。请参考 :class:`spikingjelly.datasets.dvs128_gesture.DVS128Gesture` 的API文档获取更多信息。
+    不同框架对DVS128 Gesture数据集的预处理方式可能不同，这或许导致不同的训练集和测试集样本数量。请参考 :class:`spikingjelly.datasets.dvs128_gesture.DVS128Gesture` 的API文档获取更多信息。
 
 
 获取Event数据
@@ -103,7 +102,7 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 获取Frame数据
 -----------------------
 
-将原始的Event流积分成Frame数据，是常用的处理方法，我们采用 [#PLIF]_ 的实现方式。我们将原始的Event数据记为 :math:`E(x_{i}, y_{i}, t_{i}, p_{i}), 0 \leq i < N`；设置 ``split_by='number'`` 表示从Event数量 :math:`N` 上进行划分，接近均匀地划分为 ``frames_num=20``， 也就是 :math:`T` 段。记积分后的Frame数据中的某一帧
+将原始的Event流积分成Frame数据，是常用的处理方法，我们采用 [#PLIF]_ 的实现方式。我们将原始的Event数据记为 :math:`E(x_{i}, y_{i}, t_{i}, p_{i}), 0 \leq i < N`；设置 ``split_by='number'`` 表示从Event数量 :math:`N` 上进行划分，接近均匀地划分为 ``frames_number=20``， 也就是 :math:`T` 段。记积分后的Frame数据中的某一帧
 为 :math:`F(j)`，在 :math:`(p, x, y)` 位置的像素值为 :math:`F(j, p, x, y)`；:math:`F(j)` 是从Event流中索引介于 :math:`j_{l}` 和 :math:`j_{r}` 的Event
 积分而来：
 
@@ -214,6 +213,8 @@ DVS128 Gesture 的时间单位为微秒，``duration=1000000`` 即 1 秒。
 
 .. code:: python
 
+    from typing import Dict
+    import numpy as np
     from spikingjelly.datasets.utils import integrate_events_segment_to_frame
     def integrate_events_to_2_frames_randomly(events: Dict, H: int, W: int):
         index_split = np.random.randint(low=0, high=len(events['t']))
