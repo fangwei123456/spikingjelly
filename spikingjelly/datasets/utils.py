@@ -456,7 +456,7 @@ def cal_fixed_frames_number_segment_index(
         j_{r} & = \begin{cases} [\frac{N}{M}] \cdot (j + 1), & j < M - 1 \\ N, & j = M - 1 \end{cases}
         \end{align*}
 
-    :param events_t: 事件的 t
+    :param events_t: 事件时间戳；``split_by='time'`` 时必须非降序排列，允许重复
     :type events_t: numpy.ndarray
 
     :param split_by: 'time' 或 'number'
@@ -495,7 +495,8 @@ def cal_fixed_frames_number_segment_index(
         j_{r} & = \begin{cases} [\frac{N}{M}] \cdot (j + 1), & j < M - 1 \\ N, & j = M - 1 \end{cases}
         \end{align*}
 
-    :param events_t: events' t
+    :param events_t: Event timestamps; when ``split_by='time'``, they must be
+        nondecreasing. Duplicate timestamps are allowed.
     :type events_t: numpy.ndarray
 
     :param split_by: 'time' or 'number'

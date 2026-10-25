@@ -8,6 +8,11 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 ### Fixes
 
+#### spikingjelly.datasets
+
+- Time-based fixed-frame integration handles empty intervals without changing
+  previously successful results for ordered events.
+
 #### spikingjelly.activation_based.functional
 
 - `spike_similar_loss` matches target dtype to similarities for float64 MSE/BCE
