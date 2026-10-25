@@ -11,7 +11,9 @@ from spikingjelly.activation_based.surrogate import PoissonPass
 def test_poisson_pass_composes_with_matching_linear_dtype(dtype, spiking):
     """Sampling must not prevent a same-dtype network from forwarding and training."""
     with torch.random.fork_rng(devices=[]):
-        torch.manual_seed(0)
+        torch.random.set_rng_state(
+            torch.Generator(device="cpu").manual_seed(0).get_state()
+        )
         x = torch.full((2, 3), 0.5, dtype=dtype, requires_grad=True)
         original = x.detach().clone()
         linear = torch.nn.Linear(3, 2, bias=False).to(dtype)
