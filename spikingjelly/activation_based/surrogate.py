@@ -3001,7 +3001,7 @@ class poisson_pass(torch.autograd.Function):
 
     :param x: 输入张量
     :type x: torch.Tensor
-    :return: 脉冲张量，与输入 x 形状相同
+    :return: 脉冲张量，与输入 x 的形状、dtype 和 device 相同
     :rtype: torch.Tensor
 
     ----
@@ -3015,13 +3015,13 @@ class poisson_pass(torch.autograd.Function):
 
     :param x: input tensor
     :type x: torch.Tensor
-    :return: spike tensor, same shape as x
+    :return: spike tensor with the same shape, dtype, and device as x
     :rtype: torch.Tensor
     """
 
     @staticmethod
-    def forward(x):
-        return torch.bernoulli(x).float()
+    def forward(x: torch.Tensor) -> torch.Tensor:
+        return torch.bernoulli(x)
 
     @staticmethod
     def setup_context(ctx, inputs, output):
@@ -3069,7 +3069,39 @@ class PoissonPass(SurrogateFunctionBase):
         """
         super().__init__(spiking=spiking)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        r"""
+        **API Language** - :ref:`中文 <PoissonPass.forward-cn>` | :ref:`English <PoissonPass.forward-en>`
+
+        ----
+
+        .. _PoissonPass.forward-cn:
+
+        * **中文**
+
+        脉冲模式按输入概率进行伯努利采样，反向传播直接传递梯度。
+        非脉冲模式直接返回输入；两种模式都保持输入的形状、dtype 和 device。
+
+        :param x: 任意形状的浮点张量；脉冲模式下的值必须位于 ``[0, 1]``。
+        :type x: torch.Tensor
+        :return: 脉冲张量，或非脉冲模式下的输入张量。
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _PoissonPass.forward-en:
+
+        * **English**
+
+        Spiking mode samples Bernoulli spikes and passes the gradient through.
+        Non-spiking mode returns the input directly. Both modes preserve shape,
+        dtype, and device.
+
+        :param x: floating-point tensor of any shape; spiking probabilities must be in ``[0, 1]``.
+        :type x: torch.Tensor
+        :return: sampled spikes, or the input tensor in non-spiking mode.
+        :rtype: torch.Tensor
+        """
         if self.spiking:
             return poisson_pass.apply(x)
         else:

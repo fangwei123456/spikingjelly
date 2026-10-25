@@ -31,6 +31,10 @@ Changes since `2.0.0.dev0`. For older releases, see
   compatibility; with autocast disabled, explicit FP16/BF16 inputs now produce
   matching low-precision MSE/L1 losses instead of FP32.
 
+#### spikingjelly.activation_based.surrogate
+
+- `PoissonPass` preserves the input dtype, allowing matching FP16/BF16/FP64 layers.
+
 ### Changes
 
 - Few-spike, outlier-aware and hierarchically gated neurons add optional native CUDA alongside Triton for eligible FP32 inference, with explicit provider selection and reference fallbacks.
