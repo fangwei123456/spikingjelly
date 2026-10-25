@@ -96,9 +96,10 @@ def neuron_implementation(
     查询神经元在指定设备和执行路径上的绑定实现。CPU 返回 Torch 参考实现；CUDA
     查询会初始化并缓存对应路径的选择，不执行神经元计算，也不改变模块状态。
     CLIF 与其他注册神经元一样分别选择 eager 和 compile 实现；具体输入和
-    surrogate 是否满足融合条件由计算入口判断。
+    surrogate 是否满足融合条件由计算入口判断。Few-spike 的 compile 路径保持
+    Torch 参考执行；该路径拒绝显式原生 CUDA/Triton 请求。
 
-    :param neuron_type: ``if``、``lif``、``plif``、``qif``、``eif``、``izhikevich``、``ilif``、``activation_aware_if`` 、``stbif`` 或 ``clif``。
+    :param neuron_type: ``if``、``lif``、``plif``、``qif``、``eif``、``izhikevich``、``ilif``、``activation_aware_if`` 、``stbif``、``clif`` 或 ``few_spike`` （FS/OAT/HG）。
     :type neuron_type: str
     :param device: CPU 或 NVIDIA CUDA 设备；省略 CUDA 索引时使用当前设备。
     :type device: torch.device
@@ -108,7 +109,7 @@ def neuron_implementation(
     :return: 包含实际 ``implementation`` 名称和各不可用候选 ``unavailable`` 原因的字典副本。
     :rtype: dict[str, object]
     :raises ValueError: 神经元名称、设备类型或执行路径无效。
-    :raises RuntimeError: CUDA 设备没有可用实现。
+    :raises RuntimeError: CUDA 设备没有可用实现，或显式请求不支持该执行路径。
 
     ----
 
@@ -121,9 +122,10 @@ def neuron_implementation(
     corresponding path's selection without computation or module-state changes.
     CLIF selects eager and compile implementations like other registered neurons.
     The computation entry point checks whether the actual inputs and surrogate
-    satisfy the fused profile.
+    satisfy the fused profile. Few-spike keeps the Torch reference under compile
+    and rejects explicit native CUDA/Triton requests for that path.
 
-    :param neuron_type: One of ``if``, ``lif``, ``plif``, ``qif``, ``eif``, ``izhikevich``, ``ilif``, ``activation_aware_if``, ``stbif``, or ``clif``.
+    :param neuron_type: One of ``if``, ``lif``, ``plif``, ``qif``, ``eif``, ``izhikevich``, ``ilif``, ``activation_aware_if``, ``stbif``, ``clif``, or ``few_spike`` (FS/OAT/HG).
     :type neuron_type: str
     :param device: CPU or NVIDIA CUDA device; an omitted CUDA index uses the current device.
     :type device: torch.device
@@ -135,7 +137,7 @@ def neuron_implementation(
     :return: A copy of ``implementation`` and the ``unavailable`` reasons for rejected candidates.
     :rtype: dict[str, object]
     :raises ValueError: Invalid neuron name, device type or execution path.
-    :raises RuntimeError: No CUDA implementation is available.
+    :raises RuntimeError: No CUDA implementation is available, or the explicit request does not support the execution path.
     """
     packages = {
         "if": "if_",
@@ -148,6 +150,7 @@ def neuron_implementation(
         "activation_aware_if": "activation_aware_if",
         "stbif": "stbif",
         "clif": "clif",
+        "few_spike": "few_spike",
     }
     if neuron_type not in packages:
         raise ValueError(f"Unknown neuron type {neuron_type!r}.")
@@ -158,6 +161,16 @@ def neuron_implementation(
     if device.type != "cuda":
         raise ValueError(f"Unsupported neuron device {device}.")
     package = importlib.import_module(f"..._ops.{packages[neuron_type]}", __package__)
+    if neuron_type == "few_spike" and (execution == "compile" or torch.version.hip):
+        from ..._ops.selection import _require_automatic_torch
+
+        if package._selection._requested not in ("auto", "torch"):
+            _require_automatic_torch(
+                package._selection,
+                device,
+                "few-spike compile/HIP uses the Torch reference",
+            )
+        return {"implementation": "torch-reference", "unavailable": {}}
     if neuron_type == "clif" and torch.version.hip:
         from ..._ops.selection import _require_automatic_torch
 

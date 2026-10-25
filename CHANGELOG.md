@@ -21,6 +21,11 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 ### Changes
 
+- Few-spike, outlier-aware and hierarchically gated neurons add optional native CUDA alongside Triton for eligible FP32 inference, with explicit provider selection and reference fallbacks.
+
+- Neuron dispatch uses version-aware Triton architecture floors in auto mode; explicit Triton attempts retain provider errors.
+- Few-spike tracing and incompatible optional Triton imports retain reference execution in automatic mode.
+
 - ST-BIF uses one-third less FP32 state memory and fewer inference allocations.
 - Removed `STBIFNode.cur_output`; `functional.stbif_step` and
   `functional.stbif_multi_step` return `(out, q, acc_q)`. Consume returned spikes,
