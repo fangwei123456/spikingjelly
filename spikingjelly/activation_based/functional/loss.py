@@ -252,8 +252,8 @@ def spike_similar_loss(
         raise NotImplementedError
 
 
-def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
-    """
+def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor) -> Tensor:
+    r"""
     **API Language** - :ref:`中文 <temporal_efficient_training_cross_entropy-cn>` | :ref:`English <temporal_efficient_training_cross_entropy-en>`
 
     ----
@@ -271,7 +271,8 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
     :param x_seq: ``shape=[T, N, C, *]`` 的预测值，其中 ``C`` 是类别总数
     :type x_seq: torch.Tensor
 
-    :param target: ``shape=[N]`` 的真实值，其中 ``target[i]`` 是真实类别
+    :param target: 所有时间步共享的目标：形状为 ``[N, *]`` 的整数类别索引，
+        或形状为 ``[N, C, *]`` 的浮点类别概率；目标不包含时间轴。
     :type target: torch.Tensor
 
     :return: 损失值
@@ -293,7 +294,8 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
     :param x_seq: the predicted value with ``shape=[T, N, C, *]``, where ``C`` is the number of classes
     :type x_seq: torch.Tensor
 
-    :param target: the ground truth tensor with ``shape=[N]``, where ``target[i]`` is the label
+    :param target: targets shared by all time steps: integer class indices of shape ``[N, *]``,
+        or floating-point class probabilities of shape ``[N, C, *]``. Do not include a time axis.
     :type target: torch.Tensor
 
     :return: the temporal efficient training cross entropy
@@ -305,7 +307,7 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
 
     .. code-block:: python
 
-        def tet_ce_for_loop_version(x_seq: torch.Tensor, target: torch.LongTensor):
+        def tet_ce_for_loop_version(x_seq: torch.Tensor, target: torch.Tensor):
             loss = 0.0
             for t in range(x_seq.shape[0]):
                 loss += F.cross_entropy(x_seq[t], target)
@@ -325,7 +327,11 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
     # x_seq.shape = [T, N, C, *]
     x_seq = x_seq.transpose(0, 1).transpose(1, 2)  # [N, C, T, *]
     T = x_seq.shape[2]
-    if x_seq.dim() == 3:
+    if target.dim() == x_seq.dim() - 1:
+        # Probability targets: [N, C, *] -> [N, C, T, *].
+        target = target.unsqueeze(2)
+        target = target.expand(*target.shape[:2], T, *target.shape[3:])
+    elif x_seq.dim() == 3:
         # x_seq.shape = [N, C, T]
         # target.shape = [N]
         target = target.unsqueeze(1).repeat(1, T)  # [N, T]

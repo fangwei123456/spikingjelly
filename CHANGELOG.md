@@ -24,6 +24,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 #### spikingjelly.activation_based.functional
 
+- TET cross-entropy accepts class probability targets, including MixUp and spatial targets.
 - `kernel_dot_product` keeps Gaussian squared distances nonnegative, preventing
   rounded self-similarities above one and resulting BCE failures.
 
