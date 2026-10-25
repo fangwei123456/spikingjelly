@@ -273,6 +273,8 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor) -> 
 
     :param target: 所有时间步共享的目标：形状为 ``[N, *]`` 的整数类别索引，
         或形状为 ``[N, C, *]`` 的浮点类别概率；目标不包含时间轴。
+        每个类别概率须在 ``[0, 1]`` 内，且沿类别轴求和为1。目标须与 ``x_seq`` 位于同一设备。
+        与 :func:`torch.nn.functional.cross_entropy` 一样，本函数不验证概率范围或总和。
     :type target: torch.Tensor
 
     :return: 损失值
@@ -296,6 +298,9 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor) -> 
 
     :param target: targets shared by all time steps: integer class indices of shape ``[N, *]``,
         or floating-point class probabilities of shape ``[N, C, *]``. Do not include a time axis.
+        Each class probability must lie in ``[0, 1]`` and sum to one along the class axis.
+        Targets must share the device of ``x_seq``. Like
+        :func:`torch.nn.functional.cross_entropy`, this function does not validate probability ranges or sums.
     :type target: torch.Tensor
 
     :return: the temporal efficient training cross entropy
