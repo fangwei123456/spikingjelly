@@ -504,7 +504,7 @@ class PoissonEncoder(StatelessEncoder):
         """
         super().__init__(step_mode)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         r"""
         **API Language** - :ref:`中文 <PoissonEncoder.forward-cn>` | :ref:`English <PoissonEncoder.forward-en>`
 
@@ -514,11 +514,11 @@ class PoissonEncoder(StatelessEncoder):
 
         * **中文**
 
-        前向传播。根据输入 ``x`` 中的概率值生成泊松脉冲序列。每个元素以概率 ``x`` 独立地发放脉冲。
+        前向传播。根据输入 ``x`` 中的概率值生成泊松脉冲序列。每个元素以概率 ``x`` 独立地发放脉冲。概率为零时不会发放脉冲，为一时始终发放脉冲。
 
-        :param x: 输入数据，取值范围应为 ``[0, 1]``，表示脉冲发放概率
+        :param x: 任意形状的浮点张量，取值范围应为 ``[0, 1]``，表示脉冲发放概率
         :type x: torch.Tensor
-        :return: 脉冲张量，形状与 ``x`` 相同
+        :return: 脉冲张量，形状、dtype 和 device 与 ``x`` 相同
         :rtype: torch.Tensor
 
         ----
@@ -529,13 +529,14 @@ class PoissonEncoder(StatelessEncoder):
 
         Forward pass. Generates Poisson spike trains based on the probability values in ``x``.
         Each element independently fires a spike with probability ``x``.
+        Zero probabilities never fire, and unit probabilities always fire.
 
-        :param x: input data in the range ``[0, 1]``, representing firing probabilities
+        :param x: floating-point tensor of any shape in ``[0, 1]``, representing firing probabilities
         :type x: torch.Tensor
-        :return: spike tensor with the same shape as ``x``
+        :return: spike tensor with the same shape, dtype, and device as ``x``
         :rtype: torch.Tensor
         """
-        out_spike = torch.rand_like(x).le(x).to(x)
+        out_spike = torch.rand_like(x).lt(x).to(x)
         return out_spike
 
 
