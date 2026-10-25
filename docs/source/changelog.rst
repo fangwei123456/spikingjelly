@@ -24,7 +24,8 @@ spikingjelly.datasets
 spikingjelly.activation_based.encoding
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- ``PoissonEncoder`` no longer emits spikes for zero-probability FP16/BF16 pixels.
+- ``PoissonEncoder`` no longer emits spikes for zero-probability FP16/BF16 pixels;
+  seeded spike sequences can change when random draws equal input probabilities.
 - ``LatencyEncoder`` evaluates logarithmic firing times without exponential overflow
   for long periods and low-precision inputs, including binary integer inputs.
 - ``WeightedPhaseEncoder`` outputs spikes in the input floating-point dtype instead
