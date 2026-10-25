@@ -35,6 +35,7 @@ spikingjelly.activation_based.functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 - TET cross-entropy accepts class probability targets, including MixUp and spatial targets.
+- Linear spike similarities keep BCE loss and gradients finite near cosine endpoints and handle autocast on devices that do not support it.
 - ``kernel_dot_product`` keeps Gaussian squared distances nonnegative, preventing
   rounded self-similarities above one and resulting BCE failures.
 

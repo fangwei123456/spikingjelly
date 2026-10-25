@@ -1,3 +1,5 @@
+from contextlib import nullcontext
+
 import torch
 import torch.nn.functional as F
 from torch import Tensor
@@ -153,6 +155,10 @@ def spike_similar_loss(
     .. note::
         脉冲向量稀疏、离散，最好先使用高斯核进行平滑，然后再计算相似度。
 
+    线性核的余弦值截断到 ``[-1, 1]``，避免舍入误差越界。
+    相似度计算禁用 autocast；FP16/BF16 输入使用 FP32 中间结果。
+    autocast 外的损失标量保持输入 dtype；autocast 内遵循 PyTorch 的损失精度策略。
+
     :param spikes: shape=[N, M, T]，N个数据生成的脉冲
     :type spikes: torch.Tensor
 
@@ -169,7 +175,7 @@ def spike_similar_loss(
 
     :param args: 用于计算内积的额外参数
 
-    :return: shape=[1]的tensor，相似损失
+    :return: 标量相似损失张量
     :rtype: torch.Tensor
 
     ----
@@ -207,6 +213,11 @@ def spike_similar_loss(
 
         Since spike vectors are usually discrete and sparse, it would be better to apply Gaussian filter first to smooth the vectors before calculating similarities.
 
+    Linear cosines are clipped to ``[-1, 1]`` to remove rounding overshoot.
+    Linear similarities are computed with autocast disabled and FP32 intermediates for
+    FP16/BF16 inputs. Outside autocast the loss scalar keeps the input dtype;
+    inside autocast, PyTorch's loss precision policies still apply.
+
     :param spikes: shape=[N, M, T], output spikes corresponding to a batch of N inputs
     :type spikes: torch.Tensor
 
@@ -225,16 +236,36 @@ def spike_similar_loss(
 
     :param args: Extra parameters for inner product
 
-    :return: shape=[1], similarity loss
+    :return: scalar similarity loss
     :rtype: torch.Tensor
     """
     spikes = spikes.flatten(start_dim=1)
 
-    sim_p = kernel_dot_product(spikes, spikes, kernel_type, *args)
-
+    # Meta tensors have no autocast dispatch key.
+    linear_autocast = (
+        kernel_type == "linear"
+        and spikes.device.type != "meta"
+        and torch.is_autocast_enabled(spikes.device.type)
+    )
     if kernel_type == "linear":
-        spikes_len = spikes.norm(p=2, dim=1, keepdim=True)
-        sim_p = sim_p / ((spikes_len.mm(spikes_len.t())) + 1e-8)
+        context = (
+            torch.autocast(device_type=spikes.device.type, enabled=False)
+            if linear_autocast
+            else nullcontext()
+        )
+        with context:
+            working_spikes = (
+                spikes.float()
+                if spikes.dtype in (torch.float16, torch.bfloat16)
+                else spikes
+            )
+            sim_p = kernel_dot_product(
+                working_spikes, working_spikes, kernel_type, *args
+            )
+            spikes_len = working_spikes.norm(p=2, dim=1, keepdim=True)
+            sim_p = (sim_p / (spikes_len.mm(spikes_len.t()) + 1e-8)).clamp(-1, 1)
+    else:
+        sim_p = kernel_dot_product(spikes, spikes, kernel_type, *args)
 
     labels = labels.to(dtype=sim_p.dtype)
     sim = labels.mm(labels.t()).clamp_max(
@@ -243,13 +274,21 @@ def spike_similar_loss(
     # 将大于1的元素设置为1，因为共享至少同一个标签，就认为他们相似
 
     if loss_type == "mse":
-        return F.mse_loss(sim_p, sim)
+        loss = F.mse_loss(sim_p, sim)
     elif loss_type == "l1":
-        return F.l1_loss(sim_p, sim)
+        loss = F.l1_loss(sim_p, sim)
     elif loss_type == "bce":
-        return F.binary_cross_entropy(sim_p, sim)
+        loss = F.binary_cross_entropy(sim_p, sim)
     else:
         raise NotImplementedError
+
+    if (
+        kernel_type == "linear"
+        and spikes.dtype in (torch.float16, torch.bfloat16)
+        and not linear_autocast
+    ):
+        loss = loss.to(spikes.dtype)
+    return loss
 
 
 def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor) -> Tensor:
