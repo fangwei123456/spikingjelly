@@ -21,21 +21,31 @@ spikingjelly.datasets
 - Time-based fixed-frame integration handles empty intervals without changing
   previously successful results for ordered events.
 
+spikingjelly.activation_based.encoding
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``LatencyEncoder`` evaluates logarithmic firing times without exponential overflow
+  for long periods and low-precision inputs, including binary integer inputs.
+- ``WeightedPhaseEncoder`` outputs spikes in the input floating-point dtype instead
+  of the global default dtype, allowing direct use with layers of matching dtype.
+
 spikingjelly.activation_based.functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``kernel_dot_product`` keeps Gaussian squared distances nonnegative, preventing
+  rounded self-similarities above one and resulting BCE failures.
 
 - ``spike_similar_loss`` matches target dtype to similarities for float64 MSE/BCE
   compatibility; with autocast disabled, explicit FP16/BF16 inputs now produce
   matching low-precision MSE/L1 losses instead of FP32.
 
-spikingjelly.activation_based.encoding
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-- ``WeightedPhaseEncoder`` outputs spikes in the input floating-point dtype instead
-  of the global default dtype, allowing direct use with layers of matching dtype.
-
 Changes
 ~~~~~~~
+
+- Few-spike, outlier-aware and hierarchically gated neurons add optional native CUDA alongside Triton for eligible FP32 inference, with explicit provider selection and reference fallbacks.
+
+- Neuron dispatch uses version-aware Triton architecture floors in auto mode; explicit Triton attempts retain provider errors.
+- Few-spike tracing and incompatible optional Triton imports retain reference execution in automatic mode.
 
 - ST-BIF uses one-third less FP32 state memory and fewer inference allocations.
 - Removed ``STBIFNode.cur_output``; ``functional.stbif_step`` and

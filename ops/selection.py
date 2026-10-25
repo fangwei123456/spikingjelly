@@ -2,9 +2,11 @@ import importlib
 import os
 import threading
 from functools import partial
+from importlib import metadata
 from typing import Callable, NamedTuple, Optional
 
 import torch
+from packaging.version import InvalidVersion, Version
 
 from spikingjelly.logger import logger
 
@@ -132,6 +134,37 @@ class _CudaSelection:
                 if name == "torch":
                     module_name = "cpu"
                 try:
+                    if name == "triton":
+                        try:
+                            version = Version(metadata.version("triton") or "")
+                        except (metadata.PackageNotFoundError, InvalidVersion) as error:
+                            reason = (
+                                f"Cannot verify Triton version: {error}. "
+                                "Check the Torch/Triton installation with uv pip check "
+                                "and repair missing or invalid package metadata."
+                            )
+                            if self._requested == "auto":
+                                raise ImportError(reason) from error
+                            logger.info(
+                                "{} explicit Triton attempt: {}",
+                                self._namespace,
+                                reason,
+                            )
+                        else:
+                            if version < Version("3.2.0"):
+                                raise ImportError(
+                                    f"SpikingJelly requires Triton >=3.2.0; found {version}"
+                                )
+                            # Release series, so 3.3rc/dev use the 3.3 policy too.
+                            minimum = (
+                                (7, 0) if version.release[:2] == (3, 2) else (8, 0)
+                            )
+                            if self._requested == "auto" and capability < minimum:
+                                raise ImportError(
+                                    f"Auto Triton {version} selection requires compute "
+                                    f"capability {minimum[0]}.{minimum[1]}+; found "
+                                    f"{capability[0]}.{capability[1]}"
+                                )
                     module = importlib.import_module(f".{module_name}", self._package)
                     if name == "cuda":
                         _check_native_device(module._build_info, index)

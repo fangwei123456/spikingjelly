@@ -29,6 +29,8 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
 
     - ``gaussian`` ，高斯内积， :math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \mathrm{exp}(- \frac{||\boldsymbol{x_{i}} - \boldsymbol{y_{j}}||^{2}}{2\sigma^{2}})` ，其中 :math:`\sigma = args[0]`。
 
+    高斯核的平方距离会截断为非负值，避免浮点舍入使核值超过1。
+
     :param x: shape=[N, M]的tensor，看作是N个M维向量
     :type x: torch.Tensor
 
@@ -60,6 +62,8 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
     - ``sigmoid`` -- Sigmoid kernel, :math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \mathrm{sigmoid}(\alpha \boldsymbol{x_{i}}^{T}\boldsymbol{y_{j}})`, where :math:`\alpha = args[0]`.
 
     - ``gaussian`` -- Gaussian kernel, :math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \mathrm{exp}(- \frac{||\boldsymbol{x_{i}} - \boldsymbol{y_{j}}||^{2}}{2\sigma^{2}})`, where :math:`\sigma = args[0]`.
+
+    Gaussian squared distances are clamped to nonnegative values so rounding cannot make the kernel exceed one.
 
     :param x: Tensor of shape=[N, M]
     :type x: torch.Tensor
@@ -98,7 +102,7 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
         d_xy = x2.unsqueeze(1).repeat(1, N) + y2.unsqueeze(0).repeat(N, 1) - 2 * xy
         # d_xy[i][j]的元素是x[i]的平方和，加上y[j]的平方和，减去2倍的sum_{k} x[i][k]y[j][k]，因此
         # d_xy[i][j]就是x[i]和y[j]相减，平方，求和
-        return torch.exp(-d_xy / (2 * sigma * sigma))
+        return torch.exp(-d_xy.clamp_min(0) / (2 * sigma * sigma))
     else:
         raise NotImplementedError
 

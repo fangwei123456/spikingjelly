@@ -50,6 +50,23 @@ CUDA、Torch 的顺序检查。各 GPU 架构使用相同的顺序，兼容性�
 STBIF。各类支持的训练模式、dtype 和替代梯度不同，详见对应 API。其他神经元
 沿用各自的执行方式，其中一些没有独立 CUDA 内核。
 
+选择轮到 Triton 时，读取其发行包元数据并检查 ``triton>=3.2.0`` 安装契约。
+自动模式下，3.2 release 系列使用计算能力 7.0 下限，3.3 及后续版本沿用当前
+8.0 政策。预发布和 local 后缀不改变 release 系列：3.3rc/dev 属于 3.3，
+而 3.2.0rc 仍不能越过独立的最低版本检查。显式 Triton 请求跳过此自动架构政策，
+但不跳过输入、数值或设备限制，也不静默替换 provider。版本元数据缺失或非法时，
+auto 跳过 Triton；显式请求记录版本无法核实的诊断并尝试已安装实现。
+应修复发行包元数据，并使用 ``uv pip check`` 检查环境。这些下限只恢复候选资格，
+不代表旧 GPU 已验收或完整兼容：旧编译器仍可能不认识更新 GPU。
+选择后的 kernel/JIT/OOM 错误继续传播，不运行 probe。
+
+FewSpikeNode、OutlierAwareThresholdNode 和 HGNode 对兼容的连续 FP32 推理
+使用可选原生 CUDA 或 Triton 融合。在新进程中设置
+``SJ_FEW_SPIKE_CUDA_IMPLEMENTATION=auto|cuda|triton|torch``；``auto`` 依次检查
+原生 CUDA、Triton、Torch。显式融合请求在实现不可用或执行范围不支持时失败。
+CPU、外层 compile 和 tracing 使用 Torch；梯度、hook、子类和张量视图限制详见 API。
+原生构建使用安装指南中的 ``SJ_BUILD_NATIVE_CUDA=1`` 命令。
+
 普通融合路径接受 FP32/FP16/BF16 输入，要求状态为 FP32，替代梯度为受支持的内置
 类型。低精度状态和自定义替代梯度可使用 Torch 参考公式。未显式配置精度时，
 模块的膜电位跟随输入 dtype，已有 FP32 状态也会转换。因此普通 FP16/BF16
