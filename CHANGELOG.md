@@ -15,6 +15,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 #### spikingjelly.activation_based.encoding
 
+- `PoissonEncoder` no longer emits spikes for zero-probability FP16/BF16 pixels.
 - `LatencyEncoder` evaluates logarithmic firing times without exponential overflow
   for long periods and low-precision inputs, including binary integer inputs.
 - `WeightedPhaseEncoder` outputs spikes in the input floating-point dtype instead
