@@ -41,6 +41,11 @@ spikingjelly.activation_based.functional
   compatibility; with autocast disabled, explicit FP16/BF16 inputs now produce
   matching low-precision MSE/L1 losses instead of FP32.
 
+spikingjelly.activation_based.surrogate
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``PoissonPass`` preserves the input dtype, allowing matching FP16/BF16/FP64 layers.
+
 Changes
 ~~~~~~~
 
