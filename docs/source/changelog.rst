@@ -45,6 +45,7 @@ spikingjelly.activation_based.functional
 spikingjelly.activation_based.surrogate
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+- Torch ``Sigmoid`` surrogate gradients retain representable positive tails in low-precision training.
 - ``PoissonPass`` preserves the input dtype, allowing matching FP16/BF16/FP64 layers.
 
 Changes

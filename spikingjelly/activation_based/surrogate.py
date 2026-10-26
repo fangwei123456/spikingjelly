@@ -641,7 +641,10 @@ def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
 
     * **中文**
 
-    Sigmoid 替代函数的梯度计算。 :math:`g'(x) = \alpha \cdot (1 - \mathrm{sigmoid}(\alpha x)) \cdot \mathrm{sigmoid}(\alpha x)`
+    Sigmoid 替代函数的梯度计算。Torch 实现利用导数的偶对称性，
+    避免正输入处 sigmoid 舍入为1而使梯度过早归零。
+
+    :math:`g'(x) = \alpha \cdot (1 - \mathrm{sigmoid}(\alpha x)) \cdot \mathrm{sigmoid}(\alpha x)`
 
     :param grad_output: 上游梯度
     :type grad_output: torch.Tensor
@@ -658,7 +661,8 @@ def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
 
     * **English**
 
-    Gradient computation for the Sigmoid surrogate function.
+    Gradient computation for the Sigmoid surrogate function. The Torch implementation
+    uses the even derivative to avoid premature zeros when sigmoid rounds to one.
 
     :param grad_output: gradient of the upstream
     :type grad_output: torch.Tensor
@@ -669,7 +673,13 @@ def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     :return: gradient tensor, None
     :rtype: tuple
     """
-    sgax = (x * alpha).sigmoid_()
+    # The derivative is even: use the negative tail so sigmoid cannot round to 1.
+    scaled_x = x * alpha
+    if torch.is_grad_enabled():
+        # abs has zero derivative at zero, which would corrupt the third derivative.
+        sgax = torch.where(scaled_x > 0, -scaled_x, scaled_x).sigmoid_()
+    else:
+        sgax = scaled_x.abs_().neg_().sigmoid_()
     return grad_output * (1.0 - sgax) * sgax * alpha, None
 
 
