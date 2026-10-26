@@ -306,3 +306,52 @@ def test_fptt_updates_parameters_and_running_average():
     )
     torch.testing.assert_close(model.weight.squeeze(), weight)
     torch.testing.assert_close(w_ra[0].squeeze(), average)
+
+
+@pytest.mark.parametrize("frozen_index", [0, 1])
+@pytest.mark.parametrize("warmup", [False, True])
+def test_fptt_handles_frozen_parameters_in_optimizer_groups(frozen_index, warmup):
+    """Frozen layers and saved averages agree with a filtered-optimizer reference."""
+    model = nn.Sequential(
+        nn.Linear(1, 1, bias=False), nn.Linear(1, 1, bias=False)
+    ).double()
+    with torch.no_grad():
+        model[0].weight.fill_(0.5)
+        model[1].weight.fill_(0.8)
+    optimizer = torch.optim.SGD(
+        [{"params": model[0].parameters()}, {"params": model[1].parameters()}], lr=0.1
+    )
+    averages = fptt_online_training_init_w_ra(optimizer)
+    x = torch.tensor([1.0, 2.0, 0.5], dtype=torch.double).reshape(3, 1, 1)
+    targets = torch.tensor([0.2, 0.8, -0.1], dtype=torch.double).reshape(3, 1, 1)
+    if warmup:
+        fptt_online_training(
+            model, optimizer, x, targets, nn.functional.mse_loss, 0.3, averages
+        )
+    model[frozen_index].requires_grad_(False)
+    reference = copy.deepcopy(model)
+    reference_optimizer = torch.optim.SGD(
+        [p for p in reference.parameters() if p.requires_grad], lr=0.1
+    )
+    reference_averages = [averages[1 - frozen_index].clone()]
+    frozen_snapshot = model[frozen_index].weight.detach().clone()
+    trainable_snapshot = model[1 - frozen_index].weight.detach().clone()
+    average_snapshot = averages[frozen_index].clone()
+    if warmup:
+        assert not torch.equal(frozen_snapshot, average_snapshot)
+    for net, opt, state in [
+        (reference, reference_optimizer, reference_averages),
+        (model, optimizer, averages),
+    ]:
+        fptt_online_training(net, opt, x, targets, nn.functional.mse_loss, 0.3, state)
+    for actual, expected in zip(model.parameters(), reference.parameters()):
+        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    torch.testing.assert_close(
+        model[frozen_index].weight, frozen_snapshot, rtol=0, atol=0
+    )
+    torch.testing.assert_close(averages[frozen_index], average_snapshot, rtol=0, atol=0)
+    torch.testing.assert_close(
+        averages[1 - frozen_index], reference_averages[0], rtol=0, atol=0
+    )
+    assert model[frozen_index].weight.grad is None
+    assert not torch.equal(model[1 - frozen_index].weight, trainable_snapshot)
