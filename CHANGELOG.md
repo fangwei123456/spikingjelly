@@ -37,6 +37,10 @@ Changes since `2.0.0.dev0`. For older releases, see
 - Torch `Sigmoid` surrogate gradients retain representable positive tails in low-precision training.
 - `PoissonPass` preserves the input dtype, allowing matching FP16/BF16/FP64 layers.
 
+#### spikingjelly.activation_based.learning
+
+- FPTT training preserves frozen optimizer parameters and their running-average slots instead of failing on missing gradients.
+
 ### Changes
 
 - Few-spike, outlier-aware and hierarchically gated neurons add optional native CUDA alongside Triton for eligible FP32 inference, with explicit provider selection and reference fallbacks.
