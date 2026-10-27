@@ -86,9 +86,13 @@ def test_linear_similarity_bce_preserves_gradient_near_one():
     )
 
 
-def test_linear_similarity_bce_preserves_zero_dot_positive_gradient():
-    """A positive target with orthogonal spikes must retain an overlap gradient."""
-    spikes = torch.eye(2, requires_grad=True)
+@pytest.mark.parametrize(
+    "values",
+    [((1.0, 0.0), (0.0, 1.0)), ((0.0, 0.0), (1.0, 0.0))],
+)
+def test_linear_similarity_bce_preserves_zero_dot_positive_gradient(values):
+    """Orthogonal or silent spikes need a gradient for a positive target."""
+    spikes = torch.tensor(values, requires_grad=True)
     labels = torch.ones((2, 1))
 
     loss = spike_similar_loss(spikes, labels, "linear", "bce")

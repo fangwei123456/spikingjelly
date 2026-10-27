@@ -302,7 +302,7 @@ def spike_similar_loss(
             logits_loss = F.binary_cross_entropy_with_logits(
                 linear_bce_logits, sim, reduction="none"
             )
-            zero_dot = (linear_dot == 0) & (norm_product > 0)
+            zero_dot = linear_dot == 0
             loss = torch.where(zero_dot, probability_loss, logits_loss).mean()
         else:
             loss = F.binary_cross_entropy(sim_p, sim)
