@@ -368,6 +368,20 @@ def test_capability_report_preserves_unsupported_device_type():
         validate_capability(report)
 
 
+class _FakeDevice:
+    """Stands in for torch.device on a build that does not know "npu".
+
+    torch.device("npu") raises on a CPU-only wheel, so a test for the NPU
+    branch has to supply the device object the real backend would produce.
+    """
+
+    def __init__(self, spec):
+        self.type, _, self.index = str(spec).partition(":")
+
+    def __str__(self):
+        return self.type if not self.index else f"{self.type}:{self.index}"
+
+
 def test_capability_report_asks_a_non_cuda_accelerator_for_its_own_bf16_support(
     monkeypatch,
 ):
@@ -381,6 +395,7 @@ def test_capability_report_asks_a_non_cuda_accelerator_for_its_own_bf16_support(
         is_available=lambda: True, is_bf16_supported=lambda: True
     )
     monkeypatch.setattr(torch, "npu", npu_ns, raising=False)
+    monkeypatch.setattr(torch, "device", _FakeDevice)
     report = build_capability_report(torch.nn.Identity(), "npu", "bf16")
 
     assert report["device_type"] == "npu"
@@ -393,6 +408,7 @@ def test_capability_report_takes_no_bf16_a_non_cuda_accelerator_denies(monkeypat
         is_available=lambda: True, is_bf16_supported=lambda: False
     )
     monkeypatch.setattr(torch, "npu", npu_ns, raising=False)
+    monkeypatch.setattr(torch, "device", _FakeDevice)
     report = build_capability_report(torch.nn.Identity(), "npu", "bf16")
 
     assert report["bf16_supported"] is False
