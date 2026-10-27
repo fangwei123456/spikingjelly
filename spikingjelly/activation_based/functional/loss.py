@@ -279,10 +279,10 @@ def spike_similar_loss(
                 # This avoids BCELoss's zero gradient when float32 rounds p to one.
                 bce_dot = linear_dot.to(dtype=sim_p.dtype)
                 complement = (norm_product - bce_dot).clamp_min(0) + 1e-8
-                tiny = torch.finfo(sim_p.dtype).tiny
-                linear_bce_logits = bce_dot.clamp_min(tiny).log() - complement.log()
+                numerator = bce_dot.clamp_min(0) + 1e-8
+                linear_bce_logits = numerator.log() - complement.log()
                 linear_bce_logits = torch.where(
-                    linear_dot > 0,
+                    norm_product > 0,
                     linear_bce_logits,
                     torch.full_like(linear_bce_logits, -100),
                 ).clamp(-100, 100)
@@ -297,16 +297,13 @@ def spike_similar_loss(
         loss = F.l1_loss(sim_p, sim)
     elif loss_type == "bce":
         if kernel_type == "linear":
-            # Delegate invalid inputs to BCELoss to preserve its range errors.
-            if (
-                not torch.isfinite(sim_p).all()
-                or torch.any(sim_p < 0)
-                or not torch.isfinite(sim).all()
-                or torch.any(sim < 0)
-            ):
-                loss = F.binary_cross_entropy(sim_p, sim)
-            else:
-                loss = F.binary_cross_entropy_with_logits(linear_bce_logits, sim)
+            # Keep BCELoss's range validation and endpoint gradient for zero-dot pairs.
+            probability_loss = F.binary_cross_entropy(sim_p, sim, reduction="none")
+            logits_loss = F.binary_cross_entropy_with_logits(
+                linear_bce_logits, sim, reduction="none"
+            )
+            zero_dot = (linear_dot == 0) & (norm_product > 0)
+            loss = torch.where(zero_dot, probability_loss, logits_loss).mean()
         else:
             loss = F.binary_cross_entropy(sim_p, sim)
     else:

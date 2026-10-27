@@ -85,6 +85,19 @@ def test_linear_similarity_bce_preserves_gradient_near_one():
     )
 
 
+def test_linear_similarity_bce_preserves_zero_dot_positive_gradient():
+    """A positive target with orthogonal spikes must retain an overlap gradient."""
+    spikes = torch.eye(2, requires_grad=True)
+    labels = torch.ones((2, 1))
+
+    loss = spike_similar_loss(spikes, labels, "linear", "bce")
+    loss.backward()
+
+    assert torch.isfinite(loss)
+    assert torch.isfinite(spikes.grad).all()
+    assert torch.any(spikes.grad != 0)
+
+
 def test_autocast_availability_is_checked_before_enabled_state(monkeypatch):
     """Unsupported devices must not be queried for their autocast state."""
     from spikingjelly.activation_based.functional.loss import (
@@ -132,12 +145,13 @@ def test_linear_similarity_keeps_meta_shape_propagation():
 
 
 @pytest.mark.parametrize("autocast_enabled", [False, True])
-def test_linear_similarity_remains_fullgraph_traceable(autocast_enabled):
+@pytest.mark.parametrize("loss_type", ["mse", "bce"])
+def test_linear_similarity_remains_fullgraph_traceable(autocast_enabled, loss_type):
     """Precision management must remain capturable without a graph break."""
     compiled = torch.compile(spike_similar_loss, backend="eager", fullgraph=True)
     spikes = torch.tensor([[0.2, 0.7, 0.4], [0.9, 0.3, 0.1]], requires_grad=True)
     with torch.autocast("cpu", dtype=torch.bfloat16, enabled=autocast_enabled):
-        loss = compiled(spikes, torch.eye(2))
+        loss = compiled(spikes, torch.eye(2), loss_type=loss_type)
     loss.backward()
     assert loss.isfinite()
     assert spikes.grad.isfinite().all()
