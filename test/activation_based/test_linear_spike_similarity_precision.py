@@ -62,7 +62,45 @@ def test_linear_similarity_matches_scalar_reference(dtype, loss_type):
     torch.testing.assert_close(loss, loss.new_tensor(expected))
 
 
-@pytest.mark.parametrize("loss_type", ["mse", "l1"])
+def test_linear_similarity_bce_preserves_gradient_near_one():
+    """BCE must retain the small cosine gap hidden by float32 rounding."""
+    spikes = torch.ones((2, 7), dtype=torch.float32, requires_grad=True)
+    labels = torch.eye(2)
+    loss = spike_similar_loss(spikes, labels, "linear", "bce")
+    loss.backward()
+
+    reference_spikes = spikes.detach().double().requires_grad_()
+    reference_lengths = reference_spikes.norm(p=2, dim=1, keepdim=True)
+    reference_similarity = (reference_spikes @ reference_spikes.t()) / (
+        reference_lengths @ reference_lengths.t() + 1e-8
+    )
+    reference_loss = torch.nn.functional.binary_cross_entropy(
+        reference_similarity, labels.double()
+    )
+    reference_loss.backward()
+
+    torch.testing.assert_close(loss.double(), reference_loss, rtol=1e-6, atol=1e-6)
+    torch.testing.assert_close(
+        spikes.grad.double(), reference_spikes.grad, rtol=1e-6, atol=1e-7
+    )
+
+
+def test_autocast_availability_is_checked_before_enabled_state(monkeypatch):
+    """Unsupported devices must not be queried for their autocast state."""
+    from spikingjelly.activation_based.functional.loss import (
+        _is_autocast_enabled,
+    )
+
+    monkeypatch.setattr(torch.amp, "is_autocast_available", lambda _: False)
+    monkeypatch.setattr(
+        torch,
+        "is_autocast_enabled",
+        lambda *_: pytest.fail("unsupported device should not query autocast state"),
+    )
+    assert not _is_autocast_enabled("privateuseone")
+
+
+@pytest.mark.parametrize("loss_type", ["mse", "l1", "bce"])
 def test_linear_similarity_preserves_cpu_autocast_loss_dtype(loss_type):
     spikes = torch.tensor([[0.2, 0.7, 0.4], [0.9, 0.3, 0.1]])
     expected = reference_loss(spikes.double().tolist(), loss_type)

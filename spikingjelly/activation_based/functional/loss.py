@@ -109,6 +109,15 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
         raise NotImplementedError
 
 
+def _is_autocast_enabled(device_type: str) -> bool:
+    """Return whether autocast is active without querying unsupported devices."""
+    if torch.compiler.is_compiling():
+        return torch.is_autocast_enabled(device_type)
+    if torch.amp.is_autocast_available(device_type):
+        return torch.is_autocast_enabled(device_type)
+    return False
+
+
 def spike_similar_loss(
     spikes: Tensor,
     labels: Tensor,
@@ -156,8 +165,8 @@ def spike_similar_loss(
         脉冲向量稀疏、离散，最好先使用高斯核进行平滑，然后再计算相似度。
 
     线性核的余弦值截断到 ``[-1, 1]``，避免舍入误差越界。
-    相似度计算禁用 autocast；FP16/BF16 输入使用 FP32 中间结果。
-    autocast 外的损失标量保持输入 dtype；autocast 内遵循 PyTorch 的损失精度策略。
+    线性相似度及标签目标的计算禁用 autocast；FP16/BF16 输入使用 FP32 中间结果。
+    BCE 使用稳定的 logits 公式，使舍入为1的余弦值仍保留有限损失和梯度。
 
     :param spikes: shape=[N, M, T]，N个数据生成的脉冲
     :type spikes: torch.Tensor
@@ -214,9 +223,9 @@ def spike_similar_loss(
         Since spike vectors are usually discrete and sparse, it would be better to apply Gaussian filter first to smooth the vectors before calculating similarities.
 
     Linear cosines are clipped to ``[-1, 1]`` to remove rounding overshoot.
-    Linear similarities are computed with autocast disabled and FP32 intermediates for
-    FP16/BF16 inputs. Outside autocast the loss scalar keeps the input dtype;
-    inside autocast, PyTorch's loss precision policies still apply.
+    Linear similarities and label targets are computed with autocast disabled;
+    FP16/BF16 inputs use FP32 intermediates. BCE uses stable logits so a cosine rounded
+    to one retains a finite loss and gradient.
 
     :param spikes: shape=[N, M, T], output spikes corresponding to a batch of N inputs
     :type spikes: torch.Tensor
@@ -241,11 +250,8 @@ def spike_similar_loss(
     """
     spikes = spikes.flatten(start_dim=1)
 
-    # Meta tensors have no autocast dispatch key.
-    linear_autocast = (
-        kernel_type == "linear"
-        and spikes.device.type != "meta"
-        and torch.is_autocast_enabled(spikes.device.type)
+    linear_autocast = kernel_type == "linear" and _is_autocast_enabled(
+        spikes.device.type
     )
     if kernel_type == "linear":
         context = (
@@ -259,26 +265,50 @@ def spike_similar_loss(
                 if spikes.dtype in (torch.float16, torch.bfloat16)
                 else spikes
             )
-            sim_p = kernel_dot_product(
+            linear_dot = kernel_dot_product(
                 working_spikes, working_spikes, kernel_type, *args
             )
             spikes_len = working_spikes.norm(p=2, dim=1, keepdim=True)
-            sim_p = (sim_p / (spikes_len.mm(spikes_len.t()) + 1e-8)).clamp(-1, 1)
+            norm_product = spikes_len.mm(spikes_len.t())
+            denominator = norm_product + 1e-8
+            sim_p = (linear_dot / denominator).clamp(-1, 1)
+            labels = labels.to(dtype=sim_p.dtype)
+            sim = labels.mm(labels.t()).clamp_max(1)
+            if loss_type == "bce":
+                # logit(p) = log(dot) - log(norm_product - dot + eps).
+                # This avoids BCELoss's zero gradient when float32 rounds p to one.
+                bce_dot = linear_dot.to(dtype=sim_p.dtype)
+                complement = (norm_product - bce_dot).clamp_min(0) + 1e-8
+                tiny = torch.finfo(sim_p.dtype).tiny
+                linear_bce_logits = bce_dot.clamp_min(tiny).log() - complement.log()
+                linear_bce_logits = torch.where(
+                    linear_dot > 0,
+                    linear_bce_logits,
+                    torch.full_like(linear_bce_logits, -100),
+                ).clamp(-100, 100)
     else:
         sim_p = kernel_dot_product(spikes, spikes, kernel_type, *args)
-
-    labels = labels.to(dtype=sim_p.dtype)
-    sim = labels.mm(labels.t()).clamp_max(
-        1
-    )  # labels.mm(labels.t())[i][j]位置的元素表现输入数据i和数据数据j有多少个相同的标签
-    # 将大于1的元素设置为1，因为共享至少同一个标签，就认为他们相似
+        labels = labels.to(dtype=sim_p.dtype)
+        sim = labels.mm(labels.t()).clamp_max(1)
 
     if loss_type == "mse":
         loss = F.mse_loss(sim_p, sim)
     elif loss_type == "l1":
         loss = F.l1_loss(sim_p, sim)
     elif loss_type == "bce":
-        loss = F.binary_cross_entropy(sim_p, sim)
+        if kernel_type == "linear":
+            # Delegate invalid inputs to BCELoss to preserve its range errors.
+            if (
+                not torch.isfinite(sim_p).all()
+                or torch.any(sim_p < 0)
+                or not torch.isfinite(sim).all()
+                or torch.any(sim < 0)
+            ):
+                loss = F.binary_cross_entropy(sim_p, sim)
+            else:
+                loss = F.binary_cross_entropy_with_logits(linear_bce_logits, sim)
+        else:
+            loss = F.binary_cross_entropy(sim_p, sim)
     else:
         raise NotImplementedError
 
