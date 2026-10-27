@@ -86,6 +86,32 @@ def test_linear_similarity_bce_preserves_gradient_near_one():
     )
 
 
+def test_linear_similarity_bce_matches_reference_for_small_positive_dot():
+    """Small positive dot products must not be shifted by a logit epsilon."""
+    spikes = torch.tensor(
+        [[1e-5, 0.0], [0.0, 1e-5]], dtype=torch.float32, requires_grad=True
+    )
+    labels = torch.eye(2)
+    loss = spike_similar_loss(spikes, labels, "linear", "bce")
+    loss.backward()
+
+    reference_spikes = spikes.detach().double().requires_grad_()
+    reference_lengths = reference_spikes.norm(p=2, dim=1, keepdim=True)
+    reference_similarity = (reference_spikes @ reference_spikes.t()) / (
+        reference_lengths @ reference_lengths.t() + 1e-8
+    )
+    reference_loss = torch.nn.functional.binary_cross_entropy(
+        reference_similarity, labels.double()
+    )
+    reference_loss.backward()
+
+    assert loss > 1.0
+    torch.testing.assert_close(loss.double(), reference_loss, rtol=1e-6, atol=1e-6)
+    torch.testing.assert_close(
+        spikes.grad.double(), reference_spikes.grad, rtol=1e-5, atol=1e-5
+    )
+
+
 @pytest.mark.parametrize(
     "values",
     [((1.0, 0.0), (0.0, 1.0)), ((0.0, 0.0), (1.0, 0.0))],

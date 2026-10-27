@@ -279,7 +279,11 @@ def spike_similar_loss(
                 # This avoids BCELoss's zero gradient when float32 rounds p to one.
                 bce_dot = linear_dot.to(dtype=sim_p.dtype)
                 complement = (norm_product - bce_dot).clamp_min(0) + 1e-8
-                numerator = bce_dot.clamp_min(0) + 1e-8
+                # Zero and negative dots use the probability BCE path below.
+                # Keep its logits finite without perturbing small positive dots.
+                numerator = torch.where(
+                    bce_dot > 0, bce_dot, torch.ones_like(bce_dot)
+                )
                 linear_bce_logits = numerator.log() - complement.log()
                 linear_bce_logits = torch.where(
                     norm_product > 0,
