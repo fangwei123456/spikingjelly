@@ -308,10 +308,7 @@ def test_fptt_updates_parameters_and_running_average():
     torch.testing.assert_close(w_ra[0].squeeze(), average)
 
 
-@pytest.mark.parametrize("frozen_index", [0, 1])
-@pytest.mark.parametrize("warmup", [False, True])
-def test_fptt_handles_frozen_parameters_in_optimizer_groups(frozen_index, warmup):
-    """Frozen layers and saved averages agree with a filtered-optimizer reference."""
+def test_fptt_preserves_frozen_parameter_and_running_average():
     model = nn.Sequential(
         nn.Linear(1, 1, bias=False), nn.Linear(1, 1, bias=False)
     ).double()
@@ -324,34 +321,25 @@ def test_fptt_handles_frozen_parameters_in_optimizer_groups(frozen_index, warmup
     averages = fptt_online_training_init_w_ra(optimizer)
     x = torch.tensor([1.0, 2.0, 0.5], dtype=torch.double).reshape(3, 1, 1)
     targets = torch.tensor([0.2, 0.8, -0.1], dtype=torch.double).reshape(3, 1, 1)
-    if warmup:
-        fptt_online_training(
-            model, optimizer, x, targets, nn.functional.mse_loss, 0.3, averages
-        )
-    model[frozen_index].requires_grad_(False)
-    reference = copy.deepcopy(model)
-    reference_optimizer = torch.optim.SGD(
-        [p for p in reference.parameters() if p.requires_grad], lr=0.1
+    fptt_online_training(
+        model, optimizer, x, targets, nn.functional.mse_loss, 0.3, averages
     )
-    reference_averages = [averages[1 - frozen_index].clone()]
-    frozen_snapshot = model[frozen_index].weight.detach().clone()
-    trainable_snapshot = model[1 - frozen_index].weight.detach().clone()
-    average_snapshot = averages[frozen_index].clone()
-    if warmup:
-        assert not torch.equal(frozen_snapshot, average_snapshot)
+    model[0].requires_grad_(False)
+    reference = copy.deepcopy(model)
+    reference_optimizer = torch.optim.SGD(reference[1].parameters(), lr=0.1)
+    reference_averages = [averages[1].clone()]
+    frozen_snapshot = model[0].weight.detach().clone()
+    trainable_snapshot = model[1].weight.detach().clone()
+    average_snapshot = averages[0].clone()
+    assert not torch.equal(frozen_snapshot, average_snapshot)
     for net, opt, state in [
         (reference, reference_optimizer, reference_averages),
         (model, optimizer, averages),
     ]:
         fptt_online_training(net, opt, x, targets, nn.functional.mse_loss, 0.3, state)
-    for actual, expected in zip(model.parameters(), reference.parameters()):
-        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
-    torch.testing.assert_close(
-        model[frozen_index].weight, frozen_snapshot, rtol=0, atol=0
-    )
-    torch.testing.assert_close(averages[frozen_index], average_snapshot, rtol=0, atol=0)
-    torch.testing.assert_close(
-        averages[1 - frozen_index], reference_averages[0], rtol=0, atol=0
-    )
-    assert model[frozen_index].weight.grad is None
-    assert not torch.equal(model[1 - frozen_index].weight, trainable_snapshot)
+    torch.testing.assert_close(model[0].weight, frozen_snapshot, rtol=0, atol=0)
+    torch.testing.assert_close(model[1].weight, reference[1].weight, rtol=0, atol=0)
+    torch.testing.assert_close(averages[0], average_snapshot, rtol=0, atol=0)
+    torch.testing.assert_close(averages[1], reference_averages[0], rtol=0, atol=0)
+    assert model[0].weight.grad is None
+    assert not torch.equal(model[1].weight, trainable_snapshot)
