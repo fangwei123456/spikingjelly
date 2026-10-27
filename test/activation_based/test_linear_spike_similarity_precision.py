@@ -55,6 +55,7 @@ def reference_loss(values, loss_type):
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 @pytest.mark.parametrize("loss_type", ["mse", "l1", "bce"])
 def test_linear_similarity_matches_scalar_reference(dtype, loss_type):
+    """Tensor losses must match an independent scalar high-precision reference."""
     values = [[0.2, 0.7, 0.4], [0.9, 0.3, 0.1], [0.1, 0.2, 0.9]]
     spikes = torch.tensor(values, dtype=dtype, requires_grad=True)
     expected = reference_loss(spikes.detach().double().tolist(), loss_type)
@@ -115,6 +116,7 @@ def test_autocast_availability_is_checked_before_enabled_state(monkeypatch):
 
 @pytest.mark.parametrize("loss_type", ["mse", "l1", "bce"])
 def test_linear_similarity_preserves_cpu_autocast_loss_dtype(loss_type):
+    """Linear losses use the documented dtype policy under CPU autocast."""
     spikes = torch.tensor([[0.2, 0.7, 0.4], [0.9, 0.3, 0.1]])
     expected = reference_loss(spikes.double().tolist(), loss_type)
     with torch.autocast("cpu", dtype=torch.bfloat16):
@@ -125,6 +127,7 @@ def test_linear_similarity_preserves_cpu_autocast_loss_dtype(loss_type):
 
 @pytest.mark.parametrize("loss_type", ["mse", "l1", "bce"])
 def test_linear_similarity_does_not_reinterpret_signed_cosines(loss_type):
+    """Negative cosine inputs retain the existing BCE range-error behavior."""
     spikes = torch.tensor([[1.0, 0.0], [-1.0, 0.0]])
     if loss_type == "bce":
         with pytest.raises(RuntimeError, match="between 0 and 1"):
