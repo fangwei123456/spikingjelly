@@ -131,11 +131,13 @@ def test_linear_similarity_keeps_meta_shape_propagation():
     assert loss.dtype == torch.float32
 
 
-def test_linear_similarity_remains_fullgraph_traceable():
+@pytest.mark.parametrize("autocast_enabled", [False, True])
+def test_linear_similarity_remains_fullgraph_traceable(autocast_enabled):
     """Precision management must remain capturable without a graph break."""
     compiled = torch.compile(spike_similar_loss, backend="eager", fullgraph=True)
     spikes = torch.tensor([[0.2, 0.7, 0.4], [0.9, 0.3, 0.1]], requires_grad=True)
-    loss = compiled(spikes, torch.eye(2))
+    with torch.autocast("cpu", dtype=torch.bfloat16, enabled=autocast_enabled):
+        loss = compiled(spikes, torch.eye(2))
     loss.backward()
     assert loss.isfinite()
     assert spikes.grad.isfinite().all()
