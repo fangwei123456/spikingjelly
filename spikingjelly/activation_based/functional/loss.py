@@ -281,9 +281,7 @@ def spike_similar_loss(
                 complement = (norm_product - bce_dot).clamp_min(0) + 1e-8
                 # Zero and negative dots use the probability BCE path below.
                 # Keep its logits finite without perturbing small positive dots.
-                numerator = torch.where(
-                    bce_dot > 0, bce_dot, torch.ones_like(bce_dot)
-                )
+                numerator = torch.where(bce_dot > 0, bce_dot, torch.ones_like(bce_dot))
                 linear_bce_logits = numerator.log() - complement.log()
                 linear_bce_logits = torch.where(
                     norm_product > 0,
