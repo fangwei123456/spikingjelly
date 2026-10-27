@@ -129,6 +129,22 @@ def test_linear_similarity_bce_preserves_zero_dot_positive_gradient(values):
     assert torch.any(spikes.grad != 0)
 
 
+def test_linear_similarity_bce_bounds_fp16_silent_pair_gradient():
+    """Silent same-label pairs keep a finite BCE gradient in half precision."""
+    spikes = torch.tensor(
+        [[0.0, 0.0], [1.0, 0.0]], dtype=torch.float16, requires_grad=True
+    )
+    labels = torch.ones((2, 2), dtype=torch.float16)
+
+    loss = spike_similar_loss(spikes, labels, "linear", "bce")
+    loss.backward()
+
+    torch.testing.assert_close(loss, loss.new_tensor(75.0))
+    assert torch.isfinite(spikes.grad).all()
+    assert spikes.grad[0, 0] < 0
+    assert spikes.grad.abs().max() < torch.finfo(torch.float16).max
+
+
 def test_autocast_availability_is_checked_before_enabled_state(monkeypatch):
     """Unsupported devices must not be queried for their autocast state."""
     from spikingjelly.activation_based.functional.loss import (

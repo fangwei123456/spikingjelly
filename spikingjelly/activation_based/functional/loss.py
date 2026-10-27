@@ -288,6 +288,14 @@ def spike_similar_loss(
                     linear_bce_logits,
                     torch.full_like(linear_bce_logits, -100),
                 ).clamp(-100, 100)
+                zero_dot = linear_dot == 0
+                # BCE has an infinite exact derivative at p=0. Keep its finite
+                # endpoint loss, but use this bounded local logit slope so silent
+                # and orthogonal positive pairs retain a representable gradient.
+                zero_dot_logits = -100 + linear_dot / norm_product.clamp_min(1)
+                linear_bce_logits = torch.where(
+                    zero_dot, zero_dot_logits, linear_bce_logits
+                )
     else:
         sim_p = kernel_dot_product(spikes, spikes, kernel_type, *args)
         labels = labels.to(dtype=sim_p.dtype)
@@ -305,7 +313,12 @@ def spike_similar_loss(
                 linear_bce_logits, sim, reduction="none"
             )
             zero_dot = linear_dot == 0
-            loss = torch.where(zero_dot, probability_loss, logits_loss).mean()
+            # Preserve BCE's clamped endpoint value and range validation while
+            # taking the bounded gradient from the finite logit extension.
+            zero_dot_loss = probability_loss.detach() + (
+                logits_loss - logits_loss.detach()
+            )
+            loss = torch.where(zero_dot, zero_dot_loss, logits_loss).mean()
         else:
             loss = F.binary_cross_entropy(sim_p, sim)
     else:
