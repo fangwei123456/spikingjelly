@@ -1587,3 +1587,60 @@ def test_clif_scalar_division_matches_torch_at_threshold(tau, monkeypatch):
     assert ga[2] is gr[2] is None
     for a, r in zip(ga[:2], gr[:2]):
         torch.testing.assert_close(a, r, rtol=1e-6, atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "dtype", [torch.float16, torch.bfloat16, torch.float32, torch.float64]
+)
+def test_sigmoid_surrogate_preserves_symmetric_tail_gradients(dtype):
+    """Representable surrogate derivatives survive positive sigmoid saturation."""
+    x = torch.tensor(
+        [-5.0, -3.0, -2.0, 0.0, 2.0, 3.0, 5.0], dtype=dtype, requires_grad=True
+    )
+    upstream = torch.tensor([1.0, -2.0, 3.0, 1.0, 3.0, -2.0, 1.0], dtype=dtype)
+    surrogate.Sigmoid()(x).backward(upstream)
+    z = 4 * x.detach().double()
+    exp_z = torch.exp(-z)
+    expected = (upstream.double() * 4 * exp_z / (1 + exp_z).square()).to(dtype)
+    torch.testing.assert_close(
+        x.grad,
+        expected,
+        rtol=0.01 if dtype == torch.bfloat16 else 0.002,
+        atol=torch.finfo(dtype).tiny * 0.01,
+    )
+    torch.testing.assert_close(x.grad, x.grad.flip(0), rtol=1e-6, atol=0)
+
+
+@pytest.mark.parametrize("dtype, weight", [(torch.bfloat16, 3.0), (torch.float16, 4.0)])
+def test_sigmoid_surrogate_autocast_ifnode_weight_gradient(dtype, weight):
+    """Autocast IF training propagates the nonzero gradient to FP32 weights."""
+    net = torch.nn.Sequential(
+        torch.nn.Linear(1, 1, bias=False),
+        neuron.IFNode(surrogate_function=surrogate.Sigmoid(), detach_reset=True),
+    )
+    with torch.no_grad():
+        net[0].weight.fill_(weight)
+    with torch.autocast("cpu", dtype=dtype):
+        spike = net(torch.ones(1, 1))
+        loss = spike.float().square().sum()
+    loss.backward()
+    torch.testing.assert_close(spike, torch.ones_like(spike), rtol=0, atol=0)
+    z = torch.tensor(4 * (weight - 1), dtype=torch.float64)
+    expected = (8 * torch.exp(-z) / (1 + torch.exp(-z)).square()).float().reshape(1, 1)
+    torch.testing.assert_close(net[0].weight.grad, expected, rtol=0.01, atol=0)
+
+
+def test_sigmoid_surrogate_tail_double_backward():
+    """Differentiating the surrogate gradient still follows the sigmoid formula."""
+    x = torch.tensor(
+        [-3.0, -0.5, 0.0, 0.5, 3.0], dtype=torch.float64, requires_grad=True
+    )
+    actual = surrogate.Sigmoid()(x)
+    first = torch.autograd.grad(actual.sum(), x, create_graph=True)[0]
+    second = torch.autograd.grad(first.sum(), x, create_graph=True)[0]
+    third = torch.autograd.grad(second.sum(), x)[0]
+    s = (x.detach() * 4).sigmoid()
+    expected = 16 * s * (1 - s) * (1 - 2 * s)
+    torch.testing.assert_close(second, expected, rtol=1e-10, atol=1e-14)
+    expected_third = 64 * s * (1 - s) * (1 - 6 * s + 6 * s.square())
+    torch.testing.assert_close(third, expected_third, rtol=1e-10, atol=1e-14)
