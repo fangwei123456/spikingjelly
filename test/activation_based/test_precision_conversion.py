@@ -368,6 +368,38 @@ def test_capability_report_preserves_unsupported_device_type():
         validate_capability(report)
 
 
+def test_capability_report_asks_a_non_cuda_accelerator_for_its_own_bf16_support(
+    monkeypatch,
+):
+    """An NPU publishes is_bf16_supported like CUDA; the report must read it.
+
+    Hardcoding False for every device that is not CUDA or MPS reports bf16 as
+    unsupported on hardware that supports it, and validate_capability then
+    refuses a mode the accelerator can run.
+    """
+    npu_ns = types.SimpleNamespace(
+        is_available=lambda: True, is_bf16_supported=lambda: True
+    )
+    monkeypatch.setattr(torch, "npu", npu_ns, raising=False)
+    report = build_capability_report(torch.nn.Identity(), "npu", "bf16")
+
+    assert report["device_type"] == "npu"
+    assert report["bf16_supported"] is True
+    validate_capability(report)
+
+
+def test_capability_report_takes_no_bf16_a_non_cuda_accelerator_denies(monkeypatch):
+    npu_ns = types.SimpleNamespace(
+        is_available=lambda: True, is_bf16_supported=lambda: False
+    )
+    monkeypatch.setattr(torch, "npu", npu_ns, raising=False)
+    report = build_capability_report(torch.nn.Identity(), "npu", "bf16")
+
+    assert report["bf16_supported"] is False
+    with pytest.raises(RuntimeError, match="requested on npu"):
+        validate_capability(report)
+
+
 def test_convert_model_for_precision_preserves_shared_linear_module_identity():
     shared = torch.nn.Linear(8, 8)
     model = torch.nn.ModuleList([shared, shared])

@@ -87,25 +87,46 @@ def _transformer_engine_fp8_status() -> tuple[
     )
 
 
-def _detect_cpu_bf16() -> bool:
-    """Check whether the CPU backend actually supports bfloat16 tensors."""
+def _probe_bf16(backend, device) -> bool:
+    """Ask ``backend`` whether it supports bfloat16, or build one bf16 tensor.
+
+    An accelerator namespace (``torch.npu``, ``torch.xpu``, ...) publishes the
+    predicate the way ``torch.cuda`` does; one that does not is asked the way
+    every torch build can answer -- by making a bfloat16 tensor on the device.
+    ``backend`` is None for the CPU, which has no namespace to ask.
+    """
+    fn = getattr(backend, "is_bf16_supported", None)
+    if fn is not None:
+        return bool(fn())
     try:
-        _ = torch.tensor(1.0, dtype=torch.bfloat16)
+        _ = torch.tensor(1.0, dtype=torch.bfloat16, device=device)
         return True
     except Exception:
         return False
+
+
+def _detect_cpu_bf16() -> bool:
+    """Check whether the CPU backend actually supports bfloat16 tensors."""
+    return _probe_bf16(None, "cpu")
 
 
 def _detect_mps_bf16(mps_backend) -> bool:
     """Check whether the MPS backend reports bfloat16 support."""
-    fn = getattr(mps_backend, "is_bf16_supported", None)
-    if fn is not None:
-        return bool(fn())
-    try:
-        _ = torch.tensor(1.0, dtype=torch.bfloat16, device="mps")
-        return True
-    except Exception:
+    return _probe_bf16(mps_backend, "mps")
+
+
+def _detect_accelerator_bf16(device: torch.device) -> bool:
+    """Check whether the accelerator behind ``device`` supports bfloat16.
+
+    Without this, every device that is not CUDA or MPS reports bf16 as
+    unsupported, and ``validate_capability`` then refuses a mode the
+    accelerator can run. A device this torch build cannot reach answers False,
+    so an absent backend stays unsupported instead of raising here.
+    """
+    backend = getattr(torch, device.type, None)
+    if backend is None or not backend.is_available():
         return False
+    return _probe_bf16(backend, device)
 
 
 def _resolve_device_type(device: torch.device | str) -> str:
@@ -178,7 +199,7 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
     elif device_type == "cpu":
         bf16_supported = cpu_bf16
     else:
-        bf16_supported = False
+        bf16_supported = _detect_accelerator_bf16(device)
 
     can_convert = True
     can_execute = True
