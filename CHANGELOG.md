@@ -28,6 +28,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 #### spikingjelly.activation_based.functional
 
+- `kernel_dot_product` evaluates low-precision Gaussian distances in FP32, preserving spike differences and avoiding nonfinite similarities.
 - TET cross-entropy accepts class probability targets, including MixUp and spatial targets.
 - `kernel_dot_product` keeps Gaussian squared distances nonnegative, preventing
   rounded self-similarities above one and resulting BCE failures.

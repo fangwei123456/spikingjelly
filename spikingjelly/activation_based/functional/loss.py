@@ -1,3 +1,5 @@
+from contextlib import nullcontext
+
 import torch
 import torch.nn.functional as F
 from torch import Tensor
@@ -9,7 +11,15 @@ __all__ = [
 ]
 
 
-def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
+@torch.compiler.assume_constant_result
+def _kernel_autocast_available(device_type: str) -> bool:
+    # Device support is static metadata for each compiled graph.
+    return torch.amp.is_autocast_available(device_type)
+
+
+def kernel_dot_product(
+    x: Tensor, y: Tensor, kernel: str = "linear", *args: int | float | Tensor
+) -> Tensor:
     r"""
     **API Language** - :ref:`中文 <kernel_dot_product-cn>` | :ref:`English <kernel_dot_product-en>`
 
@@ -30,6 +40,9 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
     - ``gaussian`` ，高斯内积， :math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \mathrm{exp}(- \frac{||\boldsymbol{x_{i}} - \boldsymbol{y_{j}}||^{2}}{2\sigma^{2}})` ，其中 :math:`\sigma = args[0]`。
 
     高斯核的平方距离会截断为非负值，避免浮点舍入使核值超过1。
+    FP16/BF16 输入以及 autocast 中可转换的浮点输入使用 FP32 计算距离，
+    避免丢失单个脉冲差异或产生非有限相似度。输出保留原有输入及 autocast 的
+    dtype 提升规则；未启用 autocast 时，FP32/FP64 计算方式不变。
 
     :param x: shape=[N, M]的tensor，看作是N个M维向量
     :type x: torch.Tensor
@@ -41,6 +54,7 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
     :type kernel: str
 
     :param args: 用于计算内积的额外的参数
+    :type args: int, float or torch.Tensor
 
     :return: ret, shape=[N, N]的tensor， ``ret[i][j]`` 表示 ``x[i]`` 和 ``y[j]`` 的内积
     :rtype: torch.Tensor
@@ -64,6 +78,10 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
     - ``gaussian`` -- Gaussian kernel, :math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \mathrm{exp}(- \frac{||\boldsymbol{x_{i}} - \boldsymbol{y_{j}}||^{2}}{2\sigma^{2}})`, where :math:`\sigma = args[0]`.
 
     Gaussian squared distances are clamped to nonnegative values so rounding cannot make the kernel exceed one.
+    FP16/BF16 inputs and autocast-eligible floating inputs use FP32 distance
+    arithmetic, preserving single-spike differences and avoiding nonfinite
+    similarities. Outputs retain the existing input/autocast dtype promotion;
+    FP32/FP64 arithmetic without autocast is unchanged.
 
     :param x: Tensor of shape=[N, M]
     :type x: torch.Tensor
@@ -75,6 +93,7 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
     :type kernel: str
 
     :param args: Extra parameters for inner product
+    :type args: int, float or torch.Tensor
 
     :return: ret, Tensor of shape=[N, N], ``ret[i][j]`` is inner product of ``x[i]`` and ``y[j]``.
     :rtype: torch.Tensor
@@ -96,13 +115,38 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
                 f"sigma must be positive for the Gaussian kernel, but got {sigma}"
             )
         N = x.shape[0]
-        x2 = x.square().sum(dim=1)  # shape=[N]
-        y2 = y.square().sum(dim=1)  # shape=[N]
-        xy = x.mm(y.t())  # shape=[N, N]
-        d_xy = x2.unsqueeze(1).repeat(1, N) + y2.unsqueeze(0).repeat(N, 1) - 2 * xy
-        # d_xy[i][j]的元素是x[i]的平方和，加上y[j]的平方和，减去2倍的sum_{k} x[i][k]y[j][k]，因此
-        # d_xy[i][j]就是x[i]和y[j]相减，平方，求和
-        return torch.exp(-d_xy.clamp_min(0) / (2 * sigma * sigma))
+        x_dtype, y_dtype = x.dtype, y.dtype
+        device_type = x.device.type
+        low_precision = (torch.float16, torch.bfloat16)
+        castable = (*low_precision, torch.float32)
+        autocast_inputs = (
+            x_dtype in castable
+            and y_dtype in castable
+            and _kernel_autocast_available(device_type)
+            and torch.is_autocast_enabled(device_type)
+        )
+        widen = (x_dtype == y_dtype and x_dtype in low_precision) or autocast_inputs
+        output_dtype = None
+        if widen:
+            output_dtype = torch.promote_types(x_dtype, y_dtype)
+            if autocast_inputs:
+                output_dtype = torch.promote_types(
+                    output_dtype, torch.get_autocast_dtype(device_type)
+                )
+            x, y = x.float(), y.float()
+        context = (
+            torch.autocast(device_type, enabled=False)
+            if autocast_inputs
+            else nullcontext()
+        )
+        with context:
+            x2 = x.square().sum(dim=1)  # shape=[N]
+            y2 = y.square().sum(dim=1)  # shape=[N]
+            xy = x.mm(y.t())  # shape=[N, N]
+            d_xy = x2.unsqueeze(1).repeat(1, N) + y2.unsqueeze(0).repeat(N, 1) - 2 * xy
+            # d_xy[i][j] is the squared Euclidean distance between x[i] and y[j].
+            result = torch.exp(-d_xy.clamp_min(0) / (2 * sigma * sigma))
+        return result if output_dtype is None else result.to(output_dtype)
     else:
         raise NotImplementedError
 
