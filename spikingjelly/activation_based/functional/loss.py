@@ -40,10 +40,11 @@ def kernel_dot_product(
     - ``gaussian`` ，高斯内积， :math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \mathrm{exp}(- \frac{||\boldsymbol{x_{i}} - \boldsymbol{y_{j}}||^{2}}{2\sigma^{2}})` ，其中 :math:`\sigma = args[0]`。
 
     高斯核的平方距离会截断为非负值，避免浮点舍入使核值超过1。
-    FP16/BF16 输入以及 autocast 中可转换的浮点输入使用 FP32 计算距离，
-    避免丢失单个脉冲差异或产生非有限相似度。启用 autocast 时，核结果保留
-    FP32 精度；否则，FP16/BF16 结果转换回输入 dtype。未启用 autocast 时，
-    FP32/FP64 计算方式不变。
+    未启用 autocast 时，dtype 相同的 FP16/BF16 输入使用 FP32 计算距离；
+    其他输入须满足原生矩阵乘法的 dtype 兼容要求。启用 autocast 时，
+    可转换的浮点输入对使用 FP32 计算距离。这样可避免丢失单个脉冲差异或
+    产生非有限相似度。autocast 下的核结果保留 FP32 精度；否则，FP16/BF16
+    结果转换回输入 dtype。未启用 autocast 时，FP32/FP64 计算方式不变。
 
     :param x: shape=[N, M]的tensor，看作是N个M维向量
     :type x: torch.Tensor
@@ -79,8 +80,10 @@ def kernel_dot_product(
     - ``gaussian`` -- Gaussian kernel, :math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \mathrm{exp}(- \frac{||\boldsymbol{x_{i}} - \boldsymbol{y_{j}}||^{2}}{2\sigma^{2}})`, where :math:`\sigma = args[0]`.
 
     Gaussian squared distances are clamped to nonnegative values so rounding cannot make the kernel exceed one.
-    FP16/BF16 inputs and autocast-eligible floating inputs use FP32 distance
-    arithmetic, preserving single-spike differences and avoiding nonfinite
+    Without autocast, matching FP16/BF16 inputs use FP32 distance arithmetic;
+    other inputs must satisfy native matrix-multiplication dtype requirements.
+    With autocast enabled, eligible floating input pairs use FP32 distance
+    arithmetic. This preserves single-spike differences and avoids nonfinite
     similarities. Under autocast, the kernel remains in FP32; otherwise,
     FP16/BF16 results are cast back to the input dtype. FP32/FP64 arithmetic
     without autocast is unchanged.
