@@ -7,15 +7,27 @@ from spikingjelly.activation_based.functional import (
 
 
 @pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
     "dtype", [torch.float16, torch.bfloat16, torch.float32, torch.float64]
 )
 @pytest.mark.parametrize("features", [2048, 32768])
 @pytest.mark.parametrize("autocast_enabled", [False, True])
 def test_gaussian_binary_spike_distance_and_gradients(
-    dtype, features, autocast_enabled
+    dtype, features, autocast_enabled, device
 ):
-    x = torch.ones(2, features, dtype=dtype, requires_grad=True)
-    y = torch.ones(2, features, dtype=dtype)
+    x = torch.ones(2, features, dtype=dtype, device=device, requires_grad=True)
+    y = torch.ones(2, features, dtype=dtype, device=device)
     y[1, -1] = 0
     y.requires_grad_()
     reference_x = x.detach().double().requires_grad_()
@@ -26,8 +38,16 @@ def test_gaussian_binary_spike_distance_and_gradients(
     expected_gradients = torch.autograd.grad(
         reference.sum(), (reference_x, reference_y)
     )
-    with torch.autocast("cpu", dtype=torch.bfloat16, enabled=autocast_enabled):
+    with torch.autocast(
+        device,
+        dtype=torch.bfloat16 if device == "cpu" else torch.float16,
+        enabled=autocast_enabled,
+    ):
         actual = kernel_dot_product(x, y, "gaussian", 1.0)
+    expected_dtype = (
+        torch.float32 if autocast_enabled and dtype != torch.float64 else dtype
+    )
+    assert actual.dtype == expected_dtype
     torch.testing.assert_close(actual, reference.detach().to(actual.dtype))
     for gradient, expected in zip(
         torch.autograd.grad(actual.sum(), (x, y)), expected_gradients
@@ -36,19 +56,41 @@ def test_gaussian_binary_spike_distance_and_gradients(
 
 
 @pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
     "dtype", [torch.float16, torch.bfloat16, torch.float32, torch.float64]
 )
 @pytest.mark.parametrize("autocast_enabled", [False, True])
-def test_gaussian_precision_remains_fullgraph_traceable(dtype, autocast_enabled):
-    x = torch.ones(2, 2048, dtype=dtype)
+def test_gaussian_precision_remains_fullgraph_traceable(
+    dtype, autocast_enabled, device
+):
+    x = torch.ones(2, 2048, dtype=dtype, device=device)
     y = x.clone()
     y[1, -1] = 0
     compiled = torch.compile(kernel_dot_product, backend="eager", fullgraph=True)
-    with torch.autocast("cpu", dtype=torch.bfloat16, enabled=autocast_enabled):
+    with torch.autocast(
+        device,
+        dtype=torch.bfloat16 if device == "cpu" else torch.float16,
+        enabled=autocast_enabled,
+    ):
         actual = compiled(x, y, "gaussian", 1.0)
     expected = torch.exp(
         -((x.double()[:, None] - y.double()[None, :]) ** 2).sum(-1) / 2
     )
+    expected_dtype = (
+        torch.float32 if autocast_enabled and dtype != torch.float64 else dtype
+    )
+    assert actual.dtype == expected_dtype
     torch.testing.assert_close(actual, expected.to(actual.dtype))
 
 

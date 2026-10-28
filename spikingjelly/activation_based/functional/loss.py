@@ -41,8 +41,9 @@ def kernel_dot_product(
 
     高斯核的平方距离会截断为非负值，避免浮点舍入使核值超过1。
     FP16/BF16 输入以及 autocast 中可转换的浮点输入使用 FP32 计算距离，
-    避免丢失单个脉冲差异或产生非有限相似度。输出保留原有输入及 autocast 的
-    dtype 提升规则；未启用 autocast 时，FP32/FP64 计算方式不变。
+    避免丢失单个脉冲差异或产生非有限相似度。启用 autocast 时，核结果保留
+    FP32 精度；否则，FP16/BF16 结果转换回输入 dtype。未启用 autocast 时，
+    FP32/FP64 计算方式不变。
 
     :param x: shape=[N, M]的tensor，看作是N个M维向量
     :type x: torch.Tensor
@@ -80,8 +81,9 @@ def kernel_dot_product(
     Gaussian squared distances are clamped to nonnegative values so rounding cannot make the kernel exceed one.
     FP16/BF16 inputs and autocast-eligible floating inputs use FP32 distance
     arithmetic, preserving single-spike differences and avoiding nonfinite
-    similarities. Outputs retain the existing input/autocast dtype promotion;
-    FP32/FP64 arithmetic without autocast is unchanged.
+    similarities. Under autocast, the kernel remains in FP32; otherwise,
+    FP16/BF16 results are cast back to the input dtype. FP32/FP64 arithmetic
+    without autocast is unchanged.
 
     :param x: Tensor of shape=[N, M]
     :type x: torch.Tensor
@@ -128,11 +130,8 @@ def kernel_dot_product(
         widen = (x_dtype == y_dtype and x_dtype in low_precision) or autocast_inputs
         output_dtype = None
         if widen:
-            output_dtype = torch.promote_types(x_dtype, y_dtype)
-            if autocast_inputs:
-                output_dtype = torch.promote_types(
-                    output_dtype, torch.get_autocast_dtype(device_type)
-                )
+            if not autocast_inputs:
+                output_dtype = x_dtype
             x, y = x.float(), y.float()
         context = (
             torch.autocast(device_type, enabled=False)
