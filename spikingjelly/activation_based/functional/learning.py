@@ -50,6 +50,12 @@ def _identity(x: torch.Tensor) -> torch.Tensor:
     return x
 
 
+def _sum_spatial_contributions(x: torch.Tensor, dim: list[int]) -> torch.Tensor:
+    # Keep large potentiation/depression totals finite until they are combined.
+    dtype = torch.float32 if x.dtype in (torch.float16, torch.bfloat16) else None
+    return x.sum(dim=dim, dtype=dtype)
+
+
 def stdp_linear_step(
     in_spike: torch.Tensor,
     out_spike: torch.Tensor,
@@ -405,6 +411,9 @@ def stdp_conv2d_step(
     规则展开；函数因此只表达 dilation 为 1、groups 为 1 的卷积 STDP 方程，
     不读取 ``Conv2d`` module 或解释 padding mode。
 
+    FP16/BF16 贡献使用 FP32 求和，pre/post 更新合并后再转换为权重 dtype。
+    trace 更新及其 dtype 提升规则不变；最终更新超出权重 dtype 范围时仍可能溢出。
+
     :param in_spike: 已 padding 的输入脉冲，形状 ``[N, C_in, H_pad, W_pad]``
     :type in_spike: torch.Tensor
     :param out_spike: 输出脉冲，形状 ``[N, C_out, H_out, W_out]``
@@ -446,6 +455,11 @@ def stdp_conv2d_step(
     layer's padding. The function consequently expresses only the convolutional
     STDP equation for dilation 1 and one group; it neither reads a ``Conv2d``
     module nor interprets a padding mode.
+
+    Spatial reductions of FP16/BF16 contributions use FP32; the pre/post updates
+    are combined before conversion to the weight dtype. Trace-update arithmetic
+    and dtype promotion are unchanged. A final update outside the weight dtype's
+    range can still overflow.
 
     :param in_spike: Padded input spikes shaped ``[N, C_in, H_pad, W_pad]``
     :type in_spike: torch.Tensor
@@ -498,15 +512,16 @@ def stdp_conv2d_step(
             pre_spike = in_spike[:, :, h:h_end:stride_h, w:w_end:stride_w]
             tr_pre = trace_pre[:, :, h:h_end:stride_h, w:w_end:stride_w]
             weight_hw = weight[:, :, h, w]
-            delta_w_pre = -(
-                f_pre(weight_hw)
-                * (trace_post.unsqueeze(2) * pre_spike.unsqueeze(1))
-                .permute([1, 2, 0, 3, 4])
-                .sum(dim=[2, 3, 4])
+            delta_w_pre = -f_pre(weight_hw) * _sum_spatial_contributions(
+                (trace_post.unsqueeze(2) * pre_spike.unsqueeze(1)).permute(
+                    [1, 2, 0, 3, 4]
+                ),
+                [2, 3, 4],
             )
-            delta_w_post = f_post(weight_hw) * (
-                tr_pre.unsqueeze(1) * out_spike.unsqueeze(2)
-            ).permute([1, 2, 0, 3, 4]).sum(dim=[2, 3, 4])
+            delta_w_post = f_post(weight_hw) * _sum_spatial_contributions(
+                (tr_pre.unsqueeze(1) * out_spike.unsqueeze(2)).permute([1, 2, 0, 3, 4]),
+                [2, 3, 4],
+            )
             delta_w[:, :, h, w] += delta_w_pre + delta_w_post
     return delta_w, (trace_pre, trace_post)
 
@@ -539,6 +554,9 @@ def stdp_conv1d_step(
     ``(trace_pre, trace_post)``。``in_spike`` 必须已经按突触层的 padding
     规则展开；函数因此只表达 dilation 为 1、groups 为 1 的卷积 STDP 方程，
     不读取 ``Conv1d`` module 或解释 padding mode。
+
+    FP16/BF16 贡献使用 FP32 求和，pre/post 更新合并后再转换为权重 dtype。
+    trace 更新及其 dtype 提升规则不变；最终更新超出权重 dtype 范围时仍可能溢出。
 
     :param in_spike: 已 padding 的输入脉冲，形状 ``[N, C_in, L_pad]``
     :type in_spike: torch.Tensor
@@ -581,6 +599,11 @@ def stdp_conv1d_step(
     layer's padding. The function consequently expresses only the convolutional
     STDP equation for dilation 1 and one group; it neither reads a ``Conv1d``
     module nor interprets a padding mode.
+
+    Spatial reductions of FP16/BF16 contributions use FP32; the pre/post updates
+    are combined before conversion to the weight dtype. Trace-update arithmetic
+    and dtype promotion are unchanged. A final update outside the weight dtype's
+    range can still overflow.
 
     :param in_spike: Padded input spikes shaped ``[N, C_in, L_pad]``
     :type in_spike: torch.Tensor
@@ -631,15 +654,14 @@ def stdp_conv1d_step(
         pre_spike = in_spike[:, :, l:l_end:stride_l]
         tr_pre = trace_pre[:, :, l:l_end:stride_l]
         weight_l = weight[:, :, l]
-        delta_w_pre = -(
-            f_pre(weight_l)
-            * (trace_post.unsqueeze(2) * pre_spike.unsqueeze(1))
-            .permute([1, 2, 0, 3])
-            .sum(dim=[2, 3])
+        delta_w_pre = -f_pre(weight_l) * _sum_spatial_contributions(
+            (trace_post.unsqueeze(2) * pre_spike.unsqueeze(1)).permute([1, 2, 0, 3]),
+            [2, 3],
         )
-        delta_w_post = f_post(weight_l) * (
-            tr_pre.unsqueeze(1) * out_spike.unsqueeze(2)
-        ).permute([1, 2, 0, 3]).sum(dim=[2, 3])
+        delta_w_post = f_post(weight_l) * _sum_spatial_contributions(
+            (tr_pre.unsqueeze(1) * out_spike.unsqueeze(2)).permute([1, 2, 0, 3]),
+            [2, 3],
+        )
         delta_w[:, :, l] += delta_w_pre + delta_w_post
     return delta_w, (trace_pre, trace_post)
 

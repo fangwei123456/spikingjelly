@@ -11,6 +11,65 @@ def f_weight(x):
     return torch.clamp(x, -1.0, 1.0)
 
 
+@pytest.mark.parametrize("ndim", [1, 2])
+@pytest.mark.parametrize(
+    "dtype", [torch.float16, torch.bfloat16, torch.float32, torch.float64]
+)
+@pytest.mark.parametrize("trace_pattern", ["balanced", "potentiation", "one_event"])
+def test_conv_stdp_large_spatial_reduction(ndim, dtype, trace_pattern):
+    """Finite updates must survive intermediate sums beyond the FP16 range."""
+    spatial = (4096,) if ndim == 1 else (64, 64)
+    spikes = torch.ones(32, 1, *spatial, dtype=dtype)
+    weight = torch.full((1, 1, *((1,) * ndim)), 0.25, dtype=dtype)
+    trace_pre = torch.zeros_like(spikes)
+    if trace_pattern == "potentiation":
+        trace_pre.fill_(2)
+    elif trace_pattern == "one_event":
+        trace_pre.flatten()[0] = 2
+    trace_post = torch.zeros_like(spikes)
+    rule = functional.stdp_conv1d_step if ndim == 1 else functional.stdp_conv2d_step
+
+    delta, traces = rule(
+        spikes,
+        spikes,
+        (trace_pre, trace_post),
+        weight,
+        stride=(1,) * ndim,
+        tau_pre=2.0,
+        tau_post=2.0,
+    )
+
+    # Each previous trace value of two contributes one after Euler decay.
+    event_count = {"balanced": 0, "potentiation": spikes.numel(), "one_event": 1}
+    expected = 0.25 * event_count[trace_pattern]
+    assert delta.dtype == dtype
+    torch.testing.assert_close(delta, torch.full_like(weight, expected))
+    torch.testing.assert_close(traces[0], trace_pre / 2 + spikes)
+    torch.testing.assert_close(traces[1], spikes)
+
+
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+def test_conv_stdp_half_training_keeps_weights_finite(step_mode):
+    """Ordinary binary spike maps must not poison an SGD update with NaNs."""
+    conv = layer.Conv2d(1, 1, 1, bias=False, step_mode=step_mode).half()
+    sn = neuron.IFNode(v_threshold=0.1, step_mode=step_mode)
+    with torch.no_grad():
+        conv.weight.fill_(0.25)
+    learner = learning.STDPLearner(step_mode, conv, sn, 2.0, 2.0)
+    x = torch.ones(32, 1, 64, 64, dtype=torch.float16)
+    if step_mode == "m":
+        x = x.unsqueeze(0).expand(2, *x.shape)
+    try:
+        output = sn(conv(x))
+        assert torch.equal(output, torch.ones_like(output))
+        learner.step()
+        torch.testing.assert_close(conv.weight.grad, torch.zeros_like(conv.weight))
+        torch.optim.SGD(conv.parameters(), lr=0.1).step()
+        torch.testing.assert_close(conv.weight, torch.full_like(conv.weight, 0.25))
+    finally:
+        learner.close()
+
+
 def _count_alive_tensors():
     gc.collect()
     return sum(1 for obj in gc.get_objects() if torch.is_tensor(obj))

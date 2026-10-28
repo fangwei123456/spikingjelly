@@ -28,6 +28,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 #### spikingjelly.activation_based.functional
 
+- Convolutional STDP accumulates FP16/BF16 contributions in FP32, avoiding intermediate overflow when finite weight updates combine large spatial sums.
 - TET cross-entropy accepts class probability targets, including MixUp and spatial targets.
 - `kernel_dot_product` keeps Gaussian squared distances nonnegative, preventing
   rounded self-similarities above one and resulting BCE failures.
