@@ -368,52 +368,52 @@ def test_capability_report_preserves_unsupported_device_type():
         validate_capability(report)
 
 
-class _FakeDevice:
-    """Stands in for torch.device on a build that does not know "npu".
-
-    torch.device("npu") raises on a CPU-only wheel, so a test for the NPU
-    branch has to supply the device object the real backend would produce.
-    """
-
-    def __init__(self, spec):
-        self.type, _, self.index = str(spec).partition(":")
-
-    def __str__(self):
-        return self.type if not self.index else f"{self.type}:{self.index}"
-
-
-def test_capability_report_asks_a_non_cuda_accelerator_for_its_own_bf16_support(
-    monkeypatch,
+@pytest.mark.parametrize("device_type", ["cuda", "mps", "xpu"])
+@pytest.mark.parametrize(
+    "available,supported", [(True, True), (True, False), (False, True)]
+)
+def test_capability_report_reads_backend_bf16_support(
+    monkeypatch, device_type, available, supported
 ):
-    """An NPU publishes is_bf16_supported like CUDA; the report must read it.
-
-    Hardcoding False for every device that is not CUDA or MPS reports bf16 as
-    unsupported on hardware that supports it, and validate_capability then
-    refuses a mode the accelerator can run.
-    """
-    npu_ns = types.SimpleNamespace(
-        is_available=lambda: True, is_bf16_supported=lambda: True
+    backend = types.SimpleNamespace(
+        is_available=lambda: available, is_bf16_supported=lambda: supported
     )
-    monkeypatch.setattr(torch, "npu", npu_ns, raising=False)
-    monkeypatch.setattr(torch, "device", _FakeDevice)
-    report = build_capability_report(torch.nn.Identity(), "npu", "bf16")
+    if device_type == "cuda":
+        backend.get_device_capability = lambda device: (8, 0)
+        backend.device_count = lambda: 1
+    owner = torch.backends if device_type == "mps" else torch
+    monkeypatch.setattr(owner, device_type, backend)
+    report = build_capability_report(torch.nn.Identity(), device_type, "bf16")
 
-    assert report["device_type"] == "npu"
-    assert report["bf16_supported"] is True
-    validate_capability(report)
-
-
-def test_capability_report_takes_no_bf16_a_non_cuda_accelerator_denies(monkeypatch):
-    npu_ns = types.SimpleNamespace(
-        is_available=lambda: True, is_bf16_supported=lambda: False
-    )
-    monkeypatch.setattr(torch, "npu", npu_ns, raising=False)
-    monkeypatch.setattr(torch, "device", _FakeDevice)
-    report = build_capability_report(torch.nn.Identity(), "npu", "bf16")
-
-    assert report["bf16_supported"] is False
-    with pytest.raises(RuntimeError, match="requested on npu"):
+    assert report["device_type"] == device_type
+    assert report["bf16_supported"] is (available and supported)
+    if available and supported:
         validate_capability(report)
+    else:
+        with pytest.raises(RuntimeError, match="bf16"):
+            validate_capability(report)
+
+
+@pytest.mark.parametrize("device_type", ["cpu", "mps", "xpu"])
+@pytest.mark.parametrize("supported", [True, False])
+def test_capability_report_probes_bf16_tensor(monkeypatch, device_type, supported):
+    backend = types.SimpleNamespace(is_available=lambda: True)
+    owner = torch.backends if device_type == "mps" else torch
+    monkeypatch.setattr(owner, device_type, backend)
+    original_tensor = torch.tensor
+
+    def tensor(data, *, dtype, device):
+        assert device.type == device_type
+        assert dtype == torch.bfloat16
+        if not supported:
+            raise RuntimeError("bf16 is unavailable")
+        return original_tensor(data, dtype=dtype)
+
+    monkeypatch.setattr(torch, "tensor", tensor)
+    report = build_capability_report(torch.nn.Identity(), device_type, "bf16")
+
+    assert report["bf16_supported"] is supported
+    assert report["cpu_bf16_autocast"] is (supported and device_type == "cpu")
 
 
 def test_convert_model_for_precision_preserves_shared_linear_module_identity():
