@@ -8,6 +8,10 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 ### Fixes
 
+#### spikingjelly.activation_based.precision
+
+- BF16 capability detection queries non-CUDA accelerator backends instead of rejecting them unconditionally.
+
 #### spikingjelly.datasets
 
 - Time-based fixed-frame integration handles empty intervals without changing

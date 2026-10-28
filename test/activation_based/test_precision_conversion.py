@@ -368,6 +368,54 @@ def test_capability_report_preserves_unsupported_device_type():
         validate_capability(report)
 
 
+@pytest.mark.parametrize("device_type", ["cuda", "mps", "xpu"])
+@pytest.mark.parametrize(
+    "available,supported", [(True, True), (True, False), (False, True)]
+)
+def test_capability_report_reads_backend_bf16_support(
+    monkeypatch, device_type, available, supported
+):
+    backend = types.SimpleNamespace(
+        is_available=lambda: available, is_bf16_supported=lambda: supported
+    )
+    if device_type == "cuda":
+        backend.get_device_capability = lambda device: (8, 0)
+        backend.device_count = lambda: 1
+    owner = torch.backends if device_type == "mps" else torch
+    monkeypatch.setattr(owner, device_type, backend)
+    report = build_capability_report(torch.nn.Identity(), device_type, "bf16")
+
+    assert report["device_type"] == device_type
+    assert report["bf16_supported"] is (available and supported)
+    if available and supported:
+        validate_capability(report)
+    else:
+        with pytest.raises(RuntimeError, match="bf16"):
+            validate_capability(report)
+
+
+@pytest.mark.parametrize("device_type", ["cpu", "mps", "xpu"])
+@pytest.mark.parametrize("supported", [True, False])
+def test_capability_report_probes_bf16_tensor(monkeypatch, device_type, supported):
+    backend = types.SimpleNamespace(is_available=lambda: True)
+    owner = torch.backends if device_type == "mps" else torch
+    monkeypatch.setattr(owner, device_type, backend)
+    original_tensor = torch.tensor
+
+    def tensor(data, *, dtype, device):
+        assert device.type == device_type
+        assert dtype == torch.bfloat16
+        if not supported:
+            raise RuntimeError("bf16 is unavailable")
+        return original_tensor(data, dtype=dtype)
+
+    monkeypatch.setattr(torch, "tensor", tensor)
+    report = build_capability_report(torch.nn.Identity(), device_type, "bf16")
+
+    assert report["bf16_supported"] is supported
+    assert report["cpu_bf16_autocast"] is (supported and device_type == "cpu")
+
+
 def test_convert_model_for_precision_preserves_shared_linear_module_identity():
     shared = torch.nn.Linear(8, 8)
     model = torch.nn.ModuleList([shared, shared])

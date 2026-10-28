@@ -87,31 +87,6 @@ def _transformer_engine_fp8_status() -> tuple[
     )
 
 
-def _detect_cpu_bf16() -> bool:
-    """Check whether the CPU backend actually supports bfloat16 tensors."""
-    try:
-        _ = torch.tensor(1.0, dtype=torch.bfloat16)
-        return True
-    except Exception:
-        return False
-
-
-def _detect_mps_bf16(mps_backend) -> bool:
-    """Check whether the MPS backend reports bfloat16 support."""
-    fn = getattr(mps_backend, "is_bf16_supported", None)
-    if fn is not None:
-        return bool(fn())
-    try:
-        _ = torch.tensor(1.0, dtype=torch.bfloat16, device="mps")
-        return True
-    except Exception:
-        return False
-
-
-def _resolve_device_type(device: torch.device | str) -> str:
-    return torch.device(device).type
-
-
 def _assess_fp8(
     transformer_engine_installed: bool,
     te_fp8_available: bool,
@@ -144,7 +119,7 @@ def _assess_fp8(
 def build_capability_report(model, device, mode: str) -> dict[str, Any]:
     device = torch.device(device)
     device_str = str(device)
-    device_type = _resolve_device_type(device)
+    device_type = device.type
     is_cuda = device_type == "cuda"
     capability = None
     if is_cuda and torch.cuda.is_available():
@@ -165,20 +140,19 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
 
     mps_backend = getattr(torch.backends, "mps", None)
     mps_available = bool(mps_backend is not None and mps_backend.is_available())
-    mps_bf16_supported = (
-        _detect_mps_bf16(mps_backend)
-        if mps_backend is not None and mps_available
-        else False
-    )
-    cpu_bf16 = _detect_cpu_bf16()
-    if is_cuda:
-        bf16_supported = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-    elif device_type == "mps":
-        bf16_supported = mps_bf16_supported
-    elif device_type == "cpu":
-        bf16_supported = cpu_bf16
-    else:
+    backend = mps_backend if device_type == "mps" else getattr(torch, device_type, None)
+    is_available = getattr(backend, "is_available", None)
+    is_bf16_supported = getattr(backend, "is_bf16_supported", None)
+    if device_type != "cpu" and (is_available is None or not is_available()):
         bf16_supported = False
+    elif is_bf16_supported is not None:
+        bf16_supported = bool(is_bf16_supported())
+    else:
+        try:
+            torch.tensor(1.0, dtype=torch.bfloat16, device=device)
+            bf16_supported = True
+        except Exception:
+            bf16_supported = False
 
     can_convert = True
     can_execute = True
@@ -210,7 +184,7 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
         "te_recipe_resolved": None,
         "te_recipe_fallback_reason": None,
         "bf16_supported": bf16_supported,
-        "cpu_bf16_autocast": cpu_bf16 if device_type == "cpu" else False,
+        "cpu_bf16_autocast": bf16_supported if device_type == "cpu" else False,
         "mps_available": mps_available,
         "model_class": type(model).__name__,
         "can_convert": can_convert,
