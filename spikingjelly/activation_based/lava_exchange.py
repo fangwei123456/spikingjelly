@@ -271,8 +271,9 @@ class LeakyIntegratorStep(torch.autograd.Function):
     Custom autograd Function for the Leaky Integrator used in Lava exchange current/voltage decay.
     Forward implements leaky integration via integer arithmetic through ``_listep_forward``,
     and backward propagates gradients through ``_listep_backward``.
-    Decay can be trained even when the input and previous state do not require gradients.
-    Decay gradients are reduced to the decay tensor's shape to support broadcast parameters.
+    Decay can be trained even when the input and previous state do not require
+    gradients. Decay gradients are reduced to the decay tensor's shape to support
+    broadcast parameters.
     """
 
     @staticmethod
