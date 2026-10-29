@@ -54,10 +54,15 @@ def test_broadcast_decay_gradient_is_reduced_per_parameter(x_grad):
 
 @pytest.mark.parametrize("step_mode", ["s", "m"])
 @pytest.mark.parametrize("detach_reset", [False, True])
-def test_cuba_decay_gradients_do_not_require_input_gradients(step_mode, detach_reset):
+@pytest.mark.parametrize("tensor_decay", [False, True])
+def test_cuba_decay_gradients_do_not_require_input_gradients(
+    step_mode, detach_reset, tensor_decay
+):
+    current_decay = torch.tensor([0.125, 0.25, 0.375]) if tensor_decay else 0.25
+    voltage_decay = torch.tensor([0.25, 0.5, 0.75]) if tensor_decay else 0.5
     node = CubaLIFNode(
-        current_decay=0.25,
-        voltage_decay=0.5,
+        current_decay=current_decay,
+        voltage_decay=voltage_decay,
         requires_grad=True,
         step_mode=step_mode,
         detach_reset=detach_reset,
@@ -90,6 +95,7 @@ def test_cuba_decay_gradients_do_not_require_input_gradients(step_mode, detach_r
     for name in ("current_decay", "voltage_decay"):
         gradient = getattr(node, name).grad
         assert gradient is not None
+        assert gradient.shape == ((3,) if tensor_decay else ())
         assert torch.isfinite(gradient).all()
         assert torch.count_nonzero(gradient) > 0
         torch.testing.assert_close(
