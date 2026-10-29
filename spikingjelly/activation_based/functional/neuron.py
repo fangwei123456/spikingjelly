@@ -2081,7 +2081,7 @@ def gated_lif_step(
 
     本函数没有独立的多步形式；多步执行由调用者循环调用本函数。
 
-    :param x: 当前输入，现有 ``GatedLIFNode`` 约定 shape 为 ``[N, C, H, W]``
+    :param x: 当前时间步输入，shape 为 ``[N, C, *]``，可选空间维可以省略
     :type x: torch.Tensor
     :param v: 当前膜电位，shape 可广播到 ``x``
     :type v: torch.Tensor
@@ -2127,8 +2127,8 @@ def gated_lif_step(
     This function has no independent multi-step form; callers implement
     multi-step execution by looping over this function.
 
-    :param x: Current input. Existing ``GatedLIFNode`` expects shape
-        ``[N, C, H, W]``
+    :param x: Current time-step input with shape ``[N, C, *]``;
+        spatial dimensions are optional
     :type x: torch.Tensor
     :param v: Current membrane voltage, broadcastable to ``x``
     :type v: torch.Tensor
