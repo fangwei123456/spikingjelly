@@ -15,6 +15,11 @@ Unreleased
 Fixes
 ~~~~~
 
+spikingjelly.activation_based.neuron
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``GatedLIFNode`` preserves feature and one-dimensional sequence layouts instead of adding spatial axes or misaligning channel parameters.
+
 spikingjelly.activation_based.precision
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
