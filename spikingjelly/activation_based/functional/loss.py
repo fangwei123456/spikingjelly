@@ -120,35 +120,32 @@ def kernel_dot_product(
                 f"sigma must be positive for the Gaussian kernel, but got {sigma}"
             )
         N = x.shape[0]
-        x_dtype, y_dtype = x.dtype, y.dtype
+        x_dtype = x.dtype
         device_type = x.device.type
         low_precision = (torch.float16, torch.bfloat16)
         castable = (*low_precision, torch.float32)
         autocast_inputs = (
             x_dtype in castable
-            and y_dtype in castable
+            and y.dtype in castable
             and _kernel_autocast_available(device_type)
             and torch.is_autocast_enabled(device_type)
         )
-        widen = (x_dtype == y_dtype and x_dtype in low_precision) or autocast_inputs
-        output_dtype = None
-        if widen:
-            if not autocast_inputs:
-                output_dtype = x_dtype
+        if autocast_inputs or (x_dtype == y.dtype and x_dtype in low_precision):
             x, y = x.float(), y.float()
-        context = (
+        with (
             torch.autocast(device_type, enabled=False)
             if autocast_inputs
             else nullcontext()
-        )
-        with context:
+        ):
             x2 = x.square().sum(dim=1)  # shape=[N]
             y2 = y.square().sum(dim=1)  # shape=[N]
             xy = x.mm(y.t())  # shape=[N, N]
             d_xy = x2.unsqueeze(1).repeat(1, N) + y2.unsqueeze(0).repeat(N, 1) - 2 * xy
             # d_xy[i][j] is the squared Euclidean distance between x[i] and y[j].
             result = torch.exp(-d_xy.clamp_min(0) / (2 * sigma * sigma))
-        return result if output_dtype is None else result.to(output_dtype)
+        if not autocast_inputs and x.dtype != x_dtype:
+            return result.to(x_dtype)
+        return result
     else:
         raise NotImplementedError
 
