@@ -59,6 +59,11 @@ spikingjelly.activation_based.learning
 
 - FPTT training preserves frozen optimizer parameters and their running-average slots instead of failing on missing gradients.
 
+spikingjelly.activation_based.lava_exchange
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``CubaLIFNode`` trains scalar or broadcast decay parameters without requiring input or initial-state gradients.
+
 Changes
 ~~~~~~~
 

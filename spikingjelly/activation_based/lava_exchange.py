@@ -128,7 +128,7 @@ def _listep_backward(
     grad_state = (1 - decay / (1 << hw_bits)) * grad_output
     grad_decay = -state / (1 << hw_bits) * grad_output
 
-    grad_decay = grad_decay.sum()
+    grad_decay = grad_decay.sum_to_size(decay.shape)
 
     return grad_output, grad_decay, grad_state
     # x, decay, state
@@ -259,6 +259,8 @@ class LeakyIntegratorStep(torch.autograd.Function):
 
     泄露积分器（Leaky Integrator）的自定义自动求导函数，用于 Lava 交换中的电流/电压衰减计算。
     前向通过 ``_listep_forward`` 实现整数算术的泄露积分，反向通过 ``_listep_backward`` 实现梯度传播。
+    即使输入和旧状态不需要梯度，也可以训练衰减参数。
+    衰减梯度会归约到衰减张量的形状，以支持广播的衰减参数。
 
     ----
 
@@ -269,6 +271,8 @@ class LeakyIntegratorStep(torch.autograd.Function):
     Custom autograd Function for the Leaky Integrator used in Lava exchange current/voltage decay.
     Forward implements leaky integration via integer arithmetic through ``_listep_forward``,
     and backward propagates gradients through ``_listep_backward``.
+    Decay can be trained even when the input and previous state do not require gradients.
+    Decay gradients are reduced to the decay tensor's shape to support broadcast parameters.
     """
 
     @staticmethod
@@ -276,7 +280,7 @@ class LeakyIntegratorStep(torch.autograd.Function):
         output = _listep_forward(
             x, decay, state, w_scale, dtype=torch.int64, hw_bits=_hw_bits
         )
-        if x.requires_grad or state.requires_grad:
+        if x.requires_grad or decay.requires_grad or state.requires_grad:
             ctx.save_for_backward(decay, state)
         return output
 
