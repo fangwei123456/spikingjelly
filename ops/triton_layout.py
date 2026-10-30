@@ -42,7 +42,21 @@ def _neuron_indices(
     NCL: tl.constexpr, BLOCK: tl.constexpr, SIZES: tl.constexpr, MINOR: tl.constexpr
 ):
     pid = tl.program_id(0)
-    if NCL > 2147483647:
+    if MINOR == 1:
+        last_index: tl.constexpr = ((NCL + BLOCK - 1) // BLOCK) * BLOCK - 1
+    else:
+        first_size: tl.constexpr = tl.constexpr(SIZES).value[0]
+        outer_block: tl.constexpr = BLOCK // MINOR
+        padded_outer: tl.constexpr = (
+            (NCL // first_size + outer_block - 1) // outer_block
+        ) * outer_block
+        last_index: tl.constexpr = (
+            (padded_outer - 1) * first_size
+            + ((first_size + MINOR - 1) // MINOR) * MINOR
+            - 1
+        )
+    # Padded lanes may exceed int32 even when the logical neuron count fits.
+    if NCL > 2147483647 or last_index > 2147483647:
         pid = pid.to(tl.int64)
     if MINOR == 1:
         indices = (pid * BLOCK + tl.arange(0, BLOCK))[None, :]

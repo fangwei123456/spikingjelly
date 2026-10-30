@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from spikingjelly._ops.layout import _empty_like, _layout_args
-from spikingjelly.activation_based import neuron
+from spikingjelly.activation_based import functional, neuron, surrogate
 
 try:
     import triton
@@ -64,7 +64,7 @@ def _arguments(kind, T, N, device, dtype=torch.float32):
 
 
 if triton is not None:
-    from spikingjelly._ops.triton_layout import _neuron_indices
+    from spikingjelly._ops.triton_layout import _neuron_grid, _neuron_indices
 
     @triton.jit
     def _large_index_probe(out, N: tl.constexpr, MINOR: tl.constexpr):
@@ -74,6 +74,14 @@ if triton is not None:
             lane = tl.arange(0, 256)
             tl.store(out + lane, tl.reshape(indices, (256,)))
             tl.store(out + 256 + lane, tl.reshape(mask, (256,)).to(tl.int64))
+
+    @triton.jit
+    def _near_int32_mask_probe(output, NCL: tl.constexpr, LAST: tl.constexpr):
+        if tl.program_id(0) == LAST:
+            indices, mask = _neuron_indices(NCL, 256, (3, NCL // 3), 4)
+            lane = tl.arange(0, 256)
+            tl.store(output + lane, tl.reshape(indices, (256,)).to(tl.int64))
+            tl.store(output + 256 + lane, tl.reshape(mask, (256,)).to(tl.int64))
 
 
 def _layout(x, kind):
@@ -239,6 +247,149 @@ def test_single_step_noncontiguous_input(kind):
     y = node(x)
     assert y.shape == x.shape
     assert torch.isfinite(torch.autograd.grad(y.sum(), x)[0]).all()
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("execution", ["eager", "compile"])
+@pytest.mark.parametrize(
+    "dtype",
+    [torch.float32, torch.float16, torch.bfloat16],
+    ids=["fp32", "fp16", "bf16"],
+)
+def test_clif_strided_boundary_avoids_layout_copies(execution, dtype, monkeypatch):
+    from spikingjelly._ops.clif import _selection, reference
+
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    monkeypatch.setattr(_selection, "_selections", {})
+    monkeypatch.setattr(_selection, "_compiled_selections", {})
+    torch.manual_seed(42)
+    shape = (2, 3, 4, 5)
+    x = torch.randn(shape, device="cuda", dtype=dtype).contiguous(
+        memory_format=torch.channels_last
+    )
+    v = torch.randn(shape, device="cuda", dtype=dtype)
+    v = v.transpose(-1, -2).contiguous().transpose(-1, -2)
+    m = torch.randn((2, 3, 1, 1), device="cuda", dtype=dtype).expand(shape)
+    inputs = tuple(t.requires_grad_() for t in (x, v, m))
+    refs = tuple(t.detach().clone().requires_grad_() for t in inputs)
+    spike = surrogate.Rect()
+
+    def step(x, v, m):
+        return functional.clif_step(x, v, m, 3.7, 1.0, spike)
+
+    run = torch.compile(step, fullgraph=True) if execution == "compile" else step
+    warmup = run(*inputs)
+    weights = tuple(
+        torch.randn_like(t).transpose(-1, -2).contiguous().transpose(-1, -2)
+        for t in warmup
+    )
+    torch.autograd.grad(warmup, inputs, weights)
+    with torch.profiler.profile(
+        activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA,
+        ]
+    ) as profile:
+        actual = run(*inputs)
+        actual_grads = torch.autograd.grad(actual, inputs, weights)
+    expected = reference.step(*refs, 3.7, 1.0, spike)
+    expected_grads = torch.autograd.grad(expected, refs, weights)
+    rtol = {torch.float32: 1e-6, torch.float16: 1e-3, torch.bfloat16: 1.6e-2}[dtype]
+    atol = 1e-4 if dtype == torch.float16 else 1e-5
+    torch.testing.assert_close(actual, expected, rtol=rtol, atol=atol)
+    torch.testing.assert_close(actual_grads, expected_grads, rtol=rtol, atol=atol)
+    assert all(t.is_contiguous() for t in actual)
+    kernels = {
+        event.name
+        for event in profile.events()
+        if event.device_type == torch.autograd.DeviceType.CUDA
+    }
+    assert not any("clone" in name for name in kernels)
+    # AOT may materialize noncontiguous tangents before its compiled backward.
+    if execution == "eager":
+        names = {event.name for event in profile.events()}
+        assert not names.intersection({"aten::clone", "aten::contiguous"})
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize(
+    "execution,negative_location",
+    [
+        ("eager", "none"),
+        ("eager", "input"),
+        ("compile", "none"),
+        ("compile", "graph"),
+    ],
+)
+def test_clif_strided_views_preserve_values_and_gradients(
+    negative_location, execution, monkeypatch
+):
+    from spikingjelly._ops.clif import _selection, reference
+
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    monkeypatch.setattr(_selection, "_selections", {})
+    monkeypatch.setattr(_selection, "_compiled_selections", {})
+    torch.manual_seed(42)
+    inputs = tuple(
+        _layout(torch.randn(2, 3, 5, device="cuda"), layout)
+        for layout in ("sliced", "offset", "overlap")
+    )
+    if negative_location == "input":
+        inputs = tuple(torch._neg_view(t) for t in inputs)
+    inputs = tuple(t.requires_grad_() for t in inputs)
+    snapshots = tuple(t.detach().clone() for t in inputs)
+    refs = tuple(t.detach().clone().requires_grad_() for t in inputs)
+    spike = surrogate.Rect()
+
+    def step(x, v, m):
+        if negative_location == "graph":
+            x, v, m = (torch._neg_view(t) for t in (x, v, m))
+        return functional.clif_step(x, v, m, 3.7, 1.0, spike)
+
+    run = torch.compile(step, fullgraph=True) if execution == "compile" else step
+    actual = run(*inputs)
+    reference_inputs = (
+        tuple(torch._neg_view(t) for t in refs)
+        if negative_location == "graph"
+        else refs
+    )
+    expected = reference.step(*reference_inputs, 3.7, 1.0, spike)
+    weights = tuple(torch.randn_like(t) for t in actual)
+    if negative_location == "input":
+        weights = tuple(torch._neg_view(t) for t in weights)
+    torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(
+        torch.autograd.grad(actual, inputs, weights),
+        torch.autograd.grad(expected, refs, weights),
+    )
+    torch.testing.assert_close(inputs, snapshots, rtol=0, atol=0)
+    assert all(t.is_contiguous() for t in actual)
+    storages = {t.untyped_storage().data_ptr() for t in actual}
+    assert len(storages) == len(actual)
+    assert not storages.intersection(t.untyped_storage().data_ptr() for t in inputs)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_clif_strided_offsets_beyond_int32(monkeypatch):
+    from spikingjelly._ops.clif import _selection, reference
+
+    if torch.cuda.mem_get_info()[0] < 6 * 1024**3:
+        pytest.skip("CLIF strided-address regression needs 6 GiB free")
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    monkeypatch.setattr(_selection, "_selections", {})
+    storage = torch.empty((1 << 31) + 1, device="cuda", dtype=torch.float16)
+    values = storage.as_strided((2,), (1 << 31,))
+    values.copy_(torch.tensor([0.25, 1.25], device="cuda", dtype=torch.float16))
+    inputs = tuple(values.detach().requires_grad_() for _ in range(3))
+    refs = tuple(t.detach().clone().requires_grad_() for t in inputs)
+    spike = surrogate.Rect()
+    actual = functional.clif_step(*inputs, 2.0, 1.0, spike)
+    expected = reference.step(*refs, 2.0, 1.0, spike)
+    torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(
+        torch.autograd.grad(sum(t.sum() for t in actual), inputs),
+        torch.autograd.grad(sum(t.sum() for t in expected), refs),
+    )
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
@@ -581,6 +732,23 @@ def test_triton_large_logical_indices(minor):
     expected = torch.arange(256, device="cuda", dtype=torch.int64) + (1 << 31)
     torch.testing.assert_close(out[:256], expected)
     torch.testing.assert_close(out[256:], (expected < n).to(torch.int64))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_padded_logical_indices_near_int32_limit():
+    pytest.importorskip("triton")
+    n = (1 << 31) - 2
+    grid = _neuron_grid(n, (3, n // 3), 256, 4)
+    output = torch.empty(512, device="cuda", dtype=torch.int64)
+    _near_int32_mask_probe[grid](output, n, grid[0] - 1)
+    valid = output[:256][output[256:].bool()]
+    assert valid.numel() == 126, valid.numel()
+    torch.testing.assert_close(
+        valid,
+        torch.arange(n - 126, n, device="cuda", dtype=torch.int64),
+        rtol=0,
+        atol=0,
+    )
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

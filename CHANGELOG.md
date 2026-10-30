@@ -167,6 +167,10 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 - Native CUDA/Triton neurons accept compact nonoverlapping, channels-last and
   broadcast layouts without layout copies, including states and gradients.
+- CLIF's Triton boundary reads strided inputs and gradients directly, avoiding
+  redundant layout copies while preserving contiguous outputs.
+- Padded Triton neuron indices use 64-bit program IDs when needed, preventing
+  int32 overflow for large tensors.
 - IF/LIF/PLIF precision preserves spike input dtype; `store_v_seq=False` avoids
   redundant voltage storage, and Triton 3.6 LIF backward compiles correctly.
 - Fixed single-step `store_v_seq` recording, including recurrent containers and
