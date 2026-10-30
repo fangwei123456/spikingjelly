@@ -281,8 +281,7 @@ class LeakyIntegratorStep(torch.autograd.Function):
         output = _listep_forward(
             x, decay, state, w_scale, dtype=torch.int64, hw_bits=_hw_bits
         )
-        if x.requires_grad or decay.requires_grad or state.requires_grad:
-            ctx.save_for_backward(decay, state)
+        ctx.save_for_backward(decay, state)
         return output
 
     @staticmethod

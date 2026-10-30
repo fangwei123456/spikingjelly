@@ -1,3 +1,6 @@
+import copy
+import math
+
 import pytest
 import torch
 
@@ -797,6 +800,69 @@ def test_lava_cuba_lif_step_matches_norm_free_module():
     _assert_close(spike, module_spike)
     _assert_close(current_next, module.current_state)
     _assert_close(voltage_next, module.voltage_state)
+
+
+def test_lava_broadcast_decay_gradient_is_reduced_per_parameter():
+    x = torch.tensor([[0.25, -0.5], [0.5, 0.25]])
+    state = torch.tensor([[2.0, -1.0], [1.0, -2.0]])
+    decay = torch.tensor([1024.0, 2048.0], requires_grad=True)
+    result = lava_exchange.LeakyIntegratorStep.apply(x, decay, state, 4096)
+
+    torch.testing.assert_close(
+        result, torch.tensor([[1.75, -1.0], [1.25, -0.75]]), rtol=0, atol=0
+    )
+    result.backward(torch.tensor([[3.0, -2.0], [1.0, 4.0]]))
+    torch.testing.assert_close(
+        decay.grad, torch.tensor([-7.0, 6.0]) / 4096, rtol=0, atol=0
+    )
+
+
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+@pytest.mark.parametrize("tensor_decay", [False, True])
+def test_lava_cuba_decay_gradients_do_not_require_input_gradients(
+    step_mode, tensor_decay
+):
+    current_decay = torch.tensor([0.125, 0.25, 0.375]) if tensor_decay else 0.25
+    voltage_decay = torch.tensor([0.25, 0.5, 0.75]) if tensor_decay else 0.5
+    node = lava_exchange.CubaLIFNode(
+        current_decay=current_decay,
+        voltage_decay=voltage_decay,
+        requires_grad=True,
+        step_mode=step_mode,
+    )
+    node.current_state = torch.full((2, 3), 0.75)
+    node.voltage_state = torch.full((2, 3), 0.25)
+    reference = copy.deepcopy(node)
+    shape = (3, 2, 3) if step_mode == "m" else (2, 3)
+    x = torch.linspace(0.3, 0.7, math.prod(shape)).reshape(shape)
+
+    result = node(x)
+    expected = reference(x.clone().requires_grad_())
+    torch.testing.assert_close(result, expected, rtol=0, atol=0)
+    torch.testing.assert_close(
+        node.current_state, reference.current_state, rtol=0, atol=0
+    )
+    torch.testing.assert_close(
+        node.voltage_state, reference.voltage_state, rtol=0, atol=0
+    )
+
+    for module, spikes in ((node, result), (reference, expected)):
+        (
+            spikes.sum()
+            + module.current_state.square().mean()
+            + module.voltage_state.square().mean()
+        ).backward()
+
+    for name in ("current_decay", "voltage_decay"):
+        parameter = getattr(node, name)
+        gradient = parameter.grad
+        assert gradient is not None
+        assert gradient.shape == parameter.shape
+        assert torch.isfinite(gradient).all()
+        assert torch.count_nonzero(gradient) > 0
+        torch.testing.assert_close(
+            gradient, getattr(reference, name).grad, rtol=0, atol=0
+        )
 
 
 def test_cuba_sequence_caches_are_not_functional_states():
