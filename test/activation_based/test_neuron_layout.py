@@ -319,14 +319,6 @@ def test_clif_strided_boundary_avoids_layout_copies(execution, dtype, monkeypatc
         ("eager", "input"),
         ("compile", "none"),
         ("compile", "graph"),
-        pytest.param(
-            "compile",
-            "input",
-            marks=pytest.mark.xfail(
-                reason="Inductor ignores lazy-negative graph inputs, even for x + 1",
-                strict=True,
-            ),
-        ),
     ],
 )
 def test_clif_strided_views_preserve_values_and_gradients(
