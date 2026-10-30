@@ -64,7 +64,7 @@ def _arguments(kind, T, N, device, dtype=torch.float32):
 
 
 if triton is not None:
-    from spikingjelly._ops.triton_layout import _neuron_indices
+    from spikingjelly._ops.triton_layout import _neuron_grid, _neuron_indices
 
     @triton.jit
     def _large_index_probe(out, N: tl.constexpr, MINOR: tl.constexpr):
@@ -74,6 +74,14 @@ if triton is not None:
             lane = tl.arange(0, 256)
             tl.store(out + lane, tl.reshape(indices, (256,)))
             tl.store(out + 256 + lane, tl.reshape(mask, (256,)).to(tl.int64))
+
+    @triton.jit
+    def _near_int32_mask_probe(output, NCL: tl.constexpr, LAST: tl.constexpr):
+        if tl.program_id(0) == LAST:
+            indices, mask = _neuron_indices(NCL, 256, (3, NCL // 3), 4)
+            lane = tl.arange(0, 256)
+            tl.store(output + lane, tl.reshape(indices, (256,)).to(tl.int64))
+            tl.store(output + 256 + lane, tl.reshape(mask, (256,)).to(tl.int64))
 
 
 def _layout(x, kind):
@@ -731,6 +739,23 @@ def test_triton_large_logical_indices(minor):
     expected = torch.arange(256, device="cuda", dtype=torch.int64) + (1 << 31)
     torch.testing.assert_close(out[:256], expected)
     torch.testing.assert_close(out[256:], (expected < n).to(torch.int64))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_padded_logical_indices_near_int32_limit():
+    pytest.importorskip("triton")
+    n = (1 << 31) - 2
+    grid = _neuron_grid(n, (3, n // 3), 256, 4)
+    output = torch.empty(512, device="cuda", dtype=torch.int64)
+    _near_int32_mask_probe[grid](output, n, grid[0] - 1)
+    valid = output[:256][output[256:].bool()]
+    assert valid.numel() == 126, valid.numel()
+    torch.testing.assert_close(
+        valid,
+        torch.arange(n - 126, n, device="cuda", dtype=torch.int64),
+        rtol=0,
+        atol=0,
+    )
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
