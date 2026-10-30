@@ -328,6 +328,7 @@ def test_clif_strided_views_preserve_values_and_gradients(
 
     monkeypatch.setattr(_selection, "_requested", "triton")
     monkeypatch.setattr(_selection, "_selections", {})
+    monkeypatch.setattr(_selection, "_compiled_selections", {})
     torch.manual_seed(42)
     inputs = tuple(
         _layout(torch.randn(2, 3, 5, device="cuda"), layout)
