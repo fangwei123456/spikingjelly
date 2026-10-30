@@ -50,6 +50,10 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 - FPTT training preserves frozen optimizer parameters and their running-average slots instead of failing on missing gradients.
 
+#### spikingjelly.activation_based.lava_exchange
+
+- `CubaLIFNode` trains scalar or broadcast decay parameters without requiring input or initial-state gradients.
+
 ### Changes
 
 - Few-spike, outlier-aware and hierarchically gated neurons add optional native CUDA alongside Triton for eligible FP32 inference, with explicit provider selection and reference fallbacks.
