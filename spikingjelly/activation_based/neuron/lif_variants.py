@@ -44,6 +44,8 @@ class GatedLIFNode(base.MemoryModule):
         `GLIF: A Unified Gated Leaky Integrate-and-Fire Neuron for Spiking Neural Networks
         <https://openreview.net/forum?id=UmFSx2c4ubT>`_ 提出。
         该模型对 LIF 神经元进行统一门控建模，膜电位相关参数（包括门控系数）均为可学习参数。
+        输入和输出的形状均为 ``[T, N, C, *]``，其中可选空间维可以省略；
+        channel-wise 参数沿通道维 ``C`` 广播，layer-wise 参数由所有神经元共享。
 
         :param T: 时间步数
         :type T: int
@@ -86,6 +88,9 @@ class GatedLIFNode(base.MemoryModule):
         <https://openreview.net/forum?id=UmFSx2c4ubT>`_.
         This model introduces unified gating mechanisms into LIF neurons.
         All membrane-related parameters, including gating coefficients, are learnable.
+        Input and output share shape ``[T, N, C, *]``, with optional spatial
+        dimensions. Channel-wise parameters broadcast along ``C``; layer-wise
+        parameters are shared by all neurons.
 
         :param T: number of time-steps
         :type T: int
@@ -212,13 +217,15 @@ class GatedLIFNode(base.MemoryModule):
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
         x_seq = inputs[0]
         v = states[0]
-        alpha = self.alpha.view(1, -1, 1, 1).sigmoid()
-        beta = self.beta.view(1, -1, 1, 1).sigmoid()
-        gamma = self.gamma.view(1, -1, 1, 1).sigmoid()
-        tau = self.tau.view(1, -1, 1, 1).sigmoid()
-        v_threshold = self.v_threshold.view(1, -1, 1, 1).sigmoid()
-        linear_decay = self.linear_decay.view(1, -1, 1, 1).sigmoid()
-        v_subreset = self.v_subreset.view(1, -1, 1, 1).sigmoid()
+        # A time slice is [N, C, *], so only existing spatial axes need padding.
+        parameter_shape = (1, -1) + (1,) * (x_seq.ndim - 3)
+        alpha = self.alpha.view(parameter_shape).sigmoid()
+        beta = self.beta.view(parameter_shape).sigmoid()
+        gamma = self.gamma.view(parameter_shape).sigmoid()
+        tau = self.tau.view(parameter_shape).sigmoid()
+        v_threshold = self.v_threshold.view(parameter_shape).sigmoid()
+        linear_decay = self.linear_decay.view(parameter_shape).sigmoid()
+        v_subreset = self.v_subreset.view(parameter_shape).sigmoid()
 
         spike = torch.zeros(x_seq.shape[1:], device=x_seq.device, dtype=x_seq.dtype)
         spike_seq = []
@@ -234,7 +241,7 @@ class GatedLIFNode(base.MemoryModule):
                 v_threshold,
                 linear_decay,
                 v_subreset,
-                self.conduct[t].view(1, -1, 1, 1).sigmoid(),
+                self.conduct[t].view(parameter_shape).sigmoid(),
                 self.surrogate_function,
             )
             spike_seq.append(spike)

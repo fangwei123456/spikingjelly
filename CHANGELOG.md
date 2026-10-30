@@ -8,6 +8,10 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 ### Fixes
 
+#### spikingjelly.activation_based.neuron
+
+- `GatedLIFNode` preserves feature and one-dimensional sequence layouts instead of adding spatial axes or misaligning channel parameters.
+
 #### spikingjelly.activation_based.precision
 
 - BF16 capability detection queries non-CUDA accelerator backends instead of rejecting them unconditionally.

@@ -1,3 +1,5 @@
+import copy
+
 import pytest
 import torch
 
@@ -99,6 +101,41 @@ def test_gated_lif_output_and_state_follow_the_input_dtype(dtype):
 
     assert out.dtype == dtype
     assert node.v.dtype == dtype
+
+
+@pytest.mark.parametrize("spatial_shape", [(), (5,)])
+@pytest.mark.parametrize("channel_wise", [False, True])
+def test_gated_lif_layout_matches_image_sequence_values_and_gradients(
+    spatial_shape, channel_wise
+):
+    node = GatedLIFNode(T=3, inplane=4 if channel_wise else None)
+    image_node = copy.deepcopy(node)
+    x = torch.randn(
+        3,
+        2,
+        4,
+        *spatial_shape,
+        dtype=torch.float32,
+        generator=torch.Generator().manual_seed(0),
+    ).requires_grad_()
+    # The image path represents the same independent neurons.
+    image_x = x.detach().reshape(3, 2, 4, -1, 1).clone().requires_grad_()
+
+    result = node(x)
+    reference = image_node(image_x)
+
+    assert result.shape == x.shape
+    assert node.v.shape == node.u.shape == x.shape[1:]
+    torch.testing.assert_close(result, reference.reshape_as(x))
+    torch.testing.assert_close(node.v, image_node.v.reshape_as(node.v))
+    torch.testing.assert_close(node.u, image_node.u.reshape_as(node.u))
+
+    (result.square().mean() + node.v.square().mean()).backward()
+    (reference.square().mean() + image_node.v.square().mean()).backward()
+    torch.testing.assert_close(x.grad, image_x.grad.reshape_as(x))
+    for parameter, image_parameter in zip(node.parameters(), image_node.parameters()):
+        assert parameter.grad is not None
+        torch.testing.assert_close(parameter.grad, image_parameter.grad)
 
 
 def test_vectorized_misc_helpers_preserve_values_and_gradients():
