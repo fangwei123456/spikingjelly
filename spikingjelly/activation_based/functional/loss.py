@@ -1,5 +1,3 @@
-from contextlib import nullcontext
-
 import torch
 import torch.nn.functional as F
 from torch import Tensor
@@ -109,15 +107,6 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
         raise NotImplementedError
 
 
-def _is_autocast_enabled(device_type: str) -> bool:
-    """Return whether autocast is active without querying unsupported devices."""
-    if torch.compiler.is_compiling():
-        return torch.is_autocast_enabled(device_type)
-    if torch.amp.is_autocast_available(device_type):
-        return torch.is_autocast_enabled(device_type)
-    return False
-
-
 def spike_similar_loss(
     spikes: Tensor,
     labels: Tensor,
@@ -153,6 +142,8 @@ def spike_similar_loss(
 
     当使用Sigmoid或高斯内积时，内积的取值范围均在[0, 1]之间；而使用线性内积时，为了保证内积取值仍然在[0, 1]之间，会进行归一化，按照 :math:`\text{sim}_p[i][j]=\frac{\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}})}{||\boldsymbol{x_{i}}|| · ||\boldsymbol{y_{j}}||}`。
 
+    线性相似度截断到 ``[-1, 1]`` 以修正舍入越界；被截断元素的梯度为零。
+
     对于相似的数据，根据输入的 ``loss_type`` ，返回度量 ``sim`` 与 ``sim_p`` 差异的损失：
 
     - ``mse`` -- 返回sim与sim_p的均方误差（也就是l2误差）。
@@ -163,10 +154,6 @@ def spike_similar_loss(
 
     .. note::
         脉冲向量稀疏、离散，最好先使用高斯核进行平滑，然后再计算相似度。
-
-    线性核的余弦值截断到 ``[-1, 1]``，避免舍入误差越界。
-    线性相似度及标签目标的计算禁用 autocast；FP16/BF16 输入使用 FP32 中间结果。
-    BCE 使用稳定的 logits 公式，使舍入为1的余弦值仍保留有限损失和梯度。
 
     :param spikes: shape=[N, M, T]，N个数据生成的脉冲
     :type spikes: torch.Tensor
@@ -184,7 +171,7 @@ def spike_similar_loss(
 
     :param args: 用于计算内积的额外参数
 
-    :return: 标量相似损失张量
+    :return: shape=[1]的tensor，相似损失
     :rtype: torch.Tensor
 
     ----
@@ -209,6 +196,9 @@ def spike_similar_loss(
 
     When Sigmoid or Gaussian kernel is applied, the inner product naturally lies in :math:`[0, 1]`. To make the value consistent when using linear kernel, the result will be normalized as: :math:`\text{sim}_p[i][j]=\frac{\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}})}{||\boldsymbol{x_{i}}|| · ||\boldsymbol{y_{j}}||}`.
 
+    Linear similarities are clamped to ``[-1, 1]`` to correct rounding overshoot;
+    the gradient of a clamped element is zero.
+
     For similar data, return the specified discrepancy loss between ``sim`` and ``sim_p`` according to ``loss_type``.
 
     - ``mse`` -- Return the Mean-Square Error (squared L2 norm) between sim and sim_p.
@@ -221,11 +211,6 @@ def spike_similar_loss(
         :class: note
 
         Since spike vectors are usually discrete and sparse, it would be better to apply Gaussian filter first to smooth the vectors before calculating similarities.
-
-    Linear cosines are clipped to ``[-1, 1]`` to remove rounding overshoot.
-    Linear similarities and label targets are computed with autocast disabled;
-    FP16/BF16 inputs use FP32 intermediates. BCE uses stable logits so a cosine rounded
-    to one retains a finite loss and gradient.
 
     :param spikes: shape=[N, M, T], output spikes corresponding to a batch of N inputs
     :type spikes: torch.Tensor
@@ -245,92 +230,31 @@ def spike_similar_loss(
 
     :param args: Extra parameters for inner product
 
-    :return: scalar similarity loss
+    :return: shape=[1], similarity loss
     :rtype: torch.Tensor
     """
     spikes = spikes.flatten(start_dim=1)
 
-    linear_autocast = kernel_type == "linear" and _is_autocast_enabled(
-        spikes.device.type
-    )
+    sim_p = kernel_dot_product(spikes, spikes, kernel_type, *args)
+
     if kernel_type == "linear":
-        context = (
-            torch.autocast(device_type=spikes.device.type, enabled=False)
-            if linear_autocast
-            else nullcontext()
-        )
-        with context:
-            working_spikes = (
-                spikes.float()
-                if spikes.dtype in (torch.float16, torch.bfloat16)
-                else spikes
-            )
-            linear_dot = kernel_dot_product(
-                working_spikes, working_spikes, kernel_type, *args
-            )
-            spikes_len = working_spikes.norm(p=2, dim=1, keepdim=True)
-            norm_product = spikes_len.mm(spikes_len.t())
-            denominator = norm_product + 1e-8
-            sim_p = (linear_dot / denominator).clamp(-1, 1)
-            labels = labels.to(dtype=sim_p.dtype)
-            sim = labels.mm(labels.t()).clamp_max(1)
-            if loss_type == "bce":
-                # logit(p) = log(dot) - log(norm_product - dot + eps).
-                # This avoids BCELoss's zero gradient when float32 rounds p to one.
-                bce_dot = linear_dot.to(dtype=sim_p.dtype)
-                complement = (norm_product - bce_dot).clamp_min(0) + 1e-8
-                # Zero and negative dots use the probability BCE path below.
-                # Keep its logits finite without perturbing small positive dots.
-                numerator = torch.where(bce_dot > 0, bce_dot, torch.ones_like(bce_dot))
-                linear_bce_logits = numerator.log() - complement.log()
-                linear_bce_logits = torch.where(
-                    norm_product > 0,
-                    linear_bce_logits,
-                    torch.full_like(linear_bce_logits, -100),
-                ).clamp(-100, 100)
-                zero_dot = linear_dot == 0
-                # BCE has an infinite exact derivative at p=0. Keep its finite
-                # endpoint loss, but use this bounded local logit slope so silent
-                # and orthogonal positive pairs retain a representable gradient.
-                zero_dot_logits = -100 + linear_dot / norm_product.clamp_min(1)
-                linear_bce_logits = torch.where(
-                    zero_dot, zero_dot_logits, linear_bce_logits
-                )
-    else:
-        sim_p = kernel_dot_product(spikes, spikes, kernel_type, *args)
-        labels = labels.to(dtype=sim_p.dtype)
-        sim = labels.mm(labels.t()).clamp_max(1)
+        spikes_len = spikes.norm(p=2, dim=1, keepdim=True)
+        sim_p = (sim_p / ((spikes_len.mm(spikes_len.t())) + 1e-8)).clamp(-1, 1)
+
+    labels = labels.to(dtype=sim_p.dtype)
+    sim = labels.mm(labels.t()).clamp_max(
+        1
+    )  # labels.mm(labels.t())[i][j]位置的元素表现输入数据i和数据数据j有多少个相同的标签
+    # 将大于1的元素设置为1，因为共享至少同一个标签，就认为他们相似
 
     if loss_type == "mse":
-        loss = F.mse_loss(sim_p, sim)
+        return F.mse_loss(sim_p, sim)
     elif loss_type == "l1":
-        loss = F.l1_loss(sim_p, sim)
+        return F.l1_loss(sim_p, sim)
     elif loss_type == "bce":
-        if kernel_type == "linear":
-            # Keep BCELoss's range validation and endpoint gradient for zero-dot pairs.
-            probability_loss = F.binary_cross_entropy(sim_p, sim, reduction="none")
-            logits_loss = F.binary_cross_entropy_with_logits(
-                linear_bce_logits, sim, reduction="none"
-            )
-            zero_dot = linear_dot == 0
-            # Preserve BCE's clamped endpoint value and range validation while
-            # taking the bounded gradient from the finite logit extension.
-            zero_dot_loss = probability_loss.detach() + (
-                logits_loss - logits_loss.detach()
-            )
-            loss = torch.where(zero_dot, zero_dot_loss, logits_loss).mean()
-        else:
-            loss = F.binary_cross_entropy(sim_p, sim)
+        return F.binary_cross_entropy(sim_p, sim)
     else:
         raise NotImplementedError
-
-    if (
-        kernel_type == "linear"
-        and spikes.dtype in (torch.float16, torch.bfloat16)
-        and not linear_autocast
-    ):
-        loss = loss.to(spikes.dtype)
-    return loss
 
 
 def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor) -> Tensor:
