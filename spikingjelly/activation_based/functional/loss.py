@@ -185,6 +185,8 @@ def spike_similar_loss(
 
     当使用Sigmoid或高斯内积时，内积的取值范围均在[0, 1]之间；而使用线性内积时，为了保证内积取值仍然在[0, 1]之间，会进行归一化，按照 :math:`\text{sim}_p[i][j]=\frac{\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}})}{||\boldsymbol{x_{i}}|| · ||\boldsymbol{y_{j}}||}`。
 
+    线性相似度截断到 ``[-1, 1]`` 以修正舍入越界；被截断元素的梯度为零。
+
     对于相似的数据，根据输入的 ``loss_type`` ，返回度量 ``sim`` 与 ``sim_p`` 差异的损失：
 
     - ``mse`` -- 返回sim与sim_p的均方误差（也就是l2误差）。
@@ -237,6 +239,9 @@ def spike_similar_loss(
 
     When Sigmoid or Gaussian kernel is applied, the inner product naturally lies in :math:`[0, 1]`. To make the value consistent when using linear kernel, the result will be normalized as: :math:`\text{sim}_p[i][j]=\frac{\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}})}{||\boldsymbol{x_{i}}|| · ||\boldsymbol{y_{j}}||}`.
 
+    Linear similarities are clamped to ``[-1, 1]`` to correct rounding overshoot;
+    the gradient of a clamped element is zero.
+
     For similar data, return the specified discrepancy loss between ``sim`` and ``sim_p`` according to ``loss_type``.
 
     - ``mse`` -- Return the Mean-Square Error (squared L2 norm) between sim and sim_p.
@@ -277,7 +282,7 @@ def spike_similar_loss(
 
     if kernel_type == "linear":
         spikes_len = spikes.norm(p=2, dim=1, keepdim=True)
-        sim_p = sim_p / ((spikes_len.mm(spikes_len.t())) + 1e-8)
+        sim_p = (sim_p / ((spikes_len.mm(spikes_len.t())) + 1e-8)).clamp(-1, 1)
 
     labels = labels.to(dtype=sim_p.dtype)
     sim = labels.mm(labels.t()).clamp_max(
