@@ -666,14 +666,19 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
     def resource_url_md5(cls) -> list:
         return [
             (
-                "shd_train.h5.zip",
-                "https://zenkelab.org/datasets/shd_train.h5.zip",
-                "f3252aeb598ac776c1b526422d90eecb",
+                "ssc_train.h5.zip",
+                "https://zenkelab.org/datasets/ssc/ssc_train.h5.zip",
+                "d102be95e7144fcc0553d1f45ba94170",
             ),
             (
-                "shd_test.h5.zip",
-                "https://zenkelab.org/datasets/shd_test.h5.zip",
-                "1503a5064faa34311c398fb0a1ed0a6f",
+                "ssc_valid.h5.zip",
+                "https://zenkelab.org/datasets/ssc/ssc_valid.h5.zip",
+                "b4eee3516a4a90dd0c71a6ac23a8ae43",
+            ),
+            (
+                "ssc_test.h5.zip",
+                "https://zenkelab.org/datasets/ssc/ssc_test.h5.zip",
+                "a35ff1e9cffdd02a20eb850c17c37748",
             ),
         ]
 

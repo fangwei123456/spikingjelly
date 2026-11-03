@@ -30,6 +30,8 @@ spikingjelly.datasets
 
 - Time-based fixed-frame integration handles empty intervals without changing
   previously successful results for ordered events.
+- ``SpikingSpeechCommands`` downloads the SSC train/valid/test archives instead of the
+  SHD ones, so automatic download no longer fails on the missing ``ssc_*.h5`` files.
 
 spikingjelly.activation_based.encoding
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
