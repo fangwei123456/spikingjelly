@@ -84,5 +84,5 @@ def test_ssc_root_without_ssc_files_raises_clear_error(
     (tmp_path / "events_h5").mkdir()
     (tmp_path / "events_h5" / "shd_train.h5").touch()
 
-    with pytest.raises(FileNotFoundError, match="separate root"):
+    with pytest.raises(FileNotFoundError, match="separate, empty root"):
         SpikingSpeechCommands(root=str(tmp_path), split="valid", **kwargs)

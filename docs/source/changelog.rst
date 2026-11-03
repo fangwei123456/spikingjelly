@@ -33,7 +33,7 @@ spikingjelly.datasets
 - ``SpikingSpeechCommands`` downloads the SSC train/valid/test archives instead of the
   SHD ones, so automatic download no longer fails on the missing ``ssc_*.h5`` files.
   A root prepared earlier or by ``SpikingHeidelbergDigits`` now raises a clear error; use
-  a separate root or remove its ``download``, ``extract`` and ``events_h5`` directories.
+  a separate, empty root for SSC.
 
 spikingjelly.activation_based.encoding
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

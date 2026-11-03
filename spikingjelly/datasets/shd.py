@@ -511,9 +511,8 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
 
         :raises FileNotFoundError: 若 ``root`` 下已存在的 ``events_h5`` 缺少所需的
             ``ssc_*.h5`` 文件（例如由 :class:`SpikingHeidelbergDigits` 或旧版本在同一
-            ``root`` 下准备），
-            则抛出该异常。请为 SSC 使用单独的 ``root``，或删除该 ``root`` 下的
-            ``download``、``extract`` 和 ``events_h5`` 目录。
+            ``root`` 下准备），则抛出该异常。两个数据集使用相同的 ``download``、
+            ``extract``、``events_h5`` 及帧目录名称，请为 SSC 使用单独的空 ``root``。
 
         ----
 
@@ -570,9 +569,9 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
         :raises FileNotFoundError: If the existing ``events_h5`` under ``root``
             lacks the ``ssc_*.h5`` files that are needed, for example because it
             was prepared by :class:`SpikingHeidelbergDigits` or by an earlier
-            version in the same ``root``. Use a separate ``root`` for SSC, or
-            remove the ``download``, ``extract`` and ``events_h5`` directories of
-            that ``root``.
+            version in the same ``root``. Both datasets use the same ``download``,
+            ``extract``, ``events_h5`` and frame directory names, so use a
+            separate, empty ``root`` for SSC.
 
         .. note::
 
@@ -624,18 +623,19 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
         return _root / self.split
 
     def _check_raw_files(self, splits: tuple[str, ...]) -> None:
-        # ``download``, ``extract`` and ``events_h5`` are shared with
-        # SpikingHeidelbergDigits, and an existing ``events_h5`` is reused as is,
-        # so a root prepared by SHD or by an earlier version lacks the SSC files.
+        # SpikingHeidelbergDigits uses the same ``download``, ``extract``,
+        # ``events_h5`` and frame directory names, and an existing ``events_h5`` is
+        # reused as is, so a root prepared by SHD or by an earlier version lacks
+        # the SSC files. Only a separate root avoids mixing the two datasets.
         missing = [f"ssc_{s}.h5" for s in splits]
         missing = [name for name in missing if not (self.raw_root / name).exists()]
         if missing:
             raise FileNotFoundError(
                 f"{', '.join(missing)} not found in the existing [{self.raw_root}], "
                 "which may have been prepared by SpikingHeidelbergDigits or by an "
-                "earlier SpikingJelly version. Use a separate root for "
-                "SpikingSpeechCommands, or remove the download, extract and "
-                "events_h5 directories of this root."
+                "earlier SpikingJelly version. Use a separate, empty root for "
+                "SpikingSpeechCommands: both datasets use the same download, "
+                "extract, events_h5 and frame directory names."
             )
 
     @property
