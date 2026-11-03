@@ -691,6 +691,32 @@ def test_deepcopy_after_forward_keeps_shared_state_shared():
     assert clone.v is not node.v
 
 
+def test_deepcopy_after_forward_keeps_shared_containers_shared():
+    node = neuron.IFNode()
+    node(torch.rand(2, 3, requires_grad=True))
+    node.history = [node.v]
+    node.history_alias = node.history
+
+    clone = copy.deepcopy(node)
+
+    assert clone.history_alias is clone.history
+    assert clone.history[0] is clone.v
+    assert clone.v.grad_fn is None
+
+
+def test_deepcopy_after_forward_with_self_referential_container():
+    node = neuron.IFNode()
+    node(torch.rand(2, 3, requires_grad=True))
+    node.history = [node.v]
+    node.history.append(node.history)
+
+    clone = copy.deepcopy(node)
+
+    assert clone.history[1] is clone.history
+    assert clone.history[0] is clone.v
+    assert clone.v.grad_fn is None
+
+
 def test_deepcopy_non_spiking_node_after_forward():
     node = neuron.NonSpikingLIFNode(decode="last_mem")
     node(torch.rand(4, 2, 3, requires_grad=True))

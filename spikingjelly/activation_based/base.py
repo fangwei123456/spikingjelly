@@ -11,21 +11,33 @@ def _as_graph_leaf(obj: object, cache: dict) -> object:
     # ``obj`` with each such tensor (also inside lists, tuples and dicts)
     # replaced by a detached alias that keeps ``requires_grad``: this is what
     # pickling such a tensor already stores, so pickling is unchanged.
-    # ``cache`` keeps aliases of the same tensor shared.
+    # ``cache`` maps ``id`` of visited objects to their result, like the
+    # ``deepcopy`` memo: shared tensors and containers stay shared, and lists
+    # and dicts are registered before their items are visited, so containers
+    # that refer to themselves do not recurse forever.
+    key = id(obj)
+    if key in cache:
+        return cache[key]
     if isinstance(obj, torch.Tensor):
         if obj.grad_fn is None:
             return obj
-        if id(obj) not in cache:
-            cache[id(obj)] = obj.detach().requires_grad_(obj.requires_grad)
-        return cache[id(obj)]
-    if type(obj) in (list, tuple):
-        items = [_as_graph_leaf(item, cache) for item in obj]
-        changed = any(new is not old for new, old in zip(items, obj))
-        return type(obj)(items) if changed else obj
+        cache[key] = obj.detach().requires_grad_(obj.requires_grad)
+        return cache[key]
+    if type(obj) is list:
+        result = cache[key] = []
+        result.extend(_as_graph_leaf(item, cache) for item in obj)
+        return result
     if type(obj) is dict:
-        items = {key: _as_graph_leaf(value, cache) for key, value in obj.items()}
-        changed = any(items[key] is not value for key, value in obj.items())
-        return items if changed else obj
+        result = cache[key] = {}
+        result.update(
+            (name, _as_graph_leaf(value, cache)) for name, value in obj.items()
+        )
+        return result
+    if type(obj) is tuple:
+        items = tuple(_as_graph_leaf(item, cache) for item in obj)
+        changed = any(new is not old for new, old in zip(items, obj))
+        cache[key] = items if changed else obj
+        return cache[key]
     return obj
 
 
