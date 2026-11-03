@@ -6,16 +6,38 @@ import torch
 import torch.nn as nn
 
 
+def _is_namedtuple(obj: object) -> bool:
+    return isinstance(obj, tuple) and hasattr(type(obj), "_fields")
+
+
+def _is_container(obj: object) -> bool:
+    return type(obj) in (list, tuple, dict) or _is_namedtuple(obj)
+
+
+def _reaches_graph_tensor(obj: object, seen: set) -> bool:
+    """Whether ``obj`` is, or contains, a tensor attached to the autograd graph."""
+    if isinstance(obj, torch.Tensor):
+        return obj.grad_fn is not None
+    if not _is_container(obj) or id(obj) in seen:
+        return False
+    seen.add(id(obj))
+    items = [*obj.keys(), *obj.values()] if type(obj) is dict else obj
+    return any(_reaches_graph_tensor(item, seen) for item in items)
+
+
 def _as_graph_leaf(obj: object, cache: dict) -> object:
-    # ``copy.deepcopy`` rejects tensors attached to the autograd graph
-    # (non-leaf), which is what runtime state is after a forward pass. Return
-    # ``obj`` with each such tensor (also inside lists, tuples and dicts)
-    # replaced by a detached alias that keeps ``requires_grad``: this is what
-    # pickling such a tensor already stores, so pickling is unchanged.
-    # ``cache`` maps ``id`` of visited objects to their result, like the
-    # ``deepcopy`` memo: shared tensors and containers stay shared, and lists
-    # and dicts are registered before their items are visited, so containers
-    # that refer to themselves do not recurse forever.
+    """Return ``obj`` with graph-attached tensors replaced by detached leaves.
+
+    ``copy.deepcopy`` rejects tensors attached to the autograd graph (non-leaf),
+    which is what runtime state is after a forward pass. Each such tensor, also
+    inside lists, tuples, named tuples and dicts, is replaced by a detached alias
+    that keeps ``requires_grad``: this is what pickling such a tensor already
+    stores, so pickling is unchanged. Only containers that reach such a tensor
+    are rebuilt; any other object is returned as is, so ``deepcopy`` handles it
+    exactly as before. ``cache`` maps the ``id`` of rebuilt objects to their
+    result, like the ``deepcopy`` memo: shared objects stay shared, and lists and
+    dicts are registered before their items, so self-references terminate.
+    """
     key = id(obj)
     if key in cache:
         return cache[key]
@@ -24,6 +46,8 @@ def _as_graph_leaf(obj: object, cache: dict) -> object:
             return obj
         cache[key] = obj.detach().requires_grad_(obj.requires_grad)
         return cache[key]
+    if not _is_container(obj) or not _reaches_graph_tensor(obj, set()):
+        return obj
     if type(obj) is list:
         result = cache[key] = []
         result.extend(_as_graph_leaf(item, cache) for item in obj)
@@ -35,21 +59,22 @@ def _as_graph_leaf(obj: object, cache: dict) -> object:
             for name, value in obj.items()
         )
         return result
-    if type(obj) is tuple:
-        items = tuple(_as_graph_leaf(item, cache) for item in obj)
-        if key in cache:  # reached again through a list or dict inside it
-            return cache[key]
-        changed = any(new is not old for new, old in zip(items, obj))
-        cache[key] = items if changed else obj
+    items = [_as_graph_leaf(item, cache) for item in obj]
+    if key in cache:  # reached again through a list or dict inside it
         return cache[key]
-    return obj
+    cache[key] = type(obj)._make(items) if _is_namedtuple(obj) else tuple(items)
+    return cache[key]
 
 
 _KEEP_GRAPH_STATE = contextvars.ContextVar("_KEEP_GRAPH_STATE", default=False)
 
 
 def _getstate_as_graph_leaves(state: dict) -> dict:
-    # Used by ``__getstate__`` (``copy.deepcopy`` and pickling go through it).
+    """Convert a ``__getstate__`` result with :func:`_as_graph_leaf`.
+
+    ``copy.deepcopy`` and pickling go through ``__getstate__``. The conversion is
+    skipped during :func:`_shallow_copy_keeping_graph`.
+    """
     if _KEEP_GRAPH_STATE.get():
         return state
     cache = {}
@@ -57,16 +82,19 @@ def _getstate_as_graph_leaves(state: dict) -> dict:
 
 
 def _shallow_copy_keeping_graph(module: nn.Module) -> nn.Module:
-    # ``copy.copy`` also goes through ``__getstate__``. A shallow copy keeps
-    # sharing the state as it is, graph included, so skip the conversion.
+    """Shallow copy of ``module`` that shares its state as it is, graph included.
+
+    ``copy.copy`` also goes through ``__getstate__``; this builds the copy the
+    same way ``copy.copy`` does, from the unconverted state.
+    """
     token = _KEEP_GRAPH_STATE.set(True)
     try:
-        func, args, state = module.__reduce_ex__(4)[:3]
+        reduced = module.__reduce_ex__(4)
     finally:
         _KEEP_GRAPH_STATE.reset(token)
-    new = func(*args)
-    new.__setstate__(state)
-    return new
+    if isinstance(reduced, str):
+        return module
+    return copy._reconstruct(module, None, *reduced)
 
 
 class StepModule:

@@ -1,5 +1,6 @@
 import copy
 import pickle
+from collections import namedtuple
 
 import pytest
 import torch
@@ -754,6 +755,42 @@ def test_shallow_copy_after_forward_shares_graph_attached_state(make_node):
 
     assert shallow is not node
     assert shallow.v is node.v and shallow.v.grad_fn is not None
+
+
+def test_deepcopy_keeps_containers_shared_between_nodes():
+    # Containers without graph-attached tensors are left to deepcopy, which
+    # keeps them shared between modules, as before.
+    net = nn.Sequential(neuron.IFNode(), neuron.IFNode())
+    net[0].config = net[1].config = [1, 2]
+    net(torch.rand(2, 3, requires_grad=True))
+
+    clone = copy.deepcopy(net)
+
+    assert clone[0].config is clone[1].config
+    assert clone[0].config is not net[0].config
+
+
+_State = namedtuple("_State", ["v", "step"])
+
+
+def test_deepcopy_after_forward_with_named_tuple_memory():
+    node = neuron.IFNode()
+    node.register_memory("trace", None)
+    node.trace = _State(torch.ones(2, 3, requires_grad=True) * 2, 1)
+
+    clone = copy.deepcopy(node)
+
+    assert type(clone.trace) is _State
+    assert clone.trace.v.grad_fn is None and clone.trace.step == 1
+
+
+class _NodeWithTwoItemReduce(neuron.IFNode):
+    def __reduce_ex__(self, protocol):
+        return (_NodeWithTwoItemReduce, ())
+
+
+def test_shallow_copy_accepts_two_item_reduce():
+    assert type(copy.copy(_NodeWithTwoItemReduce())) is _NodeWithTwoItemReduce
 
 
 def test_deepcopy_non_spiking_node_after_forward():

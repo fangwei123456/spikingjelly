@@ -23,7 +23,8 @@ spikingjelly.activation_based.neuron
 spikingjelly.activation_based.base
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- ``copy.deepcopy`` of ``MemoryModule``, ``FlexSN`` and ``NonSpikingBaseNode`` no longer fails after a forward pass: graph-attached tensors stored in memories or attributes (directly or in lists, tuples and dicts, e.g. ``v_seq``, ``state_seqs``) are copied as detached leaves. Pickling is unchanged.
+- ``copy.deepcopy`` of ``MemoryModule``, ``FlexSN`` and ``NonSpikingBaseNode`` no longer
+  fails after a forward pass; graph-attached state is copied as detached leaves.
 
 spikingjelly.activation_based.precision
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
