@@ -793,6 +793,20 @@ def test_shallow_copy_accepts_two_item_reduce():
     assert type(copy.copy(_NodeWithTwoItemReduce())) is _NodeWithTwoItemReduce
 
 
+def test_deepcopy_after_forward_with_queue_memory():
+    # SlidingPSN keeps its recent inputs in a list memory.
+    node = neuron.SlidingPSN(k=2, step_mode="s")
+    x = torch.rand(2, 3, requires_grad=True)
+    node(x)
+    node(x)
+    assert node.queue[-1].grad_fn is not None
+
+    clone = copy.deepcopy(node)
+
+    assert all(item.grad_fn is None for item in clone.queue)
+    torch.testing.assert_close(clone.queue[-1], node.queue[-1].detach())
+
+
 def test_deepcopy_non_spiking_node_after_forward():
     node = neuron.NonSpikingLIFNode(decode="last_mem")
     node(torch.rand(4, 2, 3, requires_grad=True))
