@@ -18,8 +18,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 #### spikingjelly.datasets
 
-- Time-based fixed-frame integration handles empty intervals without changing
-  previously successful results for ordered events.
+- Time-based fixed-frame integration handles empty intervals for ordered events.
 - `SpikingHeidelbergDigits` and `SpikingSpeechCommands` time-split frame integration
   yields empty frames for silent intervals instead of raising `IndexError`, and no
   longer drops or double-counts events that fall on a rounded frame boundary.
