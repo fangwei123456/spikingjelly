@@ -611,7 +611,7 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
     def get_root_when_train_is_none(self, _root: Path):
         return _root / self.split
 
-    def _check_raw_files(self, splits: Tuple[str, ...]):
+    def _check_raw_files(self, splits: tuple[str, ...]) -> None:
         # ``download``, ``extract`` and ``events_h5`` are shared with
         # SpikingHeidelbergDigits, and an existing ``events_h5`` is reused as is,
         # so a root prepared by SHD or by an earlier version lacks the SSC files.
