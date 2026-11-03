@@ -590,6 +590,8 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
 
         self.prepare_raw_dataset()
         builder = self.get_dataset_builder()
+        if data_type != "event" and not builder.processed_root.exists():
+            self._check_raw_files(self.splits)
         self.processed_root, loader = builder.build()
 
         split_root = self.get_root_when_train_is_none(self.processed_root)
@@ -609,6 +611,21 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
     def get_root_when_train_is_none(self, _root: Path):
         return _root / self.split
 
+    def _check_raw_files(self, splits: Tuple[str, ...]):
+        # ``download``, ``extract`` and ``events_h5`` are shared with
+        # SpikingHeidelbergDigits, and an existing ``events_h5`` is reused as is,
+        # so a root prepared by SHD or by an earlier version lacks the SSC files.
+        missing = [f"ssc_{s}.h5" for s in splits]
+        missing = [name for name in missing if not (self.raw_root / name).exists()]
+        if missing:
+            raise FileNotFoundError(
+                f"{', '.join(missing)} not found in the existing [{self.raw_root}], "
+                "which may have been prepared by SpikingHeidelbergDigits or by an "
+                "earlier SpikingJelly version. Use a separate root for "
+                "SpikingSpeechCommands, or remove the download, extract and "
+                "events_h5 directories of this root."
+            )
+
     @property
     def raw_root(self) -> Path:
         """
@@ -619,6 +636,7 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
     def get_dataset_builder(self):
         if self.cfg.data_type == "event":
             # prepare for manual __getitem__
+            self._check_raw_files((self.split,))
             self.h5_file_path = self.raw_root / f"ssc_{self.split}.h5"
             self.h5_file = None
             self.h5_file_pid = None
