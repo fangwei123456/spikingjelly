@@ -646,6 +646,7 @@ class FlexSN(base.MemoryModule):
         cls = self.__class__
         result = cls.__new__(cls)
         memo[id(self)] = result
+        cache = {}
         for key, value in self.__dict__.items():
             if key in {
                 "_triton_handle",
@@ -653,6 +654,7 @@ class FlexSN(base.MemoryModule):
                 "_triton_runtime_dtype",
             }:
                 continue
+            value = base._as_graph_leaf(value, cache)
             result.__dict__[key] = copy.deepcopy(value, memo)
         result._triton_handle = None
         result._triton_handle_finalizer = None

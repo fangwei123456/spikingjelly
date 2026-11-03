@@ -12,6 +12,10 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 - `GatedLIFNode` preserves feature and one-dimensional sequence layouts instead of adding spatial axes or misaligning channel parameters.
 
+#### spikingjelly.activation_based.base
+
+- `copy.deepcopy` of `MemoryModule`, `FlexSN` and `NonSpikingBaseNode` no longer fails after a forward pass: graph-attached tensors stored in memories or attributes (directly or in lists, tuples and dicts, e.g. `v_seq`, `state_seqs`) are copied as detached leaves. Pickling is unchanged.
+
 #### spikingjelly.activation_based.precision
 
 - BF16 capability detection queries non-CUDA accelerator backends instead of rejecting them unconditionally.

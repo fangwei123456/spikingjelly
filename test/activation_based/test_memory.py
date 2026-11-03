@@ -1,3 +1,6 @@
+import copy
+import pickle
+
 import pytest
 import torch
 import torch.nn as nn
@@ -620,3 +623,117 @@ def test_apply_moves_tensor_reset_values_device():
     net.reset()
     assert net.s.is_cuda
     net(torch.ones(4, device="cuda"))  # no cross-device RuntimeError
+
+
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+@pytest.mark.parametrize("node_cls", [neuron.IFNode, neuron.LIFNode])
+def test_deepcopy_after_forward_with_graph_attached_state(node_cls, step_mode):
+    """deepcopy must work on a module whose state is attached to the autograd
+    graph (non-leaf tensor), e.g. right after a training forward."""
+    net = nn.Sequential(layer.Linear(3, 3), node_cls())
+    functional.set_step_mode(net, step_mode)
+    x = torch.rand(4, 2, 3) if step_mode == "m" else torch.rand(2, 3)
+    net(x)
+    v = net[1].v
+    assert v.grad_fn is not None
+
+    clone = copy.deepcopy(net)
+
+    # The clone has an independent, detached copy of the state ...
+    v_clone = clone[1].v
+    assert v_clone.grad_fn is None
+    assert v_clone.data_ptr() != v.data_ptr()
+    torch.testing.assert_close(v_clone, v.detach())
+    # ... while the original keeps its graph and remains differentiable.
+    assert net[1].v is v and v.grad_fn is not None
+    v.sum().backward()
+    assert net[0].weight.grad is not None
+
+    # The clone keeps working, from the copied state, and is independent.
+    functional.reset_net(net)
+    torch.testing.assert_close(clone[1].v, v_clone)
+    clone(x)
+
+
+def test_deepcopy_preserves_leaf_memory_and_reset_values():
+    node = neuron.LIFNode(v_reset=0.5)
+    node(torch.rand(2, 3))
+    clone = copy.deepcopy(node)
+    torch.testing.assert_close(clone.v, node.v)
+    assert clone.v is not node.v
+    assert clone.get_reset_value("v") == node.get_reset_value("v")
+    assert clone._memories is not node._memories
+    clone.reset()
+    assert node.v.shape == (2, 3)
+
+
+def test_deepcopy_after_forward_with_stored_v_seq():
+    # ``v_seq`` is a plain attribute (not a registered memory)
+    node = neuron.LIFNode(step_mode="m", store_v_seq=True)
+    node(torch.rand(4, 2, 3, requires_grad=True))
+    assert node.v_seq.grad_fn is not None
+
+    clone = copy.deepcopy(node)
+
+    assert clone.v_seq.grad_fn is None
+    torch.testing.assert_close(clone.v_seq, node.v_seq.detach())
+    assert node.v_seq.grad_fn is not None
+
+
+def test_deepcopy_after_forward_keeps_shared_state_shared():
+    node = neuron.IFNode()
+    node(torch.rand(2, 3, requires_grad=True))
+    node.v_alias = node.v  # same graph-attached tensor under two names
+
+    clone = copy.deepcopy(node)
+
+    assert clone.v_alias is clone.v
+    assert clone.v is not node.v
+
+
+def test_deepcopy_non_spiking_node_after_forward():
+    node = neuron.NonSpikingLIFNode(decode="last_mem")
+    node(torch.rand(4, 2, 3, requires_grad=True))
+    assert node.v.grad_fn is not None
+
+    clone = copy.deepcopy(node)
+
+    assert clone.v.grad_fn is None
+    torch.testing.assert_close(clone.v, node.v.detach())
+
+
+def test_deepcopy_compiled_neuron_keeps_compiled_wrapper():
+    compiled = torch.compile(neuron.LIFNode(), backend="eager")
+    assert type(copy.deepcopy(compiled)) is type(compiled)
+    compiled(torch.rand(2, 3, requires_grad=True))
+    clone = copy.deepcopy(compiled)
+    assert type(clone) is type(compiled)
+    assert clone._orig_mod.v.grad_fn is None
+
+
+class _NodeWithCustomState(neuron.IFNode):
+    def __getstate__(self):
+        state = super().__getstate__()
+        state["custom"] = "from_getstate"
+        return state
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        self.restored = True
+
+
+def test_deepcopy_after_forward_honours_getstate_and_setstate():
+    node = _NodeWithCustomState()
+    node(torch.rand(2, 3, requires_grad=True))
+    clone = copy.deepcopy(node)
+    assert clone.custom == "from_getstate"
+    assert clone.restored
+
+
+def test_pickle_after_forward_is_unchanged():
+    node = neuron.LIFNode()
+    node(torch.rand(2, 3, requires_grad=True))
+    restored = pickle.loads(pickle.dumps(node))
+    # as before: the state is restored as a leaf that still requires grad
+    assert restored.v.is_leaf and restored.v.requires_grad
+    torch.testing.assert_close(restored.v, node.v.detach())

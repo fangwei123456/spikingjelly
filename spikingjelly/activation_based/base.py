@@ -5,6 +5,36 @@ import torch
 import torch.nn as nn
 
 
+def _as_graph_leaf(obj: object, cache: dict) -> object:
+    # ``copy.deepcopy`` rejects tensors attached to the autograd graph
+    # (non-leaf), which is what runtime state is after a forward pass. Return
+    # ``obj`` with each such tensor (also inside lists, tuples and dicts)
+    # replaced by a detached alias that keeps ``requires_grad``: this is what
+    # pickling such a tensor already stores, so pickling is unchanged.
+    # ``cache`` keeps aliases of the same tensor shared.
+    if isinstance(obj, torch.Tensor):
+        if obj.grad_fn is None:
+            return obj
+        if id(obj) not in cache:
+            cache[id(obj)] = obj.detach().requires_grad_(obj.requires_grad)
+        return cache[id(obj)]
+    if type(obj) in (list, tuple):
+        items = [_as_graph_leaf(item, cache) for item in obj]
+        changed = any(new is not old for new, old in zip(items, obj))
+        return type(obj)(items) if changed else obj
+    if type(obj) is dict:
+        items = {key: _as_graph_leaf(value, cache) for key, value in obj.items()}
+        changed = any(items[key] is not value for key, value in obj.items())
+        return items if changed else obj
+    return obj
+
+
+def _getstate_as_graph_leaves(state: dict) -> dict:
+    # Used by ``__getstate__`` (``copy.deepcopy`` and pickling go through it).
+    cache = {}
+    return {key: _as_graph_leaf(value, cache) for key, value in state.items()}
+
+
 class StepModule:
     r"""
     **API Language** - :ref:`中文 <StepModule-cn>` | :ref:`English <StepModule-en>`
@@ -925,6 +955,12 @@ class MemoryModule(nn.Module, StepModule):
         for key in self._memories.keys():
             if isinstance(self._memories[key], torch.Tensor):
                 self._memories[key].detach_()
+
+    def __getstate__(self) -> dict:
+        # After a forward pass, memories (and attributes such as ``v_seq``)
+        # are non-leaf tensors, which ``copy.deepcopy`` rejects. Hand them out
+        # as detached leaves so the module can be copied without ``reset``.
+        return _getstate_as_graph_leaves(super().__getstate__())
 
     def _apply(self, fn):
         for key, value in self._memories.items():

@@ -600,6 +600,10 @@ class NonSpikingBaseNode(nn.Module, base.MultiStepModule):
         super().__init__()
         self.decode = decode
 
+    def __getstate__(self) -> dict:
+        # ``self.v`` is a non-leaf tensor after a forward pass.
+        return base._getstate_as_graph_leaves(super().__getstate__())
+
     @abstractmethod
     def neuronal_charge(self, x: torch.Tensor):
         raise NotImplementedError

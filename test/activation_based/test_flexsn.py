@@ -58,6 +58,23 @@ def test_functional_forward_does_not_mutate_managed_state():
     assert module.state_seqs is not None
 
 
+def test_deepcopy_after_forward_detaches_graph_attached_states():
+    threshold = torch.nn.Parameter(torch.tensor(0.8))
+    module = FlexSN(_lif_core, 1, (threshold,), store_state_seqs=True)
+    module(torch.randn(4, 2, 3, requires_grad=True))
+    assert module.states[0].grad_fn is not None
+
+    copied = copy.deepcopy(module)
+
+    assert copied.states[0].grad_fn is None
+    assert copied.state_seqs[0].grad_fn is None
+    torch.testing.assert_close(copied.states[0], module.states[0].detach())
+    torch.testing.assert_close(copied.state_seqs[0], module.state_seqs[0].detach())
+    # the original keeps its graph
+    module.states[0].sum().backward()
+    assert threshold.grad is not None
+
+
 def test_cpu_scan_is_visible_to_fullgraph_compile():
     x = torch.randn(3, 2, 4)
     eager = FlexSN(_lif_core, 1, (torch.tensor(0.8),))(x)
