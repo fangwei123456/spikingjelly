@@ -509,6 +509,12 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
             #. 原始数据集通过符号链接复制了解析后的数据集。原始数据集由三个 ``.h5`` 文件组成，而不是一系列 ``.npz`` 文件。
             #. 当 ``data_type == "event"`` 时，将绕过 ``DatasetFolder`` 的数据加载过程。否则，将以 ``Dataset`` 样式加载数据。
 
+        :raises FileNotFoundError: 若 ``root`` 下已存在的 ``events_h5`` 缺少所需的
+            ``ssc_*.h5`` 文件（例如由 :class:`SpikingHeidelbergDigits` 或旧版本在同一
+            ``root`` 下准备），
+            则抛出该异常。请为 SSC 使用单独的 ``root``，或删除该 ``root`` 下的
+            ``download``、``extract`` 和 ``events_h5`` 目录。
+
         ----
 
         .. _SpikingSpeechCommands.__init__-en:
@@ -561,6 +567,12 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
         :type transform: Optional[Callable]
         :param target_transform: Target transform function
         :type target_transform: Optional[Callable]
+        :raises FileNotFoundError: If the existing ``events_h5`` under ``root``
+            lacks the ``ssc_*.h5`` files that are needed, for example because it
+            was prepared by :class:`SpikingHeidelbergDigits` or by an earlier
+            version in the same ``root``. Use a separate ``root`` for SSC, or
+            remove the ``download``, ``extract`` and ``events_h5`` directories of
+            that ``root``.
 
         .. note::
 
