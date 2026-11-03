@@ -523,10 +523,12 @@ def cal_fixed_frames_number_segment_index(
         dt = (events_t[-1] - events_t[0]) // frames_num
         for i in range(frames_num):
             t_l = dt * i + events_t[0]
-            t_r = t_l + dt
             j_l[i] = np.searchsorted(events_t, t_l, side="left")
-            j_r[i] = np.searchsorted(events_t, t_r, side="left")
 
+        # As documented, frame j ends at t_0 + dt * (j + 1), the start of frame
+        # j + 1. Computing it as ``t_l + dt`` instead can round differently for
+        # float timestamps and drop or double-count an event on the boundary.
+        j_r[:-1] = j_l[1:]
         j_r[-1] = N
     else:
         raise NotImplementedError

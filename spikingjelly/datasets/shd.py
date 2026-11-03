@@ -49,15 +49,14 @@ def _cal_fixed_frames_number_segment_index(
         dt = (
             events_t[-1] - events_t[0]
         ) / frames_num  # different from utils.cal_fixed_frames_number_segment_index
-        idx = np.arange(N)
         for i in range(frames_num):
             t_l = dt * i + events_t[0]
-            t_r = t_l + dt
-            mask = np.logical_and(events_t >= t_l, events_t < t_r)
-            idx_masked = idx[mask]
-            j_l[i] = idx_masked[0]
-            j_r[i] = idx_masked[-1] + 1
+            # Empty intervals yield j_l == j_r instead of indexing an empty mask.
+            j_l[i] = np.searchsorted(events_t, t_l, side="left")
 
+        # Each frame ends where the next one starts, so that rounding in
+        # ``t_l + dt`` can neither drop an event nor count it twice.
+        j_r[:-1] = j_l[1:]
         j_r[-1] = N
     else:
         raise NotImplementedError
