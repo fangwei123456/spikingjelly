@@ -28,13 +28,12 @@ spikingjelly.activation_based.precision
 spikingjelly.datasets
 ^^^^^^^^^^^^^^^^^^^^^
 
-- Time-based fixed-frame integration handles empty intervals for ordered events.
-- ``SpikingHeidelbergDigits`` and ``SpikingSpeechCommands`` time-split frame integration
-  yields empty frames for silent intervals instead of raising ``IndexError``, and no
-  longer drops or double-counts events that fall on a rounded frame boundary.
-- Time-based fixed-frame integration ends each frame where the next one starts, as
-  documented, so float timestamps on a frame boundary are no longer dropped or
-  counted twice.
+- Time-based fixed-frame integration handles empty intervals and ends each frame where
+  the next one starts, so float events on a boundary are counted once; integer
+  timestamps give unchanged frames.
+- ``SpikingHeidelbergDigits`` and ``SpikingSpeechCommands`` time-split frames no longer
+  raise ``IndexError`` on silent intervals or drop or double-count boundary events.
+  Delete cached ``frames_number_*_split_by_time`` folders to rebuild them.
 
 spikingjelly.activation_based.encoding
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

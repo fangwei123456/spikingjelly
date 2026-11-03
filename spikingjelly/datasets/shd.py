@@ -34,6 +34,12 @@ SSC_N_CLASSES = 35
 def _cal_fixed_frames_number_segment_index(
     events_t: np.ndarray, split_by: str, frames_num: int
 ) -> tuple:
+    """Start and end event indices ``j_l, j_r`` of each frame for sorted ``events_t``.
+
+    With ``split_by="time"``, frames span equal durations and each one ends where
+    the next one starts, so the frames partition the events; a frame without events
+    has ``j_l == j_r``.
+    """
     j_l = np.zeros(shape=[frames_num], dtype=int)
     j_r = np.zeros(shape=[frames_num], dtype=int)
     N = events_t.size
