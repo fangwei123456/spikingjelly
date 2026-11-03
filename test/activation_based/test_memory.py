@@ -717,6 +717,45 @@ def test_deepcopy_after_forward_with_self_referential_container():
     assert clone.v.grad_fn is None
 
 
+def test_deepcopy_after_forward_with_tuple_list_cycle():
+    node = neuron.IFNode()
+    node(torch.rand(2, 3, requires_grad=True))
+    inner = [node.v]
+    node.history = (inner,)
+    inner.append(node.history)
+
+    clone = copy.deepcopy(node)
+
+    assert clone.history[0][1] is clone.history
+    assert clone.history[0][0] is clone.v
+
+
+def test_deepcopy_after_forward_with_graph_attached_dict_key():
+    node = neuron.IFNode()
+    node(torch.rand(2, 3, requires_grad=True))
+    node.by_state = {node.v: 1}
+
+    clone = copy.deepcopy(node)
+
+    (key,) = clone.by_state
+    assert key is clone.v and key.grad_fn is None
+
+
+@pytest.mark.parametrize(
+    "make_node",
+    [lambda: neuron.LIFNode(step_mode="m"), neuron.NonSpikingLIFNode],
+    ids=["LIFNode", "NonSpikingLIFNode"],
+)
+def test_shallow_copy_after_forward_shares_graph_attached_state(make_node):
+    node = make_node()
+    node(torch.rand(4, 2, 3, requires_grad=True))
+
+    shallow = copy.copy(node)
+
+    assert shallow is not node
+    assert shallow.v is node.v and shallow.v.grad_fn is not None
+
+
 def test_deepcopy_non_spiking_node_after_forward():
     node = neuron.NonSpikingLIFNode(decode="last_mem")
     node(torch.rand(4, 2, 3, requires_grad=True))

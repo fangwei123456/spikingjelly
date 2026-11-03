@@ -604,6 +604,9 @@ class NonSpikingBaseNode(nn.Module, base.MultiStepModule):
         # ``self.v`` is a non-leaf tensor after a forward pass.
         return base._getstate_as_graph_leaves(super().__getstate__())
 
+    def __copy__(self):
+        return base._shallow_copy_keeping_graph(self)
+
     @abstractmethod
     def neuronal_charge(self, x: torch.Tensor):
         raise NotImplementedError

@@ -1,3 +1,4 @@
+import contextvars
 import copy
 from typing import Tuple, Generator, Optional, Callable
 
@@ -30,21 +31,42 @@ def _as_graph_leaf(obj: object, cache: dict) -> object:
     if type(obj) is dict:
         result = cache[key] = {}
         result.update(
-            (name, _as_graph_leaf(value, cache)) for name, value in obj.items()
+            (_as_graph_leaf(name, cache), _as_graph_leaf(value, cache))
+            for name, value in obj.items()
         )
         return result
     if type(obj) is tuple:
         items = tuple(_as_graph_leaf(item, cache) for item in obj)
+        if key in cache:  # reached again through a list or dict inside it
+            return cache[key]
         changed = any(new is not old for new, old in zip(items, obj))
         cache[key] = items if changed else obj
         return cache[key]
     return obj
 
 
+_KEEP_GRAPH_STATE = contextvars.ContextVar("_KEEP_GRAPH_STATE", default=False)
+
+
 def _getstate_as_graph_leaves(state: dict) -> dict:
     # Used by ``__getstate__`` (``copy.deepcopy`` and pickling go through it).
+    if _KEEP_GRAPH_STATE.get():
+        return state
     cache = {}
     return {key: _as_graph_leaf(value, cache) for key, value in state.items()}
+
+
+def _shallow_copy_keeping_graph(module: nn.Module) -> nn.Module:
+    # ``copy.copy`` also goes through ``__getstate__``. A shallow copy keeps
+    # sharing the state as it is, graph included, so skip the conversion.
+    token = _KEEP_GRAPH_STATE.set(True)
+    try:
+        func, args, state = module.__reduce_ex__(4)[:3]
+    finally:
+        _KEEP_GRAPH_STATE.reset(token)
+    new = func(*args)
+    new.__setstate__(state)
+    return new
 
 
 class StepModule:
@@ -973,6 +995,9 @@ class MemoryModule(nn.Module, StepModule):
         # are non-leaf tensors, which ``copy.deepcopy`` rejects. Hand them out
         # as detached leaves so the module can be copied without ``reset``.
         return _getstate_as_graph_leaves(super().__getstate__())
+
+    def __copy__(self):
+        return _shallow_copy_keeping_graph(self)
 
     def _apply(self, fn):
         for key, value in self._memories.items():
