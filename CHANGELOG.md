@@ -22,6 +22,8 @@ Changes since `2.0.0.dev0`. For older releases, see
   previously successful results for ordered events.
 - `SpikingSpeechCommands` downloads the SSC train/valid/test archives instead of the
   SHD ones, so automatic download no longer fails on the missing `ssc_*.h5` files.
+  A root prepared by the previous code keeps the SHD files: remove its `download`,
+  `extract` and `events_h5` directories before loading SSC again.
 
 #### spikingjelly.activation_based.encoding
 
