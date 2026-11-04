@@ -20,6 +20,10 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 - Time-based fixed-frame integration handles empty intervals without changing
   previously successful results for ordered events.
+- `SpikingSpeechCommands` downloads the SSC train/valid/test archives instead of the
+  SHD ones, so automatic download no longer fails on the missing `ssc_*.h5` files.
+  A root prepared earlier or by `SpikingHeidelbergDigits` now raises a clear error; use
+  a separate, empty root for SSC.
 
 #### spikingjelly.activation_based.encoding
 
