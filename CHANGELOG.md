@@ -18,8 +18,12 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 #### spikingjelly.datasets
 
-- Time-based fixed-frame integration handles empty intervals without changing
-  previously successful results for ordered events.
+- Time-based fixed-frame integration handles empty intervals and ends each frame where
+  the next one starts, so float events on a boundary are counted once; integer
+  timestamps give unchanged frames.
+  Delete cached `frames_number_*_split_by_time` folders to rebuild them with the fix.
+- `SpikingHeidelbergDigits` and `SpikingSpeechCommands` time-split frames no longer
+  raise `IndexError` on silent intervals or drop or double-count boundary events.
 - `SpikingSpeechCommands` downloads the SSC train/valid/test archives instead of the
   SHD ones, so automatic download no longer fails on the missing `ssc_*.h5` files.
   A root prepared earlier or by `SpikingHeidelbergDigits` now raises a clear error; use
