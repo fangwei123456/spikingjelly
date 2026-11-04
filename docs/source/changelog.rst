@@ -31,9 +31,9 @@ spikingjelly.datasets
 - Time-based fixed-frame integration handles empty intervals and ends each frame where
   the next one starts, so float events on a boundary are counted once; integer
   timestamps give unchanged frames.
+  Delete cached ``frames_number_*_split_by_time`` folders to rebuild them with the fix.
 - ``SpikingHeidelbergDigits`` and ``SpikingSpeechCommands`` time-split frames no longer
   raise ``IndexError`` on silent intervals or drop or double-count boundary events.
-  Delete cached ``frames_number_*_split_by_time`` folders to rebuild them.
 
 spikingjelly.activation_based.encoding
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
