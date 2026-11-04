@@ -34,6 +34,10 @@ spikingjelly.datasets
   Delete cached ``frames_number_*_split_by_time`` folders to rebuild them with the fix.
 - ``SpikingHeidelbergDigits`` and ``SpikingSpeechCommands`` time-split frames no longer
   raise ``IndexError`` on silent intervals or drop or double-count boundary events.
+- ``SpikingSpeechCommands`` downloads the SSC train/valid/test archives instead of the
+  SHD ones, so automatic download no longer fails on the missing ``ssc_*.h5`` files.
+  A root prepared earlier or by ``SpikingHeidelbergDigits`` now raises a clear error; use
+  a separate, empty root for SSC.
 
 spikingjelly.activation_based.encoding
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
