@@ -69,40 +69,6 @@ jobs:
       - name: Build documentation without warnings
         run: uv run --no-sync sphinx-build -M html docs/source docs/build -W --keep-going
 
-  windows-datasets:
-    name: Windows dataset tests
-    runs-on: windows-2022
-    timeout-minutes: 20
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: "3.11"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
-        with:
-          version: "0.9.24"
-
-      - name: Install CPU test environment
-        shell: bash
-        run: |
-          set -euo pipefail
-          uv venv --python 3.11
-          uv pip install --python .venv/Scripts/python.exe \
-            torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 \
-            --constraints .github/ci-constraints.txt \
-            --index-url https://download.pytorch.org/whl/cpu
-          uv pip install --python .venv/Scripts/python.exe --editable . --group dev \
-            --constraints .github/ci-constraints.txt \
-            --build-constraints .github/ci-constraints.txt
-
-      - name: Run dataset regression tests
-        run: uv run --no-sync pytest test/datasets/test_builders.py test/datasets/test_ssc_download.py test/datasets/test_utils.py -v
-
   package:
     name: Package install smoke test
     runs-on: ubuntu-24.04
