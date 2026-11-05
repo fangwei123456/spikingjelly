@@ -11,7 +11,11 @@ from torchvision.datasets.utils import extract_archive
 
 from .. import configure
 from . import utils
-from .base import NeuromorphicDatasetFolder, NeuromorphicDatasetConfig
+from .base import (
+    NeuromorphicDatasetBuilder,
+    NeuromorphicDatasetConfig,
+    NeuromorphicDatasetFolder,
+)
 # https://github.com/jackd/events-tfds/blob/master/events_tfds/data_io/aedat.py
 
 
@@ -235,6 +239,50 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
             transform,
             target_transform,
         )
+
+    def get_dataset_builder(self) -> NeuromorphicDatasetBuilder:
+        r"""
+        **API Language** - :ref:`中文 <cifar10_dvs.get_dataset_builder-cn>` | :ref:`English <cifar10_dvs.get_dataset_builder-en>`
+
+        ----
+
+        .. _cifar10_dvs.get_dataset_builder-cn:
+
+        * **中文**
+
+        创建数据集构建器；未完成的 TEBN 原始数据划分不能用于加载或构建新数据。
+
+        :return: 数据集构建器
+        :rtype: NeuromorphicDatasetBuilder
+        :raises RuntimeError: 使用未完成的 TEBN 原始数据划分时
+
+        ----
+
+        .. _cifar10_dvs.get_dataset_builder-en:
+
+        * **English**
+
+        Create a dataset builder. An unfinished TEBN raw split cannot be loaded
+        or used to build new data.
+
+        :return: the dataset builder
+        :rtype: NeuromorphicDatasetBuilder
+        :raises RuntimeError: if an unfinished TEBN raw split would be used
+        """
+        builder = super().get_dataset_builder()
+        raw_marker = self.raw_root.with_name(
+            f"{self.raw_root.name}.tebn_split.building"
+        )
+        if raw_marker.exists() and (
+            builder.processed_root == self.raw_root
+            or not builder.processed_root.exists()
+        ):
+            raise RuntimeError(
+                f"Found unfinished TEBN split [{raw_marker}]. Remove the partial "
+                f"train and test directories in [{self.raw_root}] and the marker "
+                "before retrying."
+            )
+        return builder
 
     @classmethod
     def get_H_W(cls) -> Tuple:
@@ -510,23 +558,18 @@ class CIFAR10DVSTEBNSplit(CIFAR10DVS):
 
         self.prepare_raw_dataset()
         builder = self.get_dataset_builder()
-        split_dirs = [builder.processed_root]
-        if not builder.processed_root.exists():
-            split_dirs.append(self.raw_root)
-        for split_dir in split_dirs:
-            split_marker = split_dir.with_name(f"{split_dir.name}.tebn_split.building")
-            if split_marker.exists():
-                raise RuntimeError(
-                    f"Found unfinished TEBN split [{split_marker}]. Remove the partial "
-                    f"train and test directories in [{split_dir}] and the marker "
-                    "before retrying."
-                )
+        split_marker = builder.processed_root.with_name(
+            f"{builder.processed_root.name}.tebn_split.building"
+        )
+        if split_marker.exists():
+            raise RuntimeError(
+                f"Found unfinished TEBN split [{split_marker}]. Remove the partial "
+                f"train and test directories in [{builder.processed_root}] and the "
+                "marker before retrying."
+            )
 
         self.processed_root, loader = builder.build()
         split_root = self.processed_root / ("train" if self.cfg.train else "test")
-        split_marker = self.processed_root.with_name(
-            f"{self.processed_root.name}.tebn_split.building"
-        )
         if not split_root.exists():
             logger.info(
                 "We have the unsplit processed dataset at [{}]. _move_data() is called to split the dataset following TEBN's approach.",

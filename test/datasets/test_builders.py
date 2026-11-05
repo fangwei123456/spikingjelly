@@ -121,7 +121,12 @@ def test_custom_lambda_directory_on_windows(
 
 
 @pytest.mark.parametrize("data_type", ["event", "frame"])
-def test_interrupted_tebn_split_is_not_reused(tmp_path, monkeypatch, data_type):
+@pytest.mark.parametrize(
+    "dataset_cls", [cifar10_dvs.CIFAR10DVS, cifar10_dvs.CIFAR10DVSTEBNSplit]
+)
+def test_interrupted_tebn_split_is_not_reused(
+    tmp_path, monkeypatch, data_type, dataset_cls
+):
     sample_dir = tmp_path / "events_np" / "airplane"
     sample_dir.mkdir(parents=True)
     np.savez(sample_dir / "sample.npz", x=[0], y=[0], t=[0], p=[0])
@@ -135,25 +140,36 @@ def test_interrupted_tebn_split_is_not_reused(tmp_path, monkeypatch, data_type):
         cifar10_dvs.CIFAR10DVSTEBNSplit(tmp_path, train=False)
     assert (tmp_path / "events_np.tebn_split.building").is_file()
     with pytest.raises(RuntimeError, match="unfinished TEBN split"):
-        cifar10_dvs.CIFAR10DVSTEBNSplit(
+        dataset_cls(
             tmp_path,
-            train=False,
             data_type=data_type,
             frames_number=2 if data_type == "frame" else None,
             split_by="number" if data_type == "frame" else None,
+            **(
+                {"train": False}
+                if dataset_cls is cifar10_dvs.CIFAR10DVSTEBNSplit
+                else {}
+            ),
         )
     assert not (tmp_path / "frames_number_2_split_by_number").exists()
 
 
-def test_completed_tebn_frames_load_during_interrupted_raw_split(tmp_path):
+@pytest.mark.parametrize(
+    "dataset_cls", [cifar10_dvs.CIFAR10DVS, cifar10_dvs.CIFAR10DVSTEBNSplit]
+)
+def test_completed_frames_load_during_interrupted_raw_split(tmp_path, dataset_cls):
     (tmp_path / "events_np").mkdir()
     (tmp_path / "events_np.tebn_split.building").touch()
     sample_dir = tmp_path / "frames_number_2_split_by_number" / "test" / "airplane"
     sample_dir.mkdir(parents=True)
     np.savez(sample_dir / "sample.npz", frames=np.zeros((2, 2, 2, 2)))
 
-    dataset = cifar10_dvs.CIFAR10DVSTEBNSplit(
-        tmp_path, train=False, data_type="frame", frames_number=2, split_by="number"
+    dataset = dataset_cls(
+        tmp_path,
+        data_type="frame",
+        frames_number=2,
+        split_by="number",
+        **({"train": False} if dataset_cls is cifar10_dvs.CIFAR10DVSTEBNSplit else {}),
     )
 
     assert len(dataset) == 1
