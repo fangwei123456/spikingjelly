@@ -17,6 +17,7 @@ from .base import (
     NeuromorphicDatasetBuilder,
     NeuromorphicDatasetConfig,
     NeuromorphicDatasetFolder,
+    _custom_frames_root,
 )
 
 
@@ -235,10 +236,7 @@ class SHDFrameCustomIntegrateBuilder(_SHDFrameBuilder):
 
     @property
     def processed_root(self) -> Path:
-        name = self.cfg.custom_integrated_frames_dir_name
-        if name is None:
-            name = self.cfg.custom_integrate_function.__name__
-        return self.cfg.root / name
+        return _custom_frames_root(self.cfg)
 
 
 class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
@@ -273,7 +271,7 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
             与 SpikingJelly 中的其他数据集不同，SHD 是一个神经形态音频数据集。
 
             #. 此数据集中的事件格式为 ``(x, t)`` 而不是 ``(x, y, t, p)``。
-            #. 原始数据集通过符号链接复制了解析后的数据集。原始数据集由两个 ``.h5`` 文件组成，而不是一系列 ``.npz`` 文件。
+            #. 原始数据集通过符号链接引用解析后的数据集；Windows 缺少符号链接权限时复制文件。原始数据集由两个 ``.h5`` 文件组成，而不是一系列 ``.npz`` 文件。
             #. 当 ``data_type == "event"`` 时，将绕过 ``DatasetFolder`` 的数据加载过程。否则，将以 ``Dataset`` 样式加载数据。
 
         ----
@@ -334,7 +332,7 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
             Unlike other datasets in SpikingJelly, SHD is a neuromorphic audio dataset.
 
             #. Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``.
-            #. The raw dataset replicates the extracted dataset (by symbolic links). The raw dataset consists of two ``.h5`` files instead of a series of ``.npz`` files.
+            #. The raw dataset links to the extracted files, or copies them if Windows denies symbolic-link privileges. It consists of two ``.h5`` files instead of a series of ``.npz`` files.
             #. When ``data_type == "event"``, the data loading procedure of ``DatasetFolder`` will be bypassed. Instead, data will be loaded in ``Dataset`` style.
         """
         if train is None:
@@ -445,7 +443,7 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
             target = raw_root / f.name
             if target.exists():
                 continue
-            target.symlink_to(f)
+            utils._link_or_copy(f, target)
 
     def __len__(self):
         if self.cfg.data_type == "event":
@@ -511,7 +509,7 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
             与 SpikingJelly 中的其他数据集不同，SSC 是一个神经形态音频数据集。
 
             #. 此数据集中的事件格式为 ``(x, t)`` 而不是 ``(x, y, t, p)``。
-            #. 原始数据集通过符号链接复制了解析后的数据集。原始数据集由三个 ``.h5`` 文件组成，而不是一系列 ``.npz`` 文件。
+            #. 原始数据集通过符号链接引用解析后的数据集；Windows 缺少符号链接权限时复制文件。原始数据集由三个 ``.h5`` 文件组成，而不是一系列 ``.npz`` 文件。
             #. 当 ``data_type == "event"`` 时，将绕过 ``DatasetFolder`` 的数据加载过程。否则，将以 ``Dataset`` 样式加载数据。
 
         :raises FileNotFoundError: 若 ``root`` 下已存在的 ``events_h5`` 缺少所需的
@@ -583,7 +581,7 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
             Unlike other datasets in SpikingJelly, SSC is a neuromorphic audio dataset.
 
             #. Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``.
-            #. The raw dataset replicates the extracted dataset (by symbolic links). The raw dataset consists of three ``.h5`` files instead of a series of ``.npz`` files.
+            #. The raw dataset links to the extracted files, or copies them if Windows denies symbolic-link privileges. It consists of three ``.h5`` files instead of a series of ``.npz`` files.
             #. When ``data_type == "event"``, the data loading procedure of ``DatasetFolder`` will be bypassed. Instead, data will be loaded in ``Dataset`` style.
         """
         self.splits = ("train", "valid", "test")
@@ -742,7 +740,7 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
             target = raw_root / f.name
             if target.exists():
                 continue
-            target.symlink_to(f)
+            utils._link_or_copy(f, target)
 
     def __len__(self):
         if self.cfg.data_type == "event":

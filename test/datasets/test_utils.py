@@ -1,10 +1,33 @@
 import struct
+from pathlib import Path
 
 import numpy as np
 import pytest
 import torch
 
 from spikingjelly.datasets import transform, utils
+
+
+def test_link_or_copy_falls_back_only_for_windows_privilege_error(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.write_bytes(b"dataset")
+    error = OSError("privilege not held")
+    error.winerror = 1314
+
+    def fail_link(*_):
+        raise error
+
+    monkeypatch.setattr(Path, "symlink_to", fail_link)
+    utils._link_or_copy(source, target)
+    assert target.read_bytes() == source.read_bytes()
+    assert not target.is_symlink()
+
+    error.winerror = 5
+    with pytest.raises(OSError, match="privilege not held"):
+        utils._link_or_copy(source, tmp_path / "other")
 
 
 def _events():

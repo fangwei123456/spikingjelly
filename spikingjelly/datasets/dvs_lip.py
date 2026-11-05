@@ -5,6 +5,7 @@ from typing import Callable, Optional, Tuple
 
 from torchvision.datasets.utils import extract_archive
 
+from . import utils
 from .base import NeuromorphicDatasetFolder
 
 
@@ -169,7 +170,7 @@ class DVSLip(NeuromorphicDatasetFolder):
                 for fname in os.listdir(source_class_dir):
                     source_file = source_class_dir / fname
                     target_file = target_class_dir / fname
-                    target_file.symlink_to(source_file)
+                    utils._link_or_copy(source_file, target_file)
         # The data in source_file is a structured array
         # whose dtype is [('t', '<i4'), ('x', 'i1'), ('y', 'i1'), ('p', 'i1')].
         # Although its form is like [(t0, x0, y0, p0), ...],

@@ -69,6 +69,24 @@ def test_ssc_download_and_load_with_mocked_network(
     assert len(dataset) == 2
 
 
+def test_ssc_loads_when_symlinks_require_privileges(tmp_path, monkeypatch):
+    def fake_download_url(url, root, filename, md5=None):
+        _write_zipped_h5(Path(root), filename)
+
+    def deny_symlink(*_):
+        error = OSError("privilege not held")
+        error.winerror = 1314
+        raise error
+
+    monkeypatch.setattr(base, "download_url", fake_download_url)
+    monkeypatch.setattr(Path, "symlink_to", deny_symlink)
+    dataset = SpikingSpeechCommands(root=str(tmp_path), split="train")
+
+    assert len(dataset) == 2
+    assert (tmp_path / "events_h5" / "ssc_train.h5").is_file()
+    assert not (tmp_path / "events_h5" / "ssc_train.h5").is_symlink()
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
