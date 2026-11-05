@@ -100,12 +100,16 @@ def test_custom_frame_builder_saves_integrated_frames(tmp_path):
 @pytest.mark.parametrize(
     "builder_type", [base.FrameCustomIntegrateBuilder, SHDFrameCustomIntegrateBuilder]
 )
-def test_custom_lambda_directory_on_windows(tmp_path, monkeypatch, builder_type):
+@pytest.mark.parametrize("name, expected", [(None, "lambda"), ("custom", "custom")])
+def test_custom_lambda_directory_on_windows(
+    tmp_path, monkeypatch, builder_type, name, expected
+):
     cfg = base.NeuromorphicDatasetConfig(
         root=tmp_path,
         train=True,
         data_type="frame",
         custom_integrate_function=lambda *_: None,
+        custom_integrated_frames_dir_name=name,
     )
     builder = (
         builder_type(cfg, tmp_path, 2, 2)
@@ -114,7 +118,7 @@ def test_custom_lambda_directory_on_windows(tmp_path, monkeypatch, builder_type)
     )
     with monkeypatch.context() as patch:
         patch.setattr(base.os, "name", "nt")
-        assert builder.processed_root == tmp_path / "lambda"
+        assert builder.processed_root == tmp_path / expected
 
 
 def test_interrupted_tebn_split_is_not_reused(tmp_path, monkeypatch):
