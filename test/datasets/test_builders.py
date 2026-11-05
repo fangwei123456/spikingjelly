@@ -1,5 +1,4 @@
 from pathlib import Path
-from types import SimpleNamespace
 
 import h5py
 import numpy as np
@@ -121,15 +120,11 @@ def test_custom_lambda_directory_on_windows(
         assert builder.processed_root == tmp_path / expected
 
 
-def test_interrupted_tebn_split_is_not_reused(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        cifar10_dvs.CIFAR10DVSTEBNSplit, "prepare_raw_dataset", lambda _: None
-    )
-    monkeypatch.setattr(
-        cifar10_dvs.CIFAR10DVSTEBNSplit,
-        "get_dataset_builder",
-        lambda _: SimpleNamespace(build=lambda: (tmp_path, None)),
-    )
+@pytest.mark.parametrize("data_type", ["event", "frame"])
+def test_interrupted_tebn_split_is_not_reused(tmp_path, monkeypatch, data_type):
+    sample_dir = tmp_path / "events_np" / "airplane"
+    sample_dir.mkdir(parents=True)
+    np.savez(sample_dir / "sample.npz", x=[0], y=[0], t=[0], p=[0])
 
     def fail_split(root):
         (root / "test").mkdir()
@@ -138,8 +133,30 @@ def test_interrupted_tebn_split_is_not_reused(tmp_path, monkeypatch):
     monkeypatch.setattr(cifar10_dvs, "_move_data", fail_split)
     with pytest.raises(OSError, match="copy failed"):
         cifar10_dvs.CIFAR10DVSTEBNSplit(tmp_path, train=False)
+    assert (tmp_path / "events_np.tebn_split.building").is_file()
     with pytest.raises(RuntimeError, match="unfinished TEBN split"):
-        cifar10_dvs.CIFAR10DVSTEBNSplit(tmp_path, train=False)
+        cifar10_dvs.CIFAR10DVSTEBNSplit(
+            tmp_path,
+            train=False,
+            data_type=data_type,
+            frames_number=2 if data_type == "frame" else None,
+            split_by="number" if data_type == "frame" else None,
+        )
+    assert not (tmp_path / "frames_number_2_split_by_number").exists()
+
+
+def test_completed_tebn_frames_load_during_interrupted_raw_split(tmp_path):
+    (tmp_path / "events_np").mkdir()
+    (tmp_path / "events_np.tebn_split.building").touch()
+    sample_dir = tmp_path / "frames_number_2_split_by_number" / "test" / "airplane"
+    sample_dir.mkdir(parents=True)
+    np.savez(sample_dir / "sample.npz", frames=np.zeros((2, 2, 2, 2)))
+
+    dataset = cifar10_dvs.CIFAR10DVSTEBNSplit(
+        tmp_path, train=False, data_type="frame", frames_number=2, split_by="number"
+    )
+
+    assert len(dataset) == 1
 
 
 def test_interrupted_frame_build_is_not_reused(tmp_path):
