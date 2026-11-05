@@ -101,9 +101,16 @@ def _vision_tp_worker(rank: int, store_path: str, device_type: str) -> None:
         dist.destroy_process_group()
 
 
-def _channel_tp_worker(rank: int, store_path: str) -> None:
+def _channel_tp_worker(rank: int, store_path: str, device_type: str) -> None:
+    device = (
+        torch.device(device_type, rank)
+        if device_type == "cuda"
+        else torch.device("cpu")
+    )
+    if device_type == "cuda":
+        torch.cuda.set_device(device)
     dist.init_process_group(
-        "gloo",
+        "nccl" if device_type == "cuda" else "gloo",
         init_method=f"file://{store_path}",
         rank=rank,
         world_size=2,
@@ -111,10 +118,10 @@ def _channel_tp_worker(rank: int, store_path: str) -> None:
     )
     try:
         torch.manual_seed(7)
-        conv1 = layer.Conv2d(4, 8, kernel_size=1, bias=False, step_mode="m")
-        bn1 = layer.BatchNorm2d(8, step_mode="m")
-        spike = neuron.IFNode(step_mode="m")
-        conv2 = layer.Conv2d(8, 6, kernel_size=1, bias=True, step_mode="m")
+        conv1 = layer.Conv2d(4, 8, kernel_size=1, bias=False, step_mode="m").to(device)
+        bn1 = layer.BatchNorm2d(8, step_mode="m").to(device)
+        spike = neuron.IFNode(step_mode="m").to(device)
+        conv2 = layer.Conv2d(8, 6, kernel_size=1, bias=True, step_mode="m").to(device)
 
         local_conv1 = ChannelShardConv2d(
             copy.deepcopy(conv1), dist.group.WORLD, "colwise"
@@ -125,7 +132,7 @@ def _channel_tp_worker(rank: int, store_path: str) -> None:
             copy.deepcopy(conv2), dist.group.WORLD, "rowwise"
         )
 
-        x_reference = torch.randn(3, 2, 4, 5, 5, requires_grad=True)
+        x_reference = torch.randn(3, 2, 4, 5, 5, device=device, requires_grad=True)
         x_local = x_reference.detach().clone().requires_grad_(True)
         reference = conv2(spike(bn1(conv1(x_reference))))
         candidate = local_conv2(local_spike(local_bn1(local_conv1(x_local))))
@@ -151,11 +158,24 @@ def _channel_tp_worker(rank: int, store_path: str) -> None:
         dist.destroy_process_group()
 
 
-def test_channel_tp_matches_dense_multistep_forward_and_backward():
+@pytest.mark.parametrize(
+    "device_type",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available() or torch.cuda.device_count() < 2,
+                reason="two CUDA devices are required",
+            ),
+        ),
+    ],
+)
+def test_channel_tp_matches_dense_multistep_forward_and_backward(device_type):
     with tempfile.TemporaryDirectory() as directory:
         mp.spawn(
             _channel_tp_worker,
-            args=(os.path.join(directory, "store"),),
+            args=(os.path.join(directory, "store"), device_type),
             nprocs=2,
             join=True,
         )
