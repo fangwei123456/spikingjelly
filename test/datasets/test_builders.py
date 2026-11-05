@@ -157,6 +157,35 @@ def test_interrupted_tebn_split_is_not_reused(
 @pytest.mark.parametrize(
     "dataset_cls", [cifar10_dvs.CIFAR10DVS, cifar10_dvs.CIFAR10DVSTEBNSplit]
 )
+def test_interrupted_tebn_frame_split_is_not_reused(tmp_path, monkeypatch, dataset_cls):
+    (tmp_path / "events_np").mkdir()
+    sample_dir = tmp_path / "frames_number_2_split_by_number" / "airplane"
+    sample_dir.mkdir(parents=True)
+    np.savez(sample_dir / "sample.npz", frames=np.zeros((2, 2, 2, 2)))
+
+    def fail_split(root):
+        (root / "test").mkdir()
+        raise OSError("copy failed")
+
+    monkeypatch.setattr(cifar10_dvs, "_move_data", fail_split)
+    kwargs = {"data_type": "frame", "frames_number": 2, "split_by": "number"}
+    with pytest.raises(OSError, match="copy failed"):
+        cifar10_dvs.CIFAR10DVSTEBNSplit(tmp_path, train=False, **kwargs)
+    with pytest.raises(RuntimeError, match="unfinished TEBN split"):
+        dataset_cls(
+            tmp_path,
+            **kwargs,
+            **(
+                {"train": False}
+                if dataset_cls is cifar10_dvs.CIFAR10DVSTEBNSplit
+                else {}
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    "dataset_cls", [cifar10_dvs.CIFAR10DVS, cifar10_dvs.CIFAR10DVSTEBNSplit]
+)
 def test_completed_frames_load_during_interrupted_raw_split(tmp_path, dataset_cls):
     (tmp_path / "events_np").mkdir()
     (tmp_path / "events_np.tebn_split.building").touch()
