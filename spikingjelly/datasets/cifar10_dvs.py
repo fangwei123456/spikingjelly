@@ -380,8 +380,7 @@ def _move_data(root: Union[str, Path]):
             for i in range(100):
                 source_file = source / f"cifar10_{cn}_{i}.npz"
                 target_file = target / f"cifar10_{cn}_{i}.npz"
-                target_file.symlink_to(source_file)
-                logger.debug("symlink: [{}] -> [{}]", target_file, source_file)
+                utils._link_or_copy(source_file, target_file)
 
         target = root / "train" / cn
         if not target.exists():
@@ -390,8 +389,7 @@ def _move_data(root: Union[str, Path]):
             for i in range(100, 1000):
                 source_file = source / f"cifar10_{cn}_{i}.npz"
                 target_file = target / f"cifar10_{cn}_{i}.npz"
-                target_file.symlink_to(source_file)
-                logger.debug("symlink: [{}] -> [{}]", target_file, source_file)
+                utils._link_or_copy(source_file, target_file)
 
 
 class CIFAR10DVSTEBNSplit(CIFAR10DVS):
@@ -515,12 +513,21 @@ class CIFAR10DVSTEBNSplit(CIFAR10DVS):
         self.processed_root, loader = builder.build()
 
         split_root = self.processed_root / ("train" if self.cfg.train else "test")
+        split_marker = self.processed_root / ".tebn_split.building"
+        if split_marker.exists():
+            raise RuntimeError(
+                f"Found unfinished TEBN split [{split_marker}]. Remove the partial "
+                f"train and test directories in [{self.processed_root}] and the marker "
+                "before retrying."
+            )
         if not split_root.exists():
             logger.info(
                 "We have the unsplit processed dataset at [{}]. _move_data() is called to split the dataset following TEBN's approach.",
                 self.processed_root,
             )
+            split_marker.touch(exist_ok=False)
             _move_data(self.processed_root)
+            split_marker.unlink()
         logger.info("CIFAR10-DVS has been split after TEBN's approach.")
 
         super(NeuromorphicDatasetFolder, self).__init__(

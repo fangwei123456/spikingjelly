@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import h5py
 import numpy as np
@@ -11,9 +12,11 @@ from spikingjelly.datasets.es_imagenet import (
     ESImageNetFrameFixedNumberBuilder,
 )
 from spikingjelly.datasets.shd import (
+    SHDFrameCustomIntegrateBuilder,
     SHDFrameFixedNumberBuilder,
     SpikingHeidelbergDigits,
 )
+from spikingjelly.datasets import cifar10_dvs
 from spikingjelly.datasets.speechcommands import SpeechCommands
 
 
@@ -92,6 +95,47 @@ def test_custom_frame_builder_saves_integrated_frames(tmp_path):
     ).build()
 
     assert np.array_equal(loader(processed_root / "class0" / "sample.npz"), expected)
+
+
+@pytest.mark.parametrize(
+    "builder_type", [base.FrameCustomIntegrateBuilder, SHDFrameCustomIntegrateBuilder]
+)
+def test_custom_lambda_directory_on_windows(tmp_path, monkeypatch, builder_type):
+    cfg = base.NeuromorphicDatasetConfig(
+        root=tmp_path,
+        train=True,
+        data_type="frame",
+        custom_integrate_function=lambda *_: None,
+    )
+    builder = (
+        builder_type(cfg, tmp_path, 2, 2)
+        if builder_type is base.FrameCustomIntegrateBuilder
+        else builder_type(cfg, tmp_path, 2)
+    )
+    with monkeypatch.context() as patch:
+        patch.setattr(base.os, "name", "nt")
+        assert builder.processed_root == tmp_path / "lambda"
+
+
+def test_interrupted_tebn_split_is_not_reused(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        cifar10_dvs.CIFAR10DVSTEBNSplit, "prepare_raw_dataset", lambda _: None
+    )
+    monkeypatch.setattr(
+        cifar10_dvs.CIFAR10DVSTEBNSplit,
+        "get_dataset_builder",
+        lambda _: SimpleNamespace(build=lambda: (tmp_path, None)),
+    )
+
+    def fail_split(root):
+        (root / "test").mkdir()
+        raise OSError("copy failed")
+
+    monkeypatch.setattr(cifar10_dvs, "_move_data", fail_split)
+    with pytest.raises(OSError, match="copy failed"):
+        cifar10_dvs.CIFAR10DVSTEBNSplit(tmp_path, train=False)
+    with pytest.raises(RuntimeError, match="unfinished TEBN split"):
+        cifar10_dvs.CIFAR10DVSTEBNSplit(tmp_path, train=False)
 
 
 def test_interrupted_frame_build_is_not_reused(tmp_path):

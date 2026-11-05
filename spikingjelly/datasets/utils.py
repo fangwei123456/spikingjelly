@@ -40,6 +40,15 @@ __all__ = [
 np_savez = np.savez_compressed if configure.save_datasets_compressed else np.savez
 
 
+def _link_or_copy(source: Path, target: Path) -> None:
+    try:
+        target.symlink_to(source)
+    except OSError as error:
+        if getattr(error, "winerror", None) != 1314:
+            raise
+        shutil.copyfile(source, target)
+
+
 def save_as_pic(
     x: Union[torch.Tensor, np.ndarray],
     save_pic_to: str = "./",

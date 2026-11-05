@@ -28,6 +28,8 @@ spikingjelly.activation_based.precision
 spikingjelly.datasets
 ^^^^^^^^^^^^^^^^^^^^^
 
+- Dataset file links fall back to copies when Windows denies symlink privileges, using additional disk space.
+- Lambda-based frame integration uses the ``lambda`` cache directory on Windows; specify distinct directory names for different functions.
 - Time-based fixed-frame integration handles empty intervals and ends each frame where
   the next one starts, so float events on a boundary are counted once; integer
   timestamps give unchanged frames.
