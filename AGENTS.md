@@ -6,6 +6,7 @@
 - Follow `CONTRIBUTING.md` and `pyproject.toml` for installation steps and optional dependencies. Manage Python and dependencies with `uv`, and reuse an existing environment when possible.
 - Before remote testing or reusing a worktree environment, read the machine-specific conventions in a local `ENV.md` if it exists. Otherwise, verify the actual environment instead of guessing its configuration.
 - If `.codegraph/` exists, use CodeGraph first to locate code. Read files that are not indexed directly; do not create an index yourself.
+- Design specs are in [docs/specs/](docs/specs/), starting from `architecture.md`. Read the relevant spec before changing a module boundary, contract, or invariant, update it in the same change, and add new specs to this directory.
 
 ## Implementation and Verification
 
