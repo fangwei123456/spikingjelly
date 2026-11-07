@@ -165,24 +165,9 @@ ILC-SAN 的完整代码位于 ``spikingjelly/activation_based/examples/ilc_san``
     cd spikingjelly/activation_based/examples/ilc_san
     python hybrid_td3_cuda_norm.py --help
 
-    usage: hybrid_td3_cuda_norm.py [--env ENV] [--encoder_pop_dim ENC_POP_DIM] [--decoder_pop_dim DEC_POP_DIM] [--encoder_var ENC_VAR] [--start_model_idx IDX] [--num_model N] [--epochs E] [--device_id DEVICE_ID] [--root_dir ROOT_DIR] [--encode ENC] [--decode DEC]
+``hybrid_td3_cuda_norm.py`` 在解析参数之前就 import 了 ``gym``。请先按该目录的 README 安装依赖（``gym==0.18.0`` 和 ``MuJoCo==2.1.0``）；这些版本面向 Python 3.9 及更早版本，在 Python 3.11 上尚未验证。``--help`` 同样需要这些依赖才能打印。
 
-    Solve the continuous control tasks from OpenAI Gym
-
-    options:
-      --env ENV                         the continuous control tasks from OpenAI Gym
-      --encoder_pop_dim ENC_POP_DIM     the input population sizes per state dimension
-      --decoder_pop_dim DEC_POP_DIM     the size of output populations corresponding to each action dimension
-      --encoder_var ENC_VAR             the initial standard deviation of Gaussian receptive fields for the population encoder
-      --start_model_idx IDX             the start index of the model for training
-      --num_model N                     the number of models for training
-      --epochs E                        the number of training epochs per model
-      --device_id DEVICE_ID             the cuda ID of training device, e.g., "0" or "1"
-      --root_dir ROOT_DIR               the directory for storing files
-      --encode ENC                      the type of population encoder, e.g., "pop-det", "pop-ran" or "pop-raw"
-      --decode DEC                      the type of population decoder, e.g., "fr-mlp", "last-mem", "max-mem", "max-abs-mem" or "mean-mem"
-
-需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 不一定带来更好的训练效果。\ ``T``
+训练该 SNN 所需的显存与仿真步数 ``T`` 线性相关，更长的 ``T`` 不一定带来更好的训练效果。\ ``T``
 太大时，SNN在时间上展开后会变成一个非常深的网络，这将导致BPTT计算梯度时容易衰减或爆炸。
 
 训练结果

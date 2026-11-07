@@ -501,7 +501,7 @@ class NoisyNonSpikingBaseNode(nn.Module, base.MultiStepModule):
             self.neuronal_charge(x)
             v_seq.append(self.v)
 
-        if self.decode not in {"max-mem", "max-abs-mem", "mean-mem", "last-me"}:
+        if self.decode not in {"max-mem", "max-abs-mem", "mean-mem", "last-mem"}:
             return v_seq
 
         v_stack = torch.stack(v_seq)
@@ -513,7 +513,7 @@ class NoisyNonSpikingBaseNode(nn.Module, base.MultiStepModule):
             mem = torch.where(max_mem.abs() > min_mem.abs(), max_mem, min_mem)
         elif self.decode == "mean-mem":
             mem = v_stack.mean(0)
-        elif self.decode == "last-me":
+        elif self.decode == "last-mem":
             mem = v_seq[-1]
         return mem
 

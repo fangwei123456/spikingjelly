@@ -50,6 +50,17 @@ Vision 与 LLM 使用不同的精度配置入口，见 :doc:`./precision`。
     )
     metrics = vision.train_classification(config)
 
+仓库中的合成数据入口可以直接验证安装和并行配置：
+
+.. code-block:: bash
+
+    torchrun --standalone --nproc-per-node=4 benchmark/vision_distributed.py \
+        --model sew-resnet34 \
+        --data-parallel fsdp2 \
+        --tensor-parallel-size 2 \
+        --precision bf16 \
+        --max-steps 10
+
 ``PrecisionConfig`` 在 DDP/FSDP 包装与 optimizer 创建之前应用。实验性
 Transformer Engine FP8 与 Triton 神经元 mixed precision 当前要求 DDP 且 TP=PP=1。
 MCore LLM 精度与此独立，继续由原生 transformer 和 optimizer 配置拥有。配置职责、
@@ -78,7 +89,7 @@ validation loss 和 validation accuracy。直接调用库时须启用
 返回的 ``metrics`` 字典包含最终指标与吞吐统计。
 
 ``neuron_config`` 可为 SEW-ResNet34 和两种 Spikformer config 选择可序列化的神经元与
-替代梯度。省略时逐位保留论文默认配置。自定义神经元会替换模型中的所有神经元位置，
+替代梯度。省略时保留论文默认配置。自定义神经元会替换模型中的所有神经元位置，
 并须接受模型提供的 ``step_mode`` 参数。内置类按完整路径解析；外部类
 必须在训练、checkpoint 导出和推理的每个进程中先导入并注册：
 
@@ -89,10 +100,13 @@ validation loss 和 validation accuracy。直接调用库时须启用
             "spikingjelly.activation_based.neuron.integrate_and_fire.IFNode"
         ),
         kwargs={"v_threshold": 0.7},
-        surrogate="spikingjelly.activation_based.surrogate.Rect",
+        surrogate="spikingjelly.activation_based.surrogate.ATan",
         surrogate_kwargs={"alpha": 2.0},
     )
     model_config = SEWResNet34Config(neuron_config=neuron_config)
+
+七种融合内置替代梯度之外的选择（见 :doc:`./surrogate`）会让所有神经元退回 Torch
+参考递推。
 
 外部神经元导入后调用 ``vision.register_neuron_class(MyNeuron)``；外部替代梯度调用
 ``vision.register_surrogate_class(MySurrogate)``。神经元和替代梯度类路径不会触发自动导入。
@@ -116,17 +130,6 @@ BatchNorm buffer；训练函数改为在每个完整 T 窗口前只广播一次 
 ``[N, C]`` logits 和分类 target，并返回用于反向传播和 loss 统计的 batch-mean
 标量张量。``loss_kwargs`` 是每次调用时传入的关键字参数。普通训练、PP、验证
 共用同一 loss 函数；top-1 accuracy 仍是固定的分类指标。
-
-仓库中的合成数据入口可以直接验证安装和并行配置：
-
-.. code-block:: bash
-
-    torchrun --standalone --nproc-per-node=4 benchmark/vision_distributed.py \
-        --model sew-resnet34 \
-        --data-parallel fsdp2 \
-        --tensor-parallel-size 2 \
-        --precision bf16 \
-        --max-steps 10
 
 自定义模型通过 ``vision.ModelConfig`` 和 ``vision.ModelBuilder`` 接入。
 ``build`` 返回当前 rank 的模型、FSDP2 分片模块路径，以及 PP 输入输出形状；完整签名见
@@ -868,8 +871,8 @@ batch 下的加速比。完整中位数、三次运行范围和 batch 配置见
 功能测试还覆盖了 BF16 的 TP4、PP4、TP2 × PP2、CP4、TP2 × CP2、PP2 × CP2，
 以及 TP4/PP4/CP4 的 FP8。所有组合都得到有限 loss、有限梯度，且 SNN 模块上存在非零梯度。
 在 7 GiB 显存预算下，planner 选择 TP4、SpikingJelly memopt 和 MCore selective
-``core_attn`` 重计算。6.28 GiB 是静态规划输入；强制按该方案运行两步时，实际峰值
-约为 7.26 GiB/卡。TP2 × PP2 的 sharded model/optimizer checkpoint 也已验证从
+``core_attn`` 重计算。planner 自身给出的 6.28 GiB/卡 是静态规划输入；强制按该方案
+运行两步时，实际峰值约为 7.26 GiB/卡。TP2 × PP2 的 sharded model/optimizer checkpoint 也已验证从
 step 1 恢复到 step 2。
 
 分布式推理基准

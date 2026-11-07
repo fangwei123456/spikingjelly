@@ -100,7 +100,7 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 
 文献 [#f1]_ 证明，恒定输入在 ``[0, V_threshold]`` 内时，采用减法重置的 IF 神经元发放率随 T 增大逼近归一化的 ReLU 激活值。
 
-针对神经网络第一层，考虑 SNN 神经元发放率 :math:`r` 和对应 ANN 激活值之间的关系。假定输入恒定为 :math:`z \in [0,1]`。对于采用减法重置的IF神经元，其膜电位V随时间变化为：
+针对神经网络第一层，考虑 SNN 神经元发放率 :math:`r` 和对应 ANN 激活值 :math:`a` 之间的关系。假定输入恒定为 :math:`z \in [0,1]`。对于采用减法重置的IF神经元，其膜电位V随时间变化为：
 
 .. math::
     V_t=V_{t-1}+z-V_{threshold}\theta_t
@@ -121,7 +121,7 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 .. math::
     r = a- \frac{ V_T-V_0 }{T V_{threshold}}
 
-故在仿真时间步  :math:`T` 无限长情况下:
+因此，当仿真步数 :math:`T` 趋于无穷时：
 
 .. math::
     r = a (a>0)
@@ -138,7 +138,7 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 
 转换主要解决两个问题：
 
-1. 推理时 BN 是固定的仿射变换，可以折叠进前一个卷积层，转换后不再需要单独的 BN 模块。
+1. 在 evaluation mode 下，具有 running mean 和 running variance 的 BatchNorm 是固定仿射变换，可以折叠进前一个卷积层，转换后不再需要单独的 BN 模块。``RateCodingRecipe`` 会在融合前切换到 eval 模式。此路径不能折叠 ``track_running_stats=False`` 的 BN。
 
 2. 按转换理论，ANN 每层的输入输出需要限制在 [0,1] 范围内，需要对参数进行缩放（模型归一化）。
 
@@ -156,7 +156,7 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 
 ◆ 模型归一化
 
-对于某个参数模块，假定得到了其输入张量和输出张量，其输入张量的最大值为 :math:`\lambda_{pre}` ,输出张量的最大值为 :math:`\lambda` 那么，归一化后的权重 :math:`\hat{W}` 为：
+对于某个参数模块，假定得到了其输入张量和输出张量，其输入张量的最大值为 :math:`\lambda_{pre}`，输出张量的最大值为 :math:`\lambda` 那么，归一化后的权重 :math:`\hat{W}` 为：
 
 .. math::
     \hat{W} = W * \frac{\lambda_{pre}}{\lambda}
@@ -190,6 +190,8 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
 最简单的 rate-coding 调用如下：
 
 .. code-block:: python
+
+    from spikingjelly.activation_based import ann2snn
 
     recipe = ann2snn.RateCodingRecipe(dataloader=train_loader, mode="max")
     snn = ann2snn.FXConverter(recipe=recipe).convert(ann)
@@ -238,6 +240,9 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
 
 .. code-block:: python
 
+    import torch
+    import torch.nn as nn
+
     class CNN(nn.Module):
         def __init__(self):
             super().__init__()
@@ -283,6 +288,8 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
 
 .. code-block:: python
 
+    import torchvision
+
     train_data_dataset = torchvision.datasets.MNIST(
         root=dataset_dir,
         train=True,
@@ -313,6 +320,7 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
         DEFAULT_CHECKPOINT_PATH,
         DEFAULT_CHECKPOINT_URL,
         download_checkpoint,
+        val,
     )
     from spikingjelly.activation_based.ann2snn.sample_models import mnist_cnn
 
@@ -341,18 +349,12 @@ ANN 训练完成。选择 rate-coding recipe，传入确定性校准 dataloader�
 
 ``snn_model`` 即转换后的 SNN 模型。查看其网络结构，``BatchNorm2d`` 模块已消失——默认 rate-coding recipe 在校准前将 BatchNorm 参数吸收进了前面的 Conv 层：
 
-.. code-block:: python
+.. code-block:: text
 
     CNN(
       (network): Module(
         (0): Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1))
-        (3): AvgPool2d(kernel_size=2, stride=2, padding=0)
-        (4): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-        (7): AvgPool2d(kernel_size=2, stride=2, padding=0)
-        (8): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-        (11): AvgPool2d(kernel_size=2, stride=2, padding=0)
-        (12): Flatten(start_dim=1, end_dim=-1)
-        (13): Linear(in_features=32, out_features=10, bias=True)
+        ...
         (spiking_0): Module(
           (scaler0): VoltageScaler(0.193247)
           (if_node): IFNode(
@@ -361,24 +363,11 @@ ANN 训练完成。选择 rate-coding recipe，传入确定性校准 dataloader�
           )
           (scaler1): VoltageScaler(5.174733)
         )
-        (spiking_1): Module(
-          (scaler0): VoltageScaler(0.325697)
-          (if_node): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
-            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
-          )
-          (scaler1): VoltageScaler(3.070336)
-        )
-        (spiking_2): Module(
-          (scaler0): VoltageScaler(0.121967)
-          (if_node): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
-            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
-          )
-          (scaler1): VoltageScaler(8.198915)
-        )
+        ...
       )
     )
+
+每个被校准的 ReLU 都被替换为一组 ``scaler0 -> IFNode -> scaler1``。
 
 其它 recipe 与自定义 recipe
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -434,53 +423,48 @@ FX 路径固定步骤顺序为 ``validate`` -> ``before_trace`` -> ``after_trace
       --time-steps 50 \
       --plot-mode-sweep
 
-历史文档记录： `237dde3e <https://github.com/fangwei123456/spikingjelly/commit/237dde3e>`_ （2026-06-26）；NVIDIA GeForce RTX 4090；未在当前 V2 上复测。
+历史文档记录： `237dde3e <https://github.com/fangwei123456/spikingjelly/commit/237dde3e>`_ （2026-06-26）；NVIDIA GeForce RTX 4090；未在当前 V2 上复测。当前脚本不再打印各阶段耗时，也不再保存图片。
 
-以下输出是在 NVIDIA GeForce RTX 4090 上以 ``T=50`` 测得：
+该实验在 2.0 之前的一次运行（NVIDIA GeForce RTX 4090，``T=50``）测得：
 
-.. code-block:: shell
+ANN 验证正确率为 0.9870，各归一化模式的结果如下：
 
-    ANN Validating Accuracy: 0.9870
-    ---------------------------------------------
-    Converting using MaxNorm
-    Calibration: 3.76s
-    Simulating...
-    Simulation: 7.61s
-    SNN accuracy (simulation 50 time-steps): 0.9771
-    ---------------------------------------------
-    Converting using RobustNorm
-    Calibration: 12.08s
-    Simulating...
-    Simulation: 7.31s
-    SNN accuracy (simulation 50 time-steps): 0.9848
-    ---------------------------------------------
-    Converting using 1/2 max(activation) as scales
-    Calibration: 3.73s
-    Simulating...
-    Simulation: 7.28s
-    SNN accuracy (simulation 50 time-steps): 0.9846
-    ---------------------------------------------
-    Converting using 1/3 max(activation) as scales
-    Calibration: 3.72s
-    Simulating...
-    Simulation: 7.29s
-    SNN accuracy (simulation 50 time-steps): 0.9825
-    ---------------------------------------------
-    Converting using 1/4 max(activation) as scales
-    Calibration: 3.75s
-    Simulating...
-    Simulation: 7.27s
-    SNN accuracy (simulation 50 time-steps): 0.9734
-    ---------------------------------------------
-    Converting using 1/5 max(activation) as scales
-    Calibration: 3.70s
-    Simulating...
-    Simulation: 7.26s
-    SNN accuracy (simulation 50 time-steps): 0.9472
+.. list-table:: 归一化模式对比
+    :header-rows: 1
+    :widths: 34 20 20 26
+
+    * - 模式
+      - 校准耗时
+      - 仿真耗时
+      - SNN 正确率
+    * - MaxNorm
+      - 3.76s
+      - 7.61s
+      - 0.9771
+    * - RobustNorm
+      - 12.08s
+      - 7.31s
+      - 0.9848
+    * - 1/2 max(activation)
+      - 3.73s
+      - 7.28s
+      - 0.9846
+    * - 1/3 max(activation)
+      - 3.72s
+      - 7.29s
+      - 0.9825
+    * - 1/4 max(activation)
+      - 3.75s
+      - 7.27s
+      - 0.9734
+    * - 1/5 max(activation)
+      - 3.70s
+      - 7.26s
+      - 0.9472
 
 .. image:: ../../_static/tutorials/5_ann2snn/accuracy_mode_recipe_api.png
 
-不同归一化模式在早期时间步收敛速度和最终准确率之间形成取舍，可根据延迟和准确率需求选择。
+本次运行中 RobustNorm 最早达到较高正确率，最终也最高。将最大值缩放到 1/4 或 1/5 时收敛更早，但最终低 1 到 3 个百分点。
 
 转换 recipe 对比
 ^^^^^^^^^^^^^^^^
@@ -493,7 +477,7 @@ FX 路径固定步骤顺序为 ``validate`` -> ``before_trace`` -> ``after_trace
       --time-steps 32 \
       --output /tmp/ann2snn_mnist_t32.json
 
-下表可以由该命令直接生成。其中 RobustNorm 使用 ``RateCodingRecipe(dataloader=..., mode="99.9%")``。 LTB 使用 ``LocalThresholdBalancingRecipe(dataloader=...)``。本次 MNIST 结果使用完整训练集 60000 张样本作为校准集，使用完整测试集 10000 张样本评估：
+下表由该命令生成，JSON 输出为 ``/tmp/ann2snn_mnist_t32.json``。其中 RobustNorm 使用 ``RateCodingRecipe(dataloader=..., mode="99.9%")``。 LTB 使用 ``LocalThresholdBalancingRecipe(dataloader=...)``。本次 MNIST 结果使用完整训练集 60000 张样本作为校准集，使用完整测试集 10000 张样本评估：
 
 .. list-table:: MNIST CNN 转换结果
     :header-rows: 1

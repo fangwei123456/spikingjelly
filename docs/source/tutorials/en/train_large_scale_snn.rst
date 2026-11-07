@@ -55,7 +55,7 @@ pre-trained weights by setting ``pretrained=True``:
 
 Usage of ``activation_based.examples.common.train_classify``
 --------------------------------------------------------------------------------
-:class:`spikingjelly.activation_based.examples.common.train_classify` is modified by `torchvision 0.12 references <https://github.com/pytorch/vision/tree/release/0.12/references>`_. \
+:class:`spikingjelly.activation_based.examples.common.train_classify` is adapted from `torchvision 0.12 references <https://github.com/pytorch/vision/tree/release/0.12/references>`_. \
 We can use this module to train easily.
 
 :class:`spikingjelly.activation_based.examples.common.train_classify.Trainer` provides a flexible method to train. Users can change its functions to implement the desirable behaviors without too much
@@ -95,6 +95,8 @@ If we want to add an optimizer, e.g., ``Adamax``, we can inherit the class and o
 
 .. code-block:: python
 
+  from spikingjelly.activation_based.examples.common import train_classify
+
   class MyTrainer(train_classify.Trainer):
       def set_optimizer(self, args, parameters):
           opt_name = args.opt.lower()
@@ -116,8 +118,9 @@ If we want to add some args, we can also inherit and override it:
 
   class MyTrainer(train_classify.Trainer):
       def get_args_parser(self, add_help=True):
-          parser = super().get_args_parser()
+          parser = super().get_args_parser(add_help=add_help)
           parser.add_argument('--do-something', type=str, help="do something")
+          return parser
 
 We can modify most functions in :class:`Trainer <spikingjelly.activation_based.examples.common.train_classify.Trainer>`.
 
@@ -125,7 +128,9 @@ We can use the following codes to train with ``Trainer`` or the user-defined tra
 
 .. code-block:: python
 
-    trainer = Trainer()
+    from spikingjelly.activation_based.examples.common import train_classify
+
+    trainer = train_classify.Trainer()  # or MyTrainer() to use your own subclass
     args = trainer.get_args_parser().parse_args()
     trainer.main(args)
 
@@ -156,10 +161,10 @@ we can train large-scale SNNs easily. Here are the example codes:
           return x.unsqueeze(0).expand(args.T, -1, -1, -1, -1)  # [N, C, H, W] -> [T, N, C, H, W]
 
       def process_model_output(self, args, y: torch.Tensor):
-          return y.mean(0)  # return firing rate
+          return y.mean(0)  # average logits over time
 
       def get_args_parser(self, add_help=True):
-          parser = super().get_args_parser()
+          parser = super().get_args_parser(add_help=add_help)
           parser.add_argument('--T', type=int, help="total time-steps")
           return parser
 

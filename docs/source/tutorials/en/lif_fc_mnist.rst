@@ -18,17 +18,25 @@ When building neural networks with PyTorch, we can simply use ``nn.Sequential`` 
 
 .. code-block:: python
 
+    import torch
+    import torch.nn as nn
+    import time
+    import torch.nn.functional as F
+    from torch.cuda import amp
+    from spikingjelly.activation_based import layer, neuron, surrogate, encoding, functional
+
     nn.Sequential(
         nn.Flatten(),
         nn.Linear(28 * 28, 10, bias=False),
         nn.Softmax()
         )
 
-A SNN with similar structures can also be used for classification tasks. For this network, all activation functions should be replaced with spiking neurons (LIF neurons are used here), and the connetions between neurons should be packaged with ``spikingjelly.activation_based.layer`` :
+A SNN with similar structures can also be used for classification tasks. For this network, all activation functions should be replaced with spiking neurons (LIF neurons are used here), and the connections between neurons should be packaged with ``spikingjelly.activation_based.layer`` :
 
 .. code-block:: python
 
-    nn.Sequential(
+    tau = 2.0
+    net = nn.Sequential(
         layer.Flatten(),
         layer.Linear(28 * 28, 10, bias=False),
         neuron.LIFNode(tau=tau, surrogate_function=surrogate.ATan())
@@ -45,6 +53,7 @@ Adam is used as the optimizer by default, and the poisson encoder is used to enc
 
 .. code-block:: python
 
+    lr = 1e-3
     # Use Adam optimizer
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     # Use PoissonEncoder
@@ -60,7 +69,8 @@ There are three key points to follow when programing training codes:
 
 3. After each network simulation, the network state should be reset by ``functional.reset_net(net)``.
 
-The core training codes are as follows:
+The core training codes are as follows. This excerpt uses the arguments, DataLoader,
+and AMP scaler setup from :mod:`spikingjelly.activation_based.examples.lif_fc_mnist`:
 
 .. code-block:: python
 
@@ -117,9 +127,9 @@ The complete code is in ``activation_based.examples.lif_fc_mnist.py`` , where Te
 
     uv run --no-sync python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
 
-It should be noted that the amount of memory required to train such an SNN is linearly related to the simulation time ``T``.
+The memory required to train such an SNN is linearly related to the number of simulation steps ``T``.
 A larger ``T`` does not necessarily improve training. When ``T`` is too large, the SNN unfolds in time and becomes a very deep network,
-which will cause BPTT to decay or explode when calculating the gradient.
+which can cause gradients to vanish or explode during BPTT.
 
 In addition, since we use the poisson encoder, a large ``T`` is needed to ensure that the coding noise is not too large.
 

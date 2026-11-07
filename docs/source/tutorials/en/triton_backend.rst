@@ -47,7 +47,7 @@ check performs no online profiling; importing SpikingJelly does not initialize
 CUDA either. Eager checks native CUDA, Triton and Torch in that order. Inductor
 expansion checks Triton, native CUDA and Torch. These orders are the same across
 GPU architectures; compatibility can change which implementation is available.
-Measure the workload you intend to run.
+Higher-order gradients use the Torch reference equations on every device.
 
 When selection reaches Triton, its distribution metadata must satisfy the
 ``triton>=3.2.0`` installation contract. In auto mode, the 3.2 release series
@@ -64,7 +64,9 @@ complete compatibility: an older compiler may not recognize a newer GPU.
 Kernel/JIT/OOM errors after selection still propagate. No probe is run.
 
 Automatic dispatch covers IF, LIF, PLIF, QIF, EIF, Izhikevich, I-LIF,
-ActivationAwareIF and STBIF. Training modes, dtypes and surrogate support vary
+ActivationAwareIF, STBIF and CLIF. CLIF has Triton but no native CUDA kernel,
+and its kernels require contiguous inputs rather than the strided layouts
+below. Training modes, dtypes and surrogate support vary
 by family; consult the corresponding API. Other neurons retain their own
 execution paths, some without dedicated CUDA kernels.
 
@@ -214,7 +216,7 @@ Troubleshooting
 ----------------------------
 
 * Missing extensions/dependencies or known incompatible devices allow auto mode
-  to check the next candidate. No available candidate produces an error.
+  to check the next candidate. If no candidate is available, selection raises an error.
 * Kernel, JIT, OOM or gradient failures raise errors; automatic selection does
   not hide execution failures.
 * For native loading incompatibility, check build/runtime Torch/CUDA versions and

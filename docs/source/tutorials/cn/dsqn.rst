@@ -57,7 +57,9 @@ Atari游戏的观察经过预处理成为尺寸为 :math:`84\times 84` 的灰度
             neuron.NonSpikingLIFNode(decode='max-mem')
         )
 
-其中非脉冲神经元的膜电压编码方法由 ``neuron.NonSpikingLIFNode(decode=...)`` 的 ``decode`` 参数控制；而示例训练脚本中的命令行参数 ``--dec_type`` 会被传递到这个 ``decode`` 参数。替代函数这里选择\ ``surrogate.ATan``\。
+网络需要以多步模式运行，因此在构建后调用 ``functional.set_step_mode(net, step_mode='m')``。
+
+其中非脉冲神经元的膜电压编码方法由 ``neuron.NonSpikingLIFNode(decode=...)`` 的 ``decode`` 参数控制。``max-mem``、``mean-mem``、``max-abs-mem`` 和 ``last-mem`` 对应这 4 种膜电压编码；``fr-mlp`` 是另一条分支，先对最后一层 LIF 的输出在时间维取平均，再接一个 ``nn.Linear``。替代函数这里选择\ ``surrogate.ATan``\。
 
 SpikingJelly中提供了4种膜电压编码方法，用作非脉冲神经元中膜电压序列的统计量，其中\ ``last-mem``\代表最终膜电压，\ ``max-mem``\代表最大膜电压，\ ``max-abs-mem``\代表最大绝对值的膜电压，而\ ``mean-mem``\代表平均膜电压。通过这种方式，SNN可以输出任意大小的浮点值，适用于强化学习中的Q值。
 
@@ -83,23 +85,10 @@ DSQN 的完整代码位于 ``spikingjelly/activation_based/examples/dsqn``。脚
     cd spikingjelly/activation_based/examples/dsqn
     python train.py --cuda --game breakout --T 8 --dec_type max-mem --seed 123
 
-    usage: train.py [--cuda] [--game GAME] [--T T] [--dec_type DEC] [--early_stop]
-                    [--eval_q] [--sticky_actions] [--frame_num FN] [--seed SEED]
+``train.py`` 在解析参数之前就 import 了 ``ptan``，而 ``ptan`` 依赖 ``gym``。请先按该目录的 README 安装依赖（``gym==0.18.0``、``gym[atari]`` 和 ``atari-py==0.2.5``）；这些版本面向 Python 3.9 及更早版本，在 Python 3.11 上尚未验证。
+``--help`` 同样需要这些依赖才能打印。
 
-    LIF DSQN Training
-
-    optional arguments:
-    --cuda              enable cuda
-    --game GAME         ATARI game (gym)
-    --T T               simulation time
-    --dec_type DEC      type of SNN decoder, e.g. max-mem, mean-mem, max-abs-mem, last-mem, fr-mlp
-    --early_stop        use stop reward to stop early
-    --eval_q            record the Q-value (eval)
-    --sticky_actions    use sticky actions
-    --frame_num FN      number of frames
-    --seed SEED         random seed to use
-
-需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 不一定带来更好的训练效果。\ ``T``
+训练该 SNN 所需的显存与仿真步数 ``T`` 线性相关，更长的 ``T`` 不一定带来更好的训练效果。\ ``T``
 太大时，SNN在时间上展开后会变成一个非常深的网络，这将导致BPTT计算梯度时容易衰减或爆炸。
 
 训练结果

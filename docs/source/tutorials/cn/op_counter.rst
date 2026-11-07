@@ -269,7 +269,7 @@ NeuroMC 运行时能耗
 
 * 不支持的能耗相关算子会拒绝生成总量；
 * 手工分析使用 ``stage(name, phase=..., reuse_weights=...,
-  batch_norm_backward=...)`` 显式传递映射语义，名称本身不再编码协议；同一
+  batch_norm_backward=...)`` 显式传递映射语义；同一
   上下文内复用阶段名称时必须使用相同选项；
 * 便捷入口会清空已有梯度，但不会调用 ``optimizer.step()`` 或修改模型参数；
 * 同一个模块被重复调用时，这些调用必须全部参与反向传播；只对部分调用
@@ -291,8 +291,8 @@ SpikeSim 运行时能耗
 * 只统计受支持的 Conv2d 前向阶段，非 Conv2d 工作不进入主要能耗路径；
 * 默认 ``activity_mode="dense"`` 时，运行时脉冲稀疏度不会降低能耗；
 * ``activity_mode="event"`` 对应 ``spikingjelly_spikesim_event_v1``，
-  使用 SpikeSim 常量和本项目定义的 A/R/Z 稀疏公式，不冒充作者 dense 模型；
-* ``require_if_lif_neurons=True`` 时只接受 IF/LIF 风格神经元。
+  使用 SpikeSim 常量和本项目定义的 A/R/Z 稀疏公式；
+* 默认 ``require_if_lif_neurons=True``，只接受 IF/LIF 风格神经元。
 
 能耗估计示例
 ++++++++++++++++++++++++
@@ -484,9 +484,3 @@ Conv2d；只统计 patch embedding 不能代表整网。
 案例输入、双边评分、指标和版本信息记录在
 :download:`案例级 CSV <../../_static/tutorials/op_counter/energy_model_validation.csv>` 中。
 该脚本依赖固定版本的外部仓库，因此不在 CI 中运行。
-
-总结
-++++++++++++++++++++++++
-
-``op_counter`` 按给定输入记录实际执行。基础计数器适合分析操作量和流量；能耗
-估计器用于各自模型范围内的相对比较。不同估计器的绝对值不能直接比较。

@@ -71,11 +71,10 @@
 转换到支持的网络层的函数。可以通过 :class:`spikingjelly.activation_based.lynxi_exchange.to_lynxi_supported_module` 将一个网络层或使用 :class:`spikingjelly.activation_based.lynxi_exchange.to_lynxi_supported_modules` \
 将多个网络层进行转换。
 
-需要注意的是，灵汐的芯片不支持5D的tensor，而 `shape = [T, N, C, H, W]` 经常出现在多步模式下的卷积层之间。对于使用多步模式的网络，使用 :class:`to_lynxi_supported_module <spikingjelly.activation_based.lynxi_exchange.to_lynxi_supported_module>` 或 \
+需要注意的是，在下文记录的 2022 年 HP300 / lyngor 1.1.0 环境中，编译器不接受 5D tensor。本页没有在当前硬件和 SDK 上复测这一限制。`shape = [T, N, C, H, W]` 经常出现在多步模式下的卷积层之间。对于使用多步模式的网络，使用 :class:`to_lynxi_supported_module <spikingjelly.activation_based.lynxi_exchange.to_lynxi_supported_module>` 或 \
 :class:`to_lynxi_supported_modules <spikingjelly.activation_based.lynxi_exchange.to_lynxi_supported_modules>` 进行转换时，会将输入视作 `shape = [TN, *]`。
 
-例如，查看转换神经元的源代码可以发现，在多步模式下，输入被当作 `shape = [TN, *]`，首先被reshape到 `shape = [T, N, *]` 然后才进行计算。由于灵汐不支持5D的tensor，神经元 \
-内部直接reshape为3D的tensor：
+例如，查看转换神经元的源代码可以发现，在多步模式下，输入被当作 `shape = [TN, *]`，首先被reshape到 `shape = [T, N, *]` 然后才进行计算。转换后的神经元把多步输入的第 0 维当作 `T*N`，再 reshape 成 3D：
 
 .. code-block:: python
 
@@ -88,7 +87,7 @@
                 x = x.reshape(self.T, x.shape[0] // self.T, -1)
                 # ...
 
-接下来，我们将训练好的识别FashionMNIST的网络进行转换。原始网路的定义如下：
+接下来，我们将训练好的识别FashionMNIST的网络进行转换。原始网络的定义如下：
 
 .. code-block:: python
 
@@ -158,7 +157,7 @@
             # x.shape = [N, C, H, W]
             x = x.repeat(self.T, 1, 1, 1)
 
-            # [N, C, H, W] -> [T, N, C, H, W]
+            # [N, C, H, W] -> [T*N, C, H, W]
             x = self.module_list(x)
 
             # [TN, *] -> [T, N, *]
@@ -166,10 +165,9 @@
 
             return x.mean(0)
 
-    
-        net = InferenceNet(args.T, module_list)
-        net.eval()
-        print(net)
+    net = InferenceNet(args.T, module_list)
+    net.eval()
+    print(net)
 
 输出为：
 
@@ -236,6 +234,8 @@
 
     lynxi inference accuracy = 0.9316
 
+该数值来自上文 2022-08-16 的运行，不是当前命令的输出。
+
 完整代码和输入输出
 -------------------------------------------
 
@@ -270,7 +270,7 @@
                             device id for lynxi
 
 
-完整的输出日志为：
+完整的输出日志为（编译在该机器上耗时约 19 分钟）：
 
 .. code-block:: shell
 
@@ -278,64 +278,7 @@
     lynxi_exchange.py[line:185]-CRITICAL: lyngor.version=1.1.0
     Namespace(T=4, b=16, channels=128, data_dir='/datasets/FashionMNIST/', j=4, lynxi_device=0, out_model_path='./lynxi_model', pt_path='./logs/T4_b128_sgd_lr0.1_c128/checkpoint_max.pth')
     max_test_acc=0.933
-    InferenceNet(
-    (module_list): Sequential(
-        (0): Conv2d(1, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
-        (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (2): IFNode()
-        (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
-        (4): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
-        (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (6): IFNode()
-        (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
-        (8): Flatten(start_dim=1, end_dim=-1)
-        (9): Linear(in_features=6272, out_features=2048, bias=False)
-        (10): IFNode()
-        (11): Linear(in_features=2048, out_features=10, bias=False)
-        (12): IFNode()
-    )
-    )
-    util.py[line:268]-INFO: [optimize] Total time running optimize(2): 1.9529 seconds
-    util.py[line:268]-INFO: [apu_build+optimize] Total time running apu_build(1): 4.8967 seconds
-    Aborted (core dumped)
-    builder.py[line:252]-ERROR: abc_map is error, error num is -2
-    INFO: build abc map failed, try to build by auto mode
-    util.py[line:268]-INFO: [optimize] Total time running optimize(1519): 1.2367 seconds
-    util.py[line:268]-INFO: [apu_build+optimize] Total time running apu_build(1518): 4.1377 seconds
-    lx_map compile option:
-        git tag      : LX_APU_0626
-        APU_LOG_LEVEL: 1
-        isNewCmd     : true
-        gen_golden   : false
-        savePDF      : false
-        sanityCheck  : false
-        dynPattern   : false
-        release      : true
-        logFile      : "APU.log"
-        batch        : 1
-    MC conv info: 
-        bHasMCConv   : true
-        bFastModeConv: true
-
-    test thread received convert primitive worker done message. 占用CPU时间 =     0.62s (累计用时     0.62s)
-    ====================================
-    test thread received resource assign worker done message.   占用CPU时间 =     0.71s (累计用时     1.33s)
-    ====================================
-    test thread received core slice worker done message.        占用CPU时间 =    65.14s (累计用时    66.47s)
-    ====================================
-    test thread received core map worker done message.          占用CPU时间 =   693.75s (累计用时   760.22s)
-    ====================================
-    test thread received core mem arrange worker done message.  占用CPU时间 =   129.37s (累计用时   889.59s)
-    ====================================
-    test thread received rc cfg worker done message.            占用CPU时间 =   176.15s (累计用时  1065.74s)
-    ====================================
-    test thread received route map worker done message.         占用CPU时间 =    17.04s (累计用时  1082.78s)
-    ====================================
-            支持多batch编译，最大支持数准确值请参考batchsize=2的信息说明,当前结果: 10
-    test thread received print worker done message.             占用CPU时间 =    23.28s (累计用时  1106.06s)
-    ====================================
-    util.py[line:268]-INFO: [map] Total time running apu_map(3034): 1110.0334 seconds
     util.py[line:268]-INFO: [build+map] Total time running build(0): 1136.2683 seconds
     ['net_params.json', 'Net_0']
-    100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 625/625 [02:36<00:00,  4.00it/s]
+    100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 625/625 [02:36<00:00,  4.00it/s]
     lynxi inference accuracy = 0.9316

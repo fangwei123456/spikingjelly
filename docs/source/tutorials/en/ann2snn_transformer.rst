@@ -82,7 +82,7 @@ The online-equivalent path follows explicit SpikingJelly step-mode semantics:
 
 * ``model(x)`` on the original ANN is one complete ANN inference call, without temporal expansion;
 * with ``step_mode="s"``, one converted-model call executes one differential timestep, and users write the outer time loop explicitly. Converted modules receive the current differential input :math:`x^{(t)}` and keep cumulative input :math:`X^{(t-1)}` and cumulative output :math:`f(X^{(t-1)})` internally;
-* with ``step_mode="m"``, the converted model receives a complete differential sequence tensor whose first dimension is time, and returns the complete output sequence. This mode can usually parallelize or vectorize work along the time dimension, and is much faster than single-step mode.
+* with ``step_mode="m"``, the converted model receives a complete differential sequence tensor whose first dimension is time, and returns the complete output sequence. This mode can usually parallelize or vectorize work along the time dimension.
 
 For ordinary ANN inference on one sample :math:`x`, the common differential input sequence is :math:`x^{(0)}=x` followed by zero timesteps, as in the example above. If the input is already temporal, pass its corresponding differential sequence directly.
 
@@ -176,7 +176,7 @@ The accuracy drop is 0.000 percentage points. Before evaluation, the example che
 Path 2: STA Conversion
 ----------------------
 
-Taking one step beyond the Path 1 differential-equivalence baseline, STA extends the differential idea. It still relies on explicit step-mode execution and final summation over the time dimension, but it adds calibrated spike encoders after selected nonlinear and attention outputs. The online differential-equivalence part of STA is the same spike-free TD-equivalent cumulative-difference idea introduced in Path 1; this section only adds the STA-specific spike encoder, calibration, and model-level experiment.
+STA retains Path 1's cumulative differences, explicit step mode, and time-summed readout, and adds calibrated spike encoders after selected nonlinear and attention outputs. This section covers the encoders, calibration, and model-level experiment. The recipe uses cumulative floating-point operators with calibrated output encoders; it does not reproduce the paper's full UGO/TCSA pipeline, and the results below measure this implementation.
 
 STA Spike Encoder
 ^^^^^^^^^^^^^^^^^
@@ -349,7 +349,7 @@ The full ImageNet validation run below was measured on an NVIDIA A100-SXM4-80GB 
 
 Historical documentation record: `d7ed92d8 <https://github.com/fangwei123456/spikingjelly/commit/d7ed92d8>`_ (2026-07-05); NVIDIA A100-SXM4-80GB; not rerun on current V2.
 
-The Top-1 drop is 0.368 percentage points. In this full run with ``batch_size=16``, the ANN baseline took about 181.6 seconds and the converted STA model about 1834.0 seconds. Wall-clock time is sensitive to runtime conditions; for single-step versus multi-step timing, use the dedicated step-mode benchmarks.
+The Top-1 drop is 0.368 percentage points. In this full run with ``batch_size=16``, the ANN baseline took about 181.6 seconds and the converted STA model about 1834.0 seconds. For single-step versus multi-step timing, use the dedicated step-mode benchmarks.
 
 The key stdout lines are:
 
@@ -385,7 +385,7 @@ The recipe replaces the QANN-side quantizers and Transformer operators with tran
 
 Users control single-step or multi-step execution with ``functional.set_step_mode`` and explicitly pass either a single timestep or a sequence whose first dimension is time.
 
-The ST-BIF neuron used by this SpikeZIP path is inference-only. The torch implementation contains ``detach``, ``round``, and discrete state updates, and the Triton kernel does not implement backward. Use it to run converted QANN-to-SNN models, not for end-to-end gradient training or fine-tuning.
+The ST-BIF neuron used by this SpikeZIP path is inference-only. Its construction arguments are copied and detached, and the torch, Triton and native CUDA paths raise on inputs, states or buffers that require gradients; none of them implements backward. Use it to run converted QANN-to-SNN models, not for end-to-end gradient training or fine-tuning.
 
 Synthetic RoBERTa Parity Example
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -491,12 +491,12 @@ stack with TD RMSNorm, TD linear, TD SiLU/product, TD SDPA, and
 
 The converted SNN uses the explicit temporal layout ``[T,B,S,H]`` and executes
 ``layerwise_offline_multistep``. Consequently the schedule is closer to
-:math:`L T` work than online T-step inference. It does not offer a single-step
-Qwen execution claim. Call ``functional.reset_net(model)`` before independent
-prompts; KV-cache continuation remains explicit through ``past_key_values``.
+:math:`L T` work than online T-step inference. Call ``functional.reset_net(model)``
+before independent prompts; KV-cache continuation remains explicit through
+``past_key_values``.
 
-The public Qwen2 path deliberately exposes only the real ``signed_if`` temporal
-execution (plus ``exact_td`` for equivalence checks). It does not replace the
+The public Qwen2 path exposes the real ``signed_if`` temporal execution (plus
+``exact_td`` for equivalence checks). It does not replace the
 spike sequence with a count-domain shortcut during quality evaluation.
 
 What conversion produces
@@ -504,9 +504,7 @@ What conversion produces
 
 Conversion does not change the Qwen2 token embedding, decoder depth, hidden
 size, GQA head layout, LM-head weights and dimensions, or existing weight
-tying, and it does not train new weights. It freezes all parameters and replaces
-RMSNorm, linear, SiLU/SwiGLU product, and SDPA operations in every decoder block
-with the TD implementations introduced earlier. The Qwen2 recipe adds signed
+tying, and it does not train new weights. The Qwen2 recipe adds signed
 QCFS encoding boundaries between those TD operators:
 
 The LM-head module is also represented by a ``TDLinear`` copy, but the final
@@ -561,9 +559,10 @@ boundaries use real IF dynamics and spike-count representations while TD
 operators preserve Transformer semantics; it does not mean that every Qwen
 operation has become a binary event.
 
-The converted model is read-only and inference-only: call ``eval()`` and run it
-inside ``torch.no_grad()`` or ``torch.inference_mode()``. Its ``forward()``
-raises an error in training mode or while autograd is enabled.
+For the inference examples below, call ``eval()`` and run it inside
+``torch.no_grad()`` or ``torch.inference_mode()``. Conversion keeps the
+parameters trainable, and the public model also supports the differentiable
+QCFS count reconstruction mode ``qcfs_sg`` for post-training.
 
 Signed QCFS encoders and IF neurons
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -689,13 +688,19 @@ at each encoding boundary:
      - Signed spikes after the positive and negative IF neurons receive ``ReLU(x)/T`` and ``ReLU(-x)/T``
      - Yes
      - Reconstructs a quantized and clipped :math:`x`
+   * - ``qcfs_sg``
+     - The QCFS count reconstruction, equivalent to the temporal sum of the encoded spike sequence; not a spike sequence
+     - No, the neuron time loop is skipped
+     - Reconstructs the same quantized and clipped :math:`x` differentiably, with a multi-level spike-count surrogate gradient
 
 The ``exact_td`` branch does not call ``SignedQCFSSequenceEncoder`` or its IF
 neurons. Those modules still exist on the model object, but that forward pass
 bypasses them. Consequently only floating-point and operator-implementation
 differences should remain between ``exact_td`` and dense Qwen, while
 ``signed_if`` additionally incurs rounding and saturation error at every
-encoding boundary.
+encoding boundary. ``qcfs_sg`` skips the neuron time loop and reconstructs the
+same count differentiably, so it is not a strict binary multi-step replay; the
+quality results below use ``signed_if``.
 
 T, calibration levels, and quantization error
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -755,9 +760,9 @@ Minimal calibration and inference
 
 The following example loads a local Qwen2.5 checkpoint, calibrates per-channel
 scales, converts the complete decoder, and runs the real multi-step path. The
-small prompt bank demonstrates the API; reproducing the quality results below
-requires the pinned WikiText-2 calibration protocol in
-``benchmark/snn_llm/qwen_conversion``.
+small prompt bank demonstrates the API; the quality results below are historical
+measurements whose complete run configuration was not recorded, so they are not
+an exact reproduction target for the current runner.
 
 .. code-block:: python
 
@@ -865,7 +870,7 @@ Historical documentation record: `c98d8ac4 <https://github.com/fangwei123456/spi
 These are quality results for an offline layerwise schedule, not latency or
 energy claims. High-T execution remains substantially slower than dense Qwen
 on the evaluated A100 GPU. The 3B checkpoint is governed by the Qwen Research
-License; SpikingJelly does not redistribute it. See ``benchmark/snn_llm/qwen_conversion/README.md`` for run instructions.
+License; SpikingJelly does not redistribute it. See ``benchmark/snn_llm/qwen_conversion/README.md`` for the current runner's instructions.
 
 .. [#sta] Jiang Y., et al., "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers", ICLR 2024.
 

@@ -11,7 +11,7 @@ SpikingJelly框架是基于PyTorch的SNN深度学习框架，使用SpikingJelly�
 
 基于激活值的表示方法
 -------------------------------------------
-``spikingjelly.activation_based`` 使用取值仅为0或1的张量表示脉冲，例如：
+``spikingjelly.activation_based`` 的 IF/LIF 示例使用取值仅为0或1的张量表示二值脉冲，例如：
 
 .. code-block:: python
 
@@ -33,7 +33,7 @@ SpikingJelly框架是基于PyTorch的SNN深度学习框架，使用SpikingJelly�
 
 步进模式
 -------------------------------------------
-``spikingjelly.activation_based`` 中的模块，具有两种传播模式，分别是单步模式(single-step)和多步模式(multi-step)。\
+``spikingjelly.activation_based`` 中的模块，具有两种传播模式，分别是单步模式（single-step）和多步模式（multi-step）。\
 在单步模式下，数据使用 ``shape = [N, *]`` 的格式；而在多步模式下，数据使用 ``shape = [T, N, *]`` 的格式。
 
 模块在初始化时可以指定其使用的步进模式 ``step_mode``，也可以在构建后直接进行修改：
@@ -112,7 +112,7 @@ IFNode、LIFNode 等神经元和 ``layer`` 中的常用层默认单步；FlexSN 
 状态的保存和重置
 -------------------------------------------
 SNN中的神经元等模块，与RNN类似，带有隐藏状态，其输出 :math:`Y[t]` 不仅仅与当前时刻的输入 :math:`X[t]` 有关，\
-还与上一个时末的状态 :math:`H[t-1]` 有关，即 :math:`Y[t] = f(X[t], H[t-1])`。
+还与上一个时刻末的状态 :math:`H[t-1]` 有关，即 :math:`Y[t] = f(X[t], H[t-1])`。
 
 PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.RNN` 的API文档。而在 ``spikingjelly.activation_based`` 中，\
 状态会被保存在模块内部。例如，我们新建一层IF神经元，设置为单步模式，查看给与输入前的默认电压，和给与输入后的电压：
@@ -147,7 +147,8 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
 
 在初始化后，IF神经元层的 ``v`` 会被设置为0，首次给与输入后 ``v`` 会自动广播到与输入相同的 ``shape``。
 
-若我们给与一个新的输入，则应该先清除神经元之前的状态，让其恢复到初始化状态，可以通过调用模块的 ``self.reset()`` 函数实现：
+在输入新的独立样本或独立序列前，应调用模块的 ``self.reset()`` 清除之前的状态，让其恢复到初始化状态；\
+同一连续序列的时间步之间保留状态：
 
 .. code-block:: python
 
@@ -207,6 +208,7 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
 
 .. code-block:: python
 
+    y_seq_step_by_step = []
     for t in range(T):
         x = x_seq[t]
         y = net(x)
@@ -239,14 +241,15 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
         for i in range(net.__len__()):
             y_seq_layer_by_layer = net[i](y_seq_layer_by_layer)
 
-在绝大多数情况下我们不需要显式的实现 ``for i in range(net.__len__())`` 这样的循环，因为 :class:`torch.nn.Sequential` 已经帮我们实现过了，\
-因此实际上我们可以这样做：
+本例的 :class:`torch.nn.Sequential` 已经实现逐层调用，无需显式编写 ``for i in range(net.__len__())``：
 
-.. code-block:: python 
+.. code-block:: python
     
-    y_seq_layer_by_layer = net(x_seq)
+    functional.reset_net(net)
+    with torch.no_grad():
+        y_seq_layer_by_layer = net(x_seq)
 
-本例中两种计算顺序的结果相同。训练态 BatchNorm 等按 batch 统计的层，在两种顺序下统计范围不同（N 与 T×N），结果也不同：
+本例中两种计算顺序的结果相同。训练态 BatchNorm 等按 batch 统计的层,在两种顺序下统计范围不同(N 与 T×N),结果也不同:
 
 .. code-block:: python
 

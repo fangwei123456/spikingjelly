@@ -5,7 +5,7 @@
 
 English version: :doc:`../en/memopt`
 
-本团队在ICLR 2026发表的新工作 `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ 提出了基于梯度检查点和脉冲压缩的深度SNN训练显存自动优化工具（源代码位于 `Github <https://github.com/AllenYolk/snn-gradient-checkpointing>`_ ）。只需几行代码即可显著降低深度 SNN 的训练显存；对精度和速度的影响见下文实验。
+本团队在ICLR 2026发表的新工作 `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ 提出了基于梯度检查点和脉冲压缩的深度SNN训练显存自动优化工具（源代码位于 `Github <https://github.com/AllenYolk/snn-gradient-checkpointing>`_ ）。对显存、精度和速度的影响见下文实验。
 
 该工具已经集成到 ``spikingjelly.activation_based.memopt`` 子包中，提供手工检查点、自动搜索和分布式训练接口。
 
@@ -153,7 +153,7 @@ shape、dtype 和 device 等本次调用所需的信息应放在 payload 中，�
         time_dim=0,
     )
 
-时间分块不只是一个显存开关，它会改变模块的执行顺序。只有按时间顺序分块计算仍
+时间分块会改变模块的执行顺序。只有按时间顺序分块计算仍
 保持原有语义时才能使用。普通多步神经元会在块之间传递状态，适合这种方式；训练态
 BatchNorm、跨时间注意力以及依赖完整序列统计量的运算通常不适合。
 
@@ -210,7 +210,7 @@ tensor 输出沿 ``time_dim`` 拼接；非 tensor 输出必须在各块中保持
 ``"balanced"`` 和 ``"memory"`` 分别选择 50%、75% 和 100%。候选模块按输入
 大小排序，大小相同时保持模型中的原顺序。
 
-如果启用了 ``compress``，预设只会在所有相关 rank 都观察到严格二值输入时自动
+如果启用了 ``compress``（默认开启），预设只会在所有相关 rank 都观察到严格二值输入时自动
 使用 bit 压缩。``split_fn`` 应返回至少两个互不重叠的已注册后代模块；不适用时
 返回空 tuple。``can_chunk`` 只应对确实可以沿时间维切分的模块返回 ``True``。
 
@@ -291,7 +291,7 @@ Boolean 压缩和 bit 压缩路径支持 ``torch.compile(..., fullgraph=True)``�
 融合接口的 ``weight_t`` 为 ``[K, N]``，packed/sparse 的 ``weight`` 为 ``[N, K]``。
 需要缓存转置权重时，注意训练参数更新和 autograd，不能长期复用已失效的图。
 全局 ``bit_spike_compress`` 是一维最低位优先格式，逐行 ``bit_pack_spike_dense``
-会逐行补零；输入宽度不整除 8 时尤其不能互换。memopt 的压缩器独立管理保存张量。
+会逐行补零；输入宽度不是 8 的倍数时尤其不能互换。memopt 的压缩器独立管理保存张量。
 完整形状、布局与设备约束见 :doc:`/APIs/spikingjelly.activation_based.functional.spike`。
 
 性能实测

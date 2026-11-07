@@ -14,7 +14,7 @@ Recurrent connection is the connection from outputs to inputs, e.g., the SRNN(re
 
 We can add recurrent connection to modules by SpikingJelly easily. Considering the most simple case that we add a recurrent connection to the spiking neurons layer to make its \
 outputs :math:`s[t]` at time-step :math:`t` add to the external input :math:`x[t+1]` as the input to the neuron at the next time-step. We can use :class:`spikingjelly.activation_based.layer.ElementWiseRecurrentContainer` to implement this idea.\ 
-:class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.ElementWiseRecurrentContainer>` is a container that add a recurrent connection to any ``sub_module``.\ 
+:class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.ElementWiseRecurrentContainer>` is a container that adds a recurrent connection to any ``sub_module``.\
 The connection can be specified as a user-defined element-wise operation :math:`z=f(x, y)`. Denote :math:`x[t]` as the external input for the whole module (container and ``sub_module``) at time-step :math:`t`, :math:`i[t]` and :math:`y[t]` are the input and output of ``sub_module`` \
 (note that :math:`y[t]` is also the outputs of the whole module), then we can get
 
@@ -177,6 +177,20 @@ By adding a recurrent connection implemented by :class:`spikingjelly.activation_
 
         def forward(self, x: torch.Tensor):
             return self.fc(x).mean(0)
+
+
+The three networks read the image column by column, so the input is a sequence whose
+time dimension is the image width. The same setup applies to all of them:
+
+.. code:: python
+
+    net = FeedBackNet()
+    # 'functional.set_step_mode' will not set neurons in LinearRecurrentContainer to use step_mode = 'm'
+    functional.set_step_mode(net, step_mode='m')
+    img = img.squeeze(1).permute(2, 0, 1)  # [N, 1, H, W] -> [W, N, H], regarded as [T, N, H]
+    out_fr = net(img)
+    # the neurons of the SNN have "memory", so reset them between batches
+    functional.reset_net(net)
 
 
 The following figure shows the network structure of three networks:

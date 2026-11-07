@@ -5,7 +5,7 @@ Author: `fangwei123456 <https://github.com/fangwei123456>`_
 中文版： :doc:`../cn/conv_fashion_mnist`
 
 In this tutorial, we will build a convolutional SNN to classify the `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_ dataset. Images in the Fashion-MNIST dataset \
-have the same shape as these in the MNIST dataset, which is ``1 * 28 * 28``.
+have the same shape as those in the MNIST dataset, which is ``1 * 28 * 28``.
 
 Network Structure
 -------------------------------------------
@@ -13,7 +13,7 @@ We use the common convolutional network structure. More specifically, the networ
 
 ``{Conv2d-BatchNorm2d-IFNode-MaxPool2d}×2 - Flatten - {Linear-IFNode}×2``
 
-We build the network like the following codes:
+Define the network as follows:
 
 The complete code is in :mod:`spikingjelly.activation_based.examples.conv_fashion_mnist`.
 
@@ -59,7 +59,7 @@ The complete code is in :mod:`spikingjelly.activation_based.examples.conv_fashio
             neuron.IFNode(surrogate_function=surrogate.ATan()),
             )
 
-For faster training speed, we use the multi-step mode and rely on automatic device-based neuron execution:
+For faster training speed, we use the multi-step mode and rely on automatic device-based neuron execution. Add the following line at the end of the constructor above:
 
 .. code-block:: python
 
@@ -74,7 +74,7 @@ Recently, sending the image to SNN directly is a popular method in deep SNNs, wh
 which are ``{Conv2d-BatchNorm2d-IFNode}``.
 
 The input image has ``shape=[N, C, H, W]``. We add an additional time-step dimension and expand it to a sequence with ``shape=[T, N, C, H, W]``. \
-The output is defined by the firing rate of the last spiking neurons layer. Thus, the forward function is defined by:
+The output is defined by the firing rate of the last spiking neurons layer. Thus, add the following method to the same ``CSNN`` class:
 
 .. code-block:: python
 
@@ -90,8 +90,7 @@ The output is defined by the firing rate of the last spiking neurons layer. Thus
 
 Training
 -------------------------------------------
-How to define the training method, loss function, and classification result are identical to the last tutorial, and we will not introduce them in this tutorial. \
-The only difference is we use the Fashion-MNIST dataset:
+Keep the MSE loss, classification rule, and per-batch reset from :doc:`./lif_fc_mnist`. In both training and evaluation, replace the Poisson encoding and external T-step accumulation/averaging with ``out_fr = net(img)``; ``CSNN.forward()`` already runs T steps and averages them. Use Fashion-MNIST as the dataset:
 
 .. code-block:: python
 
@@ -149,7 +148,7 @@ The outputs are:
     train speed = 7627.8147 images/s, test speed = 7868.9090 images/s
     escape time = 2022-05-24 21:42:16
 
-We get ``max_test_acc = 0.9308``. If we fine-tune the hyper-parameters, we will get higher accuracy.
+We get ``max_test_acc = 0.9308``.
 
 The following figure shows the accuracy curves during training:
 
@@ -159,7 +158,7 @@ The following figure shows the accuracy curves during training:
 Visualizing Encoding
 -------------------------------------------
 As mentioned above, we send images to SNN directly, and the encoding is implemented by the first ``{Conv2d-BatchNorm2d-IFNode}`` in the SNN. \
-Now let us extract the encoder ``{Conv2d-BatchNorm2d-IFNode}``, give images to the encoder, and visualize the output spikes:
+Now let us extract the encoder ``{Conv2d-BatchNorm2d-IFNode}``, give images to the encoder, and visualize the output spikes. Add the following method to the same ``CSNN`` class:
 
 .. code-block:: python
 
@@ -178,6 +177,7 @@ Now let us extract the encoder ``{Conv2d-BatchNorm2d-IFNode}``, give images to t
             start_epoch = checkpoint['epoch'] + 1
             max_test_acc = checkpoint['max_test_acc']
             if args.save_es is not None and args.save_es != '':
+                net.eval()
                 encoder = net.spiking_encoder()
                 with torch.no_grad():
                     for img, label in test_data_loader:
@@ -223,7 +223,7 @@ Let us load the trained model, set ``batch_size=4``, which means we only save 4 
 
 .. note::
 
-    The checkpoint was trained with ``batch_size=256`` (denoted by ``b256`` in the checkpoint path), while the inference command above uses ``batch_size=4`` to save only 4 samples for visualization.
+    The checkpoint was trained with ``batch_size=256`` (denoted by ``b256`` in the checkpoint path), while the inference command above uses ``batch_size=4`` to save only 4 samples for visualization. The network is put in ``eval()`` mode, so BatchNorm uses the running statistics learned during training.
 
 Images and spikes will be saved in ``./logs/visualization``. Here are two images and spikes encoded from them:
 

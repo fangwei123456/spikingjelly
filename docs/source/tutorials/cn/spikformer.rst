@@ -5,9 +5,7 @@
 
 English version: :doc:`../en/spikformer`
 
-本节教程主要介绍基于Spikingjelly构建脉冲Transformer （Spiking Transformer，Spikformer [#spikformer]_ ）模型，训练脉冲Transformer的细节以及改进脉冲Transformer架构的关键点。
-和SEW ResNet相比，Spikformer的结构和堆叠方式较为简单，具体来说由三个主要组件，即脉冲块分割前馈模块（Spiking Patch Splitting，SPS）、脉冲自注意力机制（Spiking Self Attention，SSA）和多层感知模块（Multi-Layer Perceptron，MLP）组成。
-堆叠方式则为一个SPS加若干个SSA-MLP组合块。具体的SSA和Spikformer如图所示：
+本教程介绍如何用 SpikingJelly 构建 Spikformer [#spikformer]_ 并改进 SSA 实现。Spikformer 的结构由三个主要组件组成：脉冲块分割前馈模块（Spiking Patch Splitting，SPS）、脉冲自注意力机制（Spiking Self Attention，SSA）和多层感知模块（Multi-Layer Perceptron，MLP），堆叠方式是一个 SPS 加若干个 SSA-MLP 组合块。训练流程见 :doc:`./train_large_scale_snn`；Spikformer 的分布式训练配置见 :doc:`./distributed_training`。具体的 SSA 和 Spikformer 如图所示：
 
 .. image:: ../../_static/tutorials/spikformer/spikformer-overview.png
     :width: 100%
@@ -83,7 +81,7 @@ English version: :doc:`../en/spikformer`
 
             return x
 
-基于SSA和MLP构建脉冲Transformer的Block，注意此处使用SEW形式残差，若使用MS形式残差则需在SSA和MLP中更改脉冲神经元的位置：
+基于SSA和MLP构建脉冲Transformer的Block。下面的片段是结构示意：``MLP`` 代表通道在后的脉冲前馈模块，本页不定义它，因此该片段本身不可运行。SpikingJelly 提供 :class:`spikingjelly.activation_based.model.spikformer.SpikformerMLP` ，但它是 token-last 格式且需要 ``out_features`` 参数，不能直接替换下面的调用。注意此处使用SEW形式残差，若使用MS形式残差则需在SSA和MLP中更改脉冲神经元的位置：
 
 .. code-block:: python
 
@@ -92,14 +90,30 @@ English version: :doc:`../en/spikformer`
             super().__init__()
             self.attn = SSA(dim, num_heads=num_heads)
             mlp_hidden_dim = int(dim * mlp_ratio)
-            self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim)
+            self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim, out_features=dim)
 
         def forward(self, x):
             x = x + self.attn(x)
             x = x + self.mlp(x)
             return x
 
-最后加入前馈模块，组成Spikformer，读者还可以根据处理任务的分辨率和复杂性设计分层的Spikformer，参考QKformer。
+最后加入前馈模块，组成Spikformer。包含 patch splitting、上述 block 和读出层的完整模型由 :func:`spikingjelly.activation_based.model.spikformer.spikformer_ti` 提供：
+
+.. code-block:: python
+
+    from spikingjelly.activation_based.model.spikformer import spikformer_ti
+    from spikingjelly.activation_based import functional
+
+    net = spikformer_ti(T=4, img_size_h=32, img_size_w=32, num_classes=10)
+    functional.set_step_mode(net, 'm')
+    x_seq = torch.rand([4, 2, 3, 32, 32])
+    y_seq = net(x_seq)
+    print(f'y_seq.shape={y_seq.shape}')
+    functional.reset_net(net)
+
+``spikformer_ti`` 是 tiny 配置。``spikformer_s`` 和 ``spikformer_cifar10`` 分别提供 small ImageNet 和 CIFAR-10 配置及其训练默认参数。
+
+读者还可以根据处理任务的分辨率和复杂性设计分层的Spikformer，参考QKformer。
 
 SSA实现方式改进
 -----------------------
@@ -130,7 +144,7 @@ SpikingJelly ``0.0.0.1.0`` 提供了 SSA 的高效实现 :class:`SpikingSelfAtte
 
     所以对于改进后的 token-last 张量而言，张量乘法顺序应为 ``v @ k.transpose(-2, -1) @ q`` 。
 
-最终得到如下的 ``SpikingSelfAttention`` 模块（仅作示意）。更多实现细节，请参考 :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>` 文档与源代码。
+下面的实现展示上述改动。完整实现见 :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>` 的文档与源码。
 
 .. code:: python
 
@@ -184,8 +198,8 @@ SpikingJelly ``0.0.0.1.0`` 提供了 SSA 的高效实现 :class:`SpikingSelfAtte
 改进脉冲Transformer
 -------------------------------
 脉冲自注意力机制的建模形式尚处于开放探索阶段，已有多种改进，改进点的具体位置有：改进QKV的形式和计算方式，增强QKV的时空关注能力，设计脉冲位置编码和SSA分块加速等。
-读者可根据实际任务需求和性能导向探索符合SNN的新型机制。此外，针对脉冲Transformer中的MLP和SPS前馈模块的改进也会显著影响其性能。
-一些Spikformer变体有：SpikingResformer [#spikingresformer]_ ,如下图
+也可以改进脉冲 Transformer 中的 MLP 和 SPS 前馈模块。
+Spikformer 的一个变体是 SpikingResformer [#spikingresformer]_ ，如下图：
 
 .. image:: ../../_static/tutorials/spikformer/spikingresformer.png
     :width: 100%

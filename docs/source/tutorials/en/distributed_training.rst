@@ -52,6 +52,18 @@ pipeline parallelism. ``vision.TrainingConfig`` describes the job and
     )
     metrics = vision.train_classification(config)
 
+The repository's synthetic-data entry point can verify the installation and
+parallel configuration directly:
+
+.. code-block:: bash
+
+    torchrun --standalone --nproc-per-node=4 benchmark/vision_distributed.py \
+        --model sew-resnet34 \
+        --data-parallel fsdp2 \
+        --tensor-parallel-size 2 \
+        --precision bf16 \
+        --max-steps 10
+
 ``PrecisionConfig`` is prepared before DDP/FSDP wrapping and optimizer creation.
 Experimental Transformer Engine FP8 and Triton-neuron mixed precision currently
 require DDP with TP=PP=1. MCore LLM precision is independent and remains configured
@@ -62,7 +74,7 @@ for configuration ownership, standalone usage, and measured FP8 crossover points
 ``"cuda_graph"`` manually captures the complete forward/loss/backward workload at
 the execution-runner seam. Optimizer and scaler updates, scheduling, EMA,
 checkpointing, logging, and ``reset_net`` remain outside the graph. Training runs
-11 real optimizer steps before capture and never runs dummy optimizer steps. A
+11 real optimizer steps before capture by default and never runs dummy optimizer steps. A
 batch whose shape, dtype, or layout differs from the capture point runs eagerly
 and increments the fallback counter. Vision CUDA Graph currently rejects FSDP2,
 multi-rank DDP/TP/PP, FP8, memopt, and ``store_v_seq=True``.
@@ -101,10 +113,13 @@ export, and inference process before constructing the model:
             "spikingjelly.activation_based.neuron.integrate_and_fire.IFNode"
         ),
         kwargs={"v_threshold": 0.7},
-        surrogate="spikingjelly.activation_based.surrogate.Rect",
+        surrogate="spikingjelly.activation_based.surrogate.ATan",
         surrogate_kwargs={"alpha": 2.0},
     )
     model_config = SEWResNet34Config(neuron_config=neuron_config)
+
+A surrogate outside the seven fused built-ins (see :doc:`./surrogate`) moves
+every neuron to the Torch reference recurrence.
 
 For an external neuron, call ``vision.register_neuron_class(MyNeuron)`` after
 importing it. Use ``vision.register_surrogate_class(MySurrogate)`` for an external
@@ -136,18 +151,6 @@ saved buffer between single-step forwards.
 for backward and loss reporting. ``loss_kwargs`` supplies keyword arguments to
 each call. The same function is used by non-pipeline and pipeline training and
 validation; top-1 accuracy remains the fixed classification metric.
-
-The repository's synthetic-data entry point can verify the installation and
-parallel configuration directly:
-
-.. code-block:: bash
-
-    torchrun --standalone --nproc-per-node=4 benchmark/vision_distributed.py \
-        --model sew-resnet34 \
-        --data-parallel fsdp2 \
-        --tensor-parallel-size 2 \
-        --precision bf16 \
-        --max-steps 10
 
 Custom models use ``vision.ModelConfig`` and ``vision.ModelBuilder``. ``build``
 returns the model for the current rank, FSDP2 shard roots, and PP input/output
@@ -940,8 +943,9 @@ Functional tests also covered BF16 TP4, PP4, TP2 x PP2, CP4, TP2 x CP2, and PP2
 x CP2, plus FP8 TP4, PP4, and CP4. Every case produced finite loss and gradients
 and nonzero gradients in the SNN modules. Under a 7-GiB memory budget, the planner
 selected TP4, SpikingJelly memopt, and MCore selective ``core_attn``
-recomputation. The 6.28 GiB figure is the static planning input; forcing this
-plan for two training steps reached about 7.26 GiB/GPU in practice. A TP2 x PP2
+recomputation. The planner's own 6.28 GiB/GPU estimate is the static planning
+input; forcing this plan for two training steps reached about 7.26 GiB/GPU in
+practice. A TP2 x PP2
 sharded model/optimizer checkpoint also resumed successfully from step 1 to step
 2.
 

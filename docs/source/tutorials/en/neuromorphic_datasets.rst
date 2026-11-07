@@ -41,7 +41,7 @@ The outputs are:
 The DVS128 Gesture dataset can not be downloaded automatically. But its ``resource_url_md5()`` will tell the user where to
 download. The DVS128 Gesture dataset can be downloaded from https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794.
 The box website does not allow us to download data by python codes without login. Thus, the user has to download it manually.
-Suppose we have downloaded the dataset into ``E:/datasets/DVS128Gesture/download``, then the directory structure is
+Suppose we have downloaded the dataset into ``D:/datasets/DVS128Gesture/download``, then the directory structure is
 
 .. code:: bash
 
@@ -70,7 +70,7 @@ Let us create a train set. We set ``data_type='event'`` to use Event data rather
     root_dir = 'D:/datasets/DVS128Gesture'
     train_set = DVS128Gesture(root_dir, train=True, data_type='event')
 
-SpikingJelly will do the followed work when running these codes:
+Running this code performs the following steps:
 
 #. If the processed data directory is missing, SpikingJelly checks the original files against their MD5 hashes (or downloads them), then extracts them to ``extract``. An existing ``extract`` directory is reused without an integrity check. If preparation is interrupted, follow the error message to clean the partial directory and ``.building`` marker before retrying.
 #. The sample in DVS128 Gesture is the video that records one actor displaying different gestures under different illumination conditions. Hence, an AER sample contains many gestures and there is also an adjoint csv file to label the time stamp of each gesture. Hence, an AER sample is not a sample with one class but multi-classes. SpikingJelly will use multi-threads to cut and extract each gesture from these files.
@@ -109,7 +109,7 @@ The values are independent NumPy arrays and ``t`` is measured in microseconds.
 Get Frame Data
 -----------------------
 
-The event-to-frame integrating method for pre-processing neuromorphic datasets is widely used. We use the same method from [#PLIF]_ in SpikingJelly. Data in neuromorphic datasets are in the formulation of :math:`E(x_{i}, y_{i}, t_{i}, p_{i})` that represent the event's coordinate, time and polarity. We split the event's number :math:`N` into :math:`T` slices with nearly the same number of events in each slice and integrate events to frames. Note that :math:`T` is also the simulating time-step. Denote a two channels frame as :math:`F(j)` and a pixel at :math:`(p, x, y)` as :math:`F(j, p, x, y)`, the pixel value is integrated from the events data whose indices are between :math:`j_{l}` and :math:`j_{r}`:
+The event-to-frame integrating method for pre-processing neuromorphic datasets is widely used. We use the same method from [#PLIF]_ in SpikingJelly. Data in neuromorphic datasets are in the formulation of :math:`E(x_{i}, y_{i}, t_{i}, p_{i})` that represent the event's coordinate, time and polarity. We split the event's number :math:`N` into :math:`T` slices with nearly the same number of events in each slice and integrate events to frames. With ``split_by='number'`` and ``frames_number=20``, :math:`T` is the number of frames, so feeding one frame per simulation step gives 20 steps. Denote a two channels frame as :math:`F(j)` and a pixel at :math:`(p, x, y)` as :math:`F(j, p, x, y)`, the pixel value is integrated from the events data whose indices are between :math:`j_{l}` and :math:`j_{r}`:
 
 .. math::
 
@@ -119,7 +119,7 @@ The event-to-frame integrating method for pre-processing neuromorphic datasets i
 
 where :math:`\lfloor \cdot \rfloor` is the floor operation, :math:`\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` is an indicator function and it equals 1 only when :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`.
 
-SpikingJelly will integrate events to frames when running the followed codes:
+SpikingJelly will integrate events to frames when running the following code:
 
 .. code:: python
 
@@ -213,7 +213,7 @@ the name of directory ``custom_integrated_frames_dir_name`` for saving frames.
 
 ``custom_integrate_function`` is a user-defined function that inputs are ``events, H, W``.
 ``events`` is a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``. ``H`` is the height of the
-data and ``W`` is the weight of the data. For example, H=128 and W=128 for the DVS128 Gesture dataset. The function should
+data and ``W`` is the width of the data. For example, H=128 and W=128 for the DVS128 Gesture dataset. The function should
 return frames.
 
 ``custom_integrated_frames_dir_name`` can be ``None``, and then the name of directory for saving frames will be set to ``custom_integrate_function.__name__``.
@@ -223,6 +223,8 @@ a function:
 
 .. code:: python
 
+    from typing import Dict
+    import numpy as np
     from spikingjelly.datasets.utils import integrate_events_segment_to_frame
     def integrate_events_to_2_frames_randomly(events: Dict, H: int, W: int):
         index_split = np.random.randint(low=0, high=len(events['t']))

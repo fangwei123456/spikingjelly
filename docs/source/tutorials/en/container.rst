@@ -150,7 +150,7 @@ rather than using a container to wrap the ann layers manually. Although the modu
 wrap forward function, the advantages of modules in :class:`spikingjelly.activation_based.layer` are:
 
 * Both single-step and multi-step modes are supported. When using :class:`SeqToANNContainer<spikingjelly.activation_based.layer.SeqToANNContainer>` or :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` to wrap modules, only the multi-step mode is supported.
-* The wrapping of containers will add a prefix of ``keys()`` of ``state_dict``, which brings some troubles for loading weights.
+* Wrapping a module in a container adds a prefix to its ``state_dict`` keys, which can complicate loading weights.
 
 For example:
 
@@ -217,7 +217,7 @@ The outputs are
     Load success!
 
 
-:class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` and :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` only support for multi-step mode and do not allow to switch to single-step mode.
+:class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` and :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` support only multi-step mode and cannot switch to single-step mode.
 
 :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` works like the merged version of :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` and :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>`, which can be used to wrap stateless or stateful single-step modules.\
 The user should specify whether the wrapped modules are stateless or stateful when using this container. This container also supports switching step modes.
@@ -240,6 +240,7 @@ Here is an example of wrapping a stateless layer:
         x_seq = torch.rand([T, N, C, H, W])
         net = layer.StepModeContainer(
             False,
+            's',
             nn.Conv2d(C, C, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(C),
         )
@@ -269,6 +270,7 @@ Here is an example of wrapping a stateful layer:
         x_seq = torch.rand([T, N, C, H, W])
         net = layer.StepModeContainer(
             True,
+            's',
             neuron.IFNode()
         )
         net.step_mode = 'm'
@@ -292,14 +294,14 @@ It is safe to use :class:`set_step_mode <spikingjelly.activation_based.functiona
     with torch.no_grad():
         net = layer.StepModeContainer(
             True,
+            's',
             neuron.IFNode()
         )
         functional.set_step_mode(net, 'm')
         print(f'net.step_mode={net.step_mode}')
         print(f'net[0].step_mode={net[0].step_mode}')
 
-If the module itself supports for switching between single-step and multi-step modes, is not recommended to use :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` or :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` to wrap.\
-Because the multi-step forward implemented by the container may not be as fast as the forward defined by the module itself.
+If a module already supports single-step and multi-step modes, use its own forward methods instead of wrapping it in :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` or :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>`. Its multi-step implementation may be faster than the container's loop.
 
 
-In most cases, we use :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` or :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` to wrap modules which do not define the multi-step forward, such as a network layer that exists in ``torch.nn`` but does not exist in ``spikingjelly.activation_based.layer``.
+Use :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` or :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` to wrap modules that do not define multi-step forward, such as a network layer that exists in ``torch.nn`` but does not exist in ``spikingjelly.activation_based.layer``.

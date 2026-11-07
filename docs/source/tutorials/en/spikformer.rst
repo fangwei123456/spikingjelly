@@ -5,9 +5,7 @@ Tutorial author: `Zhou Zhaokun <https://github.com/ZK-Zhou>`_ , `Yifan Huang (Al
 
 中文版： :doc:`../cn/spikformer`
 
-This tutorial mainly introduces the construction of the Spiking Transformer (Spiking Transformer, Spikformer [#spikformer]_ ) model based on Spikingjelly, the details of training the Spiking Transformer, and the key points of improving the Spiking Transformer architecture.
-Compared to SEW ResNet, the structure and stacking method of Spikformer are relatively simple, specifically consisting of three main components: Spiking Patch Splitting (SPS), Spiking Self Attention (SSA), and Multi-Layer Perceptron (MLP).
-The stacking method is one SPS followed by multiple SSA-MLP combination blocks. The specific SSA and Spikformer are shown in the figure:
+This tutorial shows how to build Spikformer [#spikformer]_ with SpikingJelly and improve its SSA implementation. Spikformer consists of three main components: Spiking Patch Splitting (SPS), Spiking Self Attention (SSA), and Multi-Layer Perceptron (MLP), stacked as one SPS followed by multiple SSA-MLP blocks. See :doc:`./train_large_scale_snn` for the training workflow and :doc:`./distributed_training` for Spikformer distributed training configurations. The specific SSA and Spikformer are shown in the figure:
 
 .. image:: ../../_static/tutorials/spikformer/spikformer-overview.png
     :width: 100%
@@ -84,7 +82,7 @@ In the Spiking Self Attention mechanism, Query, Key, and Value are all spike seq
 
             return x
 
-Based on SSA and MLP, construct the Spiking Transformer Block. Note that SEW-style residuals are used here. If MS-style residuals are used, the position of spike neurons in SSA and MLP needs to be changed:
+Based on SSA and MLP, construct the Spiking Transformer Block. The excerpt below is a structural sketch: ``MLP`` stands for the channel-last spiking feed-forward block, and this page does not define it, so the excerpt is not runnable on its own. SpikingJelly ships :class:`spikingjelly.activation_based.model.spikformer.SpikformerMLP`, but it is token-last and takes an ``out_features`` argument, so it is not a drop-in replacement for the call below. Note that SEW-style residuals are used here. If MS-style residuals are used, the position of spike neurons in SSA and MLP needs to be changed:
 
 .. code-block:: python
 
@@ -93,14 +91,32 @@ Based on SSA and MLP, construct the Spiking Transformer Block. Note that SEW-sty
             super().__init__()
             self.attn = SSA(dim, num_heads=num_heads)
             mlp_hidden_dim = int(dim * mlp_ratio)
-            self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim)
+            self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim, out_features=dim)
 
         def forward(self, x):
             x = x + self.attn(x)
             x = x + self.mlp(x)
             return x
 
-Finally, add the feedforward module to form Spikformer. The reader can also design hierarchical Spikformer based on resolution and complexity of the task. Refer to QKformer.
+Finally, add the feedforward module to form Spikformer. A complete model with the patch splitting, the blocks and the readout is available as :func:`spikingjelly.activation_based.model.spikformer.spikformer_ti`:
+
+.. code-block:: python
+
+    from spikingjelly.activation_based.model.spikformer import spikformer_ti
+    from spikingjelly.activation_based import functional
+
+    net = spikformer_ti(T=4, img_size_h=32, img_size_w=32, num_classes=10)
+    functional.set_step_mode(net, 'm')
+    x_seq = torch.rand([4, 2, 3, 32, 32])
+    y_seq = net(x_seq)
+    print(f'y_seq.shape={y_seq.shape}')
+    functional.reset_net(net)
+
+``spikformer_ti`` is the tiny configuration. ``spikformer_s`` and
+``spikformer_cifar10`` provide the small ImageNet and CIFAR-10 configurations
+with their training defaults.
+
+The reader can also design hierarchical Spikformer based on resolution and complexity of the task. Refer to QKformer.
 
 Improved SSA Implementation
 --------------------------------
@@ -131,7 +147,7 @@ Compared with the ``SSA`` introduced in the previous section, :class:`SpikingSel
 
     Therefore, for the token-last tensors, the correct order of tensor multiplication is ``v @ k.transpose(-2, -1) @ q``.
 
-The resulting ``SpikingSelfAttention`` module is shown below (for illustration purposes only). For more implementation details, please refer to the documentation and source code of :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>`.
+The implementation below illustrates these changes. See :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>` for the complete implementation.
 
 .. code:: python
 
@@ -186,8 +202,8 @@ The resulting ``SpikingSelfAttention`` module is shown below (for illustration p
 Improving Spiking Transformer
 -----------------------------
 The modeling form of Spiking Self Attention mechanism is still in open exploration, and there are multiple improvements, including: improving the form and calculation method of QKV, enhancing spatial-temporal attention capability of QKV, designing spike position encoding, and accelerating SSA block splitting.
-Readers can explore new mechanisms suitable for SNN based on actual task requirements and performance orientation. Furthermore, the improvement of MLP and SPS feedforward modules in Spiking Transformer will also significantly affect its performance.
-Some Spikformer variants include: SpikingResformer [#spikingresformer]_, as shown in:
+You can also modify the MLP and SPS feedforward modules.
+One Spikformer variant is SpikingResformer [#spikingresformer]_, shown below:
 
 .. image:: ../../_static/tutorials/spikformer/spikingresformer.png
     :width: 100%
