@@ -456,7 +456,7 @@ class FlexSN(base.MemoryModule):
         state_results = tuple(results[num_outputs : num_outputs + self.num_states])
         if store_state_seqs:
             state_seqs = state_results
-            states = tuple(sequence[-1] for sequence in state_seqs)
+            states = tuple(sequence[-1].clone() for sequence in state_seqs)
         else:
             state_seqs = None
             states = state_results
@@ -549,7 +549,7 @@ class FlexSN(base.MemoryModule):
         state_results = tuple(results[num_outputs : num_outputs + self.num_states])
         if store_state_seqs:
             state_seqs = state_results
-            states = tuple(sequence[-1] for sequence in state_seqs)
+            states = tuple(sequence[-1].clone() for sequence in state_seqs)
         else:
             states = state_results
             state_seqs = None

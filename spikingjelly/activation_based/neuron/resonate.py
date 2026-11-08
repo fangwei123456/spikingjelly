@@ -174,7 +174,11 @@ class RAFNode(BaseNode):
             u = torch.full_like(x, u, requires_grad=False)
         elif isinstance(u, torch.Tensor):
             if u.shape != x.shape:
-                u = torch.full_like(x, 0.0, requires_grad=False)
+                raise ValueError(
+                    f"{type(self).__name__} recovery state shape {tuple(u.shape)} "
+                    f"does not match input {tuple(x.shape)}; call reset_net(node) "
+                    "or supply matching explicit states."
+                )
             elif u.dtype != x.dtype or u.device != x.device:
                 u = u.to(dtype=x.dtype, device=x.device)
         return (*states[:-1], u)

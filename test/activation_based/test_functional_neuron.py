@@ -249,7 +249,7 @@ def test_complementary_lif_state_storage_reset_and_backend_contract():
     module.store_v_seq = True
     assert module.state_seqs is None
 
-    x_seq = torch.randn(2, 3, dtype=torch.float64)
+    x_seq = torch.randn(2, 2, 4, dtype=torch.float64)
     module(x_seq)
     assert module.v_seq is None
     assert module.v.shape == x_seq.shape[1:]
@@ -333,6 +333,90 @@ def test_materialize_states_is_pure():
 
     assert module.v == 0.0
     assert torch.equal(states[0], torch.zeros_like(x))
+
+
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+@pytest.mark.parametrize(
+    "node_type",
+    [
+        neuron.IFNode,
+        neuron.LIFNode,
+        neuron.ParametricLIFNode,
+        neuron.HalfThresholdIFNode,
+        neuron.ComplementaryLIFNode,
+        neuron.CUBALIFNode,
+        neuron.IzhikevichNode,
+        neuron.RAFNode,
+    ],
+)
+def test_state_shape_change_requires_reset(node_type, step_mode):
+    node = node_type()
+    node.step_mode = step_mode
+    reference = copy.deepcopy(node)
+    first = torch.ones(4, 3) if step_mode == "s" else torch.ones(2, 4, 3)
+    changed = torch.ones(2, 3) if step_mode == "s" else torch.ones(3, 2, 3)
+    node(first)
+    states = tuple(node.memories())
+    with pytest.raises(ValueError, match="state shape.*reset_net"):
+        node(changed)
+    assert all(a is b for a, b in zip(states, node.memories(), strict=True))
+    functional.reset_net(node)
+    torch.testing.assert_close(node(changed), reference(changed))
+    for actual, expected in zip(node.memories(), reference.memories(), strict=True):
+        torch.testing.assert_close(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "node_type,state_name",
+    [
+        (neuron.IzhikevichNode, "w"),
+        (neuron.RAFNode, "u"),
+        (neuron.ComplementaryLIFNode, "m"),
+        (neuron.CUBALIFNode, "c"),
+    ],
+)
+def test_secondary_state_shape_is_not_silently_reinitialized(node_type, state_name):
+    node = node_type()
+    node(torch.ones(4, 3))
+    setattr(node, state_name, torch.ones(2, 3))
+    states = tuple(node.memories())
+    with pytest.raises(ValueError, match="state shape.*reset_net"):
+        node(torch.ones(4, 3))
+    assert all(a is b for a, b in zip(states, node.memories(), strict=True))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+@pytest.mark.parametrize("family", ["if", "lif", "plif"])
+@pytest.mark.parametrize("profile", ["custom_surrogate", "float64"])
+def test_forced_torch_reference_profile_matches_cpu(family, profile, monkeypatch):
+    import importlib
+
+    package = importlib.import_module(
+        f"spikingjelly._ops.{'if_' if family == 'if' else family}"
+    )
+    monkeypatch.setattr(package._selection, "_requested", "torch")
+    dtype = torch.float64 if profile == "float64" else torch.float32
+    spike = torch.sigmoid if profile == "custom_surrogate" else _surrogate()
+    x = torch.randn(3, 2, 7, device="cuda", dtype=dtype, requires_grad=True)
+    v = torch.randn(2, 7, device="cuda", dtype=dtype, requires_grad=True)
+    cpu = [value.detach().cpu().requires_grad_() for value in (x, v)]
+    function = getattr(functional, f"{family}_multi_step")
+    kwargs = {"surrogate_function": spike, "store_v_seq": True}
+    if family == "plif":
+        decay = torch.tensor(0.4, device="cuda", dtype=dtype, requires_grad=True)
+        cpu_decay = decay.detach().cpu().requires_grad_()
+        actual = function(x, v, decay, **kwargs)
+        expected = function(*cpu, cpu_decay, **kwargs)
+        inputs = (x, v, decay)
+        cpu.append(cpu_decay)
+    else:
+        actual = function(x, v, **kwargs)
+        expected = function(*cpu, **kwargs)
+        inputs = (x, v)
+    gradients = torch.autograd.grad(sum(value.sum() for value in actual), inputs)
+    cpu_gradients = torch.autograd.grad(sum(value.sum() for value in expected), cpu)
+    for got, want in zip((*actual, *gradients), (*expected, *cpu_gradients)):
+        torch.testing.assert_close(got.cpu(), want)
 
 
 def test_plif_step_matches_module_and_parameter_gradient():
@@ -460,6 +544,7 @@ def test_store_v_seq_accumulates_across_single_steps_until_reset(node_type):
     node_s(x_seq[2])
     torch.testing.assert_close(node_s.v_seq, node_s.v.unsqueeze(0))
 
+    node_s.reset()
     node_s(torch.rand(5, 3))
     assert node_s.v_seq.shape == (1, 5, 3)
     torch.testing.assert_close(node_s.v_seq, node_s.v.unsqueeze(0))

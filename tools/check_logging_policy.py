@@ -187,7 +187,16 @@ def check(root: Path) -> list[str]:
                     )
                 elif (
                     isinstance(func, ast.Attribute)
-                    and func.attr in {"bind", "contextualize", "opt"}
+                    and func.attr
+                    in {
+                        "add",
+                        "remove",
+                        "enable",
+                        "configure",
+                        "bind",
+                        "contextualize",
+                        "opt",
+                    }
                     and _root_name(func.value) == "logger"
                 ):
                     violations.append(

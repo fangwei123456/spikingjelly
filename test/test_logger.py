@@ -3,9 +3,27 @@ from __future__ import annotations
 import subprocess
 import sys
 
+import pytest
+
 from spikingjelly.activation_based.op_counter.simple_energy import (
     SimpleEnergyProfiler,
 )
+
+
+@pytest.mark.parametrize("method", ["add", "remove", "enable", "configure"])
+def test_logging_policy_rejects_library_logger_configuration(tmp_path, method):
+    from tools.check_logging_policy import check
+
+    root = tmp_path / "spikingjelly"
+    root.mkdir()
+    source = f'from .logger import logger\nlogger.{method}("example")\n'
+    (root / "component.py").write_text(source)
+    examples = root / "examples"
+    examples.mkdir()
+    (examples / "application.py").write_text(source)
+    violations = check(root)
+    assert len(violations) == 1
+    assert f"logger.{method} is not allowed" in violations[0]
 
 
 def test_import_is_silent_and_does_not_change_stdlib_root():

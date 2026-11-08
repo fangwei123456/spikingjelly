@@ -274,6 +274,10 @@ class BaseNode(base.MemoryModule):
         若需要通过 ``neuronal_charge`` 修改 Python 神经元方程，请继承
         :class:`SimpleBaseNode`。
 
+        已物化的张量状态必须与单步输入形状相同。改变批量或特征形状前调用
+        ``functional.reset_net(node)``；显式状态调用须传入形状匹配的状态。
+        形状不匹配会抛出 ``ValueError``，不会自动丢弃旧状态。
+
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
 
@@ -308,6 +312,11 @@ class BaseNode(base.MemoryModule):
         ``multi_step_functional_forward`` only for an independent sequence
         implementation or specialized kernel. Inherit :class:`SimpleBaseNode`
         instead to modify Python neuron equations through ``neuronal_charge``.
+
+        Materialized tensor states must match the single-step input shape. Call
+        ``functional.reset_net(node)`` before changing batch or feature shape;
+        explicit-state calls must supply matching states. A shape mismatch raises
+        ``ValueError`` without silently discarding the old state.
 
         :param v_threshold: threshold of this neurons layer
         :type v_threshold: float
@@ -579,12 +588,10 @@ class BaseNode(base.MemoryModule):
             v = torch.full_like(x, v, dtype=state_dtype, requires_grad=False)
         elif isinstance(v, torch.Tensor):
             if v.shape != x.shape:
-                v = torch.full(
-                    x.shape,
-                    self.v_reset if self.v_reset is not None else 0.0,
-                    dtype=state_dtype,
-                    device=x.device,
-                    requires_grad=False,
+                raise ValueError(
+                    f"{type(self).__name__} state shape {tuple(v.shape)} does not "
+                    f"match input {tuple(x.shape)}; call reset_net(node) before "
+                    "changing input shape, or supply matching explicit states."
                 )
             elif v.dtype != state_dtype or v.device != x.device:
                 v = v.to(dtype=state_dtype, device=x.device)

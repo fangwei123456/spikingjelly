@@ -21,6 +21,21 @@ FAMILIES = (
 )
 
 
+@pytest.mark.parametrize("requested", ["auto", "torch", "cuda", "triton"])
+def test_reference_only_profile_accepts_explicit_torch(requested, monkeypatch):
+    from spikingjelly._ops.lif import _selection
+    from spikingjelly._ops.selection import _require_automatic_torch
+
+    reason = "Torch reference implementation required"
+    monkeypatch.setattr(_selection, "_requested", requested)
+    monkeypatch.setattr(_selection, "_selections", {(0, reason): None})
+    if requested in ("auto", "torch"):
+        _require_automatic_torch(_selection, torch.device("cuda:0"), reason)
+    else:
+        with pytest.raises(RuntimeError, match="cannot run this execution profile"):
+            _require_automatic_torch(_selection, torch.device("cuda:0"), reason)
+
+
 @pytest.mark.parametrize("family", FAMILIES)
 def test_forward_and_backward_have_explicit_device_kernels(family):
     package = importlib.import_module(f"spikingjelly._ops.{family}")

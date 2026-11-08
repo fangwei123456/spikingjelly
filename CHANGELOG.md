@@ -11,6 +11,12 @@ Changes since `2.0.0.dev0`. For older releases, see
 #### spikingjelly.activation_based.neuron
 
 - `GatedLIFNode` preserves feature and one-dimensional sequence layouts instead of adding spatial axes or misaligning channel parameters.
+- `BaseNode` subclasses reject mismatched state shapes instead of silently reinitializing them. Call `functional.reset_net` before changing input shape, or supply matching explicit states.
+- `FlexSN` keeps independent final states when storing HOP or Triton state sequences, allowing `functional.detach_net` to work.
+
+#### spikingjelly.activation_based.nir_exchange
+
+- NIR exchange imports without its optional dependencies and reports an installation command when import/export is called without them.
 
 #### spikingjelly.activation_based.precision
 
@@ -43,6 +49,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 #### spikingjelly.activation_based.functional
 
+- Explicit `SJ_*_CUDA_IMPLEMENTATION=torch` accepts profiles requiring Torch reference execution, including custom surrogates and non-FP32 states.
 - `kernel_dot_product` evaluates low-precision Gaussian distances in FP32 and retains FP32 outputs under autocast, preserving spike differences and finite similarities.
 - TET cross-entropy accepts class probability targets, including MixUp and spatial targets.
 - `kernel_dot_product` keeps Gaussian squared distances nonnegative, preventing

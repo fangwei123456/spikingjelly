@@ -42,6 +42,44 @@ def test_cpu_sequence_matches_reference_and_tracks_state_sequences():
         torch.testing.assert_close(actual_grad, expected_grad)
 
 
+@pytest.mark.parametrize("path", ["hop", "triton"])
+def test_stored_sequence_final_state_detaches_without_aliasing(path):
+    if path == "triton":
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA required")
+        pytest.importorskip("triton")
+    from spikingjelly.activation_based import functional
+
+    device = "cuda" if path == "triton" else "cpu"
+    threshold = torch.nn.Parameter(torch.tensor(0.8, device=device))
+    module = FlexSN(_lif_core, 1, (threshold,), store_state_seqs=True)
+    x = torch.randn(4, 2, 3, device=device, requires_grad=True)
+    initial = torch.randn(2, 3, device=device, requires_grad=True)
+    args = ((x,), (initial,), module.static_inputs, True)
+    if path == "hop":
+        outputs, states, traces = module._hop_scan(*args)
+    else:
+        outputs, states, traces = module._triton_scan(*args, x[0])
+    expected, final, trace = _reference(x, initial, threshold)
+    for got, want in zip((outputs[0], states[0], traces[0]), (expected, final, trace)):
+        torch.testing.assert_close(got, want)
+    actual_gradients = torch.autograd.grad(
+        outputs[0].sum() + states[0].sum() + traces[0].sum(),
+        (x, initial, threshold),
+    )
+    reference_gradients = torch.autograd.grad(
+        expected.sum() + final.sum() + trace.sum(), (x, initial, threshold)
+    )
+    for got, want in zip(actual_gradients, reference_gradients):
+        torch.testing.assert_close(got, want)
+    module.states = states
+    functional.detach_net(module)
+    assert module.states[0].grad_fn is None
+    with torch.no_grad():
+        module.states[0].add_(1)
+    torch.testing.assert_close(traces[0], trace)
+
+
 def test_functional_forward_does_not_mutate_managed_state():
     module = FlexSN(_lif_core, 1, (torch.tensor(0.8),), store_state_seqs=True)
     x = torch.randn(3, 2)
