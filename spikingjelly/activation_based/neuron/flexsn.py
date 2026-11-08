@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import functools
 import inspect
-from typing import Callable
+from typing import Callable, Optional
 
 import torch
 
@@ -360,6 +360,82 @@ class FlexSN(base.MemoryModule):
         reference = self._validate_operands(inputs, states, static_inputs, "s")
         return self._split_returns(
             self.core(*inputs, *states, *static_inputs), reference
+        )
+
+    def functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        *,
+        static_inputs: Optional[tuple[torch.Tensor, ...]] = None,
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        r"""
+        **API Language** - :ref:`中文 <FlexSN.functional_forward-cn>` | :ref:`English <FlexSN.functional_forward-en>`
+
+        ----
+
+        .. _FlexSN.functional_forward-cn:
+
+        * **中文**
+
+        使用显式递推状态执行当前步进模式的前向，不修改模块的 ``states`` 或
+        ``state_seqs``。省略静态输入时，每次调用读取当前注册的参数和 buffer；
+        显式传入元组可覆盖本次计算的静态输入，不替换模块注册值。
+
+        :param inputs: 输入 Tensor 元组；单步为单步张量，多步各输入共享时间维 T。
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: 长度为 ``num_states`` 的状态元组；包含 ``None`` 时由
+            ``init_states`` 初始化。Tensor 须匹配单步输入的元素数量、dtype 和 device。
+        :type states: tuple[object, ...]
+        :param static_inputs: 默认 ``None`` 使用 ``self.static_inputs``；显式元组的
+            长度须与注册数量相同，每个 Tensor 为标量或匹配单步元素数量，且 dtype、
+            device 与输入一致。``()`` 表示空元组；梯度按 Tensor 的 ``requires_grad`` 传播。
+        :type static_inputs: Optional[tuple[torch.Tensor, ...]]
+        :param kwargs: 转发给当前单步或多步 functional 方法的额外关键字参数。
+        :type kwargs: object
+        :return: ``(outputs, updated_states)``；多步输出包含时间维，末态仅含单步元素。
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
+        :raises TypeError: 输入、物化状态或静态输入不是 Tensor。
+        :raises ValueError: 输入/状态数量、时间维、元素数量、dtype 或 device 不符合约束。
+
+        ----
+
+        .. _FlexSN.functional_forward-en:
+
+        * **English**
+
+        Run the current step mode with explicit recurrent states without changing
+        the module's ``states`` or ``state_seqs``. Omitted static inputs read the
+        currently registered parameters and buffers on each call. An explicit
+        tuple overrides them for this call without replacing registered values.
+
+        :param inputs: Input tensors; single-step tensors in single-step mode,
+            or sequences sharing the time dimension T in multi-step mode.
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: Tuple of ``num_states`` states. A tuple containing ``None``
+            is initialized by ``init_states``. Tensors must match the per-step
+            input element count, dtype and device.
+        :type states: tuple[object, ...]
+        :param static_inputs: ``None`` (default) uses ``self.static_inputs``.
+            An explicit tuple must match the registered count; each tensor must
+            be scalar or match the per-step element count, with the input dtype
+            and device. ``()`` is an empty tuple. Gradients follow ``requires_grad``.
+        :type static_inputs: Optional[tuple[torch.Tensor, ...]]
+        :param kwargs: Additional keywords forwarded to the single- or multi-step
+            functional method.
+        :type kwargs: object
+        :return: ``(outputs, updated_states)``. Multi-step outputs include the time
+            dimension; final states contain only per-step elements.
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
+        :raises TypeError: If inputs, materialized states or static inputs are not tensors.
+        :raises ValueError: If arities, time dimensions, element counts, dtypes or
+            devices violate the constraints.
+        """
+        if static_inputs is None:
+            static_inputs = self.static_inputs
+        return super().functional_forward(
+            inputs, states, static_inputs=static_inputs, **kwargs
         )
 
     def single_step_functional_forward(

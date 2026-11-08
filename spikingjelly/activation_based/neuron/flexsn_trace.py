@@ -36,7 +36,13 @@ def _trace_core(
     num_states: int,
 ) -> tuple[torch.fx.Graph, torch.fx.Graph, torch.fx.Graph, list[bool]]:
     examples = tuple(tensor.detach().clone() for tensor in examples)
-    with torch.enable_grad():
+    # Compiler probes must not enter the caller's checkpoint or offload hooks.
+    with (
+        torch.enable_grad(),
+        torch.autograd.graph.saved_tensors_hooks(
+            lambda tensor: tensor.detach(), lambda tensor: tensor
+        ),
+    ):
         inference_graph = make_fx(core)(*examples).graph
         forward_graph, backward_graph = generate_forward_and_backward_graph(
             core,

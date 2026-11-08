@@ -26,6 +26,30 @@ def test_logging_policy_rejects_library_logger_configuration(tmp_path, method):
     assert f"logger.{method} is not allowed" in violations[0]
 
 
+def test_logging_policy_default_includes_private_operator_package(tmp_path):
+    from pathlib import Path
+
+    (tmp_path / "spikingjelly").mkdir()
+    operators = tmp_path / "ops"
+    operators.mkdir()
+    (operators / "component.py").write_text(
+        "from spikingjelly.logger import logger\nlogger.configure(handlers=[])\n"
+    )
+    script = Path(__file__).resolve().parents[1] / "tools/check_logging_policy.py"
+    result = subprocess.run(
+        [sys.executable, str(script)], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert result.returncode == 1
+    assert "ops/component.py" in result.stdout.replace("\\", "/")
+    assert "logger.configure is not allowed" in result.stdout
+    subprocess.run(
+        [sys.executable, str(script), "--root", "spikingjelly"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+
+
 def test_import_is_silent_and_does_not_change_stdlib_root():
     script = """
 import contextlib

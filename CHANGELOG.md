@@ -13,10 +13,16 @@ Changes since `2.0.0.dev0`. For older releases, see
 - `GatedLIFNode` preserves feature and one-dimensional sequence layouts instead of adding spatial axes or misaligning channel parameters.
 - `BaseNode` subclasses reject mismatched state shapes instead of silently reinitializing them. Call `functional.reset_net` before changing input shape, or supply matching explicit states.
 - `FlexSN` keeps independent final states when storing HOP or Triton state sequences, allowing `functional.detach_net` to work.
+- `FlexSN.functional_forward` defaults to registered static inputs, enabling functional conversion and checkpointing while preserving explicit overrides.
+- Cold FlexSN CUDA tracing uses deterministic gradient probes and isolates saved-tensor hooks, preserving checkpoint recomputation.
 
 #### spikingjelly.activation_based.nir_exchange
 
 - NIR exchange imports without its optional dependencies and reports an installation command when import/export is called without them.
+
+#### spikingjelly.activation_based.memopt
+
+- Module checkpointing preserves gradients to differentiable buffers while isolating buffer updates during recomputation.
 
 #### spikingjelly.activation_based.precision
 

@@ -52,6 +52,10 @@ optimization through model builders.
   matching states. Scalar initialization and dtype/device conversion still apply.
 - **Managed and explicit forms.** `base.to_functional_forward` turns a managed network
   into an explicit-state call, which `memopt` relies on.
+  `FlexSN.functional_forward` binds its current registered static tensors when
+  omitted; its lower-level step methods require them explicitly.
+  Checkpoint buffer snapshots preserve gradients and commit updates once.
+  FlexSN tracing isolates compiler probes from the caller's saved-tensor hooks.
 - **Step-mode leaves.** Built-in `StepModule` implementations are atomic leaves whose
   children are normally not `StepModule`s. Networks, blocks and attention stay plain
   `nn.Module`s. Explicit scheduling containers and modules that own independent

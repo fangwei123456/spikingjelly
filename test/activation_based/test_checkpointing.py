@@ -112,6 +112,96 @@ def test_checkpoint_module_commits_neuron_state_once():
     assert torch.equal(module.v, reference.v)
 
 
+def _flexsn_core(x, v):
+    h = 0.5 * v + x
+    spike = torch.sigmoid(h)
+    return spike, h * (1.0 - spike)
+
+
+def _parameterized_flexsn_core(x, v, threshold):
+    h = 0.5 * v + x
+    spike = torch.sigmoid(h - threshold)
+    return spike, h * (1.0 - spike)
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+@pytest.mark.parametrize(
+    "step_mode,depth,static_kind,shared,chunks",
+    [
+        ("s", 1, "none", False, 1),
+        ("s", 1, "parameter", False, 1),
+        ("m", 1, "none", False, 3),
+        ("m", 2, "parameter", False, 1),
+        ("m", 2, "parameter", True, 3),
+        ("m", 2, "buffer", False, 3),
+        ("m", 2, "differentiable_buffer", False, 3),
+    ],
+)
+def test_checkpoint_module_flexsn_preserves_states_and_gradients(
+    device, step_mode, depth, static_kind, shared, chunks
+):
+    if device == "cuda":
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA required")
+        pytest.importorskip("triton")
+    torch.manual_seed(813)
+    nodes = []
+    for index in range(depth):
+        if static_kind == "none":
+            static = ()
+            core = _flexsn_core
+        else:
+            tensor = torch.tensor(0.7 + 0.2 * index, device=device)
+            if static_kind == "parameter":
+                tensor = nn.Parameter(tensor)
+            elif static_kind == "differentiable_buffer":
+                tensor.requires_grad_()
+            static = nodes[0].static_inputs if shared and nodes else (tensor,)
+            core = _parameterized_flexsn_core
+        nodes.append(neuron.FlexSN(core, 1, static, step_mode=step_mode))
+    module = nodes[0] if depth == 1 else nn.Sequential(*nodes)
+    reference = copy.deepcopy(module)
+    reference_nodes = [reference] if depth == 1 else list(reference)
+    initial_states = []
+    for node, ref in zip(nodes, reference_nodes):
+        initial = torch.randn(2, 3, device=device, requires_grad=True)
+        ref_initial = initial.detach().clone().requires_grad_()
+        node.states = (initial,)
+        ref.states = (ref_initial,)
+        initial_states.append((initial, ref_initial))
+    x = torch.randn((2, 3) if step_mode == "s" else (5, 2, 3), device=device)
+    _compare_module(reference, memopt.checkpoint_module(module, chunks=chunks), x)
+    if device == "cuda" and step_mode == "m":
+        assert all(node._triton_handle is not None for node in nodes)
+    for node, ref in zip(nodes, reference_nodes):
+        torch.testing.assert_close(node.states[0], ref.states[0])
+    for initial, ref_initial in initial_states:
+        torch.testing.assert_close(initial.grad, ref_initial.grad)
+    for parameter, ref_parameter in zip(module.parameters(), reference.parameters()):
+        torch.testing.assert_close(parameter.grad, ref_parameter.grad)
+    for buffer, ref_buffer in zip(module.buffers(), reference.buffers()):
+        if buffer.requires_grad:
+            torch.testing.assert_close(buffer.grad, ref_buffer.grad)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_checkpoint_module_flexsn_cold_tracing_preserves_dropout_rng():
+    pytest.importorskip("triton")
+    module = nn.Sequential(neuron.FlexSN(_flexsn_core, 1), nn.Dropout(0.5))
+    reference = copy.deepcopy(module)
+    x = torch.randn(5, 2, 3, device="cuda", requires_grad=True)
+    x_ref = x.detach().clone().requires_grad_()
+    torch.manual_seed(813)
+    expected = reference(x_ref)
+    torch.manual_seed(813)
+    actual = memopt.checkpoint_module(module)(x)
+    torch.testing.assert_close(actual, expected)
+    expected.sum().backward()
+    actual.sum().backward()
+    torch.testing.assert_close(x.grad, x_ref.grad)
+    assert module[0]._triton_handle is not None
+
+
 def test_checkpoint_module_commits_batch_norm_buffers_once():
     module = nn.BatchNorm1d(3)
     reference = copy.deepcopy(module)

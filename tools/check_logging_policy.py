@@ -233,9 +233,12 @@ def check(root: Path) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root", type=Path, default=Path("spikingjelly"))
+    parser.add_argument("--root", type=Path)
     args = parser.parse_args()
-    violations = check(args.root)
+    roots = (
+        (args.root,) if args.root is not None else (Path("spikingjelly"), Path("ops"))
+    )
+    violations = [violation for root in roots for violation in check(root)]
     if violations:
         print("Logging policy violations:")
         print("\n".join(violations))
