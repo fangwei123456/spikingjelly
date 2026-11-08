@@ -346,3 +346,253 @@ def test_ws_linear_matches_standardized_weight_values_and_gradients(gain, step_m
     expected.square().sum().backward()
     for actual_input, expected_input in zip([x, *parameters], [x_ref, *reference]):
         torch.testing.assert_close(actual_input.grad, expected_input.grad)
+
+
+@pytest.mark.parametrize(
+    (
+        "p",
+        "bias",
+        "zero_input",
+        "zero_weight",
+        "step_mode",
+        "dtype",
+        "activation_factory",
+    ),
+    [
+        (0.5, False, True, False, "s", torch.float32, lambda: None),
+        (0.5, True, True, False, "m", torch.float64, nn.Sigmoid),
+        (0.5, False, False, True, "m", torch.float32, nn.ReLU),
+        (0.5, True, False, True, "s", torch.float64, lambda: None),
+        (0.0, False, False, False, "s", torch.float64, nn.ReLU),
+        (0.0, True, False, False, "m", torch.float32, lambda: None),
+        (1.0, False, False, False, "m", torch.float64, lambda: None),
+        (1.0, True, False, False, "s", torch.float32, nn.Sigmoid),
+    ],
+)
+def test_drop_connect_eval_zero_variance(
+    step_mode, dtype, activation_factory, p, bias, zero_input, zero_weight
+):
+    module = (
+        layer.DropConnectLinear(
+            3,
+            2,
+            bias=bias,
+            p=p,
+            samples_num=8,
+            activation=activation_factory(),
+            step_mode=step_mode,
+        )
+        .to(dtype)
+        .eval()
+    )
+    with torch.no_grad():
+        module.weight.copy_(torch.tensor([[1.0, -2.0, 0.5], [-1.0, 0.5, 2.0]]))
+        if zero_weight:
+            module.weight.zero_()
+        if bias:
+            module.bias.fill_(0.0 if zero_input or zero_weight else 0.25)
+    x = torch.tensor([[1.0, -2.0, 3.0], [-1.0, 2.0, 0.5]], dtype=dtype)
+    if zero_input:
+        x.zero_()
+    if step_mode == "m":
+        x = torch.stack([x, -x])
+    x = x.transpose(-1, -2).contiguous().transpose(-1, -2).requires_grad_()
+    original = x.detach().clone()
+    expected = (1 - p) * F.linear(x, module.weight, module.bias)
+    if module.activation is not None:
+        expected = module.activation(expected)
+
+    actual = module(x)
+
+    torch.testing.assert_close(actual, expected)
+    assert actual.shape == (*x.shape[:-1], 2)
+    assert actual.dtype == dtype
+    assert actual.device == x.device
+    assert not actual.requires_grad
+    assert torch.equal(x, original)
+    assert module.dropped_w is None
+    if bias:
+        assert module.dropped_b is None
+
+
+@pytest.mark.parametrize(
+    ("step_mode", "dtype", "bias", "activation_factory"),
+    [
+        ("s", torch.float32, False, lambda: None),
+        ("m", torch.float64, True, nn.Sigmoid),
+    ],
+)
+def test_drop_connect_eval_mixed_zero_variance(
+    step_mode, dtype, bias, activation_factory
+):
+    module = (
+        layer.DropConnectLinear(
+            3,
+            2,
+            bias=bias,
+            samples_num=8,
+            activation=activation_factory(),
+            step_mode=step_mode,
+        )
+        .to(dtype)
+        .eval()
+    )
+    with torch.no_grad():
+        module.weight.copy_(torch.tensor([[0.0, 0.0, 0.0], [-1.0, 0.5, 2.0]]))
+        if bias:
+            module.bias.zero_()
+    x = torch.tensor([[0.0, 0.0, 0.0], [1.0, -2.0, 3.0]], dtype=dtype)
+    if step_mode == "m":
+        x = torch.stack([x, -x])
+
+    actual = module(x)
+
+    expected = torch.zeros_like(actual)
+    if module.activation is not None:
+        expected = module.activation(expected)
+    assert torch.equal(actual[..., 0], expected[..., 0])
+    assert torch.equal(actual[..., 0, :], expected[..., 0, :])
+    assert torch.isfinite(actual).all()
+    assert actual.dtype == dtype
+    assert actual.shape == expected.shape == (*x.shape[:-1], 2)
+
+
+@pytest.mark.parametrize(
+    ("step_mode", "dtype", "bias", "activation_factory"),
+    [
+        ("s", torch.float32, False, lambda: None),
+        ("m", torch.float64, True, nn.PReLU),
+    ],
+)
+def test_drop_connect_eval_preserves_sampling_and_gradients(
+    step_mode, dtype, bias, activation_factory
+):
+    torch.manual_seed(918)
+    module = (
+        layer.DropConnectLinear(
+            3,
+            2,
+            bias=bias,
+            p=0.25,
+            samples_num=11,
+            activation=activation_factory(),
+            step_mode=step_mode,
+        )
+        .to(dtype)
+        .eval()
+    )
+    shape = (2, 3) if step_mode == "s" else (3, 2, 3)
+    x = torch.randn(shape, dtype=dtype, requires_grad=True)
+    activation = copy.deepcopy(module.activation)
+    rng_state = torch.get_rng_state()
+    expected_steps = []
+    for x_step in [x] if step_mode == "s" else x:
+        mu = (1 - module.p) * F.linear(x_step, module.weight, module.bias)
+        variance = (
+            module.p
+            * (1 - module.p)
+            * F.linear(
+                x_step.square(),
+                module.weight.square(),
+                None if module.bias is None else module.bias.square(),
+            )
+        )
+        samples = torch.distributions.Normal(mu, variance.sqrt()).sample(
+            (module.samples_num,)
+        )
+        if activation is not None:
+            samples = activation(samples)
+        expected_steps.append(samples.mean(0))
+    expected = expected_steps[0] if step_mode == "s" else torch.stack(expected_steps)
+    expected_rng_state = torch.get_rng_state()
+    torch.set_rng_state(rng_state)
+
+    actual = module(x)
+
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    assert torch.equal(torch.get_rng_state(), expected_rng_state)
+    if activation is None:
+        assert not actual.requires_grad
+    else:
+        actual.sum().backward()
+        expected.sum().backward()
+        torch.testing.assert_close(
+            module.activation.weight.grad, activation.weight.grad
+        )
+    assert x.grad is None
+    assert module.weight.grad is None
+    if bias:
+        assert module.bias.grad is None
+
+
+@pytest.mark.parametrize(
+    ("invariant", "bias", "step_mode"), [(False, False, "s"), (True, True, "m")]
+)
+def test_drop_connect_eval_preserves_training_state(invariant, bias, step_mode):
+    torch.manual_seed(123)
+    module = layer.DropConnectLinear(
+        3,
+        2,
+        bias=bias,
+        p=0.5,
+        samples_num=8,
+        invariant=invariant,
+        activation=None,
+        step_mode=step_mode,
+    ).train()
+    x = torch.ones((2, 3) if step_mode == "s" else (3, 2, 3), requires_grad=True)
+    training_output = module(x)
+    training_output.sum().backward()
+    assert x.grad is not None
+    assert module.weight.grad is not None
+    if bias:
+        assert module.bias.grad is not None
+    memories = tuple(module.memories())
+    snapshots = tuple(state.detach().clone() for state in memories)
+    parameters = {
+        name: value.detach().clone() for name, value in module.state_dict().items()
+    }
+
+    module.eval()(torch.zeros_like(x))
+
+    for state, previous, snapshot in zip(module.memories(), memories, snapshots):
+        assert state is previous
+        assert torch.equal(state, snapshot)
+    for name, value in module.state_dict().items():
+        assert torch.equal(value, parameters[name])
+    module.train()
+    if invariant:
+        torch.testing.assert_close(module(x), training_output)
+    module.reset()
+    assert module.dropped_w is None
+    if bias:
+        assert module.dropped_b is None
+
+
+@pytest.mark.parametrize(
+    ("p", "input_value", "weight_values", "invalid_parameter"),
+    [
+        (0.5, 1e30, [1e30, -1e30], "loc"),
+        (0.5, float("nan"), [1.0, 1.0], "loc"),
+        (float("nan"), 1.0, [1.0, 1.0], "loc"),
+        (-0.25, 1.0, [1.0, 1.0], "scale"),
+        (1.25, 1.0, [1.0, 1.0], "scale"),
+    ],
+)
+def test_drop_connect_eval_validates_before_sampling(
+    p, input_value, weight_values, invalid_parameter
+):
+    module = (
+        layer.DropConnectLinear(2, 1, bias=False, p=p, samples_num=8, activation=None)
+        .float()
+        .eval()
+    )
+    with torch.no_grad():
+        module.weight.copy_(torch.tensor([weight_values], dtype=torch.float32))
+    x = torch.full((1, 2), input_value, dtype=torch.float32)
+    rng_state = torch.get_rng_state()
+
+    with pytest.raises(ValueError, match=invalid_parameter):
+        module(x)
+
+    assert torch.equal(torch.get_rng_state(), rng_state)

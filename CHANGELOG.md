@@ -8,6 +8,10 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 ### Fixes
 
+#### spikingjelly.activation_based.layer
+
+- `DropConnectLinear` inference handles zero-variance outputs, including silent spikes and zero drop probability.
+
 #### spikingjelly.activation_based.neuron
 
 - `GatedLIFNode` preserves feature and one-dimensional sequence layouts instead of adding spatial axes or misaligning channel parameters.
