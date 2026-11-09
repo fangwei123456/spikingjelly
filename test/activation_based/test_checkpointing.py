@@ -112,6 +112,46 @@ def test_checkpoint_module_commits_neuron_state_once():
     assert torch.equal(module.v, reference.v)
 
 
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+@pytest.mark.parametrize("update_buffer,chunks", [(False, 1), (False, 3), (True, 1)])
+def test_checkpoint_module_preserves_nonleaf_buffer_sources(
+    device, update_buffer, chunks
+):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA required")
+
+    class DerivedBuffer(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = nn.Parameter(torch.tensor(0.7, device=device))
+            scale = self.weight * 2.0 if update_buffer else self.weight.sigmoid()
+            self.register_buffer("scale", scale)
+            self.register_buffer("alias", self.scale)
+
+        def forward(self, x):
+            output = x * (self.scale + self.alias)
+            if update_buffer:
+                self.scale.add_(0.1)
+            return output
+
+    module = DerivedBuffer()
+    reference = DerivedBuffer()
+    original = module.scale
+    original_value = original.detach().clone()
+    x = torch.randn(3, 2, device=device, requires_grad=True)
+    x_ref = x.detach().clone().requires_grad_()
+    actual = memopt.checkpoint_module(module, chunks=chunks)(x)
+    expected = reference(x_ref)
+    torch.testing.assert_close(actual, expected)
+    (actual.sum() + module.scale.sum()).backward()
+    (expected.sum() + reference.scale.sum()).backward()
+    torch.testing.assert_close(x.grad, x_ref.grad)
+    torch.testing.assert_close(module.weight.grad, reference.weight.grad)
+    torch.testing.assert_close(module.scale, reference.scale)
+    torch.testing.assert_close(original, original_value)
+    assert module.scale is module.alias
+
+
 def _flexsn_core(x, v):
     h = 0.5 * v + x
     spike = torch.sigmoid(h)
@@ -205,6 +245,7 @@ def test_checkpoint_module_flexsn_cold_tracing_preserves_dropout_rng():
 def test_checkpoint_module_commits_batch_norm_buffers_once():
     module = nn.BatchNorm1d(3)
     reference = copy.deepcopy(module)
+    buffers = tuple(module.buffers())
     wrapped = memopt.checkpoint_module(module)
 
     _compare_module(reference, wrapped, torch.randn(5, 3))
@@ -212,6 +253,7 @@ def test_checkpoint_module_commits_batch_norm_buffers_once():
     assert module.num_batches_tracked.item() == 1
     assert torch.equal(module.running_mean, reference.running_mean)
     assert torch.equal(module.running_var, reference.running_var)
+    assert all(a is b for a, b in zip(buffers, module.buffers(), strict=True))
 
 
 def test_checkpoint_module_uses_buffers_registered_after_wrapping():

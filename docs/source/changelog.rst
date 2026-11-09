@@ -33,6 +33,7 @@ spikingjelly.activation_based.memopt
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 - Module checkpointing preserves gradients to differentiable buffers while isolating buffer updates during recomputation.
+- Non-leaf buffer commits preserve autograd source tensors and shared bindings instead of modifying sources in-place.
 
 spikingjelly.activation_based.precision
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

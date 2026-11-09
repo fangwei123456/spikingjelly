@@ -55,6 +55,8 @@ optimization through model builders.
   `FlexSN.functional_forward` binds its current registered static tensors when
   omitted; its lower-level step methods require them explicitly.
   Checkpoint buffer snapshots preserve gradients and commit updates once.
+  Non-leaf buffer commits rebind shared module aliases without modifying autograd
+  sources; leaf buffers retain their objects and are updated in-place.
   FlexSN tracing isolates compiler probes from the caller's saved-tensor hooks.
 - **Step-mode leaves.** Built-in `StepModule` implementations are atomic leaves whose
   children are normally not `StepModule`s. Networks, blocks and attention stay plain
