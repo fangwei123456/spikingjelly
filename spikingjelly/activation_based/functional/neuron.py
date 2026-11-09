@@ -1775,8 +1775,9 @@ def clif_step(
     完整反向 kernel，保留逐算子 dtype 舍入；高阶梯度用 Torch 参考图重算。
     ``SJ_CLIF_CUDA_IMPLEMENTATION`` 可设为 ``auto``（默认）、``triton`` 或
     ``torch``；auto 在训练和推理中均选择可用实现，也支持 ``torch.compile``。
-    CPU、自定义函数、连续 surrogate 和其他输入使用 Torch 公式；显式请求
-    Triton 时不支持的 profile 会报错，此时应改用 auto 或 torch。
+    CPU 始终使用 Torch 公式。CUDA 上的自定义函数、连续 surrogate 和其他不支持融合的
+    profile 在 auto 或 torch 模式下使用 Torch 公式；显式请求 Triton 时，这些不支持的
+    CUDA profile 会报错，此时应改用 auto 或 torch。
     函数不融合不同时间步，不修改调用者配置的替代梯度。
 
     :param x: 当前输入，形状为 ``[N, *]``。
@@ -1793,7 +1794,7 @@ def clif_step(
     :type spike_function: Callable[[torch.Tensor], torch.Tensor]
     :return: ``(spike, v_next, m_next)``，各张量形状与 ``x`` 相同。
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises RuntimeError: 显式请求的 CUDA 实现不可用，或非 Torch 实现不支持当前输入或编译模式。
+    :raises RuntimeError: CUDA 上显式请求的实现不可用或不支持当前执行 profile。
     :raises ValueError: 融合路径的标量参数或实现配置不合法。
 
     ----
@@ -1813,9 +1814,10 @@ def clif_step(
     dtype rounding. Higher-order derivatives recompute the Torch reference graph.
     ``SJ_CLIF_CUDA_IMPLEMENTATION`` accepts ``auto`` (default), ``triton`` or
     ``torch``. Auto selects available implementations for both training and
-    inference, including ``torch.compile``. CPU, custom functions, continuous
-    surrogates and other inputs use the Torch formulas. An explicit Triton request
-    rejects unsupported profiles; use auto or torch for those functions.
+    inference, including ``torch.compile``. CPU always uses the Torch formulas.
+    On CUDA, custom functions, continuous surrogates and other unsupported profiles
+    use Torch in auto or torch mode. An explicit Triton request rejects these
+    unsupported CUDA profiles; use auto or torch for those functions.
     Time steps are not fused, and the caller's surrogate choice is preserved.
 
     :param x: Current input shaped ``[N, *]``.
@@ -1833,8 +1835,8 @@ def clif_step(
     :type spike_function: Callable[[torch.Tensor], torch.Tensor]
     :return: ``(spike, v_next, m_next)`` with tensors shaped like ``x``.
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises RuntimeError: An explicitly requested CUDA implementation is unavailable,
-        or a non-Torch implementation does not support the inputs or compiled mode.
+    :raises RuntimeError: On CUDA, if the explicitly requested implementation is
+        unavailable or does not support the execution profile.
     :raises ValueError: Invalid fused scalar parameters or implementation configuration.
     """
     from ..._ops.clif import _forward, _selection

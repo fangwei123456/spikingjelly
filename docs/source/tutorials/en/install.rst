@@ -187,7 +187,7 @@ Installing an implementation does not mean every call uses it:
     * - Ordinary registered neurons
       - Supported inputs, FP32 state and built-in surrogates can use fused execution. Ordinary module state follows input dtype; low-precision state or custom surrogates can use Torch reference equations.
     * - ComplementaryLIF (CLIF)
-      - Matching CUDA FP32/FP16/BF16 tensors use optional Triton kernels, retaining the supplied spike function and state dtype. Auto mode can select Triton for training and inference, including ``torch.compile``; small batches may be slower. CPU, custom spike functions and other unsupported inputs use Torch formulas; an explicit Triton request rejects unsupported inputs. Select with ``SJ_CLIF_CUDA_IMPLEMENTATION=auto|triton|torch``; there is no native CUDA CLIF kernel.
+      - Matching CUDA FP32/FP16/BF16 tensors use optional Triton kernels, retaining the supplied spike function and state dtype. Auto mode can select Triton for training and inference, including ``torch.compile``; small batches may be slower. CPU, custom spike functions and other unsupported inputs use Torch formulas; an explicit Triton request rejects unsupported CUDA profiles. Select with ``SJ_CLIF_CUDA_IMPLEMENTATION=auto|triton|torch``; there is no native CUDA CLIF kernel.
     * - Explicit IF/LIF/PLIF precision
       - Requires CUDA Triton supporting the requested combination; other implementations cannot replace an explicitly requested numerical policy.
     * - FlexSN CUDA multi-step

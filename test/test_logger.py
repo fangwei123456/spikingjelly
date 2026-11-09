@@ -10,7 +10,7 @@ from spikingjelly.activation_based.op_counter.simple_energy import (
 )
 
 
-@pytest.mark.parametrize("method", ["add", "remove", "enable", "configure"])
+@pytest.mark.parametrize("method", ["add", "remove", "enable", "disable", "configure"])
 def test_logging_policy_rejects_library_logger_configuration(tmp_path, method):
     from tools.check_logging_policy import check
 
@@ -24,6 +24,36 @@ def test_logging_policy_rejects_library_logger_configuration(tmp_path, method):
     violations = check(root)
     assert len(violations) == 1
     assert f"logger.{method} is not allowed" in violations[0]
+
+
+def test_logging_policy_allows_disable_only_in_package_bootstrap(tmp_path):
+    from tools.check_logging_policy import check
+
+    root = tmp_path / "spikingjelly"
+    root.mkdir()
+    bootstrap = root / "logger.py"
+    source = 'from loguru import logger\nlogger.disable("spikingjelly")\n'
+    bootstrap.write_text(source)
+    assert check(root) == []
+
+    bootstrap.write_text(source + "logger.configure(handlers=[])\n")
+    violations = check(root)
+    assert len(violations) == 1
+    assert "logger.configure is not allowed" in violations[0]
+
+    bootstrap.write_text('from loguru import logger\nlogger.disable("")\n')
+    violations = check(root)
+    assert len(violations) == 1
+    assert "logger.disable is not allowed" in violations[0]
+
+    operators = tmp_path / "ops"
+    operators.mkdir()
+    (operators / "logger.py").write_text(
+        'from spikingjelly.logger import logger\nlogger.disable("spikingjelly")\n'
+    )
+    violations = check(operators)
+    assert len(violations) == 1
+    assert "logger.disable is not allowed" in violations[0]
 
 
 def test_logging_policy_default_includes_private_operator_package(tmp_path):

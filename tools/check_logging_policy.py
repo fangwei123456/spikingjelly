@@ -128,7 +128,9 @@ def check(root: Path) -> list[str]:
             for parent in ast.walk(tree)
             for child in ast.iter_child_nodes(parent)
         }
-        is_package_logger_module = path == root / "logger.py"
+        is_package_logger_module = (
+            root.name == "spikingjelly" and path == root / "logger.py"
+        )
         imports_package_logger = is_package_logger_module or any(
             isinstance(node, ast.ImportFrom)
             and (
@@ -192,12 +194,21 @@ def check(root: Path) -> list[str]:
                         "add",
                         "remove",
                         "enable",
+                        "disable",
                         "configure",
                         "bind",
                         "contextualize",
                         "opt",
                     }
                     and _root_name(func.value) == "logger"
+                    and not (
+                        is_package_logger_module
+                        and func.attr == "disable"
+                        and len(node.args) == 1
+                        and isinstance(node.args[0], ast.Constant)
+                        and node.args[0].value == "spikingjelly"
+                        and not node.keywords
+                    )
                 ):
                     violations.append(
                         f"{path}:{node.lineno}: logger.{func.attr} is not allowed"
