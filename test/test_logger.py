@@ -80,6 +80,27 @@ def test_logging_policy_default_includes_private_operator_package(tmp_path):
     )
 
 
+@pytest.mark.parametrize("root_kind", ["default_missing", "missing", "file"])
+def test_logging_policy_rejects_invalid_scan_roots(tmp_path, root_kind):
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[1] / "tools/check_logging_policy.py"
+    command = [sys.executable, str(script)]
+    if root_kind == "default_missing":
+        (tmp_path / "spikingjelly").mkdir()
+        root = Path("ops")
+    else:
+        root = tmp_path / root_kind
+        if root_kind == "file":
+            root.write_text("pass\n")
+        command.extend(["--root", str(root)])
+    result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True)
+    assert result.returncode == 1
+    assert str(root) in result.stdout
+    assert "existing directory" in result.stdout
+    assert "Logging policy passed." not in result.stdout
+
+
 def test_import_is_silent_and_does_not_change_stdlib_root():
     script = """
 import contextlib

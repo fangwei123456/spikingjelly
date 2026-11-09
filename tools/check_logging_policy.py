@@ -113,6 +113,8 @@ def _check_logger_call(path: Path, node: ast.Call) -> list[str]:
 
 
 def check(root: Path) -> list[str]:
+    if not root.is_dir():
+        return [f"{root}: logging policy scan root must be an existing directory"]
     violations: list[str] = []
     for path in sorted(root.rglob("*.py")):
         if not _is_production(path):
