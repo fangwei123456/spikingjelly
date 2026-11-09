@@ -658,7 +658,11 @@ class ComplementaryLIFNode(BaseNode):
         elif m.ndim == 0:
             m = m.to(dtype=v.dtype, device=v.device).expand_as(v)
         elif m.shape != v.shape:
-            m = torch.zeros_like(v, requires_grad=False)
+            raise ValueError(
+                f"{type(self).__name__} complementary state shape {tuple(m.shape)} "
+                f"does not match input {tuple(v.shape)}; call reset_net(node) "
+                "or supply matching explicit states."
+            )
         elif m.dtype != v.dtype or m.device != v.device:
             m = m.to(dtype=v.dtype, device=v.device)
         return v, m
@@ -761,7 +765,11 @@ class CUBALIFNode(BaseNode):
             c = torch.full_like(x, c, requires_grad=False)
         elif isinstance(c, torch.Tensor):
             if c.shape != x.shape:
-                c = torch.zeros_like(x, requires_grad=False)
+                raise ValueError(
+                    f"{type(self).__name__} current state shape {tuple(c.shape)} "
+                    f"does not match input {tuple(x.shape)}; call reset_net(node) "
+                    "or supply matching explicit states."
+                )
             elif c.dtype != x.dtype or c.device != x.device:
                 c = c.to(dtype=x.dtype, device=x.device)
         return (states[0], c, *states[2:])

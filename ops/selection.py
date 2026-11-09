@@ -34,7 +34,7 @@ _COMPILE_CUDA_PRIORITIES = dict.fromkeys(
 def _require_automatic_torch(
     selection: "_CudaSelection", device: torch.device, reason: str
 ) -> None:
-    if device.type != "cuda":
+    if device.type != "cuda" or selection._requested == "torch":
         return
     if selection._requested != "auto":
         raise RuntimeError(

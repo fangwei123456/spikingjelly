@@ -1,9 +1,9 @@
+from __future__ import annotations
+
 from graphlib import CycleError, TopologicalSorter
 from pathlib import Path
 from typing import Optional, Union
 
-import nir
-import nirtorch
 import numpy as np
 import torch
 import torch.nn as nn
@@ -11,6 +11,13 @@ from torch import fx
 
 from .. import base, functional, layer, neuron
 from ...logger import logger
+
+try:
+    import nir
+    import nirtorch
+except ImportError as error:
+    nir = nirtorch = None
+    logger.info("NIR exchange dependencies unavailable: {}", error)
 
 
 __all__ = ["import_from_nir"]
@@ -265,6 +272,7 @@ def import_from_nir(
 
     :return: 转换得到的 ``fx.GraphModule`` 对象
     :rtype: torch.fx.GraphModule
+    :raises ImportError: 缺少可选依赖；使用 ``uv pip install 'spikingjelly[nir]'`` 安装
     :raises ValueError: ``dt`` 非正、``step_mode`` 非法，或 NIR 神经元参数非均匀、不符合 SpikingJelly 离散化约束
     :raises NotImplementedError: NIR 图包含 grouped convolution，或循环图使用多步模式
 
@@ -307,12 +315,19 @@ def import_from_nir(
 
     :return: the converted SpikingJelly ``fx.GraphModule`` object
     :rtype: torch.fx.GraphModule
+    :raises ImportError: If optional dependencies are unavailable; install them
+        with ``uv pip install 'spikingjelly[nir]'``
     :raises ValueError: If ``dt`` is not positive, ``step_mode`` is invalid, or
         NIR neuron parameters are non-uniform or incompatible with SpikingJelly
         discretization
     :raises NotImplementedError: If the NIR graph contains grouped convolution,
         or a recurrent graph uses multi-step mode
     """
+    if nir is None or nirtorch is None:
+        raise ImportError(
+            "NIR exchange requires nir and nirtorch; "
+            "install them with uv pip install 'spikingjelly[nir]'."
+        )
     if dt <= 0:
         raise ValueError("dt must be positive.")
     if step_mode not in ("s", "m"):

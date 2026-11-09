@@ -405,7 +405,11 @@ class HalfThresholdIFNode(BaseNode):
             v = torch.full_like(x, v, requires_grad=False)
         elif isinstance(v, torch.Tensor):
             if v.shape != x.shape:
-                v = torch.full_like(x, self.v_threshold / 2.0, requires_grad=False)
+                raise ValueError(
+                    f"{type(self).__name__} state shape {tuple(v.shape)} does not "
+                    f"match input {tuple(x.shape)}; call reset_net(node) before "
+                    "changing input shape, or supply matching explicit states."
+                )
             elif v.dtype != x.dtype or v.device != x.device:
                 v = v.to(dtype=x.dtype, device=x.device)
         return (v, *states[1:])

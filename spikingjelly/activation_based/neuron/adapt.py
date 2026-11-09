@@ -168,7 +168,11 @@ class AdaptBaseNode(BaseNode):
             w = torch.full_like(x, w, requires_grad=False)
         elif isinstance(w, torch.Tensor):
             if w.shape != x.shape:
-                w = torch.full_like(x, self.w_rest, requires_grad=False)
+                raise ValueError(
+                    f"{type(self).__name__} adaptation state shape {tuple(w.shape)} "
+                    f"does not match input {tuple(x.shape)}; call reset_net(node) "
+                    "or supply matching explicit states."
+                )
             elif w.dtype != x.dtype or w.device != x.device:
                 w = w.to(dtype=x.dtype, device=x.device)
         return (*states[:-1], w)

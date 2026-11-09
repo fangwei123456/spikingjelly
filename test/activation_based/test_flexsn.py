@@ -42,20 +42,127 @@ def test_cpu_sequence_matches_reference_and_tracks_state_sequences():
         torch.testing.assert_close(actual_grad, expected_grad)
 
 
+@pytest.mark.parametrize("path", ["hop", "triton"])
+def test_stored_sequence_final_state_detaches_without_aliasing(path):
+    if path == "triton":
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA required")
+        pytest.importorskip("triton")
+    from spikingjelly.activation_based import functional
+
+    device = "cuda" if path == "triton" else "cpu"
+    threshold = torch.nn.Parameter(torch.tensor(0.8, device=device))
+    module = FlexSN(_lif_core, 1, (threshold,), store_state_seqs=True)
+    x = torch.randn(4, 2, 3, device=device, requires_grad=True)
+    initial = torch.randn(2, 3, device=device, requires_grad=True)
+    args = ((x,), (initial,), module.static_inputs, True)
+    if path == "hop":
+        outputs, states, traces = module._hop_scan(*args)
+    else:
+        outputs, states, traces = module._triton_scan(*args, x[0])
+    expected, final, trace = _reference(x, initial, threshold)
+    for got, want in zip((outputs[0], states[0], traces[0]), (expected, final, trace)):
+        torch.testing.assert_close(got, want)
+    actual_gradients = torch.autograd.grad(
+        outputs[0].sum() + states[0].sum() + traces[0].sum(),
+        (x, initial, threshold),
+    )
+    reference_gradients = torch.autograd.grad(
+        expected.sum() + final.sum() + trace.sum(), (x, initial, threshold)
+    )
+    for got, want in zip(actual_gradients, reference_gradients):
+        torch.testing.assert_close(got, want)
+    module.states = states
+    functional.detach_net(module)
+    assert module.states[0].grad_fn is None
+    with torch.no_grad():
+        module.states[0].add_(1)
+    torch.testing.assert_close(traces[0], trace)
+
+
 def test_functional_forward_does_not_mutate_managed_state():
     module = FlexSN(_lif_core, 1, (torch.tensor(0.8),), store_state_seqs=True)
     x = torch.randn(3, 2)
     state = torch.zeros_like(x[0])
 
-    outputs, updated = module.multi_step_functional_forward(
-        (x,), (state,), static_inputs=module.static_inputs
-    )
+    outputs, updated = module.functional_forward((x,), (state,))
 
     assert module.states == (None,)
     assert module.state_seqs is None
     torch.testing.assert_close(outputs[0], module(x))
     torch.testing.assert_close(updated[0], module.states[0])
     assert module.state_seqs is not None
+
+
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+def test_functional_static_defaults_follow_registration_and_preserve_overrides(
+    step_mode,
+):
+    module = FlexSN(_lif_core, 1, (torch.tensor(0.8),), step_mode=step_mode)
+    module = module.to(dtype=torch.float64)
+    x = torch.randn((2,) if step_mode == "s" else (3, 2), dtype=torch.float64)
+    state = torch.randn(2, dtype=torch.float64)
+    registered = module.static_inputs[0]
+    default = module.functional_forward((x,), (state,))
+    explicit = module.functional_forward((x,), (state,), static_inputs=(registered,))
+    for actual, expected in zip(
+        (*default[0], *default[1]), (*explicit[0], *explicit[1])
+    ):
+        torch.testing.assert_close(actual, expected)
+
+    override = torch.tensor(0.3, dtype=torch.float64, requires_grad=True)
+    outputs, updated = module.functional_forward(
+        (x,), (state,), static_inputs=(override,)
+    )
+    if step_mode == "s":
+        expected, final = _lif_core(x, state, override)
+    else:
+        expected, final, _ = _reference(x, state, override)
+    torch.testing.assert_close(outputs[0], expected)
+    torch.testing.assert_close(updated[0], final)
+    got = torch.autograd.grad(outputs[0].sum(), override)[0]
+    want = torch.autograd.grad(expected.sum(), override)[0]
+    torch.testing.assert_close(got, want)
+    assert module.static_inputs[0] is registered
+    assert module.states == (None,)
+    with pytest.raises(ValueError, match="static inputs"):
+        module.functional_forward((x,), (state,), static_inputs=())
+    low_level = (
+        module.single_step_functional_forward
+        if step_mode == "s"
+        else module.multi_step_functional_forward
+    )
+    with pytest.raises(TypeError, match="static_inputs"):
+        low_level((x,), (state,))
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_functional_static_defaults_compile_with_gradients(device):
+    if device == "cuda":
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA required")
+        pytest.importorskip("triton")
+    from spikingjelly.activation_based import base
+
+    threshold = torch.nn.Parameter(torch.tensor(0.8, device=device))
+    module = FlexSN(_lif_core, 1, (threshold,))
+    function = base.to_functional_forward(module)
+    x = torch.randn(3, 2, device=device, requires_grad=True)
+    initial = torch.randn(2, device=device, requires_grad=True)
+    expected, final, _ = _reference(x, initial, threshold)
+    function((x,), (initial,))
+    outputs, states = torch.compile(function, fullgraph=True)((x,), (initial,))
+    torch.testing.assert_close(outputs[0], expected)
+    torch.testing.assert_close(states[0], final)
+    actual_gradients = torch.autograd.grad(
+        outputs[0].sum() + states[0].sum(), (x, initial, threshold)
+    )
+    expected_gradients = torch.autograd.grad(
+        expected.sum() + final.sum(), (x, initial, threshold)
+    )
+    for actual, expected in zip(actual_gradients, expected_gradients):
+        torch.testing.assert_close(actual, expected)
+    assert module.states == (None,)
 
 
 def test_cpu_scan_is_visible_to_fullgraph_compile():
@@ -160,6 +267,27 @@ def test_nondifferentiable_core_reports_unsupported_training_graph():
 
     with pytest.raises(NotImplementedError, match="No differentiable Tensor"):
         _trace_core(core, (torch.zeros(1),), num_outputs=1, num_states=0)
+
+
+def test_core_tracing_isolates_outer_saved_tensor_hooks_and_rng():
+    from spikingjelly.activation_based.neuron.flexsn_trace import _trace_core
+
+    saved = []
+
+    def pack(tensor):
+        saved.append(tensor.detach())
+        return tensor.detach()
+
+    with torch.autograd.graph.saved_tensors_hooks(pack, lambda tensor: tensor):
+        rng_state = torch.random.get_rng_state()
+        _trace_core(_lif_core, (torch.zeros(1),) * 3, num_outputs=1, num_states=1)
+        assert not saved
+        assert torch.equal(torch.random.get_rng_state(), rng_state)
+        x = torch.randn(2, requires_grad=True)
+        loss = x.square().sum()
+        assert saved
+    loss.backward()
+    torch.testing.assert_close(x.grad, 2 * x.detach())
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

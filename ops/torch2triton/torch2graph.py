@@ -51,7 +51,7 @@ def generate_forward_and_backward_graph(
     * **中文**
 
     为 PyTorch 函数生成优化后的前向与反向 FX 图。示例输入的求导设置只应用于
-    局部张量，不修改调用者的张量。
+    局部张量，不修改调用者的张量。反向追踪使用全 1 梯度，不额外抽取随机数。
 
     :param fn: 待追踪的可调用对象，返回张量或张量列表/元组。
     :type fn: Callable
@@ -73,6 +73,7 @@ def generate_forward_and_backward_graph(
 
     Generate optimized forward and backward FX graphs for a PyTorch callable.
     Gradient flags apply to local tensors without modifying the caller's tensors.
+    Backward tracing uses unit gradients without additional random draws.
 
     :param fn: Callable to trace, returning a tensor or a list/tuple of tensors.
     :type fn: Callable
@@ -137,7 +138,8 @@ def generate_forward_and_backward_graph(
         raise NotImplementedError(
             f"No differentiable Tensor found in the output of the function {fn}"
         )
-    torch.autograd.backward(diff_outputs, [torch.randn_like(y) for y in diff_outputs])
+    # Lazy tracing must not advance the caller's RNG during checkpointed execution.
+    torch.autograd.backward(diff_outputs, [torch.ones_like(y) for y in diff_outputs])
 
     if collector.fwd_module is None or collector.bwd_module is None:
         raise ValueError(
