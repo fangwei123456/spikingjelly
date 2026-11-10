@@ -151,8 +151,12 @@ events.out.tfevents.*
 workspace/
 /w1.py
 
-# Local-only agent skills & Codex state
-.agents/
+# Local-only agent skills & Codex state, except the public spec-graph skill
+!.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/spec-graph/
 .codex/
 .goal*/
 .review-*-loop-state.json

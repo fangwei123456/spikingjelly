@@ -249,7 +249,7 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
     with torch.no_grad():
         y_seq_layer_by_layer = net(x_seq)
 
-本例中两种计算顺序的结果相同。训练态 BatchNorm 等按 batch 统计的层,在两种顺序下统计范围不同(N 与 T×N),结果也不同:
+本例中两种计算顺序的结果相同。训练态 BatchNorm 等按 batch 统计的层，在两种顺序下统计范围不同（N 与 T×N），结果也不同：
 
 .. code-block:: python
 

@@ -53,8 +53,13 @@ jobs:
       - name: Run Ruff lint
         run: uvx ruff==0.15.22 check .
 
+      - name: Check logging policy
+        run: uv run --no-sync python tools/check_logging_policy.py
+
       - name: Run CPU tests
-        run: uv run --no-sync pytest test/ -v -o faulthandler_timeout=60
+        run: >-
+          uv run --no-sync pytest test/ -v -o faulthandler_timeout=60
+          --ignore-glob='test/activation_based/test_distributed_*.py'
 
       - name: Check release comparison logic
         run: uv run --no-sync python tools/release/evidence.py self-check

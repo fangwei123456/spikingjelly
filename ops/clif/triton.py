@@ -3,6 +3,8 @@ import triton
 import triton.language as tl
 from triton.language.extra import libdevice
 
+from ..layout import _layout_args
+from ..triton_layout import _spatial_offsets
 from .autograd import _check
 
 
@@ -20,15 +22,19 @@ def _forward_kernel(
     TAU: tl.constexpr,
     THRESHOLD: tl.constexpr,
     BLOCK: tl.constexpr,
+    SIZES: tl.constexpr = (),
+    STRIDES: tl.constexpr = (),
 ):
     i = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
     dtype: tl.constexpr = X.dtype.element_ty
     tau_inv = tl.div_rn(1.0, tl.full((), TAU, tl.float32))
-    x = tl.load(X + i, mask, 0).to(tl.float32)
-    v = tl.load(V + i, mask, 0).to(tl.float32)
-    m = tl.load(M + i, mask, 0).to(tl.float32)
-    leak_v = tl.load(LEAK_V + i, mask, 0).to(tl.float32)
+    x = tl.load(X + _spatial_offsets(i, SIZES, STRIDES, 0), mask, 0).to(tl.float32)
+    v = tl.load(V + _spatial_offsets(i, SIZES, STRIDES, 1), mask, 0).to(tl.float32)
+    m = tl.load(M + _spatial_offsets(i, SIZES, STRIDES, 3), mask, 0).to(tl.float32)
+    leak_v = tl.load(LEAK_V + _spatial_offsets(i, SIZES, STRIDES, 2), mask, 0).to(
+        tl.float32
+    )
     leak = (leak_v * tau_inv).to(dtype).to(tl.float32)
     h = ((v - leak).to(dtype).to(tl.float32) + x).to(dtype).to(tl.float32)
     q = (h * tau_inv).to(dtype).to(tl.float32)
@@ -62,17 +68,21 @@ def _backward_kernel(
     ALPHA: tl.constexpr,
     SURROGATE: tl.constexpr,
     BLOCK: tl.constexpr,
+    SIZES: tl.constexpr = (),
+    STRIDES: tl.constexpr = (),
 ):
     i = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
     mask = i < N
     dtype: tl.constexpr = H.dtype.element_ty
     tau_inv = tl.div_rn(1.0, tl.full((), TAU, tl.float32))
-    gs = tl.load(GS + i, mask, 0).to(tl.float32)
-    gv = tl.load(GV + i, mask, 0).to(tl.float32)
-    gm = tl.load(GM + i, mask, 0).to(tl.float32)
-    h = tl.load(H + i, mask, 0).to(tl.float32)
-    m = tl.load(M + i, mask, 0).to(tl.float32)
-    m_next = tl.load(MO + i, mask, 0).to(tl.float32)
+    gs = tl.load(GS + _spatial_offsets(i, SIZES, STRIDES, 0), mask, 0).to(tl.float32)
+    gv = tl.load(GV + _spatial_offsets(i, SIZES, STRIDES, 1), mask, 0).to(tl.float32)
+    gm = tl.load(GM + _spatial_offsets(i, SIZES, STRIDES, 2), mask, 0).to(tl.float32)
+    h = tl.load(H + _spatial_offsets(i, SIZES, STRIDES, 3), mask, 0).to(tl.float32)
+    m = tl.load(M + _spatial_offsets(i, SIZES, STRIDES, 4), mask, 0).to(tl.float32)
+    m_next = tl.load(MO + _spatial_offsets(i, SIZES, STRIDES, 5), mask, 0).to(
+        tl.float32
+    )
     z = (h - THRESHOLD).to(dtype).to(tl.float32)
     spike = (z >= 0).to(tl.float32)
     b = tl.div_rn(1.0, 1.0 + libdevice.exp(-m_next)).to(dtype).to(tl.float32)
@@ -158,16 +168,21 @@ def _forward_impl(
         torch.empty_like(x, memory_format=torch.contiguous_format) for _ in range(4)
     )
     if x.numel():
+        sizes, strides = (
+            ((), ())
+            if all(t.is_contiguous() for t in (x, v, leak_v, m))
+            else _layout_args(spike, x, v, leak_v, m, sequence=False)
+        )
         with torch.cuda.device(x.device):
             (
                 _forward_kernel
                 if _kernel_wrapper is None
                 else _kernel_wrapper(_forward_kernel)
             )[(triton.cdiv(x.numel(), 256),)](
-                x.contiguous(),
-                v.contiguous(),
-                leak_v.contiguous(),
-                m.contiguous(),
+                x,
+                v,
+                leak_v,
+                m,
                 spike,
                 v_next,
                 m_next,
@@ -176,6 +191,8 @@ def _forward_impl(
                 tau,
                 threshold,
                 256,
+                sizes,
+                strides,
                 enable_fp_fusion=False,
             )
     return spike, v_next, m_next, h
@@ -200,18 +217,23 @@ def _backward_impl(
         torch.empty_like(h, memory_format=torch.contiguous_format) for _ in range(3)
     )
     if h.numel():
+        sizes, strides = (
+            ((), ())
+            if all(t.is_contiguous() for t in (gs, gv, gm, h, m, m_next))
+            else _layout_args(gx, gs, gv, gm, h, m, m_next, sequence=False)
+        )
         with torch.cuda.device(h.device):
             (
                 _backward_kernel
                 if _kernel_wrapper is None
                 else _kernel_wrapper(_backward_kernel)
             )[(triton.cdiv(h.numel(), 256),)](
-                gs.contiguous(),
-                gv.contiguous(),
-                gm.contiguous(),
-                h.contiguous(),
-                m.contiguous(),
-                m_next.contiguous(),
+                gs,
+                gv,
+                gm,
+                h,
+                m,
+                m_next,
                 gx,
                 gv_leak,
                 gm_init,
@@ -221,6 +243,8 @@ def _backward_impl(
                 alpha,
                 surrogate_id,
                 256,
+                sizes,
+                strides,
                 enable_fp_fusion=False,
             )
     return gx, gv_leak, gm_init

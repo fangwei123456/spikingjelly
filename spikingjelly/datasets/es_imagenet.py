@@ -328,11 +328,11 @@ class ESImageNet(NeuromorphicDatasetFolder):
         for class_dir in os.listdir(source_train_dir):
             source_dir = source_train_dir / class_dir
             target_dir = train_dir / class_dir
-            logger.info("Create soft links from [{}] to [{}].", source_dir, target_dir)
+            logger.info("Prepare files from [{}] to [{}].", source_dir, target_dir)
             for sample in os.listdir(source_dir):
                 source_file = source_dir / sample
                 target_file = target_dir / sample
-                target_file.symlink_to(source_file)
+                utils._link_or_copy(source_file, target_file)
 
         val_txt_path = extract_root / "ES-imagenet-0.18" / "vallabel.txt"
         val_label = np.loadtxt(val_txt_path, delimiter=" ", usecols=(1,), dtype=int)
@@ -346,7 +346,7 @@ class ESImageNet(NeuromorphicDatasetFolder):
         for fname, label in zip(val_fname, val_label, strict=True):
             source_file = source_dir / fname
             target_file = target_dir / f"class{label}" / f"{fname}"
-            target_file.symlink_to(source_file)
+            utils._link_or_copy(source_file, target_file)
 
         logger.info("Used time = [{}s].", round(time.time() - t_ckp, 2))
         logger.info(

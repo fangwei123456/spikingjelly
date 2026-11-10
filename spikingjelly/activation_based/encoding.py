@@ -1,4 +1,3 @@
-import math
 from abc import abstractmethod
 
 import torch
@@ -319,7 +318,9 @@ class PeriodicEncoder(StatefulEncoder):
 
 
 class LatencyEncoder(StatefulEncoder):
-    def __init__(self, T: int, enc_function="linear", step_mode="s"):
+    def __init__(
+        self, T: int, enc_function: str = "linear", step_mode: str = "s"
+    ) -> None:
         r"""
         **API Language** - :ref:`中文 <LatencyEncoder.__init__-cn>` | :ref:`English <LatencyEncoder.__init__-en>`
 
@@ -339,7 +340,7 @@ class LatencyEncoder(StatefulEncoder):
             .. math::
                 t_f(x) = (T - 1) - \text{ln}(\alpha * x + 1)
 
-        其中 :math:`\alpha` 满足 :math:`t_f(1) = T - 1`
+        其中 :math:`\alpha = \mathrm{exp}(T - 1) - 1`。计算使用等价的对数域形式，避免大编码周期或低精度输入导致指数溢出。
 
         .. warning::
 
@@ -375,7 +376,9 @@ class LatencyEncoder(StatefulEncoder):
             .. math::
                 t_f(x) = (T - 1) - \text{ln}(\alpha * x + 1)
 
-        where :math:`\alpha` satisfies :math:`t_f(1) = T - 1`
+        where :math:`\alpha = \mathrm{exp}(T - 1) - 1`. Computation uses an
+        equivalent log-domain form to avoid exponential overflow for long periods
+        or low-precision inputs.
 
         .. admonition:: Warning
             :class: warning
@@ -410,9 +413,7 @@ class LatencyEncoder(StatefulEncoder):
                 print(encoder(x))
         """
         super().__init__(T, step_mode)
-        if enc_function == "log":
-            self.alpha = math.exp(T - 1.0) - 1.0
-        elif enc_function != "linear":
+        if enc_function not in ("linear", "log"):
             raise NotImplementedError
 
         self.enc_function = enc_function
@@ -445,7 +446,16 @@ class LatencyEncoder(StatefulEncoder):
         :type x: torch.Tensor
         """
         if self.enc_function == "log":
-            t_f = (self.T - 1.0 - torch.log(self.alpha * x + 1.0)).round().long()
+            # t_f = -log(x + (1 - x) * exp(-(T - 1))). Work in log
+            # space so neither exp(T - 1) nor its product with x can overflow.
+            values = (
+                x.float()
+                if x.dtype in (torch.float16, torch.bfloat16)
+                or not x.is_floating_point()
+                else x
+            )
+            t_f = -torch.logaddexp(values.log(), torch.log1p(-values) - (self.T - 1))
+            t_f = t_f.round().long()
         else:
             t_f = ((self.T - 1.0) * (1.0 - x)).round().long()
 
@@ -494,7 +504,7 @@ class PoissonEncoder(StatelessEncoder):
         """
         super().__init__(step_mode)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         r"""
         **API Language** - :ref:`中文 <PoissonEncoder.forward-cn>` | :ref:`English <PoissonEncoder.forward-en>`
 
@@ -504,11 +514,11 @@ class PoissonEncoder(StatelessEncoder):
 
         * **中文**
 
-        前向传播。根据输入 ``x`` 中的概率值生成泊松脉冲序列。每个元素以概率 ``x`` 独立地发放脉冲。
+        前向传播。根据输入 ``x`` 中的概率值生成泊松脉冲序列。每个元素以概率 ``x`` 独立地发放脉冲。概率为零时不会发放脉冲，为一时始终发放脉冲。
 
-        :param x: 输入数据，取值范围应为 ``[0, 1]``，表示脉冲发放概率
+        :param x: 任意形状的浮点张量，取值范围应为 ``[0, 1]``，表示脉冲发放概率
         :type x: torch.Tensor
-        :return: 脉冲张量，形状与 ``x`` 相同
+        :return: 脉冲张量，形状、dtype 和 device 与 ``x`` 相同
         :rtype: torch.Tensor
 
         ----
@@ -519,13 +529,14 @@ class PoissonEncoder(StatelessEncoder):
 
         Forward pass. Generates Poisson spike trains based on the probability values in ``x``.
         Each element independently fires a spike with probability ``x``.
+        Zero probabilities never fire, and unit probabilities always fire.
 
-        :param x: input data in the range ``[0, 1]``, representing firing probabilities
+        :param x: floating-point tensor of any shape in ``[0, 1]``, representing firing probabilities
         :type x: torch.Tensor
-        :return: spike tensor with the same shape as ``x``
+        :return: spike tensor with the same shape, dtype, and device as ``x``
         :rtype: torch.Tensor
         """
-        out_spike = torch.rand_like(x).le(x).to(x)
+        out_spike = torch.rand_like(x).lt(x).to(x)
         return out_spike
 
 
@@ -623,8 +634,10 @@ class WeightedPhaseEncoder(StatefulEncoder):
 
         单步编码函数。将输入 ``x`` 按照二进制加权相位编码方式展开为脉冲序列。
 
-        :param x: 输入数据，取值范围应为 ``[0, 1 - 2^{-T}]``
+        :param x: 浮点输入数据，取值范围应为 ``[0, 1 - 2^{-T}]``；不会被原地修改。
         :type x: torch.Tensor
+        :return: 形状为 ``[T, *x.shape]`` 的脉冲序列，与 ``x`` 的数据类型和设备相同。
+        :rtype: torch.Tensor
         :raises AssertionError: 当 ``x`` 不在 ``[0, 1 - 2^{-T}]`` 范围内时
 
         ----
@@ -636,15 +649,16 @@ class WeightedPhaseEncoder(StatefulEncoder):
         Single-step encoding function. Encodes the input ``x`` into spike trains using the
         weighted phase encoding scheme based on binary decomposition.
 
-        :param x: input data, which should be in the range ``[0, 1 - 2^{-T}]``
+        :param x: Floating-point input in ``[0, 1 - 2^{-T}]``; not modified in place.
         :type x: torch.Tensor
+        :return: Spike sequence with shape ``[T, *x.shape]``, preserving the dtype
+            and device of ``x``.
+        :rtype: torch.Tensor
         :raises AssertionError: if ``x`` is not in the range ``[0, 1 - 2^{-T}]``
         """
         assert (x >= 0).all() and (x <= 1 - 2 ** (-self.T)).all()
         inputs = x.clone()
-        spike = torch.empty(
-            (self.T,) + x.shape, device=x.device
-        )  # Encoding to [T, batch_size, *]
+        spike = torch.empty((self.T,) + x.shape, device=x.device, dtype=x.dtype)
         w = 0.5
         for i in range(self.T):
             spike[i] = inputs >= w

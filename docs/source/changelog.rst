@@ -12,16 +12,105 @@ Changes since ``2.0.0.dev0``. For older releases, see
 Unreleased
 ----------
 
+Fixes
+~~~~~
+
+spikingjelly.activation_based.neuron
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``GatedLIFNode`` preserves feature and one-dimensional sequence layouts instead of adding spatial axes or misaligning channel parameters.
+- ``BaseNode`` subclasses reject mismatched state shapes instead of silently reinitializing them. Call ``functional.reset_net`` before changing input shape, or supply matching explicit states.
+- ``FlexSN`` keeps independent final states when storing HOP or Triton state sequences, allowing ``functional.detach_net`` to work.
+- ``FlexSN.functional_forward`` defaults to registered static inputs, enabling functional conversion and checkpointing while preserving explicit overrides.
+- Cold FlexSN CUDA tracing uses deterministic gradient probes and isolates saved-tensor hooks, preserving checkpoint recomputation.
+
+spikingjelly.activation_based.nir_exchange
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- NIR exchange imports without its optional dependencies and reports an installation command when import/export is called without them.
+
+spikingjelly.activation_based.memopt
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- Module checkpointing preserves gradients to differentiable buffers while isolating buffer updates during recomputation.
+- Non-leaf buffer commits preserve autograd source tensors and shared bindings instead of modifying sources in-place.
+
+spikingjelly.activation_based.precision
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- BF16 capability detection queries non-CUDA accelerator backends instead of rejecting them unconditionally.
+
+spikingjelly.datasets
+^^^^^^^^^^^^^^^^^^^^^
+
+- Dataset file links fall back to copies when Windows denies symlink privileges, using additional disk space.
+- Lambda-based frame integration uses the ``lambda`` cache directory on Windows; specify distinct directory names for different functions.
+- ``CIFAR10DVSTEBNSplit`` reports interrupted split creation instead of loading partial results; remove the partial split directories and marker before retrying.
+- Time-based fixed-frame integration handles empty intervals and ends each frame where
+  the next one starts, so float events on a boundary are counted once; integer
+  timestamps give unchanged frames.
+  Delete cached ``frames_number_*_split_by_time`` folders to rebuild them with the fix.
+- ``SpikingHeidelbergDigits`` and ``SpikingSpeechCommands`` time-split frames no longer
+  raise ``IndexError`` on silent intervals or drop or double-count boundary events.
+- ``SpikingSpeechCommands`` downloads the SSC train/valid/test archives instead of the
+  SHD ones, so automatic download no longer fails on the missing ``ssc_*.h5`` files.
+  A root prepared earlier or by ``SpikingHeidelbergDigits`` now raises a clear error; use
+  a separate, empty root for SSC.
+
+spikingjelly.activation_based.encoding
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``PoissonEncoder`` no longer emits spikes for zero-probability FP16/BF16 pixels;
+  seeded spike sequences can change when random draws equal input probabilities.
+- ``LatencyEncoder`` evaluates logarithmic firing times without exponential overflow
+  for long periods and low-precision inputs, including binary integer inputs.
+- ``WeightedPhaseEncoder`` outputs spikes in the input floating-point dtype instead
+  of the global default dtype, allowing direct use with layers of matching dtype.
+
+spikingjelly.activation_based.functional
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- Explicit ``SJ_*_CUDA_IMPLEMENTATION=torch`` accepts profiles requiring Torch reference execution, including custom surrogates and non-FP32 states.
+- ``kernel_dot_product`` evaluates low-precision Gaussian distances in FP32 and retains FP32 outputs under autocast, preserving spike differences and finite similarities.
+- TET cross-entropy accepts class probability targets, including MixUp and spatial targets.
+- ``kernel_dot_product`` keeps Gaussian squared distances nonnegative, preventing
+  rounded self-similarities above one and resulting BCE failures.
+
+- ``spike_similar_loss`` matches target dtype to similarities for float64 MSE/BCE
+  compatibility; with autocast disabled, explicit FP16/BF16 inputs now produce
+  matching low-precision MSE/L1 losses instead of FP32.
+
+spikingjelly.activation_based.surrogate
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- Torch ``Sigmoid`` surrogate gradients retain representable positive tails in low-precision training.
+- ``PoissonPass`` preserves the input dtype, allowing matching FP16/BF16/FP64 layers.
+
+spikingjelly.activation_based.learning
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- FPTT training preserves frozen optimizer parameters and their running-average slots instead of failing on missing gradients.
+
+spikingjelly.activation_based.lava_exchange
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``CubaLIFNode`` trains scalar or broadcast decay parameters without requiring input or initial-state gradients.
+
 Changes
 ~~~~~~~
+
+- Few-spike, outlier-aware and hierarchically gated neurons add optional native CUDA alongside Triton for eligible FP32 inference, with explicit provider selection and reference fallbacks.
+
+- Neuron dispatch uses version-aware Triton architecture floors in auto mode; explicit Triton attempts retain provider errors.
+- Few-spike tracing and incompatible optional Triton imports retain reference execution in automatic mode.
 
 - ST-BIF uses one-third less FP32 state memory and fewer inference allocations.
 - Removed ``STBIFNode.cur_output``; ``functional.stbif_step`` and
   ``functional.stbif_multi_step`` return ``(out, q, acc_q)``. Consume returned spikes,
   update tuple unpacking, rebuild native extensions and regenerate compiled/exported graphs.
-- ``NonSpikingBaseNode(decode=...)`` and the noisy variants accept ``last-mem`` instead
-  of ``last_mem``; ``last-mem`` now returns the last membrane voltage like the other
-  three decoders.
+- ``NonSpikingBaseNode(decode=...)`` and ``NoisyNonSpikingBaseNode(decode=...)`` accept
+  ``last-mem`` instead of ``last_mem`` (``last-me`` for the noisy node); the old names now
+  return the whole membrane potential sequence.
 
 2.0.0 - 2026-10-18
 ------------------
@@ -136,6 +225,10 @@ Improvements and fixes
 
 - Native CUDA/Triton neurons accept compact nonoverlapping, channels-last and
   broadcast layouts without layout copies, including states and gradients.
+- CLIF's Triton boundary reads strided inputs and gradients directly, avoiding
+  redundant layout copies while preserving contiguous outputs.
+- Padded Triton neuron indices use 64-bit program IDs when needed, preventing
+  int32 overflow for large tensors.
 - IF/LIF/PLIF precision preserves spike input dtype; ``store_v_seq=False`` avoids
   redundant voltage storage, and Triton 3.6 LIF backward compiles correctly.
 - Fixed single-step ``store_v_seq`` recording, including recurrent containers and

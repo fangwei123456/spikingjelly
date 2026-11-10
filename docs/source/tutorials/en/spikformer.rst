@@ -102,6 +102,7 @@ Finally, add the feedforward module to form Spikformer. A complete model with th
 
 .. code-block:: python
 
+    import torch
     from spikingjelly.activation_based.model.spikformer import spikformer_ti
     from spikingjelly.activation_based import functional
 
@@ -151,6 +152,9 @@ The implementation below illustrates these changes. See :class:`SpikingSelfAtten
 
 .. code:: python
 
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import neuron
     from spikingjelly.activation_based.layer import SeqToANNContainer
 
     class SpikingSelfAttention(nn.Module):

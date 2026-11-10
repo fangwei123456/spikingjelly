@@ -215,7 +215,7 @@ def _checkpoint_module_forward(
     live_buffers = dict(module.named_buffers())
     buffer_names = tuple(live_buffers)
     buffer_refs = tuple(live_buffers.values())
-    buffers = tuple(buffer.detach().clone() for buffer in buffer_refs)
+    buffers = tuple(buffer.clone() for buffer in buffer_refs)
     if chunks == 1:
         outputs, states, buffers = _run_module(
             module,
@@ -274,7 +274,13 @@ def _checkpoint_module_forward(
     base.load_memories(module, list(states))
     with torch.no_grad():
         for buffer, updated in zip(buffer_refs, buffers, strict=True):
-            buffer.copy_(updated)
+            if buffer.is_leaf:
+                buffer.copy_(updated)
+            else:
+                for name, source in module.named_buffers(remove_duplicate=False):
+                    if source is buffer:
+                        parent, _, attribute = name.rpartition(".")
+                        setattr(module.get_submodule(parent), attribute, updated)
     return result
 
 
@@ -297,7 +303,10 @@ def checkpoint_module(
 
     返回保留参数名称、参数对象和 ``state_dict`` 键的 checkpoint wrapper。包含
     :class:`~spikingjelly.activation_based.base.MemoryModule` 的模块使用显式状态重算；
-    神经元状态和 buffer 只提交一次。``chunks > 1`` 时，``chunked_args`` 指定的
+    神经元状态和 buffer 只提交一次；可求导 buffer 的快照保留与原 buffer 的梯度连接。
+    非叶 buffer 通过重新绑定提交，并保留模块内共享别名，不原地修改反向所需的源张量；
+    叶 buffer 保持原对象并原地提交。
+    ``chunks > 1`` 时，``chunked_args`` 指定的
     tensor 沿 ``time_dim`` 分块，tensor 输出沿同一维拼接，非 tensor 输出必须在各
     分块中相同。输入的 device、dtype 和 backend 支持范围由被包装模块和压缩器决定。
 
@@ -324,8 +333,12 @@ def checkpoint_module(
     Return a checkpoint wrapper that preserves parameter names, parameter objects,
     and ``state_dict`` keys. Modules containing
     :class:`~spikingjelly.activation_based.base.MemoryModule` use explicit state
-    during recomputation; neuron state and buffers are committed once. When
-    ``chunks > 1``, tensors selected by ``chunked_args`` are split along
+    during recomputation; neuron state and buffers are committed once. Snapshots
+    preserve gradient connections to buffers that require gradients. Non-leaf
+    buffer commits update shared module bindings together
+    without modifying source tensors needed for backward. Leaf buffers retain
+    their objects and are committed in-place. When ``chunks > 1``, tensors
+    selected by ``chunked_args`` are split along
     ``time_dim``. Tensor outputs are concatenated along the same dimension, while
     non-tensor outputs must be identical across chunks. Supported devices, dtypes,
     and backends are determined by the wrapped module and compressor.

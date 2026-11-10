@@ -132,7 +132,7 @@ SpikingJelly 神经元，并为多步 CUDA 计算生成 Triton 内核。预定�
         torch.zeros_like(x[0]),
     )
     (s1, s2), (final_v, final_rho) = f_torch.functional_forward(
-        (x, y), initial_states, static_inputs=()
+        (x, y), initial_states
     )
     assert f_torch.states == (None, None)
 
@@ -169,7 +169,9 @@ PLIF 动力学使用可训练参数控制膜电位衰减：
         static_inputs=(w,),
     )
 
-函数式调用必须显式传入静态值，因此可以在不修改模块参数的情况下使用另一组参数：
+``functional_forward`` 默认使用当前注册的静态输入，包括设备或 dtype 转换后的值。
+因此 ``base.to_functional_forward`` 和 ``memopt.checkpoint_module`` 可以在网络中
+为每个 FlexSN 绑定其自身参数。显式元组可覆盖本次调用的值，不替换模块参数：
 
 .. code-block:: python
 
@@ -180,6 +182,9 @@ PLIF 动力学使用可训练参数控制膜电位衰减：
     )
 
 静态 Tensor 必须是标量，或与单步输入具有相同元素数；不支持任意广播。
+显式 ``()`` 表示没有静态输入，仅在未注册静态输入时有效。底层的
+``single_step_functional_forward`` 和 ``multi_step_functional_forward`` 仍须
+显式传入 ``static_inputs``。
 
 自动执行与 ``torch.compile``
 ----------------------------------------

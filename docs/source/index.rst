@@ -126,6 +126,7 @@ SpikingJelly主要由以下开发者开发维护：
 * `脉冲神经网络相关博客 <https://www.cnblogs.com/lucifer1997/tag/SNN/>`_
 * `脉冲强化学习相关博客 <https://www.cnblogs.com/lucifer1997/tag/SNN-RL/>`_
 * `神经形态计算软件框架LAVA相关博客 <https://www.cnblogs.com/lucifer1997/p/16286303.html>`_
+* `btorch <https://github.com/Criticality-Cognitive-Computation-Lab/btorch>`_
 
 .. _index_en:
 
@@ -250,6 +251,10 @@ SpikingJelly has been developed and maintained by multiple main developers over 
 **2019.12~2024.06**: `Wei Fang <https://github.com/fangwei123456>`_, `Yanqi Chen <https://github.com/Yanqi-Chen>`_, `Jianhao Ding <https://github.com/DingJianhao>`_, `Ding Chen <https://github.com/lucifer2859>`_, `Liwei Huang <https://github.com/Grasshlw>`_
 
 The list of contributors can be found at `contributors <https://github.com/fangwei123456/spikingjelly/graphs/contributors>`_.
+
+Related projects
+-------------------------
+* `btorch <https://github.com/Criticality-Cognitive-Computation-Lab/btorch>`_
 
 .. toctree::
    :hidden:

@@ -113,6 +113,8 @@ def _check_logger_call(path: Path, node: ast.Call) -> list[str]:
 
 
 def check(root: Path) -> list[str]:
+    if not root.is_dir():
+        return [f"{root}: logging policy scan root must be an existing directory"]
     violations: list[str] = []
     for path in sorted(root.rglob("*.py")):
         if not _is_production(path):
@@ -128,7 +130,9 @@ def check(root: Path) -> list[str]:
             for parent in ast.walk(tree)
             for child in ast.iter_child_nodes(parent)
         }
-        is_package_logger_module = path == root / "logger.py"
+        is_package_logger_module = (
+            root.name == "spikingjelly" and path == root / "logger.py"
+        )
         imports_package_logger = is_package_logger_module or any(
             isinstance(node, ast.ImportFrom)
             and (
@@ -187,8 +191,26 @@ def check(root: Path) -> list[str]:
                     )
                 elif (
                     isinstance(func, ast.Attribute)
-                    and func.attr in {"bind", "contextualize", "opt"}
+                    and func.attr
+                    in {
+                        "add",
+                        "remove",
+                        "enable",
+                        "disable",
+                        "configure",
+                        "bind",
+                        "contextualize",
+                        "opt",
+                    }
                     and _root_name(func.value) == "logger"
+                    and not (
+                        is_package_logger_module
+                        and func.attr == "disable"
+                        and len(node.args) == 1
+                        and isinstance(node.args[0], ast.Constant)
+                        and node.args[0].value == "spikingjelly"
+                        and not node.keywords
+                    )
                 ):
                     violations.append(
                         f"{path}:{node.lineno}: logger.{func.attr} is not allowed"
@@ -224,9 +246,12 @@ def check(root: Path) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root", type=Path, default=Path("spikingjelly"))
+    parser.add_argument("--root", type=Path)
     args = parser.parse_args()
-    violations = check(args.root)
+    roots = (
+        (args.root,) if args.root is not None else (Path("spikingjelly"), Path("ops"))
+    )
+    violations = [violation for root in roots for violation in check(root)]
     if violations:
         print("Logging policy violations:")
         print("\n".join(violations))

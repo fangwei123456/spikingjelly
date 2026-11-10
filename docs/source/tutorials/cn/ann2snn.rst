@@ -231,7 +231,7 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
 识别MNIST
 ---------
 
-构建并加载 ANN
+构建并训练 ANN
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 下面用 ``ann2snn`` 搭建一个简单卷积网络，对 MNIST 数据集进行分类。
@@ -312,25 +312,31 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
         dataset=test_data_dataset, batch_size=50, shuffle=True, drop_last=False
     )
 
-示例脚本会下载预训练权重。先加载权重并验证 ANN：
+建议先从头训练这个 MNIST ANN。早期提供的 `预训练权重 <https://ndownloader.figshare.com/files/34960191>`_ 可供选用，链接可能失效。下面训练 ANN、保存权重并验证准确率：
 
 .. code-block:: python
 
     from spikingjelly.activation_based.ann2snn.examples.cnn_mnist import (
         DEFAULT_CHECKPOINT_PATH,
-        DEFAULT_CHECKPOINT_URL,
-        download_checkpoint,
         val,
     )
     from spikingjelly.activation_based.ann2snn.sample_models import mnist_cnn
 
-    download_checkpoint(DEFAULT_CHECKPOINT_URL, DEFAULT_CHECKPOINT_PATH)
     model = mnist_cnn.CNN().to(device)
-    model.load_state_dict(torch.load(DEFAULT_CHECKPOINT_PATH, map_location=device))
+    loss_function = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
+    model.train()
+    for epoch in range(10):
+        for img, label in train_data_loader:
+            optimizer.zero_grad()
+            loss = loss_function(model(img.to(device)), label.to(device))
+            loss.backward()
+            optimizer.step()
+    torch.save(model.state_dict(), DEFAULT_CHECKPOINT_PATH)
     acc = val(model, device, test_data_loader)
     print('ANN Validating Accuracy: %.4f' % (acc))
 
-本次运行中，ANN 准确率为：
+早期预训练权重的参考输出为：
 
 .. code-block:: shell
 
@@ -477,7 +483,7 @@ ANN 验证正确率为 0.9870，各归一化模式的结果如下：
       --time-steps 32 \
       --output /tmp/ann2snn_mnist_t32.json
 
-下表由该命令生成，JSON 输出为 ``/tmp/ann2snn_mnist_t32.json``。其中 RobustNorm 使用 ``RateCodingRecipe(dataloader=..., mode="99.9%")``。 LTB 使用 ``LocalThresholdBalancingRecipe(dataloader=...)``。本次 MNIST 结果使用完整训练集 60000 张样本作为校准集，使用完整测试集 10000 张样本评估：
+下表由该命令生成，JSON 输出为 ``/tmp/ann2snn_mnist_t32.json``。其中 RobustNorm 使用 ``RateCodingRecipe(dataloader=..., mode="99.9%")``。LTB 使用 ``LocalThresholdBalancingRecipe(dataloader=...)``。本次 MNIST 结果使用完整训练集 60000 张样本作为校准集，使用完整测试集 10000 张样本评估：
 
 .. list-table:: MNIST CNN 转换结果
     :header-rows: 1

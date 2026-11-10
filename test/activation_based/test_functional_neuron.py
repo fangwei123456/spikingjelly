@@ -1,3 +1,6 @@
+import copy
+import math
+
 import pytest
 import torch
 
@@ -246,7 +249,7 @@ def test_complementary_lif_state_storage_reset_and_backend_contract():
     module.store_v_seq = True
     assert module.state_seqs is None
 
-    x_seq = torch.randn(2, 3, dtype=torch.float64)
+    x_seq = torch.randn(2, 2, 4, dtype=torch.float64)
     module(x_seq)
     assert module.v_seq is None
     assert module.v.shape == x_seq.shape[1:]
@@ -330,6 +333,90 @@ def test_materialize_states_is_pure():
 
     assert module.v == 0.0
     assert torch.equal(states[0], torch.zeros_like(x))
+
+
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+@pytest.mark.parametrize(
+    "node_type",
+    [
+        neuron.IFNode,
+        neuron.LIFNode,
+        neuron.ParametricLIFNode,
+        neuron.HalfThresholdIFNode,
+        neuron.ComplementaryLIFNode,
+        neuron.CUBALIFNode,
+        neuron.IzhikevichNode,
+        neuron.RAFNode,
+    ],
+)
+def test_state_shape_change_requires_reset(node_type, step_mode):
+    node = node_type()
+    node.step_mode = step_mode
+    reference = copy.deepcopy(node)
+    first = torch.ones(4, 3) if step_mode == "s" else torch.ones(2, 4, 3)
+    changed = torch.ones(2, 3) if step_mode == "s" else torch.ones(3, 2, 3)
+    node(first)
+    states = tuple(node.memories())
+    with pytest.raises(ValueError, match="state shape.*reset_net"):
+        node(changed)
+    assert all(a is b for a, b in zip(states, node.memories(), strict=True))
+    functional.reset_net(node)
+    torch.testing.assert_close(node(changed), reference(changed))
+    for actual, expected in zip(node.memories(), reference.memories(), strict=True):
+        torch.testing.assert_close(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "node_type,state_name",
+    [
+        (neuron.IzhikevichNode, "w"),
+        (neuron.RAFNode, "u"),
+        (neuron.ComplementaryLIFNode, "m"),
+        (neuron.CUBALIFNode, "c"),
+    ],
+)
+def test_secondary_state_shape_is_not_silently_reinitialized(node_type, state_name):
+    node = node_type()
+    node(torch.ones(4, 3))
+    setattr(node, state_name, torch.ones(2, 3))
+    states = tuple(node.memories())
+    with pytest.raises(ValueError, match="state shape.*reset_net"):
+        node(torch.ones(4, 3))
+    assert all(a is b for a, b in zip(states, node.memories(), strict=True))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+@pytest.mark.parametrize("family", ["if", "lif", "plif"])
+@pytest.mark.parametrize("profile", ["custom_surrogate", "float64"])
+def test_forced_torch_reference_profile_matches_cpu(family, profile, monkeypatch):
+    import importlib
+
+    package = importlib.import_module(
+        f"spikingjelly._ops.{'if_' if family == 'if' else family}"
+    )
+    monkeypatch.setattr(package._selection, "_requested", "torch")
+    dtype = torch.float64 if profile == "float64" else torch.float32
+    spike = torch.sigmoid if profile == "custom_surrogate" else _surrogate()
+    x = torch.randn(3, 2, 7, device="cuda", dtype=dtype, requires_grad=True)
+    v = torch.randn(2, 7, device="cuda", dtype=dtype, requires_grad=True)
+    cpu = [value.detach().cpu().requires_grad_() for value in (x, v)]
+    function = getattr(functional, f"{family}_multi_step")
+    kwargs = {"surrogate_function": spike, "store_v_seq": True}
+    if family == "plif":
+        decay = torch.tensor(0.4, device="cuda", dtype=dtype, requires_grad=True)
+        cpu_decay = decay.detach().cpu().requires_grad_()
+        actual = function(x, v, decay, **kwargs)
+        expected = function(*cpu, cpu_decay, **kwargs)
+        inputs = (x, v, decay)
+        cpu.append(cpu_decay)
+    else:
+        actual = function(x, v, **kwargs)
+        expected = function(*cpu, **kwargs)
+        inputs = (x, v)
+    gradients = torch.autograd.grad(sum(value.sum() for value in actual), inputs)
+    cpu_gradients = torch.autograd.grad(sum(value.sum() for value in expected), cpu)
+    for got, want in zip((*actual, *gradients), (*expected, *cpu_gradients)):
+        torch.testing.assert_close(got.cpu(), want)
 
 
 def test_plif_step_matches_module_and_parameter_gradient():
@@ -457,6 +544,7 @@ def test_store_v_seq_accumulates_across_single_steps_until_reset(node_type):
     node_s(x_seq[2])
     torch.testing.assert_close(node_s.v_seq, node_s.v.unsqueeze(0))
 
+    node_s.reset()
     node_s(torch.rand(5, 3))
     assert node_s.v_seq.shape == (1, 5, 3)
     torch.testing.assert_close(node_s.v_seq, node_s.v.unsqueeze(0))
@@ -797,6 +885,69 @@ def test_lava_cuba_lif_step_matches_norm_free_module():
     _assert_close(spike, module_spike)
     _assert_close(current_next, module.current_state)
     _assert_close(voltage_next, module.voltage_state)
+
+
+def test_lava_broadcast_decay_gradient_is_reduced_per_parameter():
+    x = torch.tensor([[0.25, -0.5], [0.5, 0.25]])
+    state = torch.tensor([[2.0, -1.0], [1.0, -2.0]])
+    decay = torch.tensor([1024.0, 2048.0], requires_grad=True)
+    result = lava_exchange.LeakyIntegratorStep.apply(x, decay, state, 4096)
+
+    torch.testing.assert_close(
+        result, torch.tensor([[1.75, -1.0], [1.25, -0.75]]), rtol=0, atol=0
+    )
+    result.backward(torch.tensor([[3.0, -2.0], [1.0, 4.0]]))
+    torch.testing.assert_close(
+        decay.grad, torch.tensor([-7.0, 6.0]) / 4096, rtol=0, atol=0
+    )
+
+
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+@pytest.mark.parametrize("tensor_decay", [False, True])
+def test_lava_cuba_decay_gradients_do_not_require_input_gradients(
+    step_mode, tensor_decay
+):
+    current_decay = torch.tensor([0.125, 0.25, 0.375]) if tensor_decay else 0.25
+    voltage_decay = torch.tensor([0.25, 0.5, 0.75]) if tensor_decay else 0.5
+    node = lava_exchange.CubaLIFNode(
+        current_decay=current_decay,
+        voltage_decay=voltage_decay,
+        requires_grad=True,
+        step_mode=step_mode,
+    )
+    node.current_state = torch.full((2, 3), 0.75)
+    node.voltage_state = torch.full((2, 3), 0.25)
+    reference = copy.deepcopy(node)
+    shape = (3, 2, 3) if step_mode == "m" else (2, 3)
+    x = torch.linspace(0.3, 0.7, math.prod(shape)).reshape(shape)
+
+    result = node(x)
+    expected = reference(x.clone().requires_grad_())
+    torch.testing.assert_close(result, expected, rtol=0, atol=0)
+    torch.testing.assert_close(
+        node.current_state, reference.current_state, rtol=0, atol=0
+    )
+    torch.testing.assert_close(
+        node.voltage_state, reference.voltage_state, rtol=0, atol=0
+    )
+
+    for module, spikes in ((node, result), (reference, expected)):
+        (
+            spikes.sum()
+            + module.current_state.square().mean()
+            + module.voltage_state.square().mean()
+        ).backward()
+
+    for name in ("current_decay", "voltage_decay"):
+        parameter = getattr(node, name)
+        gradient = parameter.grad
+        assert gradient is not None
+        assert gradient.shape == parameter.shape
+        assert torch.isfinite(gradient).all()
+        assert torch.count_nonzero(gradient) > 0
+        torch.testing.assert_close(
+            gradient, getattr(reference, name).grad, rtol=0, atol=0
+        )
 
 
 def test_cuba_sequence_caches_are_not_functional_states():
@@ -1587,3 +1738,60 @@ def test_clif_scalar_division_matches_torch_at_threshold(tau, monkeypatch):
     assert ga[2] is gr[2] is None
     for a, r in zip(ga[:2], gr[:2]):
         torch.testing.assert_close(a, r, rtol=1e-6, atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "dtype", [torch.float16, torch.bfloat16, torch.float32, torch.float64]
+)
+def test_sigmoid_surrogate_preserves_symmetric_tail_gradients(dtype):
+    """Representable surrogate derivatives survive positive sigmoid saturation."""
+    x = torch.tensor(
+        [-5.0, -3.0, -2.0, 0.0, 2.0, 3.0, 5.0], dtype=dtype, requires_grad=True
+    )
+    upstream = torch.tensor([1.0, -2.0, 3.0, 1.0, 3.0, -2.0, 1.0], dtype=dtype)
+    surrogate.Sigmoid()(x).backward(upstream)
+    z = 4 * x.detach().double()
+    exp_z = torch.exp(-z)
+    expected = (upstream.double() * 4 * exp_z / (1 + exp_z).square()).to(dtype)
+    torch.testing.assert_close(
+        x.grad,
+        expected,
+        rtol=0.01 if dtype == torch.bfloat16 else 0.002,
+        atol=torch.finfo(dtype).tiny * 0.01,
+    )
+    torch.testing.assert_close(x.grad, x.grad.flip(0), rtol=1e-6, atol=0)
+
+
+@pytest.mark.parametrize("dtype, weight", [(torch.bfloat16, 3.0), (torch.float16, 4.0)])
+def test_sigmoid_surrogate_autocast_ifnode_weight_gradient(dtype, weight):
+    """Autocast IF training propagates the nonzero gradient to FP32 weights."""
+    net = torch.nn.Sequential(
+        torch.nn.Linear(1, 1, bias=False),
+        neuron.IFNode(surrogate_function=surrogate.Sigmoid(), detach_reset=True),
+    )
+    with torch.no_grad():
+        net[0].weight.fill_(weight)
+    with torch.autocast("cpu", dtype=dtype):
+        spike = net(torch.ones(1, 1))
+        loss = spike.float().square().sum()
+    loss.backward()
+    torch.testing.assert_close(spike, torch.ones_like(spike), rtol=0, atol=0)
+    z = torch.tensor(4 * (weight - 1), dtype=torch.float64)
+    expected = (8 * torch.exp(-z) / (1 + torch.exp(-z)).square()).float().reshape(1, 1)
+    torch.testing.assert_close(net[0].weight.grad, expected, rtol=0.01, atol=0)
+
+
+def test_sigmoid_surrogate_tail_double_backward():
+    """Differentiating the surrogate gradient still follows the sigmoid formula."""
+    x = torch.tensor(
+        [-3.0, -0.5, 0.0, 0.5, 3.0], dtype=torch.float64, requires_grad=True
+    )
+    actual = surrogate.Sigmoid()(x)
+    first = torch.autograd.grad(actual.sum(), x, create_graph=True)[0]
+    second = torch.autograd.grad(first.sum(), x, create_graph=True)[0]
+    third = torch.autograd.grad(second.sum(), x)[0]
+    s = (x.detach() * 4).sigmoid()
+    expected = 16 * s * (1 - s) * (1 - 2 * s)
+    torch.testing.assert_close(second, expected, rtol=1e-10, atol=1e-14)
+    expected_third = 64 * s * (1 - s) * (1 - 6 * s + 6 * s.square())
+    torch.testing.assert_close(third, expected_third, rtol=1e-10, atol=1e-14)

@@ -139,7 +139,7 @@ not modify the module's ``states``:
         torch.zeros_like(x[0]),
     )
     (s1, s2), (final_v, final_rho) = f_torch.functional_forward(
-        (x, y), initial_states, static_inputs=()
+        (x, y), initial_states
     )
     assert f_torch.states == (None, None)
 
@@ -177,8 +177,11 @@ membrane-decay parameter:
         static_inputs=(w,),
     )
 
-A functional call supplies static values explicitly, so it can use another
-value without replacing the module parameter:
+``functional_forward`` uses the currently registered static inputs by default,
+including after device or dtype conversion. This also lets
+``base.to_functional_forward`` and ``memopt.checkpoint_module`` bind each FlexSN's
+own parameters in a network. An explicit tuple overrides values for one call
+without replacing module parameters:
 
 .. code-block:: python
 
@@ -190,6 +193,9 @@ value without replacing the module parameter:
 
 A static tensor must be a scalar or have the same number of elements as one
 input step. Arbitrary broadcasting is not supported.
+An explicit ``()`` means no static inputs and is valid only when none were
+registered. The lower-level ``single_step_functional_forward`` and
+``multi_step_functional_forward`` methods still require explicit ``static_inputs``.
 
 Automatic execution and ``torch.compile``
 -----------------------------------------

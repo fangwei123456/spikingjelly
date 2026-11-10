@@ -449,6 +449,32 @@ class NoisyILCCUBALIFNode(NoisyILCBaseNode):
 
 
 class NoisyNonSpikingBaseNode(nn.Module, base.MultiStepModule):
+    r"""
+    **API Language** - :ref:`中文 <NoisyNonSpikingBaseNode-cn>` | :ref:`English <NoisyNonSpikingBaseNode-en>`
+
+    ----
+
+    .. _NoisyNonSpikingBaseNode-cn:
+
+    * **中文**
+
+    带噪声的非脉冲节点基类，输出膜电位，或按 ``decode`` 解码后输出。
+
+    :param decode: 解码方式。可选值与 :class:`spikingjelly.activation_based.neuron.base_node.NonSpikingBaseNode` 相同。
+    :type decode: Optional[str]
+
+    ----
+
+    .. _NoisyNonSpikingBaseNode-en:
+
+    * **English**
+
+    Base class of noisy non-spiking nodes that outputs the membrane potential, or the decoded output specified by ``decode``.
+
+    :param decode: Decoding mode. The available values are the same as :class:`spikingjelly.activation_based.neuron.base_node.NonSpikingBaseNode`.
+    :type decode: Optional[str]
+    """
+
     def __init__(
         self,
         num_node,

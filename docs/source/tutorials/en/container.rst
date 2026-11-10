@@ -228,6 +228,7 @@ Here is an example of wrapping a stateless layer:
 .. code-block:: python
 
     import torch
+    import torch.nn as nn
     from spikingjelly.activation_based import neuron, layer
 
 

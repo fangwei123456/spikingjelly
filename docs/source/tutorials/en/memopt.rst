@@ -5,7 +5,7 @@ Author: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_
 
 中文版： :doc:`../cn/memopt`
 
-Our new work `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ was published at ICLR 2026. In this work, we propose an automatic memory optimization tool for deep SNN training based on gradient checkpointing and spike compression (source code available on `GitHub <https://github.com/AllenYolk/snn-gradient-checkpointing>`_). See the experiments below for memory, accuracy, and speed effects.
+Our work `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ was published at ICLR 2026. In this work, we propose an automatic memory optimization tool for deep SNN training based on gradient checkpointing and spike compression (source code available on `GitHub <https://github.com/AllenYolk/snn-gradient-checkpointing>`_). See the experiments below for memory, accuracy, and speed effects.
 
 The toolkit is available in ``spikingjelly.activation_based.memopt`` with interfaces for manual checkpointing, automatic search, and distributed training.
 

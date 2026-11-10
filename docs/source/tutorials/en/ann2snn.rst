@@ -231,8 +231,8 @@ After conversion, ReLU modules are removed. New modules needed by the SNN, such 
 Classify MNIST
 --------------
 
-Build and load the ANN
-^^^^^^^^^^^^^^^^^^^^^^
+Build and train the ANN
+^^^^^^^^^^^^^^^^^^^^^^^
 
 This section uses ``ann2snn`` to build a simple convolutional network for MNIST classification.
 
@@ -312,25 +312,31 @@ Set the runtime options:
         dataset=test_data_dataset, batch_size=50, shuffle=True, drop_last=False
     )
 
-The example script downloads a pretrained checkpoint. Load the weights and validate the ANN first:
+We recommend training this MNIST ANN from scratch. The original `pretrained weights <https://ndownloader.figshare.com/files/34960191>`_ are optional, and the link may stop working. Train the ANN, save its weights, and check its accuracy:
 
 .. code-block:: python
 
     from spikingjelly.activation_based.ann2snn.examples.cnn_mnist import (
         DEFAULT_CHECKPOINT_PATH,
-        DEFAULT_CHECKPOINT_URL,
-        download_checkpoint,
         val,
     )
     from spikingjelly.activation_based.ann2snn.sample_models import mnist_cnn
 
-    download_checkpoint(DEFAULT_CHECKPOINT_URL, DEFAULT_CHECKPOINT_PATH)
     model = mnist_cnn.CNN().to(device)
-    model.load_state_dict(torch.load(DEFAULT_CHECKPOINT_PATH, map_location=device))
+    loss_function = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
+    model.train()
+    for epoch in range(10):
+        for img, label in train_data_loader:
+            optimizer.zero_grad()
+            loss = loss_function(model(img.to(device)), label.to(device))
+            loss.backward()
+            optimizer.step()
+    torch.save(model.state_dict(), DEFAULT_CHECKPOINT_PATH)
     acc = val(model, device, test_data_loader)
     print('ANN Validating Accuracy: %.4f' % (acc))
 
-ANN accuracy:
+Reference output with the original pretrained weights:
 
 .. code-block:: shell
 

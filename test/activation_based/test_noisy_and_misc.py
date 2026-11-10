@@ -1,7 +1,9 @@
+import copy
+
 import pytest
 import torch
 
-from spikingjelly.activation_based import functional, layer, quantize
+from spikingjelly.activation_based import functional, layer, neuron, quantize
 from spikingjelly.activation_based.functional.misc import (
     delay,
     first_spike_index,
@@ -75,6 +77,34 @@ def test_nonspiking_max_abs_decode_selects_the_largest_magnitude_membrane():
     torch.testing.assert_close(node(x), torch.tensor([[-4.0]]))
 
 
+def test_nonspiking_last_mem_decode_returns_the_last_membrane_potential():
+    x = torch.randn(4, 2, 3)
+
+    lif = neuron.NonSpikingLIFNode(tau=2.0, decode="last-mem")
+    sequence = neuron.NonSpikingLIFNode(tau=2.0, decode=None)(x)
+    torch.testing.assert_close(lif(x), sequence[-1])
+
+    noisy = NoisyNonSpikingIFNode(
+        num_node=3, is_training=False, T=4, decode="last-mem"
+    )
+    noisy_sequence = NoisyNonSpikingIFNode(
+        num_node=3, is_training=False, T=4, decode=None
+    )(x)
+    torch.testing.assert_close(noisy(x), noisy_sequence[-1])
+
+
+def test_unknown_decode_returns_the_whole_membrane_potential_sequence():
+    x = torch.randn(4, 2, 3)
+
+    for node in (
+        neuron.NonSpikingLIFNode(tau=2.0, decode="last_mem"),
+        neuron.NonSpikingLIFNode(tau=2.0, decode=None),
+        NoisyNonSpikingIFNode(num_node=3, is_training=False, T=4, decode="last-me"),
+    ):
+        out = node(x)
+        assert isinstance(out, list) and len(out) == 4
+
+
 def test_neuron_parameters_keep_float32_when_default_dtype_changes():
     default_dtype = torch.get_default_dtype()
     torch.set_default_dtype(torch.float64)
@@ -99,6 +129,41 @@ def test_gated_lif_output_and_state_follow_the_input_dtype(dtype):
 
     assert out.dtype == dtype
     assert node.v.dtype == dtype
+
+
+@pytest.mark.parametrize("spatial_shape", [(), (5,)])
+@pytest.mark.parametrize("channel_wise", [False, True])
+def test_gated_lif_layout_matches_image_sequence_values_and_gradients(
+    spatial_shape, channel_wise
+):
+    node = GatedLIFNode(T=3, inplane=4 if channel_wise else None)
+    image_node = copy.deepcopy(node)
+    x = torch.randn(
+        3,
+        2,
+        4,
+        *spatial_shape,
+        dtype=torch.float32,
+        generator=torch.Generator().manual_seed(0),
+    ).requires_grad_()
+    # The image path represents the same independent neurons.
+    image_x = x.detach().reshape(3, 2, 4, -1, 1).clone().requires_grad_()
+
+    result = node(x)
+    reference = image_node(image_x)
+
+    assert result.shape == x.shape
+    assert node.v.shape == node.u.shape == x.shape[1:]
+    torch.testing.assert_close(result, reference.reshape_as(x))
+    torch.testing.assert_close(node.v, image_node.v.reshape_as(node.v))
+    torch.testing.assert_close(node.u, image_node.u.reshape_as(node.u))
+
+    (result.square().mean() + node.v.square().mean()).backward()
+    (reference.square().mean() + image_node.v.square().mean()).backward()
+    torch.testing.assert_close(x.grad, image_x.grad.reshape_as(x))
+    for parameter, image_parameter in zip(node.parameters(), image_node.parameters()):
+        assert parameter.grad is not None
+        torch.testing.assert_close(parameter.grad, image_parameter.grad)
 
 
 def test_vectorized_misc_helpers_preserve_values_and_gradients():

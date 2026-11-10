@@ -17,6 +17,7 @@ from .base import (
     NeuromorphicDatasetBuilder,
     NeuromorphicDatasetConfig,
     NeuromorphicDatasetFolder,
+    _custom_frames_root,
 )
 
 
@@ -34,6 +35,12 @@ SSC_N_CLASSES = 35
 def _cal_fixed_frames_number_segment_index(
     events_t: np.ndarray, split_by: str, frames_num: int
 ) -> tuple:
+    """Start and end event indices ``j_l, j_r`` of each frame for sorted ``events_t``.
+
+    With ``split_by="time"``, frames span equal durations and each one ends where
+    the next one starts, so the frames partition the events; a frame without events
+    has ``j_l == j_r``.
+    """
     j_l = np.zeros(shape=[frames_num], dtype=int)
     j_r = np.zeros(shape=[frames_num], dtype=int)
     N = events_t.size
@@ -49,15 +56,14 @@ def _cal_fixed_frames_number_segment_index(
         dt = (
             events_t[-1] - events_t[0]
         ) / frames_num  # different from utils.cal_fixed_frames_number_segment_index
-        idx = np.arange(N)
         for i in range(frames_num):
             t_l = dt * i + events_t[0]
-            t_r = t_l + dt
-            mask = np.logical_and(events_t >= t_l, events_t < t_r)
-            idx_masked = idx[mask]
-            j_l[i] = idx_masked[0]
-            j_r[i] = idx_masked[-1] + 1
+            # Empty intervals yield j_l == j_r instead of indexing an empty mask.
+            j_l[i] = np.searchsorted(events_t, t_l, side="left")
 
+        # Each frame ends where the next one starts, so that rounding in
+        # ``t_l + dt`` can neither drop an event nor count it twice.
+        j_r[:-1] = j_l[1:]
         j_r[-1] = N
     else:
         raise NotImplementedError
@@ -230,10 +236,7 @@ class SHDFrameCustomIntegrateBuilder(_SHDFrameBuilder):
 
     @property
     def processed_root(self) -> Path:
-        name = self.cfg.custom_integrated_frames_dir_name
-        if name is None:
-            name = self.cfg.custom_integrate_function.__name__
-        return self.cfg.root / name
+        return _custom_frames_root(self.cfg)
 
 
 class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
@@ -268,7 +271,7 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
             与 SpikingJelly 中的其他数据集不同，SHD 是一个神经形态音频数据集。
 
             #. 此数据集中的事件格式为 ``(x, t)`` 而不是 ``(x, y, t, p)``。
-            #. 原始数据集通过符号链接复制了解析后的数据集。原始数据集由两个 ``.h5`` 文件组成，而不是一系列 ``.npz`` 文件。
+            #. 原始数据集通过符号链接引用解析后的数据集；Windows 缺少符号链接权限时复制文件。原始数据集由两个 ``.h5`` 文件组成，而不是一系列 ``.npz`` 文件。
             #. 当 ``data_type == "event"`` 时，将绕过 ``DatasetFolder`` 的数据加载过程。否则，将以 ``Dataset`` 样式加载数据。
 
         ----
@@ -329,7 +332,7 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
             Unlike other datasets in SpikingJelly, SHD is a neuromorphic audio dataset.
 
             #. Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``.
-            #. The raw dataset replicates the extracted dataset (by symbolic links). The raw dataset consists of two ``.h5`` files instead of a series of ``.npz`` files.
+            #. The raw dataset links to the extracted files, or copies them if Windows denies symbolic-link privileges. It consists of two ``.h5`` files instead of a series of ``.npz`` files.
             #. When ``data_type == "event"``, the data loading procedure of ``DatasetFolder`` will be bypassed. Instead, data will be loaded in ``Dataset`` style.
         """
         if train is None:
@@ -440,7 +443,7 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
             target = raw_root / f.name
             if target.exists():
                 continue
-            target.symlink_to(f)
+            utils._link_or_copy(f, target)
 
     def __len__(self):
         if self.cfg.data_type == "event":
@@ -506,8 +509,13 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
             与 SpikingJelly 中的其他数据集不同，SSC 是一个神经形态音频数据集。
 
             #. 此数据集中的事件格式为 ``(x, t)`` 而不是 ``(x, y, t, p)``。
-            #. 原始数据集通过符号链接复制了解析后的数据集。原始数据集由三个 ``.h5`` 文件组成，而不是一系列 ``.npz`` 文件。
+            #. 原始数据集通过符号链接引用解析后的数据集；Windows 缺少符号链接权限时复制文件。原始数据集由三个 ``.h5`` 文件组成，而不是一系列 ``.npz`` 文件。
             #. 当 ``data_type == "event"`` 时，将绕过 ``DatasetFolder`` 的数据加载过程。否则，将以 ``Dataset`` 样式加载数据。
+
+        :raises FileNotFoundError: 若 ``root`` 下已存在的 ``events_h5`` 缺少所需的
+            ``ssc_*.h5`` 文件（例如由 :class:`SpikingHeidelbergDigits` 或旧版本在同一
+            ``root`` 下准备），则抛出该异常。两个数据集使用相同的 ``download``、
+            ``extract``、``events_h5`` 及帧目录名称，请为 SSC 使用单独的空 ``root``。
 
         ----
 
@@ -561,13 +569,19 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
         :type transform: Optional[Callable]
         :param target_transform: Target transform function
         :type target_transform: Optional[Callable]
+        :raises FileNotFoundError: If the existing ``events_h5`` under ``root``
+            lacks the ``ssc_*.h5`` files that are needed, for example because it
+            was prepared by :class:`SpikingHeidelbergDigits` or by an earlier
+            version in the same ``root``. Both datasets use the same ``download``,
+            ``extract``, ``events_h5`` and frame directory names, so use a
+            separate, empty ``root`` for SSC.
 
         .. note::
 
             Unlike other datasets in SpikingJelly, SSC is a neuromorphic audio dataset.
 
             #. Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``.
-            #. The raw dataset replicates the extracted dataset (by symbolic links). The raw dataset consists of three ``.h5`` files instead of a series of ``.npz`` files.
+            #. The raw dataset links to the extracted files, or copies them if Windows denies symbolic-link privileges. It consists of three ``.h5`` files instead of a series of ``.npz`` files.
             #. When ``data_type == "event"``, the data loading procedure of ``DatasetFolder`` will be bypassed. Instead, data will be loaded in ``Dataset`` style.
         """
         self.splits = ("train", "valid", "test")
@@ -590,6 +604,8 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
 
         self.prepare_raw_dataset()
         builder = self.get_dataset_builder()
+        if data_type != "event" and not builder.processed_root.exists():
+            self._check_raw_files(self.splits)
         self.processed_root, loader = builder.build()
 
         split_root = self.get_root_when_train_is_none(self.processed_root)
@@ -609,6 +625,22 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
     def get_root_when_train_is_none(self, _root: Path):
         return _root / self.split
 
+    def _check_raw_files(self, splits: tuple[str, ...]) -> None:
+        # SpikingHeidelbergDigits uses the same ``download``, ``extract``,
+        # ``events_h5`` and frame directory names, and an existing ``events_h5`` is
+        # reused as is, so a root prepared by SHD or by an earlier version lacks
+        # the SSC files. Only a separate root avoids mixing the two datasets.
+        missing = [f"ssc_{s}.h5" for s in splits]
+        missing = [name for name in missing if not (self.raw_root / name).exists()]
+        if missing:
+            raise FileNotFoundError(
+                f"{', '.join(missing)} not found in the existing [{self.raw_root}], "
+                "which may have been prepared by SpikingHeidelbergDigits or by an "
+                "earlier SpikingJelly version. Use a separate, empty root for "
+                "SpikingSpeechCommands: both datasets use the same download, "
+                "extract, events_h5 and frame directory names."
+            )
+
     @property
     def raw_root(self) -> Path:
         """
@@ -619,6 +651,7 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
     def get_dataset_builder(self):
         if self.cfg.data_type == "event":
             # prepare for manual __getitem__
+            self._check_raw_files((self.split,))
             self.h5_file_path = self.raw_root / f"ssc_{self.split}.h5"
             self.h5_file = None
             self.h5_file_pid = None
@@ -666,14 +699,19 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
     def resource_url_md5(cls) -> list:
         return [
             (
-                "shd_train.h5.zip",
-                "https://zenkelab.org/datasets/shd_train.h5.zip",
-                "f3252aeb598ac776c1b526422d90eecb",
+                "ssc_train.h5.zip",
+                "https://zenkelab.org/datasets/ssc/ssc_train.h5.zip",
+                "d102be95e7144fcc0553d1f45ba94170",
             ),
             (
-                "shd_test.h5.zip",
-                "https://zenkelab.org/datasets/shd_test.h5.zip",
-                "1503a5064faa34311c398fb0a1ed0a6f",
+                "ssc_valid.h5.zip",
+                "https://zenkelab.org/datasets/ssc/ssc_valid.h5.zip",
+                "b4eee3516a4a90dd0c71a6ac23a8ae43",
+            ),
+            (
+                "ssc_test.h5.zip",
+                "https://zenkelab.org/datasets/ssc/ssc_test.h5.zip",
+                "a35ff1e9cffdd02a20eb850c17c37748",
             ),
         ]
 
@@ -702,7 +740,7 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
             target = raw_root / f.name
             if target.exists():
                 continue
-            target.symlink_to(f)
+            utils._link_or_copy(f, target)
 
     def __len__(self):
         if self.cfg.data_type == "event":

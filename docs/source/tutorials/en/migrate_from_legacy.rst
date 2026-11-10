@@ -101,4 +101,4 @@ keys/shapes against the current model definition.
 Package rename
 -------------------------------------------
 The ``clock_driven``/``event_driven`` rename shipped in 0.0.0.0.14 and is
-documented in the `0.0.0.0.14 documentation <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`_.
+documented in the `0.0.0.0.14 documentation <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en>`_.

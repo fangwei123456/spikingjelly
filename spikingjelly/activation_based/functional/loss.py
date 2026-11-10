@@ -1,3 +1,5 @@
+from contextlib import nullcontext
+
 import torch
 import torch.nn.functional as F
 from torch import Tensor
@@ -9,7 +11,15 @@ __all__ = [
 ]
 
 
-def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
+@torch.compiler.assume_constant_result
+def _kernel_autocast_available(device_type: str) -> bool:
+    # Device support is static metadata for each compiled graph.
+    return torch.amp.is_autocast_available(device_type)
+
+
+def kernel_dot_product(
+    x: Tensor, y: Tensor, kernel: str = "linear", *args: int | float | Tensor
+) -> Tensor:
     r"""
     **API Language** - :ref:`中文 <kernel_dot_product-cn>` | :ref:`English <kernel_dot_product-en>`
 
@@ -29,6 +39,13 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
 
     - ``gaussian`` ，高斯内积， :math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \mathrm{exp}(- \frac{||\boldsymbol{x_{i}} - \boldsymbol{y_{j}}||^{2}}{2\sigma^{2}})` ，其中 :math:`\sigma = args[0]`。
 
+    高斯核的平方距离会截断为非负值，避免浮点舍入使核值超过1。
+    未启用 autocast 时，dtype 相同的 FP16/BF16 输入使用 FP32 计算距离；
+    其他输入须满足原生矩阵乘法的 dtype 兼容要求。启用 autocast 时，
+    可转换的浮点输入对使用 FP32 计算距离。这样可避免丢失单个脉冲差异或
+    产生非有限相似度。autocast 下的核结果保留 FP32 精度；否则，FP16/BF16
+    结果转换回输入 dtype。未启用 autocast 时，FP32/FP64 计算方式不变。
+
     :param x: shape=[N, M]的tensor，看作是N个M维向量
     :type x: torch.Tensor
 
@@ -39,6 +56,7 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
     :type kernel: str
 
     :param args: 用于计算内积的额外的参数
+    :type args: int, float or torch.Tensor
 
     :return: ret, shape=[N, N]的tensor， ``ret[i][j]`` 表示 ``x[i]`` 和 ``y[j]`` 的内积
     :rtype: torch.Tensor
@@ -61,6 +79,15 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
 
     - ``gaussian`` -- Gaussian kernel, :math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \mathrm{exp}(- \frac{||\boldsymbol{x_{i}} - \boldsymbol{y_{j}}||^{2}}{2\sigma^{2}})`, where :math:`\sigma = args[0]`.
 
+    Gaussian squared distances are clamped to nonnegative values so rounding cannot make the kernel exceed one.
+    Without autocast, matching FP16/BF16 inputs use FP32 distance arithmetic;
+    other inputs must satisfy native matrix-multiplication dtype requirements.
+    With autocast enabled, eligible floating input pairs use FP32 distance
+    arithmetic. This preserves single-spike differences and avoids nonfinite
+    similarities. Under autocast, the kernel remains in FP32; otherwise,
+    FP16/BF16 results are cast back to the input dtype. FP32/FP64 arithmetic
+    without autocast is unchanged.
+
     :param x: Tensor of shape=[N, M]
     :type x: torch.Tensor
 
@@ -71,6 +98,7 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
     :type kernel: str
 
     :param args: Extra parameters for inner product
+    :type args: int, float or torch.Tensor
 
     :return: ret, Tensor of shape=[N, N], ``ret[i][j]`` is inner product of ``x[i]`` and ``y[j]``.
     :rtype: torch.Tensor
@@ -92,20 +120,43 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
                 f"sigma must be positive for the Gaussian kernel, but got {sigma}"
             )
         N = x.shape[0]
-        x2 = x.square().sum(dim=1)  # shape=[N]
-        y2 = y.square().sum(dim=1)  # shape=[N]
-        xy = x.mm(y.t())  # shape=[N, N]
-        d_xy = x2.unsqueeze(1).repeat(1, N) + y2.unsqueeze(0).repeat(N, 1) - 2 * xy
-        # d_xy[i][j]的元素是x[i]的平方和，加上y[j]的平方和，减去2倍的sum_{k} x[i][k]y[j][k]，因此
-        # d_xy[i][j]就是x[i]和y[j]相减，平方，求和
-        return torch.exp(-d_xy / (2 * sigma * sigma))
+        x_dtype = x.dtype
+        device_type = x.device.type
+        low_precision = (torch.float16, torch.bfloat16)
+        castable = (*low_precision, torch.float32)
+        autocast_inputs = (
+            x_dtype in castable
+            and y.dtype in castable
+            and _kernel_autocast_available(device_type)
+            and torch.is_autocast_enabled(device_type)
+        )
+        if autocast_inputs or (x_dtype == y.dtype and x_dtype in low_precision):
+            x, y = x.float(), y.float()
+        with (
+            torch.autocast(device_type, enabled=False)
+            if autocast_inputs
+            else nullcontext()
+        ):
+            x2 = x.square().sum(dim=1)  # shape=[N]
+            y2 = y.square().sum(dim=1)  # shape=[N]
+            xy = x.mm(y.t())  # shape=[N, N]
+            d_xy = x2.unsqueeze(1).repeat(1, N) + y2.unsqueeze(0).repeat(N, 1) - 2 * xy
+            # d_xy[i][j] is the squared Euclidean distance between x[i] and y[j].
+            result = torch.exp(-d_xy.clamp_min(0) / (2 * sigma * sigma))
+        if not autocast_inputs and x.dtype != x_dtype:
+            return result.to(x_dtype)
+        return result
     else:
         raise NotImplementedError
 
 
 def spike_similar_loss(
-    spikes: Tensor, labels: Tensor, kernel_type="linear", loss_type="mse", *args
-):
+    spikes: Tensor,
+    labels: Tensor,
+    kernel_type: str = "linear",
+    loss_type: str = "mse",
+    *args: float,
+) -> Tensor:
     r"""
     **API Language** - :ref:`中文 <spike_similar_loss-cn>` | :ref:`English <spike_similar_loss-en>`
 
@@ -134,6 +185,8 @@ def spike_similar_loss(
 
     当使用Sigmoid或高斯内积时，内积的取值范围均在[0, 1]之间；而使用线性内积时，为了保证内积取值仍然在[0, 1]之间，会进行归一化，按照 :math:`\text{sim}_p[i][j]=\frac{\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}})}{||\boldsymbol{x_{i}}|| · ||\boldsymbol{y_{j}}||}`。
 
+    线性相似度截断到 ``[-1, 1]`` 以修正舍入越界；被截断元素的梯度为零。
+
     对于相似的数据，根据输入的 ``loss_type`` ，返回度量 ``sim`` 与 ``sim_p`` 差异的损失：
 
     - ``mse`` -- 返回sim与sim_p的均方误差（也就是l2误差）。
@@ -149,7 +202,7 @@ def spike_similar_loss(
     :type spikes: torch.Tensor
 
     :param labels: shape=[N, C]，N个数据的标签， ``labels[i][k] == 1`` 表示数据i属于
-        第k类，反之亦然，允许多标签
+        第k类，反之亦然，允许多标签。标签应与脉冲位于同一设备；计算时转换为相似度矩阵的浮点数据类型。
     :type labels: torch.Tensor
 
     :param kernel_type: 使用内积来衡量两个脉冲之间的相似性， ``kernel_type`` 是计算内积时，
@@ -186,6 +239,9 @@ def spike_similar_loss(
 
     When Sigmoid or Gaussian kernel is applied, the inner product naturally lies in :math:`[0, 1]`. To make the value consistent when using linear kernel, the result will be normalized as: :math:`\text{sim}_p[i][j]=\frac{\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}})}{||\boldsymbol{x_{i}}|| · ||\boldsymbol{y_{j}}||}`.
 
+    Linear similarities are clamped to ``[-1, 1]`` to correct rounding overshoot;
+    the gradient of a clamped element is zero.
+
     For similar data, return the specified discrepancy loss between ``sim`` and ``sim_p`` according to ``loss_type``.
 
     - ``mse`` -- Return the Mean-Square Error (squared L2 norm) between sim and sim_p.
@@ -204,7 +260,8 @@ def spike_similar_loss(
 
     :param labels: shape=[N, C], labels of inputs, ``labels[i][k] == 1`` means
         the i-th input belongs to the k-th category and vice versa.
-        Multi-label input is allowed.
+        Multi-label input is allowed. Labels must be on the same device as
+        spikes and are converted to the similarity matrix's floating-point dtype.
     :type labels: torch.Tensor
 
     :param kernel_type: Type of kernel function used when calculating inner
@@ -225,9 +282,9 @@ def spike_similar_loss(
 
     if kernel_type == "linear":
         spikes_len = spikes.norm(p=2, dim=1, keepdim=True)
-        sim_p = sim_p / ((spikes_len.mm(spikes_len.t())) + 1e-8)
+        sim_p = (sim_p / ((spikes_len.mm(spikes_len.t())) + 1e-8)).clamp(-1, 1)
 
-    labels = labels.float()
+    labels = labels.to(dtype=sim_p.dtype)
     sim = labels.mm(labels.t()).clamp_max(
         1
     )  # labels.mm(labels.t())[i][j]位置的元素表现输入数据i和数据数据j有多少个相同的标签
@@ -243,8 +300,8 @@ def spike_similar_loss(
         raise NotImplementedError
 
 
-def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
-    """
+def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor) -> Tensor:
+    r"""
     **API Language** - :ref:`中文 <temporal_efficient_training_cross_entropy-cn>` | :ref:`English <temporal_efficient_training_cross_entropy-en>`
 
     ----
@@ -262,7 +319,10 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
     :param x_seq: ``shape=[T, N, C, *]`` 的预测值，其中 ``C`` 是类别总数
     :type x_seq: torch.Tensor
 
-    :param target: ``shape=[N]`` 的真实值，其中 ``target[i]`` 是真实类别
+    :param target: 所有时间步共享的目标：形状为 ``[N, *]`` 的整数类别索引，
+        或形状为 ``[N, C, *]`` 的浮点类别概率；目标不包含时间轴。
+        每个类别概率须在 ``[0, 1]`` 内，且沿类别轴求和为1。目标须与 ``x_seq`` 位于同一设备。
+        与 :func:`torch.nn.functional.cross_entropy` 一样，本函数不验证概率范围或总和。
     :type target: torch.Tensor
 
     :return: 损失值
@@ -284,7 +344,11 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
     :param x_seq: the predicted value with ``shape=[T, N, C, *]``, where ``C`` is the number of classes
     :type x_seq: torch.Tensor
 
-    :param target: the ground truth tensor with ``shape=[N]``, where ``target[i]`` is the label
+    :param target: targets shared by all time steps: integer class indices of shape ``[N, *]``,
+        or floating-point class probabilities of shape ``[N, C, *]``. Do not include a time axis.
+        Each class probability must lie in ``[0, 1]`` and sum to one along the class axis.
+        Targets must share the device of ``x_seq``. Like
+        :func:`torch.nn.functional.cross_entropy`, this function does not validate probability ranges or sums.
     :type target: torch.Tensor
 
     :return: the temporal efficient training cross entropy
@@ -296,7 +360,7 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
 
     .. code-block:: python
 
-        def tet_ce_for_loop_version(x_seq: torch.Tensor, target: torch.LongTensor):
+        def tet_ce_for_loop_version(x_seq: torch.Tensor, target: torch.Tensor):
             loss = 0.0
             for t in range(x_seq.shape[0]):
                 loss += F.cross_entropy(x_seq[t], target)
@@ -316,7 +380,11 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
     # x_seq.shape = [T, N, C, *]
     x_seq = x_seq.transpose(0, 1).transpose(1, 2)  # [N, C, T, *]
     T = x_seq.shape[2]
-    if x_seq.dim() == 3:
+    if target.dim() == x_seq.dim() - 1:
+        # Probability targets: [N, C, *] -> [N, C, T, *].
+        target = target.unsqueeze(2)
+        target = target.expand(*target.shape[:2], T, *target.shape[3:])
+    elif x_seq.dim() == 3:
         # x_seq.shape = [N, C, T]
         # target.shape = [N]
         target = target.unsqueeze(1).repeat(1, T)  # [N, T]

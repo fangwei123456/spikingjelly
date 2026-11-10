@@ -3,9 +3,102 @@ from __future__ import annotations
 import subprocess
 import sys
 
+import pytest
+
 from spikingjelly.activation_based.op_counter.simple_energy import (
     SimpleEnergyProfiler,
 )
+
+
+@pytest.mark.parametrize("method", ["add", "remove", "enable", "disable", "configure"])
+def test_logging_policy_rejects_library_logger_configuration(tmp_path, method):
+    from tools.check_logging_policy import check
+
+    root = tmp_path / "spikingjelly"
+    root.mkdir()
+    source = f'from .logger import logger\nlogger.{method}("example")\n'
+    (root / "component.py").write_text(source)
+    examples = root / "examples"
+    examples.mkdir()
+    (examples / "application.py").write_text(source)
+    violations = check(root)
+    assert len(violations) == 1
+    assert f"logger.{method} is not allowed" in violations[0]
+
+
+def test_logging_policy_allows_disable_only_in_package_bootstrap(tmp_path):
+    from tools.check_logging_policy import check
+
+    root = tmp_path / "spikingjelly"
+    root.mkdir()
+    bootstrap = root / "logger.py"
+    source = 'from loguru import logger\nlogger.disable("spikingjelly")\n'
+    bootstrap.write_text(source)
+    assert check(root) == []
+
+    bootstrap.write_text(source + "logger.configure(handlers=[])\n")
+    violations = check(root)
+    assert len(violations) == 1
+    assert "logger.configure is not allowed" in violations[0]
+
+    bootstrap.write_text('from loguru import logger\nlogger.disable("")\n')
+    violations = check(root)
+    assert len(violations) == 1
+    assert "logger.disable is not allowed" in violations[0]
+
+    operators = tmp_path / "ops"
+    operators.mkdir()
+    (operators / "logger.py").write_text(
+        'from spikingjelly.logger import logger\nlogger.disable("spikingjelly")\n'
+    )
+    violations = check(operators)
+    assert len(violations) == 1
+    assert "logger.disable is not allowed" in violations[0]
+
+
+def test_logging_policy_default_includes_private_operator_package(tmp_path):
+    from pathlib import Path
+
+    (tmp_path / "spikingjelly").mkdir()
+    operators = tmp_path / "ops"
+    operators.mkdir()
+    (operators / "component.py").write_text(
+        "from spikingjelly.logger import logger\nlogger.configure(handlers=[])\n"
+    )
+    script = Path(__file__).resolve().parents[1] / "tools/check_logging_policy.py"
+    result = subprocess.run(
+        [sys.executable, str(script)], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert result.returncode == 1
+    assert "ops/component.py" in result.stdout.replace("\\", "/")
+    assert "logger.configure is not allowed" in result.stdout
+    subprocess.run(
+        [sys.executable, str(script), "--root", "spikingjelly"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+
+
+@pytest.mark.parametrize("root_kind", ["default_missing", "missing", "file"])
+def test_logging_policy_rejects_invalid_scan_roots(tmp_path, root_kind):
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[1] / "tools/check_logging_policy.py"
+    command = [sys.executable, str(script)]
+    if root_kind == "default_missing":
+        (tmp_path / "spikingjelly").mkdir()
+        root = Path("ops")
+    else:
+        root = tmp_path / root_kind
+        if root_kind == "file":
+            root.write_text("pass\n")
+        command.extend(["--root", str(root)])
+    result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True)
+    assert result.returncode == 1
+    assert str(root) in result.stdout
+    assert "existing directory" in result.stdout
+    assert "Logging policy passed." not in result.stdout
 
 
 def test_import_is_silent_and_does_not_change_stdlib_root():

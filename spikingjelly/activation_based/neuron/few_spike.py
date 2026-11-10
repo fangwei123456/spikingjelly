@@ -141,6 +141,18 @@ class FewSpikeNode(nn.Module, base.StepModule):
     输入必须为浮点 tensor。编码表参数注册为 buffer，会随模块 ``to(device/dtype)`` 迁移；
     若输入 dtype 与 buffer dtype 不同，遵循 PyTorch 的 dtype promotion 规则。
 
+    CUDA 上无梯度、连续 FP32 输入和同设备连续 FP32 表可使用可选原生 CUDA 或 Triton
+    推理融合，覆盖七种注册二值 surrogate 和 DeterministicPass；有 forward hook
+    时在自动模式下保留 Torch。其他 dtype、布局、surrogate、梯度模式及外层
+    torch.compile / TorchScript tracing 继续使用参考递推。带逻辑取负标记的 gate 或表、节点子类、forward AD 和
+    functorch 变换也使用参考递推。多步输入求和仍由 PyTorch 执行。
+    融合针对 Torch 递推；部分形状下 torch.compile 仍可能更快。
+    在新进程中设置 ``SJ_FEW_SPIKE_CUDA_IMPLEMENTATION=auto|cuda|triton|torch``；
+    默认 ``auto`` 依次检查原生 CUDA、Triton、Torch，并按设备缓存选择。
+    原生扩展由 ``SJ_BUILD_NATIVE_CUDA=1`` 显式构建，import 不触发构建。
+    显式 ``cuda``/``triton`` 不可用或遇到不支持的 CUDA 执行范围时抛出
+    RuntimeError，不静默切换。CPU 不受该 CUDA 选择影响。
+
     该实现对应 Stöckl 和 Maass 提出的 Few-Spikes (FS) 神经元，参见
     `Stöckl and Maass (2021) <https://doi.org/10.1038/s42256-021-00311-4>`__。
 
@@ -165,6 +177,21 @@ class FewSpikeNode(nn.Module, base.StepModule):
     Inputs must be floating point tensors. Coding table parameters are registered
     as buffers and follow module ``to(device/dtype)`` conversions. If the input
     dtype differs from the buffer dtype, PyTorch dtype promotion rules apply.
+
+    Optional native CUDA or Triton fusion handles contiguous FP32 CUDA inference under disabled
+    gradients, with contiguous FP32 tables on the same device and one of the seven
+    registered binary surrogates or DeterministicPass, without forward hooks.
+    Under auto/torch, other dtypes, layouts, surrogates, gradient modes and enclosing
+    torch.compile / TorchScript tracing use the reference recurrence, as do gates or tables with a lazy negative bit,
+    node subclasses, forward AD and functorch transforms. PyTorch still sums
+    multi-step inputs. Fusion targets the Torch recurrence; torch.compile can
+    remain faster for some shapes.
+    In a new process, set ``SJ_FEW_SPIKE_CUDA_IMPLEMENTATION=auto|cuda|triton|torch``.
+    The default ``auto`` checks native CUDA, Triton, then Torch and caches selection
+    per device. Native extensions are built explicitly with ``SJ_BUILD_NATIVE_CUDA=1``;
+    import does not build them. Explicit ``cuda``/``triton`` requests raise
+    RuntimeError for unavailable implementations or unsupported CUDA execution
+    profiles instead of silently switching. CPU is unaffected by this CUDA selection.
 
     This implementation corresponds to the Few-Spikes (FS) neuron proposed by
     Stöckl and Maass; see `Stöckl and Maass (2021)
@@ -236,6 +263,85 @@ class FewSpikeNode(nn.Module, base.StepModule):
     ) -> torch.Tensor:
         return self._run_table(gate, self.theta, self.h, self.d, return_sequence)
 
+    def _decode(self, gate: torch.Tensor, return_sequence: bool) -> torch.Tensor:
+        if (
+            type(gate) is torch.Tensor
+            and gate.is_cuda
+            and not torch.version.hip
+            and not torch.is_grad_enabled()
+            and not torch.compiler.is_compiling()
+            and not torch.jit.is_tracing()
+            and not torch._C._are_functorch_transforms_active()
+            and torch.autograd.forward_ad.unpack_dual(gate).tangent is None
+            and gate.dtype == torch.float32
+            and gate.is_contiguous()
+            and not gate.is_neg()
+            and gate.numel() > 0
+            and type(self) in (FewSpikeNode, OutlierAwareThresholdNode, HGNode)
+        ):
+            from ..._ops.surrogate import _surrogate_spec
+
+            sg = self.surrogate_function
+            supported = _surrogate_spec(sg) is not None or (
+                type(sg) is surrogate.DeterministicPass and sg.spiking
+            )
+            if (
+                supported
+                and not (
+                    "forward" in sg.__dict__
+                    or sg._forward_hooks
+                    or sg._forward_pre_hooks
+                    or nn.modules.module._global_forward_hooks
+                    or nn.modules.module._global_forward_pre_hooks
+                )
+                and all(
+                    type(value) is torch.Tensor
+                    and value.dtype == torch.float32
+                    and value.device == gate.device
+                    and value.is_contiguous()
+                    and not value.is_neg()
+                    and torch.autograd.forward_ad.unpack_dual(value).tangent is None
+                    for value in self.buffers()
+                )
+            ):
+                from ..._ops.few_spike import _forward
+
+                if type(self) is HGNode:
+                    result = _forward(
+                        gate,
+                        self.region_theta,
+                        self.region_h,
+                        self.region_d,
+                        return_sequence,
+                        gates=self.gate_thresholds,
+                    )
+                elif type(self) is OutlierAwareThresholdNode:
+                    result = _forward(
+                        gate,
+                        self.theta,
+                        self.h,
+                        self.d,
+                        return_sequence,
+                        outlier=(self.outlier_theta, self.outlier_h, self.outlier_d),
+                        split_threshold=self.split_threshold,
+                        clamp_value=self.clamp_value,
+                    )
+                else:
+                    result = _forward(gate, self.theta, self.h, self.d, return_sequence)
+                if result is not None:
+                    return result
+        if gate.is_cuda:
+            from ..._ops.few_spike import _selection
+            from ..._ops.selection import _require_automatic_torch
+
+            if _selection._requested not in ("auto", "torch"):
+                _require_automatic_torch(
+                    _selection,
+                    gate.device,
+                    "few-spike fusion requires ordinary contiguous FP32 inference tensors, supported tables/surrogates, no hooks/AD/subclasses, and no enclosing compile or tracing",
+                )
+        return self._forward_from_gate(gate, return_sequence)
+
     def single_step_forward(self, x: torch.Tensor) -> torch.Tensor:
         r"""
         **API Language** - :ref:`中文 <FewSpikeNode.single_step_forward-cn>` | :ref:`English <FewSpikeNode.single_step_forward-en>`
@@ -271,7 +377,7 @@ class FewSpikeNode(nn.Module, base.StepModule):
         :raises TypeError: Raised when ``x`` is not a floating point tensor.
         """
         self._check_input(x, "x")
-        return self._forward_from_gate(x, return_sequence=False)
+        return self._decode(x, return_sequence=False)
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         r"""
@@ -318,7 +424,7 @@ class FewSpikeNode(nn.Module, base.StepModule):
             raise ValueError(
                 f"x_seq.shape[0] must equal K={self.K}, but got {x_seq.shape[0]}."
             )
-        return self._forward_from_gate(x_seq.sum(dim=0), return_sequence=True)
+        return self._decode(x_seq.sum(dim=0), return_sequence=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.step_mode == "s":

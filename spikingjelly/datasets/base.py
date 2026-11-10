@@ -35,6 +35,15 @@ def _load_events(file_name: Union[str, Path]) -> Union[dict, np.ndarray]:
         return {key: events[key] for key in events.files}
 
 
+def _custom_frames_root(cfg: "NeuromorphicDatasetConfig") -> Path:
+    name = cfg.custom_integrated_frames_dir_name
+    if name is None:
+        name = cfg.custom_integrate_function.__name__
+        if os.name == "nt" and name == "<lambda>":
+            name = "lambda"
+    return cfg.root / name
+
+
 @dataclass(frozen=True)
 class NeuromorphicDatasetConfig:
     """
@@ -656,10 +665,7 @@ class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
 
     @property
     def processed_root(self) -> Path:
-        custom_dir_name = self.cfg.custom_integrated_frames_dir_name
-        if custom_dir_name is None:
-            custom_dir_name = self.cfg.custom_integrate_function.__name__
-        return self.cfg.root / custom_dir_name
+        return _custom_frames_root(self.cfg)
 
     def get_loader(self) -> Callable:
         return utils.load_npz_frames
@@ -747,7 +753,8 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :type custom_integrate_function: Optional[Callable]
 
         :param custom_integrated_frames_dir_name: 用于保存通过 ``custom_integrate_function`` 积分帧的目录名称。
-            如果 ``None``，则设置为 ``custom_integrate_function.__name__``
+            如果为 ``None``，则使用 ``custom_integrate_function.__name__``；Windows 上的 lambda 使用 ``lambda``。
+            不同函数应使用不同的目录名，以免复用错误的缓存。
         :type custom_integrated_frames_dir_name: Optional[str]
 
         :param transform: 一个函数/转换器，接收样本并返回转换后的版本。例如图像的 ``transforms.RandomCrop``。
@@ -834,7 +841,9 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
         :param custom_integrated_frames_dir_name: The name of directory for
             saving the frames integrating by ``custom_integrate_function``.
-            If ``None``, it will be set to ``custom_integrate_function.__name__``
+            If ``None``, use ``custom_integrate_function.__name__``; a lambda uses
+            ``lambda`` on Windows. Use distinct names for different functions to
+            avoid reusing the wrong cache.
         :type custom_integrated_frames_dir_name: Optional[str]
 
         :param transform: a function/transform that takes in a sample and

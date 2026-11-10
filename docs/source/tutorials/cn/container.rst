@@ -230,6 +230,7 @@ tuple中每个tensor的形状均为 ``shape = [T, N, *]``，且 ``T`` 和 ``N`` 
 .. code-block:: python
 
     import torch
+    import torch.nn as nn
     from spikingjelly.activation_based import neuron, layer
 
 

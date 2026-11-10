@@ -1,9 +1,9 @@
+from __future__ import annotations
+
 import copy
 from pathlib import Path
 from typing import Optional, Union
 
-import nir
-import nirtorch
 import numpy as np
 import torch
 import torch.nn as nn
@@ -13,6 +13,13 @@ from torch.utils._pytree import tree_map
 
 from .. import base, layer, neuron
 from ...logger import logger
+
+try:
+    import nir
+    import nirtorch
+except ImportError as error:
+    nir = nirtorch = None
+    logger.info("NIR exchange dependencies unavailable: {}", error)
 
 
 __all__ = ["export_to_nir"]
@@ -276,6 +283,7 @@ def export_to_nir(
 
     :return: 转换得到的 NIRGraph 对象
     :rtype: nir.NIRGraph
+    :raises ImportError: 缺少可选依赖；使用 ``uv pip install 'spikingjelly[nir]'`` 安装
     :raises ValueError: ``dt`` 非正，或 CUBALIF 衰减参数超出可转换范围
     :raises NotImplementedError: 模型使用 soft reset、grouped convolution 或 NIR 无法表示的层配置
 
@@ -311,11 +319,18 @@ def export_to_nir(
 
     :return: the converted NIRGraph object
     :rtype: nir.NIRGraph
+    :raises ImportError: If optional dependencies are unavailable; install them
+        with ``uv pip install 'spikingjelly[nir]'``
     :raises ValueError: If ``dt`` is not positive or CUBALIF decay parameters
         cannot be represented
     :raises NotImplementedError: If the model uses soft reset, grouped convolution,
         or another layer configuration that NIR cannot represent
     """
+    if nir is None or nirtorch is None:
+        raise ImportError(
+            "NIR exchange requires nir and nirtorch; "
+            "install them with uv pip install 'spikingjelly[nir]'."
+        )
     if dt <= 0:
         raise ValueError("dt must be positive.")
 

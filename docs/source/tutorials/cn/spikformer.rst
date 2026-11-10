@@ -101,6 +101,7 @@ English version: :doc:`../en/spikformer`
 
 .. code-block:: python
 
+    import torch
     from spikingjelly.activation_based.model.spikformer import spikformer_ti
     from spikingjelly.activation_based import functional
 
@@ -148,6 +149,9 @@ SpikingJelly ``0.0.0.1.0`` 提供了 SSA 的高效实现 :class:`SpikingSelfAtte
 
 .. code:: python
 
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import neuron
     from spikingjelly.activation_based.layer import SeqToANNContainer
 
     class SpikingSelfAttention(nn.Module):

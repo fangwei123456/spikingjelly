@@ -7,6 +7,7 @@ from typing import Callable, Optional, Tuple
 
 from torchvision.datasets.utils import extract_archive
 
+from . import utils
 from .base import NeuromorphicDatasetFolder
 
 __all__ = ["HARDVS"]
@@ -185,4 +186,4 @@ class HARDVS(NeuromorphicDatasetFolder):
                     class_name, sample_name = line.split(" ")[0].split("/")
                     source_file = extract_root / class_name / f"{sample_name}.npz"
                     target_file = target_dir / class_name / f"{sample_name}.npz"
-                    target_file.symlink_to(source_file)
+                    utils._link_or_copy(source_file, target_file)

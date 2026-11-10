@@ -331,6 +331,24 @@ def test_temporal_efficient_cross_entropy_matches_per_step_mean_and_gradient():
     assert logits.grad is not None
 
 
+@pytest.mark.parametrize("spatial", [(), (2, 3)])
+def test_temporal_efficient_cross_entropy_soft_targets_match_per_step_reference(
+    spatial,
+):
+    logits = torch.randn(3, 2, 4, *spatial, dtype=torch.float64, requires_grad=True)
+    target = torch.randn(2, 4, *spatial, dtype=torch.float64).softmax(1)
+    target.requires_grad_()
+    expected = torch.stack([F.cross_entropy(step, target) for step in logits]).mean()
+
+    actual = temporal_efficient_training_cross_entropy(logits, target)
+
+    torch.testing.assert_close(actual, expected)
+    actual_gradients = torch.autograd.grad(actual, (logits, target))
+    expected_gradients = torch.autograd.grad(expected, (logits, target))
+    for actual_gradient, expected_gradient in zip(actual_gradients, expected_gradients):
+        torch.testing.assert_close(actual_gradient, expected_gradient)
+
+
 def test_t_last_multi_step_forward_preserves_contiguous_output_layout():
     x_seq = torch.randn(2, 4, 5)
     expected = torch.stack([x_seq[..., t] for t in range(x_seq.shape[-1])], dim=-1)

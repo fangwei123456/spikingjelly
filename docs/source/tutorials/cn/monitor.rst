@@ -233,8 +233,8 @@ English version: :doc:`../en/monitor`
 由于该神经元的每条单步记录都是 ``v_seq`` 不断增长的快照，保留全部 ``T`` 条记录需要 \
 :math:`O(T^2)` 的内存，并且在启用梯度时会保留每个快照的计算图。若只想记录当前时间步的电压，可以使用 \
 ``monitor.AttributeMonitor('v_seq', pre_forward=False, net=recurrent, instance=neuron.IFNode, function_on_attribute=lambda v_seq: v_seq[-1].clone())`` \
-（其中 ``recurrent`` 是容器模块），再用 ``torch.stack(v_seq_monitor[name])`` 重建完整序列；或者在每次前向传播之间调用 \
-``v_seq_monitor.clear_recorded_data()`` 。
+（其中 ``recurrent`` 是容器模块），再用 ``torch.stack(v_seq_monitor[name])`` 重建完整序列。\
+若要在每次前向传播之间丢弃已经记录的数据，可以调用 ``v_seq_monitor.clear_recorded_data()`` 。
 
 这里的 ``.clone()`` 不可省略：单独的 ``v_seq[-1]`` 只是一个视图，会让整个快照一直存活，\
 因此对其克隆（或在不需要梯度时使用 ``v_seq[-1].detach().clone()`` ）才是让保留内存降为 :math:`O(T)` 的关键。\

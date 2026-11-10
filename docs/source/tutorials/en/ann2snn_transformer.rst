@@ -176,7 +176,7 @@ The accuracy drop is 0.000 percentage points. Before evaluation, the example che
 Path 2: STA Conversion
 ----------------------
 
-STA retains Path 1's cumulative differences, explicit step mode, and time-summed readout, and adds calibrated spike encoders after selected nonlinear and attention outputs. This section covers the encoders, calibration, and model-level experiment. The recipe uses cumulative floating-point operators with calibrated output encoders; it does not reproduce the paper's full UGO/TCSA pipeline, and the results below measure this implementation.
+STA retains Path 1's cumulative differences, explicit step mode, and time-summed readout, and adds calibrated spike encoders after selected nonlinear and attention outputs. The recipe uses cumulative floating-point operators with calibrated output encoders; it does not reproduce the paper's full UGO/TCSA pipeline, and the results below measure this implementation.
 
 STA Spike Encoder
 ^^^^^^^^^^^^^^^^^

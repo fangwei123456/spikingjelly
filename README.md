@@ -227,6 +227,7 @@ The main institutions behind SpikingJelly are [Multimedia Learning Group, Instit
 - [Issues and development discussion](https://github.com/fangwei123456/spikingjelly/issues)
 - [OpenI mirror](https://openi.pcl.ac.cn/OpenI/spikingjelly)
 - [Community Jupyter tutorials in Chinese](https://github.com/fangwei123456/spikingjelly/tree/8932ac0668fe19b3efd0afedb3ca454cd8c126d3/community_tutorials/jupyter/chinese)
+- Also check out our friends at [btorch](https://github.com/Criticality-Cognitive-Computation-Lab/btorch), a PyTorch toolkit for computational neuroscience and biologically plausible modeling.
 
 <a href="https://star-history.com/#fangwei123456/spikingjelly&amp;Date">
   <picture>

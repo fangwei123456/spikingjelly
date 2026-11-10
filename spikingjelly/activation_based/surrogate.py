@@ -641,7 +641,10 @@ def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
 
     * **中文**
 
-    Sigmoid 替代函数的梯度计算。 :math:`g'(x) = \alpha \cdot (1 - \mathrm{sigmoid}(\alpha x)) \cdot \mathrm{sigmoid}(\alpha x)`
+    Sigmoid 替代函数的梯度计算。Torch 实现利用导数的偶对称性，
+    避免正输入处 sigmoid 舍入为1而使梯度过早归零。
+
+    :math:`g'(x) = \alpha \cdot (1 - \mathrm{sigmoid}(\alpha x)) \cdot \mathrm{sigmoid}(\alpha x)`
 
     :param grad_output: 上游梯度
     :type grad_output: torch.Tensor
@@ -658,7 +661,8 @@ def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
 
     * **English**
 
-    Gradient computation for the Sigmoid surrogate function.
+    Gradient computation for the Sigmoid surrogate function. The Torch implementation
+    uses the even derivative to avoid premature zeros when sigmoid rounds to one.
 
     :param grad_output: gradient of the upstream
     :type grad_output: torch.Tensor
@@ -669,7 +673,13 @@ def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     :return: gradient tensor, None
     :rtype: tuple
     """
-    sgax = (x * alpha).sigmoid_()
+    # The derivative is even: use the negative tail so sigmoid cannot round to 1.
+    scaled_x = x * alpha
+    if torch.is_grad_enabled():
+        # abs has zero derivative at zero, which would corrupt the third derivative.
+        sgax = torch.where(scaled_x > 0, -scaled_x, scaled_x).sigmoid_()
+    else:
+        sgax = scaled_x.abs_().neg_().sigmoid_()
     return grad_output * (1.0 - sgax) * sgax * alpha, None
 
 
@@ -3001,7 +3011,7 @@ class poisson_pass(torch.autograd.Function):
 
     :param x: 输入张量
     :type x: torch.Tensor
-    :return: 脉冲张量，与输入 x 形状相同
+    :return: 脉冲张量，与输入 x 的形状、dtype 和 device 相同
     :rtype: torch.Tensor
 
     ----
@@ -3015,13 +3025,13 @@ class poisson_pass(torch.autograd.Function):
 
     :param x: input tensor
     :type x: torch.Tensor
-    :return: spike tensor, same shape as x
+    :return: spike tensor with the same shape, dtype, and device as x
     :rtype: torch.Tensor
     """
 
     @staticmethod
-    def forward(x):
-        return torch.bernoulli(x).float()
+    def forward(x: torch.Tensor) -> torch.Tensor:
+        return torch.bernoulli(x)
 
     @staticmethod
     def setup_context(ctx, inputs, output):
@@ -3069,7 +3079,39 @@ class PoissonPass(SurrogateFunctionBase):
         """
         super().__init__(spiking=spiking)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        r"""
+        **API Language** - :ref:`中文 <PoissonPass.forward-cn>` | :ref:`English <PoissonPass.forward-en>`
+
+        ----
+
+        .. _PoissonPass.forward-cn:
+
+        * **中文**
+
+        脉冲模式按输入概率进行伯努利采样，反向传播直接传递梯度。
+        非脉冲模式直接返回输入；两种模式都保持输入的形状、dtype 和 device。
+
+        :param x: 任意形状的浮点张量；脉冲模式下的值必须位于 ``[0, 1]``。
+        :type x: torch.Tensor
+        :return: 脉冲张量，或非脉冲模式下的输入张量。
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _PoissonPass.forward-en:
+
+        * **English**
+
+        Spiking mode samples Bernoulli spikes and passes the gradient through.
+        Non-spiking mode returns the input directly. Both modes preserve shape,
+        dtype, and device.
+
+        :param x: floating-point tensor of any shape; spiking probabilities must be in ``[0, 1]``.
+        :type x: torch.Tensor
+        :return: sampled spikes, or the input tensor in non-spiking mode.
+        :rtype: torch.Tensor
+        """
         if self.spiking:
             return poisson_pass.apply(x)
         else:

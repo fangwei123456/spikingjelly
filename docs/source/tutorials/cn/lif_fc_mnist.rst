@@ -65,7 +65,7 @@ English version: :doc:`../en/lif_fc_mnist`
 
 2. 我们希望的理想结果是除了正确的神经元\ **以最高频率发放**\ ，其他神经元\ **保持静默**\ 。这里以 one-hot 发放率为目标，使用 MSE 损失。
 
-3. 每次网络仿真结束后，需要\ **重置**\ 网络状态
+3. 每次网络仿真结束后，需要\ **重置**\ 网络状态，即调用 ``functional.reset_net(net)``
 
 结合以上三点，得到训练循环的核心代码如下。以下片段使用 :mod:`spikingjelly.activation_based.examples.lif_fc_mnist` 中的参数、DataLoader 和 AMP scaler 初始化：
 

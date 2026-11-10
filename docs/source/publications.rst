@@ -9,7 +9,7 @@
 This page is auto-generated from ``publications.json`` and lists publications
 that use SpikingJelly.
 
-Total publications: 589
+Total publications: 583
 
 .. rubric:: Publication list
 
@@ -542,8 +542,6 @@ Total publications: 589
 
    - Publisher: IEEE Transactions on Artificial Intelligence
 
-#. `Fully Spiking Actor Network with Intra-layer Connections for Reinforcement Learning <https://arxiv.org/abs/2401.05444>`__
-
 #. `Sampling complex topology structures for spiking neural networks <https://www.sciencedirect.com/science/article/pii/S0893608024000352>`__
 
    - Publisher: Neural Networks
@@ -661,8 +659,6 @@ Total publications: 589
    - Publisher: International Symposium on Software Reliability Engineering Workshops (ISSREW), 2023
 
 #. `Energy-Efficient Visual Search by Eye Movement and Low-Latency Spiking Neural Network <https://arxiv.org/abs/2310.06578>`__
-
-#. `Gaining the Sparse Rewards by Exploring Binary Lottery Tickets in Spiking Neural Network <https://arxiv.org/abs/2309.13302>`__
 
 #. `Efficient Privacy-Preserving Convolutional Spiking Neural Networks with FHE <https://arxiv.org/abs/2309.09025v1>`__
 
@@ -1204,10 +1200,6 @@ Total publications: 589
 
    - Publisher: IEEE Transactions on Vehicular Technology
 
-#. `基于脉冲神经元膜电位增量的 数据分布统计量及批归一化 (Data distribution statistics and batch normalization based on membrane potential increments of spiking neurons) <https://research.ebsco.com/c/kpguhl/search/details/durlvzeo3n?db=asn>`__
-
-   - Publisher: 计算机应用研究(Application Research of Computers)
-
 #. `Efficiently Training Time-to-First-Spike Spiking Neural Networks from Scratch <https://arxiv.org/abs/2410.23619>`__
 
 #. `Topology optimization of random memristors for input-aware dynamic SNN <https://www.science.org/doi/full/10.1126/sciadv.ads5340>`__
@@ -1490,10 +1482,6 @@ Total publications: 589
 #. `AT-SNN: Adaptive Tokens for Vision Transformer on Spiking Neural Network <https://arxiv.org/abs/2408.12293>`__
 
 #. `Understanding SNN and Its Recent Advancements <https://engrxiv.org/preprint/view/3652>`__
-
-#. `SVFormer: A Direct Training Spiking <https://books.google.com/books?hl=zh-CN&lr=&id=Aw1YEQAAQBAJ&oi=fnd&pg=PA161&dq=spikingjelly&ots=g6rCaFTILh&sig=XceD7M0IQMnN03Caf_VXeCJ3zf0>`__
-
-   - Publisher: Human Brain and Artificial Intelligence
 
 #. `RTFormer: Re-parameter TSBN Spiking Transformer <https://ieeexplore.ieee.org/abstract/document/10650654/>`__
 
@@ -1792,11 +1780,6 @@ Total publications: 589
 
 #. `Towards biologically plausible computing: A comprehensive comparison <https://arxiv.org/abs/2406.16062>`__
 
-#. `High-Performance Temporal Reversible Spiking Neural Networks with $ O (L) $ Training Memory and $ O (1) $ Inference Cost. <https://arxiv.org/abs/2405.16466>`__
-
-   - Publisher: ICML2024
-   - Code: `GitHub <https://github.com/BICLab/T-RevSNN>`__
-
 #. `Ftbc: Forward temporal bias correction for optimizing ann-snn conversion <https://idp.springer.com/authorize?response_type=cookie&client_id=springerlink&redirect_uri=https%3A%2F%2Flink.springer.com%2Fcontent%2Fpdf%2F10.1007%2F978-3-031-72890-7_10.pdf>`__
 
    - Publisher: ECCV 2024
@@ -1984,10 +1967,6 @@ Total publications: 589
 #. `Energy-Efficient Drowsiness Detection with Spiking Neural Networks <https://ieeexplore.ieee.org/abstract/document/11416827/>`__
 
    - Publisher: 2026 International Conference on Computing, Networking and Communications (ICNC)
-
-#. `Dynamic Loading Simulation Method for Large-scale Spiking Neural Network <https://dc-china-simulation.researchcommons.org/journal/vol37/iss2/20/>`__
-
-   - Publisher: Journal of System Simulation
 
 #. `Privacy in Federated Learning with Spiking Neural Networks <https://arxiv.org/abs/2511.21181>`__
 

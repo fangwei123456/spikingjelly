@@ -82,7 +82,8 @@ def fptt_online_training(
 
     该函数要求 ``x_seq`` 与 ``target_seq`` 的时间维均位于第 0 维，且长度一致。
     ``w_ra`` 应由 :func:`fptt_online_training_init_w_ra` 初始化，并与 ``optimizer``
-    当前参数顺序保持一致。
+    当前参数顺序保持一致。优化器中冻结的参数保留其 ``w_ra`` 槽位，
+    不更新对应的运行平均值。
 
     :param model: 神经网络
     :type model: nn.Module
@@ -125,7 +126,8 @@ def fptt_online_training(
     The function expects both ``x_seq`` and ``target_seq`` to place the time
     axis at dimension 0 and to share the same temporal length. ``w_ra`` should
     be initialized by :func:`fptt_online_training_init_w_ra` and remain aligned
-    with the current parameter order of ``optimizer``.
+    with the current parameter order of ``optimizer``. Frozen parameters retained
+    in the optimizer keep their slots and their running averages unchanged.
 
     :param model: the neural network
     :type model: nn.Module
@@ -230,6 +232,8 @@ def fptt_online_training(
             loss_t.backward()
             with torch.no_grad():
                 for i, parameter in enumerate(parameters):
+                    if not parameter.requires_grad:
+                        continue
                     previous_gradients[i] = parameter.grad
                     w_ra[i] = (w_ra[i] + parameter) / 2.0 - parameter.grad / (
                         2.0 * alpha

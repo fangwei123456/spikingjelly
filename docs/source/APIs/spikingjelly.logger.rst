@@ -28,7 +28,8 @@ SpikingJelly 直接导出 Loguru 的全局 logger，但默认禁用 ``"spikingje
 Loguru 默认 stderr sink 的级别是 ``DEBUG``，因此不建议直接调用 ``logger.enable()``。
 SpikingJelly 不缓存日志；启用前由模块导入产生的诊断无法事后恢复。
 
-``logger.remove()`` 会影响进程中的所有 Loguru sink，因此只能由应用调用。框架内部只使用
+``logger.remove()`` 会影响进程中的所有 Loguru sink，因此只能由应用调用。
+除 ``spikingjelly.logger`` 初始化时禁用自身命名空间外，框架内部只使用
 ``logger.debug/info/warning/error/exception/critical`` 和 ``{}`` 参数化格式，不配置
 sink，也不附加结构化上下文。使用标准库 ``logging`` 的应用可以在自己的入口按
 `Loguru 标准 logging 兼容说明 <https://loguru.readthedocs.io/en/stable/overview.html#entirely-compatible-with-standard-logging>`_
@@ -60,7 +61,8 @@ Loguru's default stderr sink accepts ``DEBUG`` records, so calling
 import-time diagnostics emitted before enabling the namespace cannot be recovered.
 
 ``logger.remove()`` affects every Loguru sink in the process and therefore belongs
-only in application code. Framework code only calls
+only in application code. Apart from disabling its own namespace during
+``spikingjelly.logger`` initialization, framework code only calls
 ``logger.debug/info/warning/error/exception/critical`` with ``{}``-style arguments;
 it does not configure sinks or attach structured context. Applications built around
 stdlib ``logging`` can add interoperability at their own entry point by following

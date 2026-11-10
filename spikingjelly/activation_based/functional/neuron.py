@@ -96,9 +96,10 @@ def neuron_implementation(
     查询神经元在指定设备和执行路径上的绑定实现。CPU 返回 Torch 参考实现；CUDA
     查询会初始化并缓存对应路径的选择，不执行神经元计算，也不改变模块状态。
     CLIF 与其他注册神经元一样分别选择 eager 和 compile 实现；具体输入和
-    surrogate 是否满足融合条件由计算入口判断。
+    surrogate 是否满足融合条件由计算入口判断。Few-spike 的 compile 路径保持
+    Torch 参考执行；该路径拒绝显式原生 CUDA/Triton 请求。
 
-    :param neuron_type: ``if``、``lif``、``plif``、``qif``、``eif``、``izhikevich``、``ilif``、``activation_aware_if`` 、``stbif`` 或 ``clif``。
+    :param neuron_type: ``if``、``lif``、``plif``、``qif``、``eif``、``izhikevich``、``ilif``、``activation_aware_if`` 、``stbif``、``clif`` 或 ``few_spike`` （FS/OAT/HG）。
     :type neuron_type: str
     :param device: CPU 或 NVIDIA CUDA 设备；省略 CUDA 索引时使用当前设备。
     :type device: torch.device
@@ -108,7 +109,7 @@ def neuron_implementation(
     :return: 包含实际 ``implementation`` 名称和各不可用候选 ``unavailable`` 原因的字典副本。
     :rtype: dict[str, object]
     :raises ValueError: 神经元名称、设备类型或执行路径无效。
-    :raises RuntimeError: CUDA 设备没有可用实现。
+    :raises RuntimeError: CUDA 设备没有可用实现，或显式请求不支持该执行路径。
 
     ----
 
@@ -121,9 +122,10 @@ def neuron_implementation(
     corresponding path's selection without computation or module-state changes.
     CLIF selects eager and compile implementations like other registered neurons.
     The computation entry point checks whether the actual inputs and surrogate
-    satisfy the fused profile.
+    satisfy the fused profile. Few-spike keeps the Torch reference under compile
+    and rejects explicit native CUDA/Triton requests for that path.
 
-    :param neuron_type: One of ``if``, ``lif``, ``plif``, ``qif``, ``eif``, ``izhikevich``, ``ilif``, ``activation_aware_if``, ``stbif``, or ``clif``.
+    :param neuron_type: One of ``if``, ``lif``, ``plif``, ``qif``, ``eif``, ``izhikevich``, ``ilif``, ``activation_aware_if``, ``stbif``, ``clif``, or ``few_spike`` (FS/OAT/HG).
     :type neuron_type: str
     :param device: CPU or NVIDIA CUDA device; an omitted CUDA index uses the current device.
     :type device: torch.device
@@ -135,7 +137,7 @@ def neuron_implementation(
     :return: A copy of ``implementation`` and the ``unavailable`` reasons for rejected candidates.
     :rtype: dict[str, object]
     :raises ValueError: Invalid neuron name, device type or execution path.
-    :raises RuntimeError: No CUDA implementation is available.
+    :raises RuntimeError: No CUDA implementation is available, or the explicit request does not support the execution path.
     """
     packages = {
         "if": "if_",
@@ -148,6 +150,7 @@ def neuron_implementation(
         "activation_aware_if": "activation_aware_if",
         "stbif": "stbif",
         "clif": "clif",
+        "few_spike": "few_spike",
     }
     if neuron_type not in packages:
         raise ValueError(f"Unknown neuron type {neuron_type!r}.")
@@ -158,6 +161,16 @@ def neuron_implementation(
     if device.type != "cuda":
         raise ValueError(f"Unsupported neuron device {device}.")
     package = importlib.import_module(f"..._ops.{packages[neuron_type]}", __package__)
+    if neuron_type == "few_spike" and (execution == "compile" or torch.version.hip):
+        from ..._ops.selection import _require_automatic_torch
+
+        if package._selection._requested not in ("auto", "torch"):
+            _require_automatic_torch(
+                package._selection,
+                device,
+                "few-spike compile/HIP uses the Torch reference",
+            )
+        return {"implementation": "torch-reference", "unavailable": {}}
     if neuron_type == "clif" and torch.version.hip:
         from ..._ops.selection import _require_automatic_torch
 
@@ -1762,8 +1775,9 @@ def clif_step(
     完整反向 kernel，保留逐算子 dtype 舍入；高阶梯度用 Torch 参考图重算。
     ``SJ_CLIF_CUDA_IMPLEMENTATION`` 可设为 ``auto``（默认）、``triton`` 或
     ``torch``；auto 在训练和推理中均选择可用实现，也支持 ``torch.compile``。
-    CPU、自定义函数、连续 surrogate 和其他输入使用 Torch 公式；显式请求
-    Triton 时不支持的 profile 会报错，此时应改用 auto 或 torch。
+    CPU 始终使用 Torch 公式。CUDA 上的自定义函数、连续 surrogate 和其他不支持融合的
+    profile 在 auto 或 torch 模式下使用 Torch 公式；显式请求 Triton 时，这些不支持的
+    CUDA profile 会报错，此时应改用 auto 或 torch。
     函数不融合不同时间步，不修改调用者配置的替代梯度。
 
     :param x: 当前输入，形状为 ``[N, *]``。
@@ -1780,7 +1794,7 @@ def clif_step(
     :type spike_function: Callable[[torch.Tensor], torch.Tensor]
     :return: ``(spike, v_next, m_next)``，各张量形状与 ``x`` 相同。
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises RuntimeError: 显式请求的 CUDA 实现不可用，或非 Torch 实现不支持当前输入或编译模式。
+    :raises RuntimeError: CUDA 上显式请求的实现不可用或不支持当前执行 profile。
     :raises ValueError: 融合路径的标量参数或实现配置不合法。
 
     ----
@@ -1800,9 +1814,10 @@ def clif_step(
     dtype rounding. Higher-order derivatives recompute the Torch reference graph.
     ``SJ_CLIF_CUDA_IMPLEMENTATION`` accepts ``auto`` (default), ``triton`` or
     ``torch``. Auto selects available implementations for both training and
-    inference, including ``torch.compile``. CPU, custom functions, continuous
-    surrogates and other inputs use the Torch formulas. An explicit Triton request
-    rejects unsupported profiles; use auto or torch for those functions.
+    inference, including ``torch.compile``. CPU always uses the Torch formulas.
+    On CUDA, custom functions, continuous surrogates and other unsupported profiles
+    use Torch in auto or torch mode. An explicit Triton request rejects these
+    unsupported CUDA profiles; use auto or torch for those functions.
     Time steps are not fused, and the caller's surrogate choice is preserved.
 
     :param x: Current input shaped ``[N, *]``.
@@ -1820,8 +1835,8 @@ def clif_step(
     :type spike_function: Callable[[torch.Tensor], torch.Tensor]
     :return: ``(spike, v_next, m_next)`` with tensors shaped like ``x``.
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-    :raises RuntimeError: An explicitly requested CUDA implementation is unavailable,
-        or a non-Torch implementation does not support the inputs or compiled mode.
+    :raises RuntimeError: On CUDA, if the explicitly requested implementation is
+        unavailable or does not support the execution profile.
     :raises ValueError: Invalid fused scalar parameters or implementation configuration.
     """
     from ..._ops.clif import _forward, _selection
@@ -2068,7 +2083,7 @@ def gated_lif_step(
 
     本函数没有独立的多步形式；多步执行由调用者循环调用本函数。
 
-    :param x: 当前输入，现有 ``GatedLIFNode`` 约定 shape 为 ``[N, C, H, W]``
+    :param x: 当前时间步输入，shape 为 ``[N, C, *]``，可选空间维可以省略
     :type x: torch.Tensor
     :param v: 当前膜电位，shape 可广播到 ``x``
     :type v: torch.Tensor
@@ -2114,8 +2129,8 @@ def gated_lif_step(
     This function has no independent multi-step form; callers implement
     multi-step execution by looping over this function.
 
-    :param x: Current input. Existing ``GatedLIFNode`` expects shape
-        ``[N, C, H, W]``
+    :param x: Current time-step input with shape ``[N, C, *]``;
+        spatial dimensions are optional
     :type x: torch.Tensor
     :param v: Current membrane voltage, broadcastable to ``x``
     :type v: torch.Tensor

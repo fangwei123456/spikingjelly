@@ -225,6 +225,7 @@ SpikingJelly 的主要负责机构是北京大学信息科学技术学院数字�
 - [Issues 与开发讨论](https://github.com/fangwei123456/spikingjelly/issues)
 - [OpenI 镜像](https://openi.pcl.ac.cn/OpenI/spikingjelly)
 - [社区中文 Jupyter 教程](https://github.com/fangwei123456/spikingjelly/tree/8932ac0668fe19b3efd0afedb3ca454cd8c126d3/community_tutorials/jupyter/chinese)
+- 也欢迎关注我们的朋友 [btorch](https://github.com/Criticality-Cognitive-Computation-Lab/btorch)，一个面向计算神经科学与生物合理性建模的 PyTorch 工具包。
 
 <a href="https://star-history.com/#fangwei123456/spikingjelly&amp;Date">
   <picture>

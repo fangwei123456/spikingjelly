@@ -5,7 +5,7 @@
 
 English version: :doc:`../en/memopt`
 
-本团队在ICLR 2026发表的新工作 `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ 提出了基于梯度检查点和脉冲压缩的深度SNN训练显存自动优化工具（源代码位于 `Github <https://github.com/AllenYolk/snn-gradient-checkpointing>`_ ）。对显存、精度和速度的影响见下文实验。
+本团队在ICLR 2026发表的工作 `Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression <https://openreview.net/forum?id=nrBJ0Uvj7c>`_ 提出了基于梯度检查点和脉冲压缩的深度SNN训练显存自动优化工具（源代码位于 `Github <https://github.com/AllenYolk/snn-gradient-checkpointing>`_ ）。对显存、精度和速度的影响见下文实验。
 
 该工具已经集成到 ``spikingjelly.activation_based.memopt`` 子包中，提供手工检查点、自动搜索和分布式训练接口。
 

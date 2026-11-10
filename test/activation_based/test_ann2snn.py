@@ -1816,9 +1816,10 @@ class TestLocalThresholdBalancingRecipe:
         with pytest.raises(ValueError, match="scalar finite positive"):
             neuron.HalfThresholdIFNode(v_threshold=torch.ones(2))
 
-    def test_half_threshold_if_node_reinitializes_new_shape_to_half_threshold(self):
+    def test_half_threshold_if_node_reset_initializes_new_shape_to_half_threshold(self):
         node = neuron.HalfThresholdIFNode()
         node(torch.tensor([0.1]))
+        node.reset()
         node(torch.zeros(2, 3))
 
         assert node.v.shape == (2, 3)

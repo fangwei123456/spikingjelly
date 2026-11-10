@@ -40,6 +40,15 @@ __all__ = [
 np_savez = np.savez_compressed if configure.save_datasets_compressed else np.savez
 
 
+def _link_or_copy(source: Path, target: Path) -> None:
+    try:
+        target.symlink_to(source)
+    except OSError as error:
+        if getattr(error, "winerror", None) != 1314:
+            raise
+        shutil.copyfile(source, target)
+
+
 def save_as_pic(
     x: Union[torch.Tensor, np.ndarray],
     save_pic_to: str = "./",
@@ -456,7 +465,7 @@ def cal_fixed_frames_number_segment_index(
         j_{r} & = \begin{cases} [\frac{N}{M}] \cdot (j + 1), & j < M - 1 \\ N, & j = M - 1 \end{cases}
         \end{align*}
 
-    :param events_t: 事件的 t
+    :param events_t: 事件时间戳；``split_by='time'`` 时必须非降序排列，允许重复
     :type events_t: numpy.ndarray
 
     :param split_by: 'time' 或 'number'
@@ -495,7 +504,8 @@ def cal_fixed_frames_number_segment_index(
         j_{r} & = \begin{cases} [\frac{N}{M}] \cdot (j + 1), & j < M - 1 \\ N, & j = M - 1 \end{cases}
         \end{align*}
 
-    :param events_t: events' t
+    :param events_t: Event timestamps; when ``split_by='time'``, they must be
+        nondecreasing. Duplicate timestamps are allowed.
     :type events_t: numpy.ndarray
 
     :param split_by: 'time' or 'number'
@@ -520,15 +530,14 @@ def cal_fixed_frames_number_segment_index(
 
     elif split_by == "time":
         dt = (events_t[-1] - events_t[0]) // frames_num
-        idx = np.arange(N)
         for i in range(frames_num):
             t_l = dt * i + events_t[0]
-            t_r = t_l + dt
-            mask = np.logical_and(events_t >= t_l, events_t < t_r)
-            idx_masked = idx[mask]
-            j_l[i] = idx_masked[0]
-            j_r[i] = idx_masked[-1] + 1
+            j_l[i] = np.searchsorted(events_t, t_l, side="left")
 
+        # As documented, frame j ends at t_0 + dt * (j + 1), the start of frame
+        # j + 1. Computing it as ``t_l + dt`` instead can round differently for
+        # float timestamps and drop or double-count an event on the boundary.
+        j_r[:-1] = j_l[1:]
         j_r[-1] = N
     else:
         raise NotImplementedError
