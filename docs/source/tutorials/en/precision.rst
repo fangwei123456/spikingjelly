@@ -39,7 +39,7 @@ different PyTorch release and select a wheel that does not match the runtime:
 
 .. code-block:: bash
 
-    python -m pip install --no-build-isolation \
+    uv pip install --no-build-isolation \
         "transformer-engine[pytorch]>=2.16,<3"
 
 Path 1: custom training or inference
@@ -70,7 +70,7 @@ old parameters.
     precision = prepare_model_for_precision(
         model,
         device,
-        PrecisionConfig(mode="fp8", fp8_recipe="auto"),
+        PrecisionConfig(mode="bf16"),
     )
     model = precision.model
     optimizer = torch.optim.AdamW(model.parameters())
@@ -82,8 +82,8 @@ old parameters.
     precision.backward(loss, optimizer)
 
 ``mode`` accepts ``fp32``, ``fp16``, ``bf16``, or ``fp8``. The returned
-``PrecisionArtifacts`` creates the FP16 GradScaler when needed, so the same loop
-works for all four modes.
+``PrecisionArtifacts`` creates a GradScaler for CUDA FP16. Its ``backward`` method
+also updates the optimizer by default. The output above has shape ``[256, 1024]``.
 
 Inference uses the same context without ``backward``:
 
@@ -91,18 +91,23 @@ Inference uses the same context without ``backward``:
 
     model.eval()
     with torch.inference_mode(), precision.autocast_context():
-        output = model(input_tensor)
+        output = model(torch.randn(256, 4096, device=device))
 
 Inspecting an FP8 conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-FP8 currently converts aligned ``torch.nn.Linear``, SpikingJelly ``layer.Linear``,
+To try FP8 on a supported CUDA GPU, prepare the model again before creating a
+new optimizer. FP8 converts aligned ``torch.nn.Linear``, SpikingJelly ``layer.Linear``,
 pointwise Conv1d, and supported LayerNorm or adjacent fused patterns. A Linear
 input dimension must be divisible by 16 and its output dimension by 8. Unaligned
 layers remain in high precision and appear in the diagnostics:
 
 .. code-block:: python
 
+    precision = prepare_model_for_precision(
+        model, device, PrecisionConfig(mode="fp8", fp8_recipe="auto")
+    )
+    model = precision.model
     report = precision.describe()
     print(report["conversion_report"])
 
@@ -202,12 +207,15 @@ in the example with:
         mode="bf16", neuron_storage="bf16", neuron_fwd="bf16", neuron_bwd="fp32"
     )
 
-Explicit neuron precision uses Triton without module backend parameters.
-``neuron_fwd``/``neuron_bwd`` accept ``fp8``, ``fp16``, ``bf16`` or ``fp32``;
-not every combination is valid. FP8 arithmetic requires ``float8_e4m3fn`` or
-``float8_e5m2`` state storage. Exponentials and sensitive surrogate computations
-use FP32 inside kernels. See :doc:`./surrogate` for the seven supported surrogates.
-Unsupported explicit policies fail rather than silently changing numerics.
+Explicit neuron precision uses Triton. ``neuron_storage`` accepts ``fp32``,
+``fp16``, ``bf16``, ``float8_e4m3fn`` or ``float8_e5m2``, and is required
+whenever ``neuron_fwd`` or ``neuron_bwd`` differs from their ``fp32`` default;
+those two accept ``fp8``, ``fp16``, ``bf16`` or ``fp32``, and not every
+combination is valid. FP8 arithmetic requires
+``float8_e4m3fn`` or ``float8_e5m2`` state storage. Exponentials and sensitive
+surrogate computations use FP32 inside kernels. See :doc:`./surrogate` for the
+seven supported surrogates. Unsupported explicit policies fail rather than
+silently changing numerics.
 
 An execution query reports the ordinary path's selection. Check support for
 the precision policy you intend to use. Prepare precision before compilation;
@@ -230,22 +238,17 @@ optimizer construction. ``TrainingConfig``, ``EvaluationConfig``, and
 
 .. code-block:: python
 
-    from spikingjelly.activation_based import distributed
     from spikingjelly.activation_based.precision import PrecisionConfig
 
-    config = distributed.vision.TrainingConfig(
-        model=model_config,
-        dataset_builder=dataset_builder,
-        precision=PrecisionConfig(
-            mode="bf16",
-            neuron_storage="bf16",
-            neuron_fwd="bf16",
-            neuron_bwd="fp32",
-        ),
+    precision_config = PrecisionConfig(
+        mode="bf16",
+        neuron_storage="bf16",
+        neuron_fwd="bf16",
+        neuron_bwd="fp32",
     )
-    result = distributed.vision.train_classification(config)
 
-In the repository CLI, ``--precision`` maps to ``mode``. The remaining fields
+Pass ``precision_config`` as the ``precision`` field of your vision configuration.
+For a complete run with synthetic data, use the repository CLI. Here, ``--precision`` maps to ``mode``. The remaining fields
 come from ``--fp8-recipe``, ``--neuron-storage``, ``--neuron-fwd``, and
 ``--neuron-bwd``:
 
@@ -260,9 +263,10 @@ come from ``--fp8-recipe``, ``--neuron-storage``, ``--neuron-fwd``, and
 
 ``distributed.vision`` prepares precision before DDP wrapping and optimizer
 construction. It uses the DDP process group to synchronize Transformer Engine
-scaling metadata. Model FP8 and Triton-neuron mixed precision currently require
-DDP with TP=PP=1. Vision PP supports FP32 and BF16. Ordinary FP32/BF16 execution
-is not subject to this experimental-precision restriction.
+scaling metadata. Model FP8 and explicit neuron precision require
+DDP with TP=PP=1 for training, or replicated execution with TP=PP=1 for evaluation
+and prediction. Evaluation and prediction with these policies require eager
+execution. Vision PP supports FP32 and BF16.
 
 Path 3: ``distributed.llm``
 ----------------------------
@@ -282,6 +286,7 @@ configurations consistent:
         hidden_size=2048,
         num_attention_heads=16,
         ffn_hidden_size=8192,
+        calculate_per_token_loss=True,
         bf16=True,
         fp16=False,
         params_dtype=torch.bfloat16,
@@ -308,27 +313,39 @@ Standalone evaluation and cached generation reuse the model's
 See :doc:`./distributed_training` for complete model, data, and training
 configuration examples.
 
+Choosing a mode
+---------------
+
+Start with BF16, then compare FP16 or FP8 on your workload. For FC-SNN, test
+matrix sizes near the reference crossover and choose neuron precision explicitly.
+Compare complete training or inference steps: FP8 memory use can exceed BF16.
+
+Run the crossover benchmark on the target GPU:
+
+.. code-block:: bash
+
+    uv run python benchmark/benchmark_fp8_training_inference.py \
+        --batch-size 4096 --width 3200 --depth 8 --num-classes 3200 \
+        --warmup 8 --training-steps 20 --inference-steps 40 --trials 3 \
+        --precisions fp16 bf16 fp8 --baseline-precision bf16 \
+        --output benchmark/output/fp8-vs-bf16.json
+
+Then change ``--baseline-precision`` to ``fp16`` and check both 16-bit baselines.
+A full training comparison must also measure convergence on real data. This
+benchmark checks finite loss, output, parameter updates, and steady-state
+performance only.
+
 When FP8 is faster
 ------------------
 
-FP8 benefits large matrices, not every low-precision workload. FC-SNN depends on
-neuron execution and the Linear-to-neuron boundary; Spikformer has a larger
-convolution, BatchNorm, and neuron share and does not cross the FP16/BF16
-baseline on one GPU yet.
-
-The dense Linear and two-GPU DDP results below were measured on 2026-08-29 with
-Transformer Engine 2.18.0. The replacement FC-SNN rows and the new single-GPU
-Spikformer rows were measured on 2026-08-30 with PyTorch 2.11.0+cu128,
-Transformer Engine 2.17.1, and one 32-GiB RTX 5090. The latter used 2.17.1
-because the image's TE 2.18.0 extension could not load; the two software stacks
-must not be conflated. Each FC-SNN/Spikformer steady-state case used three
-independent processes and reports the median. A 5% throughput increase is the
-cutoff for a useful win. Model conversion is excluded from timing.
+Compare end-to-end throughput and peak memory on your target GPU. FP8 benefits
+large matrix operations; convolution and neuron work can dominate an SNN.
 
 Linear/GEMM crossover
 ~~~~~~~~~~~~~~~~~~~~~
 
-The two ratios in each cell are ``FP8 / FP16`` and ``FP8 / BF16``:
+Reference results (2026-08-29, Transformer Engine 2.18.0). Ratios are
+``FP8 / FP16`` and ``FP8 / BF16``; a 5% increase defines the crossover:
 
 .. list-table::
     :header-rows: 1
@@ -370,34 +387,23 @@ allocated memory is about 9%/14% lower than FP16 for training/inference, but
 End-to-end SNN and DDP
 ~~~~~~~~~~~~~~~~~~~~~~
 
+Reference results (2026-08-30, RTX 5090 32 GiB, Transformer Engine 2.17.1):
+
 .. list-table::
     :header-rows: 1
 
     * - workload
       - training FP8 / FP16, BF16
       - inference FP8 / FP16, BF16
-    * - FC-SNN: T16, batch 256, width 4096, depth 20 (automatically dispatched LIF, FP16 fallback)
+    * - FC-SNN: T16, batch 256, width 4096, depth 20 (Triton LIF, FP16 fallback)
       - 1.533x / 1.677x
       - 1.578x / 1.786x
-    * - FC-SNN: T16, batch 256, width 8192, depth 10 (automatically dispatched LIF, FP32 fallback)
+    * - FC-SNN: T16, batch 256, width 8192, depth 10 (Triton LIF, FP32 fallback)
       - 1.544x / 1.468x
       - 1.648x / 1.471x
 
-The ratios are end-to-end throughput ratios in the order ``FP8 / FP16`` and
-``FP8 / BF16``. Both FC-SNN cases use the existing automatically dispatched LIF; Triton neuron
-storage is not enabled and neuron computation remains high precision. W4096
-uses ``fp8_fallback_dtype="fp16"`` and its training/inference peak allocated
-memory is 4279.1/1460.3 MiB; W8192 is the earlier result without an outer
-autocast. Thus “FP8 Linear + automatically dispatched LIF” wins at these sizes, but this does not
-mean that all neuron state is FP8 or that FP8 always saves memory.
-
-The slower FC-SNN numbers previously shown in this tutorial used Torch LIF and
-are retained only in the Nsight root-cause report, not as the recommended
-FC-SNN benchmark.
-
-Requested FP8 tracked dense-MAC coverage for W4096/depth20 is 100%.
-
-Reproduce the FC-SNN profile with:
+The ratios are end-to-end throughput ratios. Measure your FC-SNN with explicit
+FP32 neuron storage to use the Triton precision path:
 
 .. code-block:: bash
 
@@ -405,14 +411,14 @@ Reproduce the FC-SNN profile with:
       --trace=cuda,nvtx,cublas,osrt --sample=none --cpuctxsw=none \
       -o fcsnn-fp8 \
       uv run python benchmark/benchmark_train_precision_snn_fc.py \
-        --precisions fp8 --fp8-fallback-dtype fp16 \
+        --precisions fp8 --fp8-fallback-dtype fp16 --neuron-storage fp32 \
         --profile --profile-steps 10 --output fcsnn-fp8.json
 
 Single-GPU Spikformer
 ~~~~~~~~~~~~~~~~~~~~~
 
-For ``spikformer_ti`` with ``T=4``, input size ``224``, eager execution, and
-automatically dispatched LIF, the RTX 5090 end-to-end results are:
+Reference results (2026-08-30, RTX 5090 32 GiB, Transformer Engine 2.17.1;
+``spikformer_ti``, ``T=4``, input size 224, eager execution):
 
 .. list-table::
     :header-rows: 1
@@ -484,12 +490,9 @@ automatically dispatched LIF, the RTX 5090 end-to-end results are:
       - 0.778x / 0.918x
       - 4398.4 MiB
 
-The training row uses 1024 classes only to satisfy the current TE FP8 backward
-16-alignment requirement; an ImageNet-1000 head currently fails with
-``lda % 16 == 0``. For the FP32 fallback configuration, Nsight shows that FP8 autocast covers only TE pointwise
-Conv1d/Linear modules; patch-stem Conv2d, BatchNorm, and LIF outputs fall back
-to FP32, adding elementwise, copy, and layout kernels. FP16/BF16 is faster for Spikformer in the configurations measured here; do not infer a Spikformer win from the
-FC-SNN Triton result. Reproduce a single-GPU profile with:
+The training cases use 1024 classes to meet the Transformer Engine 2.17.1 FP8
+backward alignment requirement. A 1000-class head failed with ``lda % 16 == 0``.
+For inference, FP16 and BF16 are faster than every FP8 configuration. For training, FP16 is fastest; FP8 with FP16 fallback is faster than BF16 but still slower than FP16. To profile your model:
 
 .. code-block:: bash
 
@@ -499,19 +502,15 @@ FC-SNN Triton result. Reproduce a single-GPU profile with:
       uv run python benchmark/benchmark_snn_single_gpu.py case \
         --model spikformer_ti --phase inference --execution eager \
         --batch-size 64 --warmup 50 --steps 10 --profile --precision fp8 \
-        --fp8-fallback-dtype bf16 \
+        --fp8-fallback-dtype bf16 --neuron-storage fp32 \
         --tensor-metadata spikformer-fp8.tensors.jsonl \
         --output spikformer-fp8.json
 
-The ``--profile`` flag bounds capture through ``cudaProfilerApi``.
+The ``--profile`` flag bounds capture through ``cudaProfilerApi``. Explicit
+FP32 neuron storage keeps this profile on the Triton precision path.
 
-The default BF16 fallback reduces FP8 training/inference latency by 18.3%/39.7%,
-but does not cross BF16. The explicit FP16 fallback is faster but has less
-dynamic range. Requested FP8 tracked dense-MAC coverage is 41.98%. The current
-RTX 5090 stack does not expose FP8 Conv2d; an emulated path is not evidence of
-increased hardware coverage.
-
-The historical two-GPU Spikformer DDP benchmark used five timed steps:
+Reference results (2026-08-29, two-GPU Spikformer DDP, Transformer Engine
+2.18.0, five timed steps):
 
 .. list-table::
     :header-rows: 1
@@ -532,26 +531,3 @@ The historical two-GPU Spikformer DDP benchmark used five timed steps:
 This Spikformer configuration has no FP8 crossover before reaching the practical
 memory limit. FP8 and DDP work together, but FP16 or BF16 is the better choice for
 this workload.
-
-Choosing a mode
----------------
-
-Start with BF16. Try FP8 for FC-SNN only with automatically dispatched LIF and matrix sizes near
-the table's crossover. FP16/BF16 is faster for Spikformer in the configurations measured here. Profile against the
-end-to-end step; FP8 memory may exceed BF16 and is not a memory-optimization
-switch.
-
-Run the crossover benchmark on the target GPU:
-
-.. code-block:: bash
-
-    uv run python benchmark/benchmark_fp8_training_inference.py \
-        --batch-size 4096 --width 3200 --depth 8 --num-classes 3200 \
-        --warmup 8 --training-steps 20 --inference-steps 40 --trials 3 \
-        --precisions fp16 bf16 fp8 --baseline-precision bf16 \
-        --output benchmark/output/fp8-vs-bf16.json
-
-Then change ``--baseline-precision`` to ``fp16`` and check both 16-bit baselines.
-A full training comparison must also measure convergence on real data. This
-benchmark checks finite loss, output, parameter updates, and steady-state
-performance only.

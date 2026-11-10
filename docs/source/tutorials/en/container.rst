@@ -1,18 +1,19 @@
 Container
 =======================================
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 中文版： :doc:`../cn/container`
 
 Translator: `Qiu Haonan <https://github.com/Maybe2022>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
-The major containers in SpikingJelly are: 
+To connect single-step modules to a sequence network, choose a container or function:
 
-* :class:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` in functional style and :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` in module style
-* :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` in functional style and :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` in module style
+* :func:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` in functional style and :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` in module style
+* :func:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` in functional style and :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` in module style
 * :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` for wrapping a single-step module for single/multi-step propagation
 
-:class:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` can use a single-step module to implement multi-step propagation, \
+:func:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` can use a single-step module to implement multi-step propagation, \
 and :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` can wrap a single-step module to a multi-step module. For example:
 
 .. code-block:: python
@@ -53,22 +54,22 @@ For a stateless ANN layer such as :class:`torch.nn.Conv2d`, which requires input
         H = 8
         W = 8
         x_seq = torch.rand([T, N, C, H, W])
-        
+
         conv = nn.Conv2d(C, 8, kernel_size=3, padding=1, bias=False)
         bn = nn.BatchNorm2d(8)
         bn.eval()
-        
+
         y_seq = functional.multi_step_forward(x_seq, (conv, bn))
         # y_seq.shape = [T, N, 8, H, W]
-        
+
         net = layer.MultiStepContainer(conv, bn)
         z_seq = net(x_seq)
         # z_seq.shape = [T, N, 8, H, W]
-        
+
         # z_seq is identical to y_seq
 
 Layers such as Conv and Linear compute each sample independently and have no temporal dependency.\
-We can use :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` or :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` to wrap, \
+We can use :func:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` or :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` to wrap, \
 which will reshape the input with ``shape = [T, N, *]`` to  ``shape = [TN, *]``, send data to ann layers, and reshape output to ``shape = [T, N, *]``. This combines the time steps into one call. Training-mode BatchNorm changes its results because its statistics cover T×N; the example uses eval mode:
 
 .. code-block:: python
@@ -97,7 +98,7 @@ which will reshape the input with ``shape = [T, N, *]`` to  ``shape = [TN, *]``,
         # z_seq.shape = [T, N, 8, H, W]
 
         # z_seq is identical to y_seq
-        
+
         p_seq = functional.seq_to_ann_forward(x_seq, (conv, bn))
         # p_seq.shape = [T, N, 8, H, W]
 
@@ -105,9 +106,11 @@ which will reshape the input with ``shape = [T, N, *]`` to  ``shape = [TN, *]``,
         q_seq = net(x_seq)
         # q_seq.shape = [T, N, 8, H, W]
 
-        # q_seq is identical to p_seq, and also identical to y_seq and z_seq
+        torch.testing.assert_close(q_seq, p_seq)
+        torch.testing.assert_close(q_seq, y_seq)
+        torch.testing.assert_close(q_seq, z_seq)
 
-The input of :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` can also be a tuple of tensors. \
+The input of :func:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` can also be a tuple of tensors. \
 Every tensor in the tuple must have ``shape = [T, N, *]`` with the same ``T`` and ``N``; the time and batch dimensions of each tensor are \
 flattened separately, and the flattened tensors are sent to the first stateless layer as positional arguments. If several stateless layers are given, \
 only the first one receives all the flattened tensors, and each subsequent layer receives the previous layer's output as a single argument. For example, \
@@ -145,12 +148,11 @@ values and the pooling indices, which can be consumed directly by :class:`MaxUnp
 In multi-step mode, ``output_size``, if given, is passed to the underlying PyTorch module after ``[T, N]`` are flattened. \
 It may be a spatial-only size (e.g., ``(H, W)``) or a full output size accepted by the underlying module for the flattened input.
 
-Most frequently-used ann modules have been defined in :class:`spikingjelly.activation_based.layer`. It is recommended to use modules in :class:`spikingjelly.activation_based.layer`, \
-rather than using a container to wrap the ann layers manually. Although the modules in :class:`spikingjelly.activation_based.layer` are implemented by using :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` to \
-wrap forward function, the advantages of modules in :class:`spikingjelly.activation_based.layer` are:
+First check whether :mod:`spikingjelly.activation_based.layer` has the layer you
+need. Using these layers directly has two benefits:
 
-* Both single-step and multi-step modes are supported. When using :class:`SeqToANNContainer<spikingjelly.activation_based.layer.SeqToANNContainer>` or :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` to wrap modules, only the multi-step mode is supported.
-* The wrapping of containers will add a prefix of ``keys()`` of ``state_dict``, which brings some troubles for loading weights.
+* Both single-step and multi-step modes are supported. When using :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` or :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` to wrap modules, only the multi-step mode is supported.
+* Wrapping a module in a container adds a prefix to its ``state_dict`` keys, which can complicate loading weights.
 
 For example:
 
@@ -211,16 +213,16 @@ The outputs are
     net_container is trying to load state dict from ann...
     net_container can not load! The error message is
     Error(s) in loading state_dict for Sequential:
-        Missing key(s) in state_dict: "0.0.weight", "0.1.weight", "0.1.bias", "0.1.running_mean", "0.1.running_var". 
-        Unexpected key(s) in state_dict: "0.weight", "1.weight", "1.bias", "1.running_mean", "1.running_var", "1.num_batches_tracked". 
+        Missing key(s) in state_dict: "0.0.weight", "0.1.weight", "0.1.bias", "0.1.running_mean", "0.1.running_var".
+        Unexpected key(s) in state_dict: "0.weight", "1.weight", "1.bias", "1.running_mean", "1.running_var", "1.num_batches_tracked".
     net_origin is trying to load state dict from ann...
     Load success!
 
 
-:class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` and :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` only support for multi-step mode and do not allow to switch to single-step mode.
+:class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` and :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` support only multi-step mode and cannot switch to single-step mode.
 
 :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` works like the merged version of :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` and :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>`, which can be used to wrap stateless or stateful single-step modules.\
-The user should specify whether the wrapped modules are stateless or stateful when using this container. This container also supports switching step modes.
+Specify whether the wrapped modules are stateless or stateful when creating this container. This container also supports switching step modes.
 
 Here is an example of wrapping a stateless layer:
 
@@ -228,6 +230,7 @@ Here is an example of wrapping a stateless layer:
 .. code-block:: python
 
     import torch
+    import torch.nn as nn
     from spikingjelly.activation_based import neuron, layer
 
 
@@ -240,6 +243,7 @@ Here is an example of wrapping a stateless layer:
         x_seq = torch.rand([T, N, C, H, W])
         net = layer.StepModeContainer(
             False,
+            's',
             nn.Conv2d(C, C, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(C),
         )
@@ -269,6 +273,7 @@ Here is an example of wrapping a stateful layer:
         x_seq = torch.rand([T, N, C, H, W])
         net = layer.StepModeContainer(
             True,
+            's',
             neuron.IFNode()
         )
         net.step_mode = 'm'
@@ -281,10 +286,10 @@ Here is an example of wrapping a stateful layer:
         # y.shape = [N, C, H, W]
         functional.reset_net(net)
 
-It is safe to use :class:`set_step_mode <spikingjelly.activation_based.functional.set_step_mode>` to change the step mode of :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>`. Only the ``step_mode`` of the container itself is changed, and the modules inside the container still use single-step:
+Use :func:`set_step_mode <spikingjelly.activation_based.functional.set_step_mode>` to change the step mode of :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>`. Only the ``step_mode`` of the container itself is changed, and the modules inside the container still use single-step:
 
 .. code-block:: python
-    
+
     import torch
     from spikingjelly.activation_based import neuron, layer, functional
 
@@ -292,14 +297,14 @@ It is safe to use :class:`set_step_mode <spikingjelly.activation_based.functiona
     with torch.no_grad():
         net = layer.StepModeContainer(
             True,
+            's',
             neuron.IFNode()
         )
         functional.set_step_mode(net, 'm')
         print(f'net.step_mode={net.step_mode}')
         print(f'net[0].step_mode={net[0].step_mode}')
 
-If the module itself supports for switching between single-step and multi-step modes, is not recommended to use :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` or :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` to wrap.\
-Because the multi-step forward implemented by the container may not be as fast as the forward defined by the module itself.
+If a module already supports single-step and multi-step modes, use its own forward methods instead of wrapping it in :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` or :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>`. Its multi-step implementation may be faster than the container's loop.
 
 
-In most cases, we use :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` or :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` to wrap modules which do not define the multi-step forward, such as a network layer that exists in ``torch.nn`` but does not exist in ``spikingjelly.activation_based.layer``.
+Use :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` or :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` to wrap modules that do not define multi-step forward, such as a network layer that exists in ``torch.nn`` but does not exist in ``spikingjelly.activation_based.layer``.

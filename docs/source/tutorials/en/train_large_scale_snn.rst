@@ -7,13 +7,13 @@ Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Usage of ``activation_based.model``
 ----------------------------------------------
-:class:`spikingjelly.activation_based.model` has defined some classic networks, which we can use as we use :class:`torchvision.models`. \
-For example, we can build the Spiking ResNet [#ResNet]_ :
+Build a Spiking ResNet [#ResNet]_ with :mod:`spikingjelly.activation_based.model`,
+then pass a four-step image sequence through it. The model factories work like
+:mod:`torchvision.models`:
 
 .. code-block:: python
 
   import torch
-  import torch.nn as nn
   from spikingjelly.activation_based import surrogate, neuron, functional
   from spikingjelly.activation_based.model import spiking_resnet
 
@@ -30,7 +30,11 @@ For example, we can build the Spiking ResNet [#ResNet]_ :
       print(f'y_seq.shape={y_seq.shape}')
       functional.reset_net(s_resnet18)
 
-The outputs are:
+The model structure is abbreviated below. The output has shape ``[T, N, classes]``:
+four time steps, one image, and 1000 class scores. ``reset_net`` clears neuron
+state before you process an independent batch.
+
+Output:
 
 .. code-block:: shell
 
@@ -51,15 +55,18 @@ pre-trained weights by setting ``pretrained=True``:
 
 .. code-block:: python
 
+  from spikingjelly.activation_based import neuron, surrogate
+  from spikingjelly.activation_based.model import spiking_resnet
+
   s_resnet18 = spiking_resnet.spiking_resnet18(pretrained=True, spiking_neuron=neuron.IFNode, surrogate_function=surrogate.ATan(), detach_reset=True)
 
 Usage of ``activation_based.examples.common.train_classify``
 --------------------------------------------------------------------------------
-:class:`spikingjelly.activation_based.examples.common.train_classify` is modified by `torchvision 0.12 references <https://github.com/pytorch/vision/tree/release/0.12/references>`_. \
-We can use this module to train easily.
-
-:class:`spikingjelly.activation_based.examples.common.train_classify.Trainer` provides a flexible method to train. Users can change its functions to implement the desirable behaviors without too much
-efforts. For example, :class:`spikingjelly.activation_based.examples.common.train_classify.Trainer.set_optimizer` defines how to set the optimizer:
+:mod:`spikingjelly.activation_based.examples.common.train_classify` provides a
+training loop adapted from `torchvision 0.12 references <https://github.com/pytorch/vision/tree/release/0.12/references>`_.
+Subclass ``Trainer`` to change individual training steps. For example,
+``Trainer.set_optimizer`` selects the optimizer. This excerpt shows its choices
+and where the training loop calls it:
 
 .. code-block:: python
 
@@ -91,9 +98,12 @@ efforts. For example, :class:`spikingjelly.activation_based.examples.common.trai
         optimizer = self.set_optimizer(args, parameters)
         # ...
 
-If we want to add an optimizer, e.g., ``Adamax``, we can inherit the class and override this function:
+To add ``Adamax``, override ``set_optimizer`` and keep the inherited choices:
 
 .. code-block:: python
+
+  import torch
+  from spikingjelly.activation_based.examples.common import train_classify
 
   class MyTrainer(train_classify.Trainer):
       def set_optimizer(self, args, parameters):
@@ -108,24 +118,27 @@ If we want to add an optimizer, e.g., ``Adamax``, we can inherit the class and o
 
 .. code-block:: shell
 
-  (pytorch-env) PS spikingjelly> python -m spikingjelly.activation_based.examples.common.train_classify -h
+  python -m spikingjelly.activation_based.examples.common.train_classify -h
 
-If we want to add some args, we can also inherit and override it:
+To add a command-line argument, override ``get_args_parser``:
 
 .. code-block:: python
+
+  from spikingjelly.activation_based.examples.common import train_classify
 
   class MyTrainer(train_classify.Trainer):
       def get_args_parser(self, add_help=True):
-          parser = super().get_args_parser()
+          parser = super().get_args_parser(add_help=add_help)
           parser.add_argument('--do-something', type=str, help="do something")
+          return parser
 
-We can modify most functions in :class:`Trainer <spikingjelly.activation_based.examples.common.train_classify.Trainer>`.
-
-We can use the following codes to train with ``Trainer`` or the user-defined trainer:
+Parse the command-line arguments, then pass them to your trainer:
 
 .. code-block:: python
 
-    trainer = Trainer()
+    from spikingjelly.activation_based.examples.common import train_classify
+
+    trainer = train_classify.Trainer()  # or MyTrainer() to use your own subclass
     args = trainer.get_args_parser().parse_args()
     trainer.main(args)
 
@@ -134,8 +147,11 @@ We can use the following codes to train with ``Trainer`` or the user-defined tra
 
 Training on ImageNet
 ----------------------------------------------
-The default data loading function :class:`load_ImageNet <spikingjelly.activation_based.examples.common.train_classify.Trainer.load_ImageNet>` will load the ImageNet [#ImageNet]_ dataset. With :class:`Trainer <spikingjelly.activation_based.examples.common.train_classify.Trainer>` and :class:`spikingjelly.activation_based.model.spiking_resnet`, \
-we can train large-scale SNNs easily. Here are the example codes:
+Prepare ImageNet [#ImageNet]_ with ``train/<class>`` and ``val/<class>`` folders
+under your data path. ``Trainer.load_ImageNet`` reads this layout. The subclass
+below repeats each image over ``T`` time steps and averages the output logits
+before computing the classification loss. The inherited loop resets neuron
+state after each batch. Pass ``--T`` explicitly when launching training:
 
 .. code-block:: python
 
@@ -156,10 +172,10 @@ we can train large-scale SNNs easily. Here are the example codes:
           return x.unsqueeze(0).expand(args.T, -1, -1, -1, -1)  # [N, C, H, W] -> [T, N, C, H, W]
 
       def process_model_output(self, args, y: torch.Tensor):
-          return y.mean(0)  # return firing rate
+          return y.mean(0)  # average logits over time
 
       def get_args_parser(self, add_help=True):
-          parser = super().get_args_parser()
+          parser = super().get_args_parser(add_help=add_help)
           parser.add_argument('--T', type=int, help="total time-steps")
           return parser
 
@@ -181,7 +197,7 @@ we can train large-scale SNNs easily. Here are the example codes:
       args = trainer.get_args_parser().parse_args()
       trainer.main(args)
 
-The codes are saved in :class:`spikingjelly.activation_based.examples.train_imagenet`. Training on a single GPU:
+Run the example in :mod:`spikingjelly.activation_based.examples.train_imagenet`. Training on a single GPU:
 
 .. code-block:: shell
 

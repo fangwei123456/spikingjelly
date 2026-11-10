@@ -18,7 +18,20 @@ run this SNN on Loihi. The workflow is:
 
 ``SpikingJelly -> Lava DL -> Lava -> Loihi``
 
-The modules related to Lava are defined in :class:`spikingjelly.activation_based.lava_exchange`.
+The modules related to Lava are defined in :mod:`spikingjelly.activation_based.lava_exchange`.
+
+.. note::
+
+    Lava-DL is optional. SpikingJelly does not install it, and there is no
+    ``spikingjelly[lava]`` extra. ``TNX_to_NXT``, ``to_lava_neuron``,
+    ``BlockContainer`` and the other conversion callables are defined only
+    when ``import lava.lib.dl.slayer`` succeeds; otherwise those names are
+    missing.
+
+    PyPI ``lava-dl==0.6.0`` requires Python >=3.10,<3.11 and torch>=2.3.1,<2.4,
+    while SpikingJelly 2.0.0 requires Python >=3.11 and torch>=2.6. These
+    releases have incompatible dependency ranges; prepare a compatible
+    Lava-DL and SpikingJelly environment before running the conversion examples.
 
 
 Basic Conversion
@@ -28,7 +41,7 @@ Data Format Conversion
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The default data format in Lava DL is ``shape = [N, *, T]``, where ``N`` is the batch dimension and ``T`` is the time-step dimension. \
 However, the module of SpikingJelly in multi-step mode (``step_mode = 'm'``) uses the data format as ``shape = [T, N, *]``. Thus, ``lava_exchange`` provides two \
-conversion functions, :class:`TNX_to_NXT <spikingjelly.activation_based.lava_exchange.TNX_to_NXT>` and :class:`NXT_to_TNX <spikingjelly.activation_based.lava_exchange.NXT_to_TNX>` for \
+conversion functions, :func:`TNX_to_NXT <spikingjelly.activation_based.lava_exchange.TNX_to_NXT>` and :func:`NXT_to_TNX <spikingjelly.activation_based.lava_exchange.NXT_to_TNX>` for \
 conversion between two formats. Here is an example:
 
 .. code-block:: python
@@ -58,11 +71,11 @@ The outputs are:
 
 Neuron Conversion
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Neurons in SpikingJelly can be converted to neurons in Lava DL. Due to the limited time and energy of developers, SpikingJelly only supports the IF neuron \
-and the LIF neuron, which are two of the most popular neurons in spiking deep learning. Other neurons will be considered to add according to user requirements.
+You can convert IF and LIF neurons. Both require ``v_reset=0.0``, and LIF
+also requires ``decay_input=False``. Other settings raise ``ValueError``.
 
 
-We can use :class:`to_lava_neuron <spikingjelly.activation_based.lava_exchange.to_lava_neuron>` to convert. Here is an example:
+We can use :func:`to_lava_neuron <spikingjelly.activation_based.lava_exchange.to_lava_neuron>` to convert. Here is an example:
 
 .. code-block:: python
 
@@ -82,18 +95,7 @@ We can use :class:`to_lava_neuron <spikingjelly.activation_based.lava_exchange.t
     print('output of sj(reshaped to NXT):\n', lava_exchange.TNX_to_NXT(if_sj(x_seq_sj)))
     print('output of lava:\n', if_la(x_seq_la))
 
-The outputs are:
-
-.. code-block:: shell
-
-    output of sj(reshaped to NXT):
-    tensor([[[0., 0., 1., 0., 1., 0., 0., 0.]],
-
-            [[0., 1., 0., 1., 0., 1., 0., 1.]]])
-    output of lava:
-    tensor([[[0., 0., 1., 0., 1., 0., 0., 0.]],
-
-            [[0., 1., 0., 1., 0., 1., 0., 1.]]])
+Compare the two printed spike tensors to inspect the converted output. Lava DL quantizes neuron dynamics, so inputs near the threshold can produce different spikes. Both the IF and LIF examples use unseeded ``torch.rand``, so values vary between runs.
 
 Here is an example of using the LIF neuron:
 
@@ -116,25 +118,13 @@ Here is an example of using the LIF neuron:
     print('output of sj:\n', lava_exchange.TNX_to_NXT(if_sj(x_seq_sj)))
     print('output of lava:\n', if_la(x_seq_la))
 
-The outputs are:
-
-.. code-block:: shell
-
-    output of sj:
-    tensor([[[0., 1., 0., 1., 0., 0., 1., 0.]],
-
-            [[0., 0., 1., 0., 0., 1., 0., 1.]]])
-    output of lava:
-    tensor([[[0., 1., 0., 1., 0., 0., 1., 0.]],
-
-            [[0., 0., 1., 0., 0., 1., 0., 1.]]])
 
 Synapse Conversion
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The frequently-used convolutional layer, linear layer, and pooling layer can be converted. Note that
+You can convert 2D convolution, linear, and 2D pooling layers with these constraints:
 
-* bias is not supported
-* Lava only supports sum pooling, which can be regarded as average pooling without average
+* Convolution and linear layers must use ``bias=False``.
+* Converted pooling layers compute sums without dividing by the number of elements in the window.
 
 Here is an example:
 
@@ -158,7 +148,7 @@ The outputs are:
 
 .. code-block:: shell
 
-    WARNING:root:The lava slayer pool layer applies sum pooling, rather than average pooling. `avgpool2d_to_lava_synapse_pool` will return a sum pooling layer.
+    The Lava-DL pooling layer applies sum pooling; returning a sum-pooling layer instead of average pooling.
     conv_la=Conv(3, 4, kernel_size=(3, 3, 1), stride=(1, 1, 1), bias=False)
     fc_la=Dense(4, 2, kernel_size=(1, 1, 1), stride=(1, 1, 1), bias=False)
     sp_la=Pool(1, 1, kernel_size=(2, 2, 1), stride=(2, 2, 1), bias=False)
@@ -182,21 +172,19 @@ For more details, please refer to `Lava: Deep Learning <https://lava-nc.org/dl.h
 `Blocks <https://lava-nc.org/lava-lib-dl/slayer/block/modules.html>`_ can be regarded as the ensemble of a synapse layer and a neuron layer. For example, \
 :class:`lava.lib.dl.slayer.block.cuba.Conv` is composed of a convolutional layer and a CUBA (current-based) LIF neuron layer.
 
-Note that ``Blocks`` is designed for SNN deployment. Thus, synapses and neuronal dynamics are quantized in ``Blocks``. Thus, ``Blocks`` is not a simple \
-``synapse + neuron ``, but ``quantize(synapse) + quantize(neuron)``.
+For deployment, ``Blocks`` quantizes synaptic weights and neuron dynamics.
+The computation is ``quantize(synapse) + quantize(neuron)``.
 
 SpikingJelly provides :class:`BlockContainer <spikingjelly.activation_based.lava_exchange.BlockContainer>` to mimic ``Blocks`` in Lava. The features of ``BlockContainer`` \
 are as follows:
 
-* supports for surrogate gradient training
-* synapses and neuronal dynamics are quantized
-* the outputs are identical to ``Blocks`` of Lava DL when giving the same inputs
-* supports for converting to :class:`lava.lib.dl.slayer.block`
+* supports surrogate gradient training
+* quantizes synapses and neuron dynamics to align with Lava DL computation
+* converts to :class:`lava.lib.dl.slayer.block`
 
-For the moment, ``BlockContainer`` only supports for :class:`lava_exchange.CubaLIFNode <spikingjelly.activation_based.lava_exchange.CubaLIFNode>`. But it also \
-supports for converting :class:`IFNode <spikingjelly.activation_based.neuron.IFNode>` or :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>` \
-in init args to ``CubaLIFNode``. Here is an example:
-
+``BlockContainer`` uses :class:`lava_exchange.CubaLIFNode <spikingjelly.activation_based.lava_exchange.CubaLIFNode>` and automatically converts
+:class:`IFNode <spikingjelly.activation_based.neuron.IFNode>` and :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>` arguments to it.
+This conversion uses the default surrogate and reset-gradient settings of ``CubaLIFNode``. To specify these settings, pass a configured ``CubaLIFNode`` directly. For example:
 
 .. code-block:: python
 
@@ -234,12 +222,16 @@ The outputs are:
 
 MNIST CSNN Example
 -------------------------------------------
-Now let us train a spiking convolutional SNN for classifying MNIST, and then convert this network to Lava DL format.
+You can use these blocks to build a convolutional SNN for MNIST, then convert the trained network to Lava DL.
 
 
 The SNN is defined as:
 
 .. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import lava_exchange, neuron, surrogate
 
     class MNISTNet(nn.Module):
         def __init__(self, channels: int = 16):
@@ -286,7 +278,7 @@ The SNN is defined as:
         def forward(self, x):
             return self.conv_fc(x)
 
-We add a conversion function to convert the SNN to Lava DL format, which can be used after training:
+Add the following ``to_lava`` method to ``MNISTNet``, at the same indentation level as ``forward``, so you can call it after training:
 
 .. code-block:: python
 
@@ -301,10 +293,12 @@ We add a conversion function to convert the SNN to Lava DL format, which can be 
         return nn.Sequential(*ret)
 
 
-Then, we train this SNN. The training process has no much difference from other SNNs. Note that the quantization inside ``lava_exchange.BlockContainer`` will 
-reduce accuracy. An example of the training codes is:
+During training, ``lava_exchange.BlockContainer`` quantizes synaptic weights and neuron dynamics, which can affect accuracy. The following training-loop excerpt requires ``net``, ``args``, the optimizer, and data loaders from the complete script:
 
 .. code-block:: python
+
+    import torch.nn.functional as F
+    from spikingjelly.activation_based import encoding, functional
 
     functional.set_step_mode(net, "m")
     encoder = encoding.PoissonEncoder(step_mode='m')
@@ -358,21 +352,23 @@ The export function is:
 
 .. code-block:: python
 
+    import os
+    import h5py
+
     def export_hdf5(net, filename):
-        # network export to hdf5 format
-        h = h5py.File(filename, 'w')
-        layer = h.create_group('layer')
-        for i, b in enumerate(net):
-            handle = layer.create_group(f'{i}')
-            b.export_hdf5(handle)
+        with h5py.File(filename, "w") as h:
+            layer = h.create_group("layer")
+            for i, b in enumerate(net):
+                handle = layer.create_group(f"{i}")
+                b.export_hdf5(handle)
 
     export_hdf5(net_ladl, os.path.join(args.out_dir, 'net_la.net'))
 
-The complete codes are stored in :class:`spikingjelly.activation_based.examples.lava_mnist`. The arguments are defined as:
+The complete codes are stored in :mod:`spikingjelly.activation_based.examples.lava_mnist`. The arguments are defined as:
 
 .. code-block:: shell
 
-    (lava-env) wfang@mlg-ThinkStation-P920:~/tempdir/w1$ python -m spikingjelly.activation_based.examples.lava_mnist -h
+    python -m spikingjelly.activation_based.examples.lava_mnist -h
     usage: lava_mnist.py [-h] [-T T] [-b B] [-device DEVICE] [-data-dir DATA_DIR]
                         [-channels CHANNELS] [-epochs EPOCHS] [-lr LR] [-out-dir OUT_DIR]
 
@@ -388,11 +384,13 @@ The complete codes are stored in :class:`spikingjelly.activation_based.examples.
     -out-dir OUT_DIR    path for saving weights
 
 
-When we run this script, it will firstly train a SNN, then convert the SNN to Lava DL format and run an inference, and finally export the SNN to the hdf5 file:
+Run the following command to train the network, check conversion accuracy, and export an HDF5 file.
+
+Reference results (MNIST, ``T=32``, 16 training epochs):
 
 .. code-block:: shell
 
-    (lava-env) wfang@mlg-ThinkStation-P920:~/tempdir/w1$ python -m spikingjelly.activation_based.examples.lava_mnist -T 32 -device cuda:0 -b 128 -epochs 16 -data-dir /datasets/MNIST/ -lr 0.1 -channels 16
+    python -m spikingjelly.activation_based.examples.lava_mnist -T 32 -device cuda:0 -b 128 -epochs 16 -data-dir /datasets/MNIST/ -lr 0.1 -channels 16
     Namespace(T=32, b=128, device='cuda:0', data_dir='/datasets/MNIST/', channels=16, epochs=16, lr=0.1, out_dir='./')
     Namespace(T=32, b=128, device='cuda:0', data_dir='/datasets/MNIST/', channels=16, epochs=16, lr=0.1, out_dir='./')
     epoch = 0, train_loss = 1.7607, train_acc = 0.7245, test_loss = 1.5243, test_acc = 0.9443, max_test_acc = 0.9443

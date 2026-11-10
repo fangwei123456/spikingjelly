@@ -1,14 +1,14 @@
-Upgrade to V2
+Upgrade to SpikingJelly 2.0
 =======================================
 
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 中文版： :doc:`../cn/migrate_from_legacy`
 
-V2 has breaking interface changes. Update old configuration using the table below.
+If your project still uses legacy interfaces, find each old item in the table, then check the current arguments, return values, and checkpoint keys against the linked APIs.
 
-V2: automatic execution and interface migration
------------------------------------------------
+2.0: automatic execution and interface migration
+------------------------------------------------
 
 .. list-table:: Previous usage and current usage
     :header-rows: 1
@@ -34,6 +34,29 @@ V2: automatic execution and interface migration
       - Ordinary Linear/Conv plus memopt; retained fused/packed/sparse projections for specific algorithms
     * - CuPy dependencies and ``cupy11``/``cupy12`` extras
       - Remove them; install Triton or build optional native CUDA extensions
+    * - ``STBIFNeuron``
+      - ``STBIFNode``
+    * - Positional ``tau`` and ``detach_reset`` of Spikformer
+      - Pass them as keyword arguments
+    * - ``cuda_threads``, ``cuda_compiler_options``, ``cuda_compiler_backend``,
+        ``save_spike_as_bool_in_neuron_kernel``, ``save_bool_spike_level`` and
+        the matching ``SJ_*`` variables
+      - Delete them
+    * - ``MSTDPLearner(..., batch_size=...)``
+      - Delete ``batch_size``; call ``reset()`` before the batch size changes
+    * - FPTT/OTTT/SLTT imports and old STDP example paths
+      - ``spikingjelly.activation_based.learning.online_learning``
+        (``ottt_online_training`` also covers SLTT); examples live in
+        ``spikingjelly.activation_based.examples.plasticity.{stdp_trace,mstdp,mstdpet,stdp_mnist}``
+    * - Tempotron ``T``/``ret_type``, dense-spike forward, ``mse_loss`` and the
+        checkpoint key ``model.summation_layer.weight``
+      - Use ``duration``. ``forward(spike_times, input_indices, batch_offsets)``
+        returns ``(v_max, t_peak, t_spike)``. Write the loss yourself. The
+        checkpoint key is ``weight``
+    * - ``GaussianTuning.encode``
+      - ``forward``; the checkpoint buffers are ``mu`` and ``sigma2``
+    * - Inference artifacts of schema v1
+      - Re-export them; loaders accept schema v2 only
 
 Old code (cannot run with the current version):
 
@@ -68,22 +91,10 @@ Single-step ``lif_step`` returns ``(spike, v_next)``; ``lif_multi_step`` returns
 three values. Check arguments and return values in :doc:`./neuron` and the
 public API when migrating a function name.
 
-Normal usage needs no implementation choice. See :doc:`./triton_backend` for
-installation/diagnostics, :doc:`./precision` for policies, :doc:`./flexsn` for
-custom dynamics and :doc:`./memopt` for memory optimization/projections.
-There is no automatic migration script or promise that an old whole-module
-pickle/checkpoint loads directly. Prefer trusted ``state_dict`` files and check
-keys/shapes against the current model definition.
+Normal usage does not require selecting an implementation. See :doc:`./triton_backend` for installation and diagnostics, :doc:`./precision` for precision policies, :doc:`./flexsn` for custom dynamics, and :doc:`./memopt` for memory optimization and projections.
 
-Rename of Packages
+Migration is manual. Whole-module pickles or checkpoints saved by an older version may not load directly. Prefer trusted ``state_dict`` files, then check their keys and shapes against the current model definition.
+
+Package rename
 -------------------------------------------
-In the new version, SpikingJelly renames some sub-packages, which are:
-
-===============  ==================
-Old              New            
-===============  ==================
-clock_driven     activation_based
-event_driven     timing_based    
-===============  ==================
-
-For earlier migration examples, see the `0.0.0.0.14 documentation <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en>`_.
+The old ``clock_driven`` package maps to ``activation_based``, and ``event_driven`` maps to ``timing_based``. This rename shipped in 0.0.0.0.14; see the `0.0.0.0.14 documentation <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en>`_ for migration examples.

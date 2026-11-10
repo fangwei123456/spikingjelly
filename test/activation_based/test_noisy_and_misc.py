@@ -3,7 +3,7 @@ import copy
 import pytest
 import torch
 
-from spikingjelly.activation_based import functional, layer, quantize
+from spikingjelly.activation_based import functional, layer, neuron, quantize
 from spikingjelly.activation_based.functional.misc import (
     delay,
     first_spike_index,
@@ -75,6 +75,44 @@ def test_nonspiking_max_abs_decode_selects_the_largest_magnitude_membrane():
     x = torch.tensor([[[-2.0]], [[3.0]], [[-5.0]]])
 
     torch.testing.assert_close(node(x), torch.tensor([[-4.0]]))
+
+
+def test_nonspiking_last_mem_decode_returns_the_last_membrane_potential():
+    x = torch.randn(4, 2, 3)
+
+    lif = neuron.NonSpikingLIFNode(tau=2.0, decode="last-mem")
+    sequence = neuron.NonSpikingLIFNode(tau=2.0, decode=None)(x)
+    torch.testing.assert_close(lif(x), sequence[-1])
+
+    noisy = NoisyNonSpikingIFNode(num_node=3, is_training=False, T=4, decode="last-mem")
+    noisy_sequence = NoisyNonSpikingIFNode(
+        num_node=3, is_training=False, T=4, decode=None
+    )(x)
+    torch.testing.assert_close(noisy(x), noisy_sequence[-1])
+
+
+def test_nonspiking_none_decode_returns_the_whole_membrane_potential_sequence():
+    x = torch.randn(4, 2, 3)
+
+    for node in (
+        neuron.NonSpikingLIFNode(tau=2.0, decode=None),
+        NoisyNonSpikingIFNode(num_node=3, is_training=False, T=4, decode=None),
+    ):
+        out = node(x)
+        assert isinstance(out, list) and len(out) == 4
+
+
+@pytest.mark.parametrize(
+    "make_node",
+    [
+        lambda decode: neuron.NonSpikingLIFNode(tau=2.0, decode=decode),
+        lambda decode: NoisyNonSpikingIFNode(num_node=3, T=4, decode=decode),
+    ],
+)
+@pytest.mark.parametrize("decode", ["last_mem", "last-me"])
+def test_nonspiking_unknown_decode_raises(make_node, decode):
+    with pytest.raises(ValueError, match="decode must be None or one of"):
+        make_node(decode)
 
 
 def test_neuron_parameters_keep_float32_when_default_dtype_changes():

@@ -598,13 +598,47 @@ class BaseNode(base.MemoryModule):
         return (v, *states[1:])
 
 
+_NON_SPIKING_DECODES = ("max-mem", "max-abs-mem", "mean-mem", "last-mem")
+
+
 class NonSpikingBaseNode(nn.Module, base.MultiStepModule):
     def __init__(self, decode: Optional[str] = None):
-        """
-        :param decode: 解码方式。若不为 ``None``，在 ``forward`` 中将使用该方式对膜电位序列进行解码
+        r"""
+        **API Language** - :ref:`中文 <NonSpikingBaseNode.__init__-cn>` | :ref:`English <NonSpikingBaseNode.__init__-en>`
+
+        ----
+
+        .. _NonSpikingBaseNode.__init__-cn:
+
+        * **中文**
+
+        非脉冲节点基类，输出膜电位，或按 ``decode`` 解码后输出。
+
+        :param decode: 解码方式。可选值为 ``'max-mem'``、``'max-abs-mem'``、``'mean-mem'``
+            和 ``'last-mem'``。为 ``None`` 时，``forward`` 返回完整的膜电位序列，
+            即包含 ``T`` 个张量的列表。
         :type decode: Optional[str]
+        :raises ValueError: ``decode`` 不是 ``None`` 或上述取值之一。
+
+        ----
+
+        .. _NonSpikingBaseNode.__init__-en:
+
+        * **English**
+
+        Base class of non-spiking nodes that outputs the membrane potential, or the decoded output specified by ``decode``.
+
+        :param decode: Decoding mode. Available values are ``'max-mem'``, ``'max-abs-mem'``,
+            ``'mean-mem'`` and ``'last-mem'``. When it is ``None``, ``forward`` returns
+            the whole membrane potential sequence, i.e. a list of ``T`` tensors.
+        :type decode: Optional[str]
+        :raises ValueError: If ``decode`` is neither ``None`` nor one of the values above.
         """
         super().__init__()
+        if decode is not None and decode not in _NON_SPIKING_DECODES:
+            raise ValueError(
+                f"decode must be None or one of {_NON_SPIKING_DECODES}, got {decode!r}."
+            )
         self.decode = decode
 
     @abstractmethod
@@ -633,7 +667,7 @@ class NonSpikingBaseNode(nn.Module, base.MultiStepModule):
             return mem
         elif self.decode == "mean-mem":
             return torch.mean(torch.stack(v_seq, 0), 0)
-        elif self.decode == "last_mem":
+        elif self.decode == "last-mem":
             return v_seq[-1]
         else:
             return v_seq

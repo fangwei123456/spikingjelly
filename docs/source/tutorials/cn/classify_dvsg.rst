@@ -4,7 +4,7 @@
 
 English version: :doc:`../en/classify_dvsg`
 
-在 :doc:`./neuromorphic_datasets` 中我们已经学习了如何使用神经形态数据集，下面让我们搭建SNN对其进行分类。
+你将把 :doc:`./neuromorphic_datasets` 中生成的 DVS128 Gesture 帧送入卷积 SNN，完成 11 类手势分类。
 
 网络结构
 -------------------------------------------
@@ -19,26 +19,27 @@ English version: :doc:`../en/classify_dvsg`
 
     # spikingjelly.activation_based.model.parametric_lif_net
 
+    from copy import deepcopy
+
     import torch
     import torch.nn as nn
-    from .. import layer
+    from spikingjelly.activation_based import layer
 
     class DVSGestureNet(nn.Module):
-        def __init__(self, channels=128, spiking_neuron: callable = None, *args, **kwargs):
+        def __init__(self, channels=128, spiking_neuron: callable = None, **kwargs):
             super().__init__()
 
             conv = []
             for i in range(5):
-                if conv.__len__() == 0:
+                if not conv:
                     in_channels = 2
                 else:
                     in_channels = channels
 
                 conv.append(layer.Conv2d(in_channels, channels, kernel_size=3, padding=1, bias=False))
                 conv.append(layer.BatchNorm2d(channels))
-                conv.append(spiking_neuron(*args, **kwargs))
+                conv.append(spiking_neuron(**deepcopy(kwargs)))
                 conv.append(layer.MaxPool2d(2, 2))
-
 
             self.conv_fc = nn.Sequential(
                 *conv,
@@ -46,11 +47,11 @@ English version: :doc:`../en/classify_dvsg`
                 layer.Flatten(),
                 layer.Dropout(0.5),
                 layer.Linear(channels * 4 * 4, 512),
-                spiking_neuron(*args, **kwargs),
+                spiking_neuron(**deepcopy(kwargs)),
 
                 layer.Dropout(0.5),
                 layer.Linear(512, 110),
-                spiking_neuron(*args, **kwargs),
+                spiking_neuron(**deepcopy(kwargs)),
 
                 layer.VotingLayer(10)
             )
@@ -60,7 +61,7 @@ English version: :doc:`../en/classify_dvsg`
 
 训练
 -------------------------------------------
-训练的代码与之前的教程 :doc:`./conv_fashion_mnist` 几乎相同，相同之处不再赘述，下面只介绍差异部分。
+训练循环沿用 :doc:`./conv_fashion_mnist`。你需要把数据集、输入形状和类别数改为 DVS128 Gesture 的设置。
 
 定义网络，使用多步模式。神经元会根据输入设备自动选择实现：
 
@@ -102,8 +103,7 @@ English version: :doc:`../en/classify_dvsg`
         test_set = DVS128Gesture(root=args.data_dir, train=False, data_type='frame', frames_number=args.T, split_by='number')
         # ...
 
-注意，由 ``DataLoader`` 打包的数据，第0维总是batch维度，因此我们从 ``DataLoader`` 读取的数据实际上是 ``shape = [N, T, C, H, W]``，因此我们需要转换为\
-SpikingJelly的多步模式使用的 ``shape = [T, N, C, H, W]``：
+``DataLoader`` 返回的帧形状为 ``[N, T, C, H, W]``，其中第 0 维是批次。多步模式要求时间维在前，因此需要转置为 ``[T, N, C, H, W]``：
 
 .. code-block:: python
 
@@ -126,7 +126,7 @@ SpikingJelly的多步模式使用的 ``shape = [T, N, C, H, W]``：
 
         # ...
 
-DVS Gesture有11类，因此在生成one hot的target时别忘了设置为11类：
+DVS128 Gesture 有 11 类，因此 one-hot 目标的类别数设为 11：
 
 .. code-block:: python
 
@@ -166,96 +166,13 @@ DVS Gesture有11类，因此在生成one hot的target时别忘了设置为11类�
 
     python -m spikingjelly.activation_based.examples.classify_dvsg -T 16 -device cuda:0 -b 16 -epochs 64 -data-dir /datasets/DVSGesture/ -amp -opt adam -lr 0.001 -j 8
 
-以下结果来自历史版本，未在当前 V2 上复测。
+参考结果（commit ``e38dee59``，CuPy 后端）：最高测试正确率为 ``0.9375``。
 
-得到输出为：
-
-.. code-block:: shell
-
-    Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
-    DVSGestureNet(
-    (conv_fc): Sequential(
-        (0): Conv2d(2, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
-        (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-        (2): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
-        (4): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
-        (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-        (6): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
-        (8): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
-        (9): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-        (10): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (11): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
-        (12): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
-        (13): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-        (14): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (15): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
-        (16): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
-        (17): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
-        (18): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (19): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
-        (20): Flatten(start_dim=1, end_dim=-1, step_mode=m)
-        (21): Dropout(p=0.5)
-        (22): Linear(in_features=2048, out_features=512, bias=True)
-        (23): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (24): Dropout(p=0.5)
-        (25): Linear(in_features=512, out_features=110, bias=True)
-        (26): LIFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, tau=2.0
-        (surrogate_function): ATan(alpha=2.0, spiking=True)
-        )
-        (27): VotingLayer(voting_size=10, step_mode=m)
-    )
-    )
-    The directory [/datasets/DVSGesture/frames_number_16_split_by_number] already exists.
-    The directory [/datasets/DVSGesture/frames_number_16_split_by_number] already exists.
-    Mkdir ./logs/T16_b16_adam_lr0.001_c128_amp.
-    Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
-    ./logs/T16_b16_adam_lr0.001_c128_amp
-    epoch = 0, train_loss = 0.0666, train_acc = 0.3964, test_loss = 0.0514, test_acc = 0.6042, max_test_acc = 0.6042
-    train speed = 92.7646 images/s, test speed = 115.2935 images/s
-    escape time = 2022-05-25 21:31:54
-
-    Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
-    ./logs/T16_b16_adam_lr0.001_c128_amp
-    epoch = 1, train_loss = 0.0463, train_acc = 0.6036, test_loss = 0.0439, test_acc = 0.6319, max_test_acc = 0.6319
-    train speed = 101.5938 images/s, test speed = 120.5184 images/s
-    escape time = 2022-05-25 21:30:48
-
-    ...
-
-    Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
-    ./logs/T16_b16_adam_lr0.001_c128_amp
-    epoch = 63, train_loss = 0.0011, train_acc = 0.9991, test_loss = 0.0103, test_acc = 0.9375, max_test_acc = 0.9375
-    train speed = 100.4324 images/s, test speed = 121.0402 images/s
-    escape time = 2022-05-25 21:30:51
-
-最终获得了 ``max_test_acc = 0.9375`` 的性能。如果精心调整超参数、增加训练 ``epochs``，通常还能获得更高的性能。
-
-下图展示了训练过程中的正确率曲线：
+该次运行的正确率曲线如下：
 
 
 .. image:: ../../_static/tutorials/classify_dvsg/dvsg_logs.*
     :width: 100%
 
 
-.. [#PLIF] Fang, Wei, et al. "Incorporating learnable membrane time constant to enhance learning of spiking neural networks." Proceedings of t
+.. [#PLIF] Fang, Wei, et al. "Incorporating learnable membrane time constant to enhance learning of spiking neural networks." Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2021, pp. 2661-2671. `CVF <https://openaccess.thecvf.com/content/ICCV2021/html/Fang_Incorporating_Learnable_Membrane_Time_Constant_To_Enhance_Learning_of_Spiking_ICCV_2021_paper.html>`_

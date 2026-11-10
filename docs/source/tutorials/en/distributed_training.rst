@@ -5,9 +5,9 @@ Authors: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_, `Wei Fang (f
 
 中文版： :doc:`../cn/distributed_training`
 
-This page covers high-level training, evaluation, and offline inference APIs,
-custom model and loop integration, and throughput and memory results from four
-RTX 4090 GPUs.
+Start by training an image classifier across several GPUs, then export its
+weights for evaluation or prediction. For language models, use the Megatron Core
+training interface and choose MCore or SGLang for offline inference.
 Vision and LLM use different precision entry points; see :doc:`./precision`.
 
 High-level APIs
@@ -20,8 +20,16 @@ Vision models
 
 ``spikingjelly.activation_based.distributed.vision`` provides image
 classification training with PyTorch DDP, FSDP2, tensor parallelism, and
-pipeline parallelism. ``vision.TrainingConfig`` describes the job and
-``vision.train_classification`` executes it:
+pipeline parallelism. DDP replicates the model and splits batches across GPUs;
+FSDP2 also shards training state. Tensor parallelism (TP) splits individual
+layers, while pipeline parallelism (PP) puts successive stages on different GPUs.
+Data parallelism (DP) refers to replicas processing different samples.
+
+Save this example as ``train_vision.py``, set the ImageNet root to your directory
+with ``train/<class>`` and ``val/<class>`` folders, and launch it with
+``torchrun --standalone --nproc-per-node=4 train_vision.py``.
+``vision.TrainingConfig`` describes the job and ``vision.train_classification``
+executes it:
 
 .. code-block:: python
 
@@ -51,6 +59,19 @@ pipeline parallelism. ``vision.TrainingConfig`` describes the job and
         memopt_checkpoint_budget="balanced",
     )
     metrics = vision.train_classification(config)
+    print(metrics)
+
+The repository's synthetic-data entry point can verify the installation and
+parallel configuration directly:
+
+.. code-block:: bash
+
+    torchrun --standalone --nproc-per-node=4 benchmark/vision_distributed.py \
+        --model sew-resnet34 \
+        --data-parallel fsdp2 \
+        --tensor-parallel-size 2 \
+        --precision bf16 \
+        --max-steps 10
 
 ``PrecisionConfig`` is prepared before DDP/FSDP wrapping and optimizer creation.
 Experimental Transformer Engine FP8 and Triton-neuron mixed precision currently
@@ -60,9 +81,9 @@ for configuration ownership, standalone usage, and measured FP8 crossover points
 
 ``execution_mode`` is ``"eager"``, ``"compile"``, or ``"cuda_graph"``.
 ``"cuda_graph"`` manually captures the complete forward/loss/backward workload at
-the execution-runner seam. Optimizer and scaler updates, scheduling, EMA,
+the execution runner. Optimizer and scaler updates, scheduling, EMA,
 checkpointing, logging, and ``reset_net`` remain outside the graph. Training runs
-11 real optimizer steps before capture and never runs dummy optimizer steps. A
+11 real optimizer steps before capture by default and never runs dummy optimizer steps. A
 batch whose shape, dtype, or layout differs from the capture point runs eagerly
 and increments the fallback counter. Vision CUDA Graph currently rejects FSDP2,
 multi-rank DDP/TP/PP, FP8, memopt, and ``store_v_seq=True``.
@@ -96,20 +117,26 @@ export, and inference process before constructing the model:
 
 .. code-block:: python
 
+    from spikingjelly.activation_based.distributed import vision
+    from spikingjelly.activation_based.model.sew_resnet import SEWResNet34Config
+
     neuron_config = vision.NeuronConfig(
         class_path=(
             "spikingjelly.activation_based.neuron.integrate_and_fire.IFNode"
         ),
         kwargs={"v_threshold": 0.7},
-        surrogate="spikingjelly.activation_based.surrogate.Rect",
+        surrogate="spikingjelly.activation_based.surrogate.ATan",
         surrogate_kwargs={"alpha": 2.0},
     )
     model_config = SEWResNet34Config(neuron_config=neuron_config)
 
+For IF/LIF neurons, a surrogate outside the seven fused built-ins
+(see :doc:`./surrogate`) selects the Torch reference recurrence.
+
 For an external neuron, call ``vision.register_neuron_class(MyNeuron)`` after
 importing it. Use ``vision.register_surrogate_class(MySurrogate)`` for an external
 surrogate. Neuron and surrogate class paths never trigger imports.
-Inference artifacts use schema version 2; version 1 artifacts must be re-exported.
+Use schema version 2 inference artifacts produced by ``export_inference_artifact``.
 
 ``input_layout`` explicitly declares the DataLoader batch layout. ``"NCHW"``
 accepts static ``[N, C, H, W]`` images; single-step calls the model ``T`` times
@@ -136,18 +163,6 @@ saved buffer between single-step forwards.
 for backward and loss reporting. ``loss_kwargs`` supplies keyword arguments to
 each call. The same function is used by non-pipeline and pipeline training and
 validation; top-1 accuracy remains the fixed classification metric.
-
-The repository's synthetic-data entry point can verify the installation and
-parallel configuration directly:
-
-.. code-block:: bash
-
-    torchrun --standalone --nproc-per-node=4 benchmark/vision_distributed.py \
-        --model sew-resnet34 \
-        --data-parallel fsdp2 \
-        --tensor-parallel-size 2 \
-        --precision bf16 \
-        --max-steps 10
 
 Custom models use ``vision.ModelConfig`` and ``vision.ModelBuilder``. ``build``
 returns the model for the current rank, FSDP2 shard roots, and PP input/output
@@ -201,9 +216,8 @@ Interface roles
 ^^^^^^^^^^^^^^^
 
 Inference interfaces are divided by whether execution belongs to the training
-lifecycle and whether ground truth is required. Validation and test use the same
-evaluation computation and differ only in invocation time and dataset, so there
-are no duplicate ``validate`` and ``test`` functions.
+lifecycle and whether ground truth is required. Use the same evaluation function
+for validation and test, supplying the appropriate dataset.
 
 .. list-table:: Vision and LLM inference interface roles
     :header-rows: 1
@@ -322,9 +336,9 @@ gathers the complete model, and the resulting artifact may use another TP/PP/DP
 topology at inference.
 
 The repository's SpikeLM and Qwen2 recipes and external runtime models live in
-``benchmark/snn_llm`` and demonstrate this seam; they are not wheel-installed
+``benchmark/snn_llm`` and demonstrate model integration; they are not wheel-installed
 model support. Their adapters retain hidden state as ``[token, T, hidden]`` and
-fold T into the head dimension only at the RadixAttention/KV-cache seam. A custom
+fold T into the head dimension only at the RadixAttention/KV-cache boundary. A custom
 model must provide both its export callback and an importable SGLang external
 model package.
 
@@ -357,8 +371,7 @@ capture. The adapters use SGLang's native layer staging and
         main()
 
 ``benchmark/snn_llm/sglang_benchmark.py`` provides reproducible offline Engine
-measurements. The experimental protocol, throughput/latency metrics, and results
-are kept together in the SGLang subsection under “Measured results.”
+measurements. Use its throughput and latency measurements to choose a topology for your workload.
 
 Low-level APIs
 --------------
@@ -370,7 +383,8 @@ Custom vision models
 parallelism, and returns the FSDP2 shard roots. See ``SEWResNet34Builder`` and
 ``SpikformerBuilder`` for working implementations.
 
-A minimal declaration has this form. It defines no model-specific checkpoint
+Use this skeleton after defining ``build_my_model`` in your model package.
+It defines no model-specific checkpoint
 boundaries, so it rejects a nonzero ``memopt_level``. A real implementation
 should apply memopt before returning, as the built-in builders do.
 
@@ -408,7 +422,7 @@ should apply memopt before returning, as the built-in builders do.
             model = build_my_model(self.config)
             model = parallelize_my_model(model, process_group)
             model.to(device)
-            return model, ("blocks",), None, None
+            return model, ("block",), None, None
 
 The model author supplies ``parallelize_my_model``. This example replaces model
 layers with public components from
@@ -462,11 +476,13 @@ shows only the assembly order:
     dp_group = mesh["dp"].get_group()
     tp_group = mesh["tp"].get_group()
 
+    torch.manual_seed(0)
     model = build_my_model()
     model = parallelize_my_model(model, tp_group).cuda(local_rank)
     functional.set_step_mode(model, step_mode)
     model = DistributedDataParallel(
-        model, device_ids=[local_rank], process_group=dp_group
+        model, device_ids=[local_rank], process_group=dp_group,
+        broadcast_buffers=step_mode == "m",
     )
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
@@ -491,6 +507,9 @@ shows only the assembly order:
 
             optimizer.zero_grad(set_to_none=True)
             if step_mode == "s":
+                source = dist.get_global_rank(dp_group, 0)
+                for buffer in model.module.buffers():
+                    dist.broadcast(buffer, src=source, group=dp_group)
                 logits = torch.stack([model(x_t) for x_t in sequence]).mean(0)
             else:
                 logits = model(sequence).mean(0)
@@ -940,8 +959,9 @@ Functional tests also covered BF16 TP4, PP4, TP2 x PP2, CP4, TP2 x CP2, and PP2
 x CP2, plus FP8 TP4, PP4, and CP4. Every case produced finite loss and gradients
 and nonzero gradients in the SNN modules. Under a 7-GiB memory budget, the planner
 selected TP4, SpikingJelly memopt, and MCore selective ``core_attn``
-recomputation. The 6.28 GiB figure is the static planning input; forcing this
-plan for two training steps reached about 7.26 GiB/GPU in practice. A TP2 x PP2
+recomputation. The planner's own 6.28 GiB/GPU estimate is the static planning
+input; forcing this plan for two training steps reached about 7.26 GiB/GPU in
+practice. A TP2 x PP2
 sharded model/optimizer checkpoint also resumed successfully from step 1 to step
 2.
 
@@ -962,10 +982,10 @@ and Triton 3.4.0.
 Vision evaluation
 ^^^^^^^^^^^^^^^^^
 
-The historical curves below used BF16, ``T=4``, 1000 classes, and a cached
-all-zero 224 x 224 image. Current runs instead pass ``--cifar10-data`` or
-``--data`` for a fixed real-image subset; the seeded-random default is for smoke
-tests. Results from the two protocols remain separate.
+Reference results use BF16, ``T=4``, 1000 classes, and a cached all-zero
+224 x 224 image. For your own measurements, pass ``--cifar10-data`` or ``--data``
+to select a fixed real-image subset. The seeded-random default is useful for
+checking the setup. Compare throughput only between runs using the same input protocol.
 
 Each throughput point starts in a fresh process with four DataLoader workers,
 five warmup batches, ten measured batches, and three independent repeats.
@@ -1008,8 +1028,7 @@ four-GPU throughput. PP reaches 1.56x and 2.11x single-GPU throughput. With K
 fixed, PP peaks at a medium batch and then moves smoothly into its capacity tail
 as per-chunk samples and memory continue to grow.
 
-Pure TP4 remains below one GPU but is now stable; this is a model
-compute-to-communication limit rather than scheduler variance. SEW executes 16
+Pure TP4 remains below one GPU. Communication accounts for much of the workload: SEW executes 16
 rowwise all-reduces totaling about 1.41 GB per batch, while Spikformer executes
 12 totaling about 0.92 GB. Two TP2 replicas on four GPUs reach 1226.1 and 858.6
 images/s, so practical deployments use TP to fit the model and DP to scale
@@ -1175,19 +1194,18 @@ post-training model quality.
     middle: one-GPU and DP4 Qwen2.5-0.5B output throughput; right: one-GPU
     input/output throughput with shared-prefix reuse.
 
-PP is not an unconditional speedup. At 32 requests with 64 input and 64 output
+At 32 requests with 64 input and 64 output
 tokens, one-GPU and PP4 SpikeLM-2.78B reach 1074.8 and 786.9 output tokens/s;
 PP4 is only 0.73x because communication and pipeline bubbles are not amortized.
 At 64 requests under the same token workload, one GPU reaches 1031.1 tokens/s
 and PP4 reaches 1416.9 tokens/s, or 1.37x. The p99 TTFT falls from 2430.9 ms to
 446.4 ms, while p99 TPOT rises from 33.2 ms to 39.8 ms. On this host, PP4 needs
-enough concurrency to improve throughput; the result does not imply lower
-single-request latency.
+enough concurrency to improve throughput. To assess single-request latency,
+compare time to first token and time per output token separately.
 
 Qwen2.5-0.5B DP4 uses 32 requests per replica and reaches 5845.5 aggregate
 output tokens/s, 3.93x the one-GPU 1486.5 tokens/s, with effectively unchanged
 TPOT. On one GPU, increasing the input from 128 to 2176 tokens with a 2048-token shared prefix raises p99 TTFT from 116.8 ms to 138.6 ms, while output throughput stays similar (1486.5 to 1517.1 tokens/s). The CSV also includes small-model PP2, which remains slower than one GPU.
-Choose topology for the model size and request concurrency.
 
 The capacity test also exported a 12.6B SpikeLM artifact containing 564 tensors
 and 25,173,851,048 bytes, then loaded and generated with PP4 without placing the

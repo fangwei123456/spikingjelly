@@ -5,11 +5,14 @@
 
 English version: :doc:`../en/neuron`
 
-本节教程主要关注 :class:`spikingjelly.activation_based.neuron`，介绍脉冲神经元。
+你将用 :mod:`spikingjelly.activation_based.neuron` 创建 IF 神经元，
+观察它如何积累电压和输出脉冲，再定义自己的充电方程。
 
 脉冲神经元模型
 -------------------------------------------
-本节以输出 0/1 的 :class:`spikingjelly.activation_based.neuron.IFNode` 为例介绍脉冲神经元。
+
+:class:`spikingjelly.activation_based.neuron.IFNode` 是积分发放（IF）神经元，
+累积输入并在电压达到阈值时输出 1，否则输出 0。
 
 首先导入相关的模块：
 
@@ -26,13 +29,13 @@ English version: :doc:`../en/neuron`
 
     if_layer = neuron.IFNode()
 
-IF神经元层有一些构造参数，在API文档中对这些参数有详细的解释，我们暂时只关注下面几个重要的参数：
+先设置控制阈值、重置和梯度的参数，完整参数见 API 文档：
 
-    - **v_threshold** -- 神经元的阈值电压
+    - ``v_threshold``： 神经元的阈值电压
 
-    - **v_reset** -- 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；如果设置为 ``None``，则电压会被减去 ``v_threshold``
+    - ``v_reset``： 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；如果设置为 ``None``，则电压会被减去 ``v_threshold``
 
-    - **surrogate_function** -- 反向传播时用来计算脉冲函数梯度的替代函数
+    - ``surrogate_function``： 反向传播时用来计算脉冲函数梯度的替代函数
 
 
 IFNode 的神经元数量由初始化或 ``reset()`` 后首次输入的 ``shape`` 决定。
@@ -42,10 +45,9 @@ IFNode 的状态是膜电位 ``v``。可以打印出刚才新建的 IF 神经元
 .. code-block:: python
 
     print(if_layer.v)
-    # if_layer.v=0.0
+    # 0.0
 
-可以发现，现在的 ``if_layer.v`` 是 ``0.0``，因为我们还没有给与它任何输入。我们给与几个不同的输入，观察神经元的电压的 ``shape``，可以发现它与输入的\
-数量是一致的：
+首次输入前，``if_layer.v`` 是标量 ``0.0``。输入后，它变成与单步输入形状相同的张量：
 
 .. code-block:: python
 
@@ -65,12 +67,12 @@ IFNode 的状态是膜电位 ``v``。可以打印出刚才新建的 IF 神经元
 
 :math:`V[t]` 和输入 :math:`X[t]` 的关系是什么样的？在脉冲神经元中，:math:`V[t]` 不仅取决于当前时刻的输入 :math:`X[t]`，还取决于它在上一个时刻末的膜电位 :math:`V[t-1]`。
 
-通常使用阈下（指的是膜电位不超过阈值电压 :math:`V_{threshold}` 时）神经动态方程 :math:`\frac{\mathrm{d}V(t)}{\mathrm{d}t} = f(V(t), X(t))` 描述连续时间的脉冲神经元的充电过程，例如对于IF神经元，充电方程为：
+用阈下（膜电位低于阈值电压 :math:`V_{threshold}`）神经动态方程 :math:`\frac{\mathrm{d}V(t)}{\mathrm{d}t} = f(V(t), X(t))` 描述连续时间的脉冲神经元的充电过程，例如对于IF神经元，充电方程为：
 
 .. math::
     \frac{\mathrm{d}V(t)}{\mathrm{d}t} = X(t)
 
-:class:`spikingjelly.activation_based.neuron` 中的神经元，使用离散的差分方程来近似连续的微分方程。在差分方程的视角下，IF神经元的充电方程为：
+:mod:`spikingjelly.activation_based.neuron` 中的神经元，使用离散的差分方程来近似连续的微分方程。在差分方程的视角下，IF神经元的充电方程为：
 
 .. math::
     V[t] - V[t-1] = X[t]
@@ -91,7 +93,7 @@ IFNode 的状态是膜电位 ``v``。可以打印出刚才新建的 IF 神经元
 不同的神经元具有不同的充电方程，但通常共享放电和重置方程。
 :class:`spikingjelly.activation_based.neuron.SimpleBaseNode` 通过
 ``neuronal_charge → neuronal_fire → neuronal_reset`` 路径直接表达这三个阶段；
-生产级神经元则在 functional 状态转移或专用 kernel 中实现等价计算。下面是
+``IFNode`` 等神经元在显式状态转移函数或专用内核中实现等价计算。下面是
 ``SimpleBaseNode.neuronal_fire`` 的核心计算：
 
 .. code-block:: python
@@ -99,15 +101,16 @@ IFNode 的状态是膜电位 ``v``。可以打印出刚才新建的 IF 神经元
     def neuronal_fire(self):
         return self.surrogate_function(self.v - self.v_threshold)
 
-``surrogate_function()`` 在前向传播时是阶跃函数，只要输入大于或等于0，就会返回1，否则会返回0。我们将这种元素仅为0或1的 ``tensor`` 视为脉冲。
+默认的 ``surrogate_function`` 在前向传播时是阶跃函数，只要输入大于或等于0，就会返回1，否则会返回0。我们将这种元素仅为0或1的 ``tensor`` 视为脉冲。
 
 释放脉冲消耗了神经元之前积累的电荷，因此膜电位会有一个瞬间的降低，即膜电位的重置。在SNN中，对膜电位重置的实现，有2种方式：
 
-#. Hard方式：释放脉冲后，膜电位直接被设置成重置电压：:math:`V[t] = V_{reset}`
+#. 硬重置：释放脉冲后，膜电位直接被设置成重置电压：:math:`V[t] = V_{reset}`
 
-#. Soft方式：释放脉冲后，膜电位减去阈值电压：:math:`V[t] = V[t] - V_{threshold}`
+#. 软重置：释放脉冲后，膜电位减去阈值电压：:math:`V[t] = V[t] - V_{threshold}`
 
-可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。在当前实现中， :class:`spikingjelly.activation_based.neuron` 中的大多数神经元构造函数中的 ``v_reset`` 默认值均为 ``0.0`` ，表示神经元默认使用Hard方式；若设置为 ``None``，则会使用Soft方式。``SimpleBaseNode.neuronal_reset`` 使用如下等价逻辑：
+软重置无需指定重置电压。``IFNode`` 的 ``v_reset`` 默认为 ``0.0``，使用硬重置；
+设为 ``None`` 时使用软重置。``SimpleBaseNode.neuronal_reset`` 使用如下等价逻辑：
 
 .. code-block:: python
 
@@ -122,7 +125,7 @@ IFNode 的状态是膜电位 ``v``。可以打印出刚才新建的 IF 神经元
 描述离散脉冲神经元的三个方程
 -------------------------------
 
-至此，我们可以用充电、放电、重置，这3个离散方程来描述任意的离散脉冲神经元。充电、放电方程为：
+用充电、放电和重置三个离散方程描述二值 IF 神经元。充电、放电方程为：
 
 .. math::
     H[t] & = f(V[t-1], X[t]) \\
@@ -137,12 +140,12 @@ IFNode 的状态是膜电位 ``v``。可以打印出刚才新建的 IF 神经元
     0, & x < 0
     \end{cases}
 
-Hard方式重置方程为：
+硬重置方程为：
 
 .. math::
     V[t] = H[t] \cdot (1 - S[t]) + V_{reset} \cdot S[t]
 
-Soft方式重置方程为：
+软重置方程为：
 
 .. math::
     V[t] = H[t] - V_{threshold} \cdot S[t]
@@ -158,9 +161,7 @@ Soft方式重置方程为：
 仿真
 -------------------------------------------
 
-接下来，我们将逐步给与神经元输入，并查看它的膜电位和输出脉冲。
-
-现在让我们给与IF神经元层持续的输入，并画出其放电后的膜电位和输出脉冲：
+给 IF 神经元层持续输入，画出每次放电后的膜电位和输出脉冲：
 
 .. code-block:: python
 
@@ -180,12 +181,12 @@ Soft方式重置方程为：
                                     figsize=figsize, dpi=dpi)
     plt.show()
 
-我们给与的输入 ``shape=[1]``，因此这个IF神经元层只有1个神经元。它的膜电位和输出脉冲随着时间变化情况如下：
+我们给予的输入 ``shape=[1]``，因此这个IF神经元层只有1个神经元。它的膜电位和输出脉冲随着时间变化情况如下：
 
 .. image:: ../../_static/tutorials/neuron/0.*
     :width: 100%
 
-下面我们将神经元层重置，并给与 ``shape=[32]`` 的输入，查看这32个神经元的膜电位和输出脉冲：
+下面我们将神经元层重置，并给予 ``shape=[32]`` 的输入，查看这32个神经元的膜电位和输出脉冲：
 
 .. code-block:: python
 
@@ -207,7 +208,7 @@ Soft方式重置方程为：
                                 ylabel='neuron index', int_x_ticks=True, x_max=T, figsize=figsize, dpi=dpi)
 
 
-    visualizing.plot_1d_spikes(spikes=s_list.numpy(), title='membrane sotentials', xlabel='simulating step',
+    visualizing.plot_1d_spikes(spikes=s_list.numpy(), title='output spikes', xlabel='simulating step',
                             ylabel='neuron index', figsize=figsize, dpi=dpi)
 
     plt.show()
@@ -225,7 +226,7 @@ Soft方式重置方程为：
 ----------------------------
 
 ``step_mode`` 控制单步或多步执行；输入决定运行设备。将模块和输入移到同一设备
-即可。PLIF 对应 ``ParametricLIFNode``，含可学习参数。下面用随机输入运行前后向，
+即可。参数化漏积分发放（PLIF）神经元对应 ``ParametricLIFNode``，含可学习参数。下面用随机输入运行前后向，
 并检查 PLIF 的参数更新：
 
 .. code-block:: python
@@ -253,8 +254,8 @@ Soft方式重置方程为：
             assert any(not torch.equal(old, p) for old, p in zip(before, parameters))
         functional.reset_net(node)  # Reset after backward/update.
 
-模块调用会推进 ``node.v`` 等状态。独立样本或 batch 在反向和参数更新后调用
-``functional.reset_net``；连续序列可以保留状态。截断 BPTT 时用
+模块调用会推进 ``node.v`` 等状态。独立样本或批次在反向和参数更新后调用
+``functional.reset_net``；连续序列可以保留状态。截断时间反向传播（BPTT）时，用
 ``functional.detach_net`` 切断上一段的梯度，不将电位重置为初值。
 完整执行、编译与诊断见 :doc:`./triton_backend`，精度见 :doc:`./precision`。
 
@@ -262,8 +263,8 @@ Soft方式重置方程为：
 ----------------------------
 
 调用 ``functional.if_multi_step``、``lif_multi_step`` 或 ``plif_multi_step`` 时，
-由调用者提供初态、保存最终状态，并决定在序列段之间是否 detach；这些函数不管理
-模块 memory。``store_v_seq=True`` 返回监控轨迹。默认 ``False`` 时，第三个返回值
+由调用者提供初态、保存最终状态，并决定在序列段之间是否分离梯度；这些函数不管理
+模块状态。``store_v_seq=True`` 返回监控轨迹。默认 ``False`` 时，第三个返回值
 为 ``None``，第二个始终是最终状态。
 
 .. code-block:: python
@@ -286,6 +287,7 @@ Soft方式重置方程为：
 
 自定义神经元
 -------------------------------------------
+
 自定义神经元有两类接口。``SimpleBaseNode`` 的 ``Simple`` 指接口简易，具体方程
 由子类定义。它用纯 PyTorch 按顺序执行充电、放电和重置，适合学习神经元行为或
 尝试新的动力学。
@@ -308,22 +310,22 @@ Soft方式重置方程为：
       - 生产级神经元实现
 
 若只需要修改神经元方程，应继承 ``SimpleBaseNode``。其单步前向固定按照充电、放电、
-重置的顺序执行，多步前向则逐时间步调用完整的单步前向。因而通常只需要实现
+重置的顺序执行，多步前向则逐时间步调用完整的单步前向。因而你只需要实现
 ``neuronal_charge``。``SimpleIFNode`` 和 ``SimpleLIFNode`` 也是基于这一接口实现的。
 
 ``SimpleBaseNode`` 没有原生 functional 状态转移。直接调用 ``functional_forward`` 会报错。
 对其实例调用
 :func:`to_functional_forward <spikingjelly.activation_based.base.to_functional_forward>`
-时，会通过通用 fallback 临时换入显式注册 memory、执行原有前向并恢复这些 memory。这能保持方程扩展
-接口，但效率低于
-``LIFNode`` 等原生 functional 神经元，因此不适合作为依赖频繁 functional 转换的高性能实现。
+时，会临时换入显式注册的状态，执行前向计算，再恢复模块状态。这个通用转换
+保留了自定义方程接口，但增加了状态替换的开销。频繁调用显式状态转移时，
+可使用 ``LIFNode`` 等直接实现该接口的神经元。
 
-生产级 ``MemoryModule`` 在 functional forward 前会调用
+使用显式状态转移的 ``MemoryModule`` 在计算前会调用
 ``materialize_states(inputs, states, step_mode)``。
 默认实现原样返回状态；只有当标量或空状态需要依据当前输入转换成张量时才需要重写。
 ``inputs`` 是当前前向传播的完整输入；实现可依据 ``step_mode`` 在多步模式下选取第一个
 时间步作为形状和设备参照，不能假定所有输入都具有时间维。该方法返回新的状态元组，不应
-修改模块 memory。旧的 ``BaseNode.v_float_to_tensor`` 已删除。
+修改模块状态或传入的状态。
 
 
 假设我们构造一种平方积分发放神经元，其充电方程为：
@@ -383,13 +385,11 @@ Soft方式重置方程为：
 
 若要实现使用显式 functional 状态转移的生产级神经元，应继承 ``BaseNode`` 并实现
 ``single_step_functional_forward``。该方法的接口为
-``(self, inputs, states, **kwargs) -> (outputs, updated_states)``，且不得修改模块中注册的
-memory 或传入的 ``states``。只有存在独立序列实现或专用 kernel 时，才需要重写
+``(self, inputs, states, **kwargs) -> (outputs, updated_states)``，其中输入、输出和状态
+均为元组；不得修改模块中注册的状态或传入的 ``states``。只有存在独立序列实现或专用内核时，才需要重写
 ``multi_step_functional_forward``。
 
-.. warning::
+.. note::
 
-    ``BaseNode`` 的常规前向已改为 functional-backed，并已移除 ``neuronal_charge``、
-    ``neuronal_fire`` 和 ``neuronal_reset``。旧代码若通过这些方法修改 Python 神经元方程，
-    请将基类改为 ``SimpleBaseNode``；原有方程无需重写。生产级神经元应使用上述
-    functional 接口。
+    在 ``SimpleBaseNode`` 子类中重写充电、放电和重置方程；在 ``BaseNode``
+    子类中实现显式状态转移接口。旧代码的迁移方法见 :doc:`./migrate_from_legacy`。

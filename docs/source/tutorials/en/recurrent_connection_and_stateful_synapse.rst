@@ -12,19 +12,20 @@ Recurrent connection is the connection from outputs to inputs, e.g., the SRNN(re
 .. image:: ../../_static/tutorials/15_recurrent_connection_and_stateful_synapse/SRNN_example.*
     :width: 100%
 
-We can add recurrent connection to modules by SpikingJelly easily. Considering the most simple case that we add a recurrent connection to the spiking neurons layer to make its \
-outputs :math:`s[t]` at time-step :math:`t` add to the external input :math:`x[t+1]` as the input to the neuron at the next time-step. We can use :class:`spikingjelly.activation_based.layer.ElementWiseRecurrentContainer` to implement this idea.\ 
-:class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.ElementWiseRecurrentContainer>` is a container that add a recurrent connection to any ``sub_module``.\ 
-The connection can be specified as a user-defined element-wise operation :math:`z=f(x, y)`. Denote :math:`x[t]` as the external input for the whole module (container and ``sub_module``) at time-step :math:`t`, :math:`i[t]` and :math:`y[t]` are the input and output of ``sub_module`` \
-(note that :math:`y[t]` is also the outputs of the whole module), then we can get
+You can feed a spiking layer's output back into its next input. For addition, the output :math:`s[t]` at time-step :math:`t` is added to the external input :math:`x[t+1]` as the next input. Use :class:`spikingjelly.activation_based.layer.ElementWiseRecurrentContainer` to implement this feedback.
+
+:class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.ElementWiseRecurrentContainer>` wraps a ``sub_module`` whose input and output shapes match.
+
+The connection can be specified as a user-defined element-wise operation :math:`z=f(y, x)`. Denote :math:`x[t]` as the external input for the whole module (container and ``sub_module``) at time-step :math:`t`, :math:`i[t]` and :math:`y[t]` are the input and output of ``sub_module`` \
+(:math:`y[t]` is also the output of the whole module):
 
 .. math::
 
-    i[t] = f(x[t], y[t-1])
+    i[t] = f(y[t-1], x[t])
 
 where :math:`f` is a user-defined element-wise function. We regard :math:`y[-1] = 0`.
 
-Let us use ``ElementWiseRecurrentContainer`` to wrap one IF neuron. We set the element-wise function as addition:
+Use ``ElementWiseRecurrentContainer`` to wrap one IF neuron. We set the element-wise function as addition:
 
 .. math::
 
@@ -40,7 +41,7 @@ The external inputs are :math:`x[t]=[1.5, 0, ..., 0]`:
     T = 8
     N = 1
 
-    def element_wise_add(x, y):
+    def element_wise_add(y, x):
         return x + y
 
     net = layer.ElementWiseRecurrentContainer(neuron.IFNode(), element_wise_add)
@@ -52,17 +53,10 @@ The external inputs are :math:`x[t]=[1.5, 0, ..., 0]`:
 
     functional.reset_net(net)
 
-The outputs are:
+After the module description (whose function address varies), the spike outputs are:
 
 .. code-block:: bash
 
-    ElementWiseRecurrentContainer(
-    element-wise function=<function element_wise_add at 0x00000158FC15ACA0>, step_mode=s
-    (sub_module): IFNode(
-        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=s
-        (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
-    )
-    )
     0 x[t]=tensor([1.5000]), s[t]=tensor([1.])
     1 x[t]=tensor([0.]), s[t]=tensor([1.])
     2 x[t]=tensor([0.]), s[t]=tensor([1.])
@@ -94,9 +88,7 @@ we can get the stateful synapse:
 
 Experiments on Sequential FashionMNIST
 ------------------------------------------
-Now let us do some simple experiments on Sequential FashionMNIST to verify whether the recurrent connection or the stateful synapse can promote the network's \
-ability on the memory task. The Sequential FashionMNIST dataset is a modified FashionMNIST dataset. Images will be sent to the network row by row or column by column, rather than \
-be sent entirely. To classify correctly, the network should have good memory ability. We will send images column by column, which is similar to how humans read the book from left to right:
+You will compare three networks on Sequential FashionMNIST, where each image arrives one column at a time. The networks must retain information from earlier columns to classify the image:
 
 .. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/samples/a.*
     :width: 50%
@@ -106,21 +98,13 @@ The following figure shows the column that is being sent:
 .. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/samples/b.*
     :width: 50%
 
-First, let us import some packages:
+Import the modules needed to define and run the networks:
 
 .. code:: python
 
     import torch
     import torch.nn as nn
-    import torch.nn.functional as F
-    import torchvision.datasets
     from spikingjelly.activation_based import neuron, surrogate, layer, functional
-    from torch.cuda import amp
-    import os, argparse
-    from torch.utils.tensorboard import SummaryWriter
-    import time
-    import datetime
-    import sys
 
 Define the plain feedforward network ``PlainNet``:
 
@@ -179,6 +163,22 @@ By adding a recurrent connection implemented by :class:`spikingjelly.activation_
             return self.fc(x).mean(0)
 
 
+The three networks read the image column by column, so the input is a sequence whose
+time dimension is the image width. The same setup applies to all of them:
+
+.. code:: python
+
+    net = FeedBackNet()
+    # 'functional.set_step_mode' will not set neurons in LinearRecurrentContainer to use step_mode = 'm'
+    functional.set_step_mode(net, step_mode='m')
+    img = torch.rand(2, 1, 28, 28)
+    img = img.squeeze(1).permute(2, 0, 1)  # [N, 1, H, W] -> [W, N, H], regarded as [T, N, H]
+    out_fr = net(img)
+    print(out_fr.shape)  # torch.Size([2, 10])
+    # the neurons of the SNN have "memory", so reset them between batches
+    functional.reset_net(net)
+
+
 The following figure shows the network structure of three networks:
 
 .. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/ppt/nets.png
@@ -188,7 +188,7 @@ The complete codes are saved in `spikingjelly.activation_based.examples.rsnn_seq
 
 .. code-block:: shell
 
-    uv run --no-sync python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --help
+    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --help
 
 Train three networks:
 
@@ -200,9 +200,7 @@ Train three networks:
 
     python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -opt sgd -lr 0.1 -j 8 -model ss
 
-The following results come from an older version and have not been rerun on V2.
-
-The following figures show the accuracy curves during training:
+Reference results for the three training commands above:
 
 .. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/rsnn_train_acc.*
     :width: 100%
@@ -212,7 +210,7 @@ The following figures show the accuracy curves during training:
     :width: 100%
 
 
-We can find that both ``StatefulSynapseNet`` and ``FeedBackNet`` have higher accuracy than ``PlainNet``, indicating that recurrent connection and stateful synapse can promote the network's memory ability.
+In these runs, ``StatefulSynapseNet`` and ``FeedBackNet`` reach higher accuracy than ``PlainNet`` on the column-by-column classification task.
 
 .. [#Effective] Yin B, Corradi F, Bohté S M. Effective and efficient computation with multiple-timescale spiking recurrent neural networks[C]//International Conference on Neuromorphic Systems 2020. 2020: 1-8.
 

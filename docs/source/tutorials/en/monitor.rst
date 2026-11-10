@@ -5,15 +5,14 @@ Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 中文版： :doc:`../cn/monitor`
 
-:class:`spikingjelly.activation_based.monitor` has defined some commonly used monitors, with which the users can record \
-the data that they are interested in. Now let us try these monitors.
+:mod:`spikingjelly.activation_based.monitor` provides monitors for outputs, inputs, state, and gradients. You will first record spikes from a small multi-step network, then record membrane voltage and gradients.
 
 
 Usage
 -------------------------------------------
-All monitors have similar usage. Let us take :class:`spikingjelly.activation_based.monitor.OutputMonitor` as the example.
+Start with :class:`spikingjelly.activation_based.monitor.OutputMonitor`. The other monitors use the same controls for enabling, indexing, and clearing records.
 
-Firstly, let us build a simple multi-step network. To avoid no spikes, we set all weights to be positive:
+Build a small multi-step network and make its weights positive so that the neurons fire more readily:
 
 .. code-block:: python
 
@@ -45,13 +44,13 @@ Firstly, let us build a simple multi-step network. To avoid no spikes, we set al
         with torch.no_grad():
             net(x_seq)
 
-The recorded data will be stored in ``.records`` whose type is ``list``. The data are recorded by the order in how they are created:
+The recorded data will be stored in ``.records`` whose type is ``list``. Records follow the order in which outputs are produced:
 
 .. code-block:: python
 
     print(f'spike_seq_monitor.records=\n{spike_seq_monitor.records}')
 
-The outputs are:
+One run may produce:
 
 .. code-block:: shell
 
@@ -84,7 +83,7 @@ The names of monitored layers are stored in ``.monitored_layers``:
     print(f'net={net}')
     print(f'spike_seq_monitor.monitored_layers={spike_seq_monitor.monitored_layers}')
 
-The outputs are:
+The output is:
 
 .. code-block:: shell
 
@@ -116,29 +115,18 @@ We can call ``.clear_recorded_data()`` to clear the recorded data:
     print(f'spike_seq_monitor.records={spike_seq_monitor.records}')
     print(f"spike_seq_monitor['1']={spike_seq_monitor['1']}")
 
-The outputs are:
+The output is:
 
 .. code-block:: shell
 
     spike_seq_monitor.records=[]
     spike_seq_monitor['1']=[]
 
-Leaving the context removes the hooks but preserves ``records`` for inspection.
-For a monitor created without ``with``, call ``close()`` when it is no longer
-needed:
-
-.. code-block:: python
-
-    spike_seq_monitor.close()
-
-``disable()`` only pauses recording and keeps the hooks so that ``enable()`` can
-resume it. ``close()`` permanently removes the hooks. Deleting a monitor variable
-is not a substitute for ``close()`` because a hook on a live module can still
-reference the monitor.
+Leaving the context removes the hooks but preserves ``records`` for inspection. If you create a monitor without ``with``, call ``close()`` when recording is finished. ``disable()`` pauses recording while keeping the hooks, so ``enable()`` can resume it. ``close()`` removes the hooks permanently. Deleting the variable alone may leave hooks registered on live modules.
 
 
 :class:`OutputMonitor <spikingjelly.activation_based.monitor.OutputMonitor>` can also process the data when recording, which is implemented by ``function_on_output``. \
-The default value of ``function_on_output`` is ``lambda x: x``, which means record the origin data. If we want to record the firing rates, we can define the \
+The default value of ``function_on_output`` is ``lambda x: x``, which means record the original data. If we want to record the firing rates, we can define the \
 function of calculating the firing rates:
 
 .. code-block:: python
@@ -170,7 +158,7 @@ Then, we can set this function as ``function_on_output`` to get a firing rates m
         functional.reset_net(net)
         fr_monitor.close()
 
-The outputs are:
+One run may produce:
 
 .. code-block:: shell
 
@@ -179,7 +167,7 @@ The outputs are:
     after call fr_monitor.enable(), fr_monitor.records=
     [tensor([0.0000, 1.0000, 0.5000, 1.0000]), tensor([0., 1., 0., 1.])]
 
-Record Attributes
+Record attributes
 -------------------------------------------
 
 To record the attributes of some modules, e.g., the membrane potential, we can use :class:`spikingjelly.activation_based.monitor.AttributeMonitor`.
@@ -204,7 +192,7 @@ Then, we use :class:`spikingjelly.activation_based.monitor.AttributeMonitor` to 
         functional.reset_net(net)
         v_seq_monitor.close()
 
-The outputs are:
+One run may produce:
 
 .. code-block:: shell
 
@@ -229,17 +217,21 @@ Neurons wrapped in :class:`LinearRecurrentContainer <spikingjelly.activation_bas
 called once per time-step, so a monitor on such a neuron records ``T`` times during one multi-step forward. With \
 ``store_v_seq = True`` the voltage of every step is appended to ``v_seq`` until ``functional.reset_net(net)``, so the \
 neuron's last record, e.g. ``v_seq_monitor[name][-1]``, holds the complete ``[T, N, *]`` sequence, while its ``T`` per-step \
-``OutputMonitor`` records can be combined with ``torch.stack(spike_seq_monitor[name])``. Because every per-step record of the \
+``OutputMonitor`` records can be combined with ``torch.stack(spike_seq_monitor[name])``.
+
+Because every per-step record of the \
 wrapped neuron is a growing snapshot of ``v_seq``, keeping all ``T`` records costs :math:`O(T^2)` memory and holds each \
 snapshot's autograd graph when gradients are enabled. To record only the current step's voltage, use \
 ``monitor.AttributeMonitor('v_seq', pre_forward=False, net=recurrent, instance=neuron.IFNode, function_on_attribute=lambda v_seq: v_seq[-1].clone())``, \
-where ``recurrent`` is the container module, and rebuild the sequence with ``torch.stack(v_seq_monitor[name])``, or call \
-``v_seq_monitor.clear_recorded_data()`` between forwards. The ``.clone()`` matters: ``v_seq[-1]`` alone is a view that keeps \
+where ``recurrent`` is the container module, and rebuild the sequence with ``torch.stack(v_seq_monitor[name])``. \
+To drop the data recorded by the previous forward, call ``v_seq_monitor.clear_recorded_data()`` between forwards.
+
+The ``.clone()`` matters: ``v_seq[-1]`` alone is a view that keeps \
 the whole snapshot alive, so cloning it (or ``v_seq[-1].detach().clone()`` when gradients are not needed) is what makes the \
 retained memory :math:`O(T)`. The monitor is scoped to the container because passing the whole \
 network would also apply the lambda to unwrapped multi-step neurons and collapse their ``[T, N, *]`` ``v_seq`` to the last step.
 
-Record Inputs
+Record inputs
 -------------------------------------------
 To record inputs, we can use :class:`spikingjelly.activation_based.monitor.InputMonitor`, which is similar to :class:`spikingjelly.activation_based.monitor.OutputMonitor`:
 
@@ -257,7 +249,7 @@ pre-forward value must remain unchanged.
         functional.reset_net(net)
         input_monitor.close()
 
-The outputs are:
+One run may produce:
 
 .. code-block:: shell
 
@@ -276,9 +268,9 @@ The outputs are:
 
             [[0.4966, 0.6030]]])]
 
-Record the Input Gradients :math:`\frac{\partial L}{\partial Y}`
+Record the output gradients :math:`\frac{\partial L}{\partial Y}`
 --------------------------------------------------------------------------------------
-We can use :class:`spikingjelly.activation_based.monitor.GradOutputMonitor` to record the input gradients :math:`\frac{\partial L}{\partial S}` of each module:
+We can use :class:`spikingjelly.activation_based.monitor.GradOutputMonitor` to record the output gradients :math:`\frac{\partial L}{\partial S}` of each module:
 
 .. code-block:: python
 
@@ -288,9 +280,9 @@ We can use :class:`spikingjelly.activation_based.monitor.GradOutputMonitor` to r
     functional.reset_net(net)
     spike_seq_grad_monitor.close()
 
-The outputs are:
+One run may produce:
 
-.. code-block:: python
+.. code-block:: text
 
     spike_seq_grad_monitor.records=
     [tensor([[[1., 1.]],
@@ -307,13 +299,13 @@ The outputs are:
 
             [[ 0.3704,  0.4747,  0.2201,  0.0596]]])]
 
-Note that the input gradients of the last layer's output spikes are all ``1`` because we use ``.sum().backward()``.
+Note that the output gradients of the last layer's output spikes are all ``1`` because we use ``.sum().backward()``.
 
-Record the Output Gradients :math:`\frac{\partial L}{\partial X}`
+Record the input gradients :math:`\frac{\partial L}{\partial X}`
 --------------------------------------------------------------------------------------
-We can use :class:`spikingjelly.activation_based.monitor.GradInputMonitor` to record the output gradients :math:`\frac{\partial L}{\partial X}` of each module.
+We can use :class:`spikingjelly.activation_based.monitor.GradInputMonitor` to record the input gradients :math:`\frac{\partial L}{\partial X}` of each module.
 
-Let us build a deep SNN, tune ``alpha`` for surrogate functions, and compare the effect:
+Build a deeper SNN, change the surrogate function's ``alpha``, and compare the input-gradient magnitudes:
 
 .. code-block:: python
 
@@ -352,7 +344,7 @@ Let us build a deep SNN, tune ``alpha`` for surrogate functions, and compare the
     input_grad_monitor.close()
 
 
-The outputs are:
+One run may produce:
 
 .. code-block:: shell
 
@@ -372,25 +364,22 @@ The outputs are:
     [tensor(4.3944), tensor(2.4396), tensor(0.8996), tensor(0.4376), tensor(0.0640), tensor(0.0122), tensor(0.0053), tensor(0.0016), tensor(0.0013), tensor(0.0005)]
 
 
-GPU Utilization Sampling
+GPU utilization sampling
 -------------------------------------------
-:class:`spikingjelly.activation_based.monitor.GPUMonitor` periodically samples
-whole-device utilization and memory through ``nvidia-smi``. It includes other
-processes using the same GPU and does not replace the model-level profilers in
-:mod:`spikingjelly.activation_based.profiler`. Always stop and join its thread:
+:class:`spikingjelly.activation_based.monitor.GPUMonitor` periodically samples whole-device utilization and memory through ``nvidia-smi``. The samples include other processes on the same GPU. Use :mod:`spikingjelly.activation_based.profiler` for model-level analysis. Put your training loop in the ``try`` block, then stop and join the monitor thread:
 
 .. code-block:: python
 
     gpu_monitor = monitor.GPUMonitor(interval=10)
     try:
-        train()
+        ...  # Run the training loop here.
     finally:
         gpu_monitor.stop()
         gpu_monitor.join()
 
-Reduce Memory Consumption
+Reduce memory consumption
 -------------------------------------------
-If we need to record huge amounts of data and the data are spikes, we can use some methods to reduce memory consumption.
+For large spike recordings, detach the graph or compress the data before storing each record.
 
 When gradients are enabled, the default identity recording function can retain
 the forward autograd graph. If gradients through the records are not required,
@@ -398,9 +387,11 @@ detach at record time:
 
 .. code-block:: python
 
-    spike_seq_monitor = monitor.OutputMonitor(
+    with monitor.OutputMonitor(
         net, neuron.IFNode, function_on_output=torch.Tensor.detach
-    )
+    ) as spike_seq_monitor:
+        with torch.no_grad():
+            net(x_seq)
 
 Bit-packing spike records
 -------------------------------------------
@@ -427,14 +418,20 @@ the packed record so it can be restored later:
 
 .. code-block:: python
 
-    spike_monitor = monitor.OutputMonitor(
+    with monitor.OutputMonitor(
         net,
         neuron.IFNode,
-        function_on_output=lambda value: functional.bit_spike_compress(value.detach()),
-    )
-    net(x_seq)
-    packed = spike_monitor.records[0]
-    spike = functional.bit_spike_decompress(packed, (T, N, C), torch.float32)
+        function_on_output=lambda value: (
+            functional.bit_spike_compress(value.detach()),
+            tuple(value.shape),
+            value.dtype,
+        ),
+    ) as spike_monitor:
+        with torch.no_grad():
+            net(x_seq)
+
+    packed, shape, dtype = spike_monitor.records[0]
+    spike = functional.bit_spike_decompress(packed, shape, dtype)
 
 Packing supports CPU and CUDA inputs. For sparse data that need further
 compression, move the packed bytes to CPU before using a general-purpose codec.

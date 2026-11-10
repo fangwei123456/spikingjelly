@@ -5,13 +5,13 @@ Author: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_
 
 中文版：:doc:`../cn/ann2snn_transformer`
 
-This page introduces Transformer-oriented ANN2SNN paths in ``spikingjelly.activation_based.ann2snn``, including the ``TransformerTDEquivalentRecipe`` baseline, ``STATransformerRecipe`` based on Spatio-Temporal Approximation (STA) [#sta]_, ``SpikeZIPTFQANNRecipe`` for SpikeZIP-compatible QANNs [#spikezip]_, and calibration-driven ``Qwen2SNNRecipe`` conversion. For classical ReLU-to-IFNode rate-coding conversion on CNNs, see :doc:`ann2snn`.
+To convert a Transformer with ``spikingjelly.activation_based.ann2snn``, choose a recipe that matches your model: the ``TransformerTDEquivalentRecipe`` baseline, ``STATransformerRecipe`` based on Spatio-Temporal Approximation (STA) [#sta]_, ``SpikeZIPTFQANNRecipe`` for SpikeZIP-compatible QANNs [#spikezip]_, and calibration-driven ``Qwen2SNNRecipe`` conversion. For classical ReLU-to-IFNode rate-coding conversion on CNNs, see :doc:`ann2snn`.
 
 .. list-table::
     :header-rows: 1
 
     * - Recipe
-      - Output
+      - Internal representation
       - Binary
       - Execution
     * - ``TransformerTDEquivalentRecipe``
@@ -36,9 +36,9 @@ The examples below are for inference.
 Path 1: Differential-equivalence Baseline
 -----------------------------------------
 
-``TransformerTDEquivalentRecipe`` is a dataloader-free replacement path that swaps supported Transformer operators for TD-equivalent modules. It is the smallest Transformer conversion baseline on this page: it performs no STA calibration, owns no internal timestep loop, and relies on existing TD operators to express cumulative differences.
+Start with ``TransformerTDEquivalentRecipe`` to check temporal-difference (TD) equivalence. It replaces supported Transformer operators with modules that output differences between consecutive cumulative results. You supply the time sequence; this recipe needs no calibration dataloader.
 
-The later ``STATransformerRecipe`` can be understood as a model-level enhancement of the same cumulative-difference and explicit step-mode idea. It adds dataloader calibration and spike encoders, and targets a complete Transformer FX graph. The two recipes are not the same API and neither is a strict superset of the other; their support boundaries and result interpretations differ.
+``STATransformerRecipe`` adds calibration and spike encoders to this cumulative-difference approach. Check each recipe's supported operators before choosing one; their supported graph operations differ.
 
 TD-equivalent Online Differences
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -57,7 +57,7 @@ The cumulative input after timestep :math:`t` is:
 
     X^{(t)} = \sum_{\tau=0}^{t} x^{(\tau)}.
 
-So :math:`X^{(0)} = X^{(1)} = \cdots = x`. Let :math:`f` denote one function or block in the original ANN, such as an affine projection, LayerNorm, GELU, or attention block. The converted TD-equivalent block is not :math:`f` itself but the difference of :math:`f` on adjacent cumulative inputs. Denote this difference block by :math:`F_t`:
+So :math:`X^{(0)} = X^{(1)} = \cdots = x`. Let :math:`f` denote one function or block in the original ANN, such as an affine projection, LayerNorm, GELU, or attention block. The TD-equivalent block outputs the difference of :math:`f` on adjacent cumulative inputs. Denote this difference block by :math:`F_t`:
 
 .. math::
 
@@ -82,7 +82,7 @@ The online-equivalent path follows explicit SpikingJelly step-mode semantics:
 
 * ``model(x)`` on the original ANN is one complete ANN inference call, without temporal expansion;
 * with ``step_mode="s"``, one converted-model call executes one differential timestep, and users write the outer time loop explicitly. Converted modules receive the current differential input :math:`x^{(t)}` and keep cumulative input :math:`X^{(t-1)}` and cumulative output :math:`f(X^{(t-1)})` internally;
-* with ``step_mode="m"``, the converted model receives a complete differential sequence tensor whose first dimension is time, and returns the complete output sequence. This mode can usually parallelize or vectorize work along the time dimension, and is much faster than single-step mode.
+* with ``step_mode="m"``, the converted model receives a complete differential sequence tensor whose first dimension is time, and returns the complete output sequence. TD operators can evaluate cumulative inputs in a batch along the time dimension.
 
 For ordinary ANN inference on one sample :math:`x`, the common differential input sequence is :math:`x^{(0)}=x` followed by zero timesteps, as in the example above. If the input is already temporal, pass its corresponding differential sequence directly.
 
@@ -126,9 +126,12 @@ For a full SST-2 validation run, omit ``--eval-samples``:
       --time-steps 8 \
       --output benchmark/output/bert_sst2_transformer_td_equivalent_t8_full.json
 
-The converted model follows the same explicit step-mode contract:
+In the example script, ``converted`` is built with ``TransformerTDEquivalentRecipe(time_steps=8)``. Once you have the embedding output and static mask, its inference step is:
 
 .. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import functional
 
     functional.set_step_mode(converted, "m")
     functional.reset_net(converted)
@@ -139,11 +142,12 @@ The converted model follows the same explicit step-mode contract:
         dtype=embedding_output.dtype,
     )
     embedding_seq[0] = embedding_output
-    logits = converted(embedding_seq, extended_attention_mask).sum(dim=0)
+    with torch.no_grad():
+        logits = converted(embedding_seq, extended_attention_mask).sum(dim=0)
 
 ``extended_attention_mask`` is a static control tensor and is passed unchanged, without a time dimension.
 
-The full SST-2 validation run below was measured on an NVIDIA A100-SXM4-80GB with the 872-sample validation split:
+Reference results (commit `0e24f7d3 <https://github.com/fangwei123456/spikingjelly/commit/0e24f7d3>`_, NVIDIA A100-SXM4-80GB):
 
 .. list-table:: BERT SST-2 Transformer TD-equivalent conversion results
     :header-rows: 1
@@ -162,9 +166,7 @@ The full SST-2 validation run below was measured on an NVIDIA A100-SXM4-80GB wit
       - 8
       - 92.431
 
-Historical documentation record: `0e24f7d3 <https://github.com/fangwei123456/spikingjelly/commit/0e24f7d3>`_ (2026-07-05); NVIDIA A100-SXM4-80GB; not rerun on current V2.
-
-The accuracy drop is 0.000 percentage points. Before evaluation, the example checks the logit alignment between the FX-friendly wrapper and the original Hugging Face classifier on the first two batches. In this full run with ``batch_size=32``, the ANN wrapper took about 1.60 seconds and the converted model about 9.20 seconds. The key stdout lines are:
+The accuracy drop is 0.000 percentage points. Before evaluation, the example checks the logit alignment between the FX-friendly wrapper and the original Hugging Face classifier on the first two batches. In this full run with ``batch_size=32``, the ANN wrapper took about 1.60 seconds and the converted model about 9.20 seconds. The corresponding output is:
 
 .. code-block:: shell
 
@@ -176,7 +178,7 @@ The accuracy drop is 0.000 percentage points. Before evaluation, the example che
 Path 2: STA Conversion
 ----------------------
 
-Taking one step beyond the Path 1 differential-equivalence baseline, STA extends the differential idea. It still relies on explicit step-mode execution and final summation over the time dimension, but it adds calibrated spike encoders after selected nonlinear and attention outputs. The online differential-equivalence part of STA is the same spike-free TD-equivalent cumulative-difference idea introduced in Path 1; this section only adds the STA-specific spike encoder, calibration, and model-level experiment.
+STA retains Path 1's cumulative differences, explicit step mode, and time-summed readout, and adds calibrated spike encoders after selected nonlinear and attention outputs. The recipe uses cumulative floating-point operators with calibrated output encoders; it does not reproduce the paper's full UGO/TCSA pipeline, and the results below measure this implementation.
 
 STA Spike Encoder
 ^^^^^^^^^^^^^^^^^
@@ -222,17 +224,22 @@ So the encoder output equals the analog increment total minus the final residual
 
 With online cumulative differences, the converted model can evaluate these operators on cumulative inputs and then encode output increments, preserving operator semantics while introducing spike-like temporal communication at selected output locations. Affine modules, ``LayerNorm``, ``GELU``, ``MultiheadAttention``, and floating FX tensor constants each maintain their own online cumulative-difference state. Bias terms and graph constants are injected once. Static attention masks and similar control tensors persist across timesteps rather than being zeroed.
 
-The recommended configuration in this tutorial is ``STATransformerRecipe(mode="spiking_encoder")``. It adds calibrated stateful spike encoders after ``LayerNorm``, ``GELU``, and ``MultiheadAttention`` outputs, and keeps the main affine projections in the online-equivalent regime. Thresholds are calibrated from a dataloader and depend on ``time_steps``.
+Use ``STATransformerRecipe(mode="spiking_encoder")``. It adds calibrated stateful spike encoders after ``LayerNorm``, ``GELU``, and ``MultiheadAttention`` outputs, and keeps the main affine projections in the online-equivalent regime. Thresholds are calibrated from a dataloader and depend on ``time_steps``.
 
 Using the Recipe
 ^^^^^^^^^^^^^^^^
 
-``STATransformerRecipe`` is an FX graph recipe. The minimum Python API uses ``FXConverter`` (``Converter`` remains a compatibility name) to execute the conversion:
+Try STA on a small LayerNorm/GELU network first. Calibrate it on a batch of floating-point inputs, then use ``FXConverter`` to convert it:
 
 .. code-block:: python
 
+    import torch
+    from torch import nn
     from spikingjelly.activation_based import ann2snn
 
+    model = nn.Sequential(nn.Linear(4, 8), nn.LayerNorm(8), nn.GELU()).eval()
+    x = torch.randn(2, 3, 4)
+    calibration_loader = [x]
     recipe = ann2snn.STATransformerRecipe(
         dataloader=calibration_loader,
         time_steps=8,
@@ -240,18 +247,17 @@ Using the Recipe
         threshold_mode="mse",
         threshold_scale=0.5,
     )
-    converted = ann2snn.FXConverter(recipe=recipe, device="cuda:0").convert(model)
+    converted = ann2snn.FXConverter(recipe=recipe, device="cpu").convert(model)
     converted.eval()
 
 ``time_steps`` belongs to the recipe because it drives threshold calibration and the conversion-time expansion of any graph constant whose sequence length cannot be inferred from runtime inputs.
 
-There are three STA modes:
+Choose between the two supported STA modes:
 
 * ``equivalent``: cumulative-difference baseline without calibration;
-* ``spiking_encoder``: calibrated spike encoders on nonlinear and attention outputs;
-* ``spiking_affine``: currently rejected by the step-mode-aligned STA backend.
+* ``spiking_encoder``: calibrated spike encoders on nonlinear and attention outputs.
 
-This tutorial uses ``spiking_encoder`` for the model-level result.
+The ``spiking_affine`` value is rejected by the step-mode backend. Use ``spiking_encoder`` for the calibrated model below.
 
 Step-mode Execution
 ^^^^^^^^^^^^^^^^^^^
@@ -266,13 +272,14 @@ Step-mode Execution
     functional.set_step_mode(converted, "s")
     functional.reset_net(converted)
 
-    y = None
-    for t in range(converted.time_steps):
-        x_t = x if t == 0 else torch.zeros_like(x)
-        y_t = converted(x_t)
-        y = y_t if y is None else y + y_t
+    with torch.no_grad():
+        y = None
+        for t in range(converted.time_steps):
+            x_t = x if t == 0 else torch.zeros_like(x)
+            y_t = converted(x_t)
+            y = y_t if y is None else y + y_t
 
-For layer-wise multi-step acceleration, switch the converted model to ``step_mode="m"`` and pass sequence tensors whose first dimension is time:
+For layer-wise multi-step execution, switch the converted model to ``step_mode="m"`` and pass sequence tensors whose first dimension is time:
 
 .. code-block:: python
 
@@ -283,8 +290,9 @@ For layer-wise multi-step acceleration, switch the converted model to ``step_mod
 
     x_zeros = torch.zeros_like(x).expand(converted.time_steps - 1, *x.shape)
     x_seq = torch.cat((x.unsqueeze(0), x_zeros), dim=0)
-    y_seq = converted(x_seq)
-    y = y_seq.sum(dim=0)
+    with torch.no_grad():
+        y_seq = converted(x_seq)
+        y = y_seq.sum(dim=0)
 
 For multi-input models, users construct floating-point input sequences explicitly. Named static control tensors such as ``attn_mask`` are passed unchanged, without adding a time dimension. Users perform the final accumulated readout by summing the output time dimension, recursively when outputs are structured.
 
@@ -322,7 +330,7 @@ To verify the environment end to end, run a small validation subset:
       --time-steps 8 \
       --threshold-scale 0.5
 
-The full ImageNet validation run below was measured on an NVIDIA A100-SXM4-80GB with the full 50,000-image validation set:
+Reference results (commit `d7ed92d8 <https://github.com/fangwei123456/spikingjelly/commit/d7ed92d8>`_, NVIDIA A100-SXM4-80GB):
 
 .. list-table:: ViT-B/16 ImageNet STA conversion results
     :header-rows: 1
@@ -347,11 +355,9 @@ The full ImageNet validation run below was measured on an NVIDIA A100-SXM4-80GB 
       - 80.700
       - 95.202
 
-Historical documentation record: `d7ed92d8 <https://github.com/fangwei123456/spikingjelly/commit/d7ed92d8>`_ (2026-07-05); NVIDIA A100-SXM4-80GB; not rerun on current V2.
+The Top-1 drop is 0.368 percentage points. In this full run with ``batch_size=16``, the ANN baseline took about 181.6 seconds and the converted STA model about 1834.0 seconds. For single-step versus multi-step timing, use the dedicated step-mode benchmarks.
 
-The Top-1 drop is 0.368 percentage points. In this full run with ``batch_size=16``, the ANN baseline took about 181.6 seconds and the converted STA model about 1834.0 seconds. Wall-clock time is sensitive to runtime conditions; for single-step versus multi-step timing, use the dedicated step-mode benchmarks.
-
-The key stdout lines are:
+The corresponding output is:
 
 .. code-block:: shell
 
@@ -370,27 +376,31 @@ Conversion Contract And API
 * RoBERTa-style self-attention must expose ``query``, ``key``, and ``value`` linear layers; ``num_attention_heads``, ``attention_head_size``, ``all_head_size``, and ``dropout``; plus ``query_quan``, ``key_quan``, ``value_quan``, ``attn_quan``, and ``after_attn_quan`` quantizers with ``s``, ``sym``, ``pos_max``, ``neg_min``, and ``level`` attributes.
 * ViT-style self-attention must expose ``qkv`` and ``proj`` linear layers; ``quan_q``, ``quan_k``, ``quan_v``, ``attn_quan``, ``after_attn_quan``, and ``quan_proj`` quantizers with the same quantization attributes; plus ``num_heads``, ``head_dim``, ``scale``, ``attn_drop``, and ``proj_drop``.
 
-The recipe replaces the QANN-side quantizers and Transformer operators with transparent SNN-side ST-BIF, SESA attention multiplication, Spike-Softmax, Spike-LayerNorm, embedding, and linear modules. This algorithm directly modifies the ``nn.Module`` tree and does not run FX tracing, so use ``ModuleConverter``:
+The recipe replaces the QANN-side quantizers and Transformer operators with ST-BIF, SESA attention multiplication, Spike-Softmax, Spike-LayerNorm, embedding, and linear modules. This algorithm copies the model and replaces modules in its ``nn.Module`` tree and does not run FX tracing, so use ``ModuleConverter``:
 
 .. code-block:: python
 
     from spikingjelly.activation_based import ann2snn
+    from spikingjelly.activation_based.ann2snn.examples.roberta_spikezip_qann_synthetic import (
+        TinyQRobertaClassifier,
+    )
 
+    qann = TinyQRobertaClassifier().eval()
     recipe = ann2snn.SpikeZIPTFQANNRecipe(
         time_steps=32,
         model_family="roberta",
     )
-    converted = ann2snn.ModuleConverter(recipe=recipe, device="cuda:0").convert(qann)
+    converted = ann2snn.ModuleConverter(recipe=recipe, device="cpu").convert(qann)
     converted.eval()
 
 Users control single-step or multi-step execution with ``functional.set_step_mode`` and explicitly pass either a single timestep or a sequence whose first dimension is time.
 
-The ST-BIF neuron used by this SpikeZIP path is inference-only. The torch implementation contains ``detach``, ``round``, and discrete state updates, and the Triton kernel does not implement backward. Use it to run converted QANN-to-SNN models, not for end-to-end gradient training or fine-tuning.
+The ST-BIF neuron used by this SpikeZIP path is inference-only. Its construction arguments are copied and detached, and the torch, Triton and native CUDA paths raise on inputs, states or buffers that require gradients; none of them implements backward. Use it to run converted QANN-to-SNN models, not for end-to-end gradient training or fine-tuning.
 
 Synthetic RoBERTa Parity Example
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This section uses RoBERTa as a simple example to verify that a SpikeZIP-compatible QANN can be converted to an SNN model whose user-accumulated logits match the QANN logits:
+Run the synthetic RoBERTa example to compare accumulated SNN logits with the original QANN logits:
 
 .. code-block:: shell
 
@@ -409,7 +419,9 @@ The expected stdout contains a near-zero parity error and an ST-BIF state summar
 
     {"accumulated_sequence_shape": [32, 3, 2], "max_abs_diff": 3.2782554626464844e-07, "mean_abs_diff": 8.630255621255856e-08, "recipe": "SpikeZIPTFQANNRecipe", "stbif_state": {"max_accumulated": 0.75, "min_accumulated": -1.0}}
 
-The result below was measured on CPU with the command above. It shows that the SpikeZIP path can convert a RoBERTa-style language Transformer when the input is already a SpikeZIP-compatible QANN.
+Use the maximum absolute difference to check whether conversion preserves the synthetic model's logits within your chosen tolerance.
+
+Reference results (commit `39ba6e93 <https://github.com/fangwei123456/spikingjelly/commit/39ba6e93>`_, CPU):
 
 .. list-table:: SpikeZIP synthetic RoBERTa QANN-to-SNN parity
     :header-rows: 1
@@ -425,8 +437,6 @@ The result below was measured on CPU with the command above. It shows that the S
       - 3 / 5
       - 3.278e-07
       - 8.630e-08
-
-Historical documentation record: `39ba6e93 <https://github.com/fangwei123456/spikingjelly/commit/39ba6e93>`_ (2026-07-07); CPU; not rerun on current V2.
 
 SpikeZIP ViT-Small ImageNet Benchmark
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -449,7 +459,7 @@ The ``vit-small-imagenet-relu-q32-81.59.pth`` checkpoint used in this tutorial c
       --samples 50000 \
       --output benchmark/output/spikezip_vit_small_imagenet_t64.json
 
-The full validation result below was measured on ``g2`` with an NVIDIA A100-SXM4-80GB, using all 50,000 ImageNet validation samples:
+Reference results (commit `39ba6e93 <https://github.com/fangwei123456/spikingjelly/commit/39ba6e93>`_, NVIDIA A100-SXM4-80GB):
 
 .. list-table:: SpikeZIP ViT-Small ImageNet QANN-to-SNN result
     :header-rows: 1
@@ -474,8 +484,6 @@ The full validation result below was measured on ``g2`` with an NVIDIA A100-SXM4
       - 96.034
       - ``step_mode="m"`` with automatic CUDA execution
 
-Historical documentation record: `39ba6e93 <https://github.com/fangwei123456/spikingjelly/commit/39ba6e93>`_ (2026-07-07); NVIDIA A100-SXM4-80GB; not rerun on current V2.
-
 The Top-1 difference is ``+0.090`` percentage points, and the Top-1 prediction agreement is ``97.34%``. QANN inference took ``79.20`` seconds; SNN inference took ``3719.15`` seconds (``61.99`` minutes), using ``snn_batch_size=4`` and peaking at ``25.63`` GiB of allocated CUDA memory. In the benchmark output, ``parity_pass=false`` because that field checks logits with ``torch.allclose(snn_logits, qann_logits, atol=parity_atol, rtol=1e-5)``; this run used ``parity_atol=1e-4``.
 
 Path 4: Qwen2 Offline Multi-step Conversion
@@ -490,23 +498,21 @@ stack with TD RMSNorm, TD linear, TD SiLU/product, TD SDPA, and
 ``ActivationAwareIFNode`` implementations.
 
 The converted SNN uses the explicit temporal layout ``[T,B,S,H]`` and executes
-``layerwise_offline_multistep``. Consequently the schedule is closer to
-:math:`L T` work than online T-step inference. It does not offer a single-step
-Qwen execution claim. Call ``functional.reset_net(model)`` before independent
-prompts; KV-cache continuation remains explicit through ``past_key_values``.
+``layerwise_offline_multistep``. For :math:`L` decoder layers, executing T steps
+per layer gives a schedule of approximately :math:`L T`. Call ``functional.reset_net(model)``
+before independent prompts; KV-cache continuation remains explicit through
+``past_key_values``.
 
-The public Qwen2 path deliberately exposes only the real ``signed_if`` temporal
-execution (plus ``exact_td`` for equivalence checks). It does not replace the
-spike sequence with a count-domain shortcut during quality evaluation.
+Use ``signed_if`` for explicit spike-sequence inference, ``exact_td`` to check
+TD equivalence, and ``qcfs_sg`` for differentiable count reconstruction.
+The reference quality results below use ``signed_if``.
 
 What conversion produces
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 Conversion does not change the Qwen2 token embedding, decoder depth, hidden
 size, GQA head layout, LM-head weights and dimensions, or existing weight
-tying, and it does not train new weights. It freezes all parameters and replaces
-RMSNorm, linear, SiLU/SwiGLU product, and SDPA operations in every decoder block
-with the TD implementations introduced earlier. The Qwen2 recipe adds signed
+tying, and it does not train new weights. The Qwen2 recipe adds signed
 QCFS encoding boundaries between those TD operators:
 
 The LM-head module is also represented by a ``TDLinear`` copy, but the final
@@ -551,19 +557,17 @@ encoders: one after the embedding and four per block for Q, K, V, and the MLP
 intermediate activation. Each signed encoder owns a positive and a negative
 ``ActivationAwareIFNode``, giving :math:`8L+2` IFNode module instances in
 total. Each instance operates elementwise over its input tensor and represents
-a population that shares per-channel thresholds, not one scalar neuron.
+a population that shares per-channel thresholds.
 
-This is a hybrid explicit multi-step model. Binary firing occurs inside the
-signed encoders. TD RMSNorm, linear, SiLU/product, and attention propagate
-floating-point temporal differences, whose elements may be negative and are not
-all ``0/1`` spikes. Here, “Qwen SNN” specifically means that selected activation
-boundaries use real IF dynamics and spike-count representations while TD
-operators preserve Transformer semantics; it does not mean that every Qwen
-operation has become a binary event.
+Binary firing occurs inside the signed encoders. TD RMSNorm, linear,
+SiLU/product, and attention propagate floating-point temporal differences,
+which can be negative. The model combines IF dynamics at selected activation
+boundaries with floating-point Transformer operations.
 
-The converted model is read-only and inference-only: call ``eval()`` and run it
-inside ``torch.no_grad()`` or ``torch.inference_mode()``. Its ``forward()``
-raises an error in training mode or while autograd is enabled.
+For the inference examples below, call ``eval()`` and run it inside
+``torch.no_grad()`` or ``torch.inference_mode()``. Conversion keeps the
+parameters trainable, and the public model also supports the differentiable
+QCFS count reconstruction mode ``qcfs_sg`` for post-training.
 
 Signed QCFS encoders and IF neurons
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -587,7 +591,7 @@ sequences:
     I_t^- = \frac{x^-}{T}, \qquad 0 \leq t < T.
 
 Thus the caller passes a static activation to ``encode(x)`` once, but each IF
-neuron sees T copies of :math:`x/T`, not :math:`x` at step 0 followed by zeros.
+neuron sees T copies of :math:`x^+/T` or :math:`x^-/T`.
 Each IF uses a per-channel threshold :math:`s`, offset :math:`s/2`, non-leaky
 integration, and soft reset:
 
@@ -604,8 +608,7 @@ integration, and soft reset:
     V_t = H_t - S_t s.
 
 The :math:`s/2` offset makes the total spike count implement rounding. Soft
-reset subtracts the threshold instead of zeroing the membrane, thereby
-preserving the residual after that subtraction. The two binary IF outputs are
+reset subtracts the threshold from the membrane, preserving the residual. The two binary IF outputs are
 scaled by :math:`s` and subtracted:
 
 .. math::
@@ -652,25 +655,23 @@ three consumption patterns:
      - Sum over T before caching or computing logits
      - A floating-point tensor without T
 
-Do not confuse the ``cumsum`` used internally by a TD operator with
-``sum(dim=0)`` at a QCFS boundary. The former still returns T temporal
-differences. The latter actually collapses the temporal dimension and starts a
-new signed spike-count encoding.
+Inside a TD operator, ``cumsum`` produces T cumulative inputs. The operator
+applies its ANN function, then differences the results to produce T outputs.
+At a QCFS boundary, ``sum(dim=0)`` removes the time dimension before a new
+signed spike-count encoding.
 
 Decoder-block boundaries do not automatically collapse T either. The TD down
 projection and residual at the end of one block produce a full
 ``[T,B,S,H]`` sequence, which enters the next block unchanged. Q, K, and V are
 summed and re-encoded at their encoding boundaries inside that next block.
 Similarly, attention output retains T until the MLP-intermediate signed encoder
-sums and re-encodes it. The model is therefore not an online pipeline in which
-one spike travels from the embedding through every layer. It repeatedly
-propagates T steps through a group of TD operators, aggregates them, and
-re-encodes the result.
+sums and re-encodes it. Execution repeatedly propagates T steps through a group of TD operators,
+aggregates them, and re-encodes the result before proceeding.
 
-``exact_td`` versus ``signed_if``
+Choose an encoding mode
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Both execution modes use the same TD decoder, but they take different actions
+The three encoding modes use the same decoder modules with different sequences
 at each encoding boundary:
 
 .. list-table::
@@ -689,13 +690,19 @@ at each encoding boundary:
      - Signed spikes after the positive and negative IF neurons receive ``ReLU(x)/T`` and ``ReLU(-x)/T``
      - Yes
      - Reconstructs a quantized and clipped :math:`x`
+   * - ``qcfs_sg``
+     - ``[reconstruct(x), 0, ..., 0]``, with the QCFS count reconstruction at the first step
+     - No, the neuron time loop is skipped
+     - Reconstructs the same quantized and clipped :math:`x` differentiably, with a multi-level spike-count surrogate gradient
 
 The ``exact_td`` branch does not call ``SignedQCFSSequenceEncoder`` or its IF
 neurons. Those modules still exist on the model object, but that forward pass
 bypasses them. Consequently only floating-point and operator-implementation
 differences should remain between ``exact_td`` and dense Qwen, while
 ``signed_if`` additionally incurs rounding and saturation error at every
-encoding boundary.
+encoding boundary. ``qcfs_sg`` skips the neuron time loop and reconstructs the
+same count differentiably. Its zero-tailed sequence supports differentiable
+training; the quality results below use ``signed_if``.
 
 T, calibration levels, and quantization error
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -746,18 +753,15 @@ another scale/range design.
 This differs from conversion paths earlier in the tutorial that tie their
 threshold calibration directly to ``time_steps``. The Qwen2 recipe separates
 ``time_steps`` from ``calibration_levels``. Read T as count capacity and levels
-as resolution within the calibrated range. The final configurations are
-empirical quality/cost operating points, not evidence that their T values are
-theoretically optimal.
+as resolution within the calibrated range. Choose both values together to balance quantization error and computation.
 
 Minimal calibration and inference
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The following example loads a local Qwen2.5 checkpoint, calibrates per-channel
-scales, converts the complete decoder, and runs the real multi-step path. The
-small prompt bank demonstrates the API; reproducing the quality results below
-requires the pinned WikiText-2 calibration protocol in
-``benchmark/snn_llm/qwen_conversion``.
+Load a local Qwen2.5 checkpoint, calibrate per-channel scales, and convert the
+decoder. The two short calibration prompts let you try the API. For a quality
+evaluation, use representative text and the calibration workflow in
+``benchmark/snn_llm/qwen_conversion/README.md``.
 
 .. code-block:: python
 
@@ -803,7 +807,7 @@ requires the pinned WikiText-2 calibration protocol in
     torch.save(calibration.state_dict(), "qwen2_snn_calibration.pt")
 
     recipe = ann2snn.Qwen2SNNRecipe(calibration, config)
-    snn = ann2snn.ModuleConverter(recipe, device=device).convert(ann)
+    snn = ann2snn.ModuleConverter(recipe, device=device).convert(ann).eval()
     del ann
 
     batch = tokenizer("SpikingJelly is", return_tensors="pt")
@@ -818,19 +822,22 @@ requires the pinned WikiText-2 calibration protocol in
             use_cache=False,
         )
     next_token = output.logits[:, -1].argmax(dim=-1)
+    print(tokenizer.batch_decode(next_token.unsqueeze(-1)))
 
 The calibration state contains tensors and basic Python values and can be
 restored with ``Qwen2SNNCalibration.from_state_dict(torch.load(...,
 weights_only=True))``. Calibration metadata must exactly match the conversion
 configuration. On CPU it uses the Torch reference; on CUDA it automatically selects a compatible ActivationAwareIF inference implementation.
 
-Reference quality evidence
+Reference accuracy
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The pinned BF16 evaluations use the full WikiText-2 test split (584 windows,
 298,937 target tokens) and six zero-shot tasks: LAMBADA, PIQA, HellaSwag,
 WinoGrande, ARC-Easy, and ARC-Challenge. ``Mean drop`` and ``max drop`` are
 dense-minus-SNN accuracy percentage points across those tasks.
+
+Reference results (commit `c98d8ac4 <https://github.com/fangwei123456/spikingjelly/commit/c98d8ac4>`_, NVIDIA A100):
 
 .. list-table:: Qwen2.5 Base offline multi-step quality
    :header-rows: 1
@@ -860,12 +867,10 @@ dense-minus-SNN accuracy percentage points across those tasks.
      - 8.57%
      - 0.41 / 1.96
 
-Historical documentation record: `c98d8ac4 <https://github.com/fangwei123456/spikingjelly/commit/c98d8ac4>`_ (2026-07-22); NVIDIA A100; not rerun on current V2. The table retains T, levels and quantile; the complete ``quality_eval.py``/``quality_aggregate.py`` run arguments were not recorded.
-
-These are quality results for an offline layerwise schedule, not latency or
-energy claims. High-T execution remains substantially slower than dense Qwen
-on the evaluated A100 GPU. The 3B checkpoint is governed by the Qwen Research
-License; SpikingJelly does not redistribute it. See ``benchmark/snn_llm/qwen_conversion/README.md`` for run instructions.
+High-T offline layerwise execution was substantially slower than dense Qwen
+on the evaluated A100 GPU. Check inference time as well as quality when
+choosing a configuration. The 3B checkpoint is governed by the Qwen Research
+License; SpikingJelly does not redistribute it. See ``benchmark/snn_llm/qwen_conversion/README.md`` for evaluation instructions.
 
 .. [#sta] Jiang Y., et al., "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers", ICLR 2024.
 

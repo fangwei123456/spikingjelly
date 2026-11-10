@@ -1,4 +1,4 @@
-Single Fully Connected Layer SNN to Classify MNIST
+Single fully connected SNN to classify MNIST
 ========================================================
 
 Author: `Yanqi-Chen <https://github.com/Yanqi-Chen>`__
@@ -7,28 +7,36 @@ Author: `Yanqi-Chen <https://github.com/Yanqi-Chen>`__
 
 Translator: `Lv Liuzhenghao <https://github.com/Lyu6PosHao>`_
 
-The tutorial will introduce how to train a simple SNN using the encoder and the surrogate gradient method to classify MNIST.
+You will build a fully connected SNN, encode input spikes with a Poisson encoder, and train it with surrogate gradients to classify MNIST digits.
 
 Build a simple SNN
 -------------------------
 
 When building neural networks with PyTorch, we can simply use ``nn.Sequential`` to stack layers to get a feedforward network, where input data will flow through each layer in order to get the output.
 
-`MNIST dataset <http://yann.lecun.com/exdb/mnist/>`__ contains 8-bit grey-scale images whose size is :math:`28\times 28` and whose labels are the digits 0–9. A simple single layer ANN to classify MNIST is as follows:
+The `MNIST dataset <http://yann.lecun.com/exdb/mnist/>`__ contains :math:`28\times 28` 8-bit grayscale images labeled with digits from 0 to 9. This single-layer ANN shows the starting structure:
 
 .. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    import time
+    import torch.nn.functional as F
+    from torch.cuda import amp
+    from spikingjelly.activation_based import layer, neuron, surrogate, encoding, functional
 
     nn.Sequential(
         nn.Flatten(),
         nn.Linear(28 * 28, 10, bias=False),
-        nn.Softmax()
+        nn.Softmax(dim=1)
         )
 
-A SNN with similar structures can also be used for classification tasks. For this network, all activation functions should be replaced with spiking neurons (LIF neurons are used here), and the connetions between neurons should be packaged with ``spikingjelly.activation_based.layer`` :
+Replace the ANN's Softmax with an LIF neuron to obtain the SNN used in this example. The connection layers come from :mod:`spikingjelly.activation_based.layer`:
 
 .. code-block:: python
 
-    nn.Sequential(
+    tau = 2.0
+    net = nn.Sequential(
         layer.Flatten(),
         layer.Linear(28 * 28, 10, bias=False),
         neuron.LIFNode(tau=tau, surrogate_function=surrogate.ATan())
@@ -45,6 +53,7 @@ Adam is used as the optimizer by default, and the poisson encoder is used to enc
 
 .. code-block:: python
 
+    lr = 1e-3
     # Use Adam optimizer
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     # Use PoissonEncoder
@@ -52,7 +61,7 @@ Adam is used as the optimizer by default, and the poisson encoder is used to enc
 
 See :mod:`spikingjelly.activation_based.encoding` for encoder usage.
 
-There are three key points to follow when programing training codes:
+The training loop has three steps:
 
 1. The output of the spiking neuron is binary, and the output of a single run is easily disturbed by the noise caused by coding. Therefore, it is generally to consider **the firing rate**  of the output layer in a period of time as the output of SNN. The value of the firing rate indicates the response intensity of the corresponding category. So we should run the SNN for a period of time ``T`` and take **the average firing rate** in ``T`` as classifying evidence.
 
@@ -60,7 +69,8 @@ There are three key points to follow when programing training codes:
 
 3. After each network simulation, the network state should be reset by ``functional.reset_net(net)``.
 
-The core training codes are as follows:
+The core training codes are as follows. This excerpt uses the arguments, DataLoader,
+and AMP scaler setup from :mod:`spikingjelly.activation_based.examples.lif_fc_mnist`:
 
 .. code-block:: python
 
@@ -111,19 +121,19 @@ The core training codes are as follows:
             # After optimizing the parameters, the state of the network should be reset because the neurons of the SNN have “memory”.
             functional.reset_net(net)
 
-The complete code is in ``activation_based.examples.lif_fc_mnist.py`` , where Tensorboard is used to save training logs. It can be run in the command line as follows:
+The complete example is :mod:`spikingjelly.activation_based.examples.lif_fc_mnist`, which writes TensorBoard logs. Start by viewing its command-line arguments:
 
 .. code-block:: shell
 
-    uv run --no-sync python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
+    python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
 
-It should be noted that the amount of memory required to train such an SNN is linearly related to the simulation time ``T``.
+The memory required to train such an SNN is linearly related to the number of simulation steps ``T``.
 A larger ``T`` does not necessarily improve training. When ``T`` is too large, the SNN unfolds in time and becomes a very deep network,
-which will cause BPTT to decay or explode when calculating the gradient.
+which can cause gradients to vanish or explode during BPTT.
 
 In addition, since we use the poisson encoder, a large ``T`` is needed to ensure that the coding noise is not too large.
 
-Results of Training
+Training results
 ------------------------
 
 We set ``tau=2.0,T=100,batch_size=64,lr=1e-3`` , the corresponding command is:
@@ -132,9 +142,9 @@ We set ``tau=2.0,T=100,batch_size=64,lr=1e-3`` , the corresponding command is:
 
     python -m spikingjelly.activation_based.examples.lif_fc_mnist -tau 2.0 -T 100 -device cuda:0 -b 64 -epochs 100 -data-dir <PATH to MNIST> -amp -opt adam -lr 1e-3 -j 8
 
-The following results come from an older version and have not been rerun on V2.
+Reference results (commit ``5ca5c06e``):
 
-In order to speed up training, mixed precision training is used. After 100 Epoch training, two npy files and a training log are output. The highest accuracy on the test dataset is 92.9%. The accuracy curve visualized by matplotlib is as follows:
+This run used mixed precision. After 100 epochs, the highest test accuracy was 92.9%. The script saves checkpoints and TensorBoard logs, then writes ``v_t_array.npy`` and ``s_t_array.npy`` after training. The accuracy curve is:
 
 .. image:: ../../_static/tutorials/lif_fc_mnist/acc.*
     :width: 100%
@@ -149,7 +159,7 @@ The classification results are obtained by using the trained model:
 
    Firing rate: [[0. 0. 0. 0. 0. 0. 0. 1. 0. 0.]]
 
-Voltages and spikes are as follows, which are gotten by the visualization function in the ``visualizing`` module.
+The saved membrane-voltage and spike sequences can be plotted in these two views:
 
 .. image:: ../../_static/tutorials/lif_fc_mnist/1d_spikes.*
     :width: 100%
@@ -157,4 +167,4 @@ Voltages and spikes are as follows, which are gotten by the visualization functi
 .. image:: ../../_static/tutorials/lif_fc_mnist/2d_heatmap.*
     :width: 100%
 
-Obviously, except for the corresponding neuron in the correct category, no other neurons are firing. The complete training code is in `activation_based/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/lif_fc_mnist.py>`_ .
+The sample is classified as digit 7, and only the output neuron for class 7 fires. The complete training code is in `activation_based/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/lif_fc_mnist.py>`_.

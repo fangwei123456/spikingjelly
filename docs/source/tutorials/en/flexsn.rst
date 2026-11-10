@@ -9,9 +9,8 @@ Authors: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_ and `Wei Fang
 SpikingJelly neuron and can generate a Triton kernel for multi-step CUDA
 execution. See :doc:`./triton_backend` for device-based neuron execution.
 
-Use FlexSN for custom multi-step neurons and public neuron/functional interfaces
-for fixed neurons. The old Auto CUDA translator and neuron code-generation
-templates have been removed.
+Use FlexSN when you want to define your own neuron dynamics. For built-in
+neurons, use the public neuron or functional interfaces.
 
 .. note::
 
@@ -40,8 +39,8 @@ state carried between time steps. ``FlexSN`` represents this equation with
         -> (*outputs, *updated_states)
 
 The final ``num_states`` return values must update the input states in order.
-For example, this function describes a soft-reset LIF neuron without input
-decay:
+For example, define a smooth approximation to a soft-reset LIF neuron without
+input decay:
 
 .. code-block:: python
 
@@ -60,7 +59,7 @@ the model or appear in its ``state_dict`` belong in ``static_inputs``.
 Building a neuron with several states
 -------------------------------------
 
-Consider a neuron with two inputs, two outputs, and two states. ``rho`` adapts
+You can add inputs and states to model threshold adaptation. ``rho`` adapts
 the threshold of the first output, while ``y`` blends hard and soft membrane
 reset:
 
@@ -117,7 +116,8 @@ inputs:
     print(v_seq.shape, rho_seq.shape)
     print(final_v.shape, final_rho.shape)
 
-``forward`` returns a Tensor for one output and a tuple for several outputs.
+The outputs and state sequences have shape ``[16, 3, 32, 32]``; final states
+have shape ``[3, 32, 32]``. ``forward`` returns a Tensor for one output and a tuple for several outputs.
 ``states`` and ``state_seqs`` are always tuples. Call ``reset()`` after each
 independent sequence to clear managed state.
 
@@ -191,8 +191,9 @@ without replacing module parameters:
         (x_seq,), v0, static_inputs=(torch.tensor(1.0),)
     )
 
-A static tensor must be a scalar or have the same number of elements as one
-input step. Arbitrary broadcasting is not supported.
+Inputs and states must share their per-step element count, dtype and device.
+A static tensor must share that dtype and device and be a scalar or have the
+same number of elements as one input step. Arbitrary broadcasting is not supported.
 An explicit ``()`` means no static inputs and is valid only when none were
 registered. The lower-level ``single_step_functional_forward`` and
 ``multi_step_functional_forward`` methods still require explicit ``static_inputs``.
@@ -217,16 +218,12 @@ compositions use the Torch/HOP path. The constructor has no backend argument.
 A supported CUDA core compiles when it first receives a real CUDA input. An
 unsupported operation or a kernel error after selection is reported directly.
 
-Limits and migration
---------------------
+Limits
+------
 
 * The leading dimension of a multi-step input is time ``T``; ``T == 0`` is rejected.
 * Single-step mode executes the core directly; automatic CUDA fusion targets multi-step mode.
 * Changing step mode preserves final states and clears derived ``state_seqs``.
-* The old ``num_inputs``, ``num_outputs``, ``example_inputs``,
-  ``example_outputs``, and ``requires_grad`` constructor arguments are removed.
-* ``FlexSNKernel`` and ``FlexSN.kernel`` are removed. Use
-  ``functional_forward`` for explicit-state execution.
 
 Training and state management
 -----------------------------

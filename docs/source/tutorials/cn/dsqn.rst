@@ -5,9 +5,9 @@
 
 .. warning::
 
-    We are looking for contributors to translate this tutorial to English!
+    欢迎参与本教程的英文翻译。
 
-本节教程将介绍如何使用替代梯度方法训练一个深度脉冲Q网络。
+你将用替代梯度训练深度脉冲 Q 网络（DSQN），根据 Atari 游戏画面选择动作。替代梯度用平滑函数的导数近似脉冲发放函数的导数，让网络能够反向传播。
 
 从头搭建一个简单的深度脉冲Q网络
 -------------------------------
@@ -18,7 +18,11 @@ Atari游戏的观察经过预处理成为尺寸为 :math:`84\times 84` 的灰度
 
 .. code-block:: python
 
-    nn.Sequential(
+    import torch.nn as nn
+
+    input_shape = (4, 84, 84)
+    n_actions = 4
+    net = nn.Sequential(
             nn.Conv2d(input_shape[0], 32, 8, 4),
             nn.ReLU(),
 
@@ -39,7 +43,13 @@ Atari游戏的观察经过预处理成为尺寸为 :math:`84\times 84` 的灰度
 
 .. code-block:: python
 
-    nn.Sequential(
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import functional, layer, neuron, surrogate
+
+    input_shape = (4, 84, 84)
+    n_actions = 4
+    net = nn.Sequential(
             layer.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
             neuron.LIFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
 
@@ -57,16 +67,26 @@ Atari游戏的观察经过预处理成为尺寸为 :math:`84\times 84` 的灰度
             neuron.NonSpikingLIFNode(decode='max-mem')
         )
 
-其中非脉冲神经元的膜电压编码方法由 ``neuron.NonSpikingLIFNode(decode=...)`` 的 ``decode`` 参数控制；而示例训练脚本中的命令行参数 ``--dec_type`` 会被传递到这个 ``decode`` 参数。替代函数这里选择\ ``surrogate.ATan``\。
+输入中的 4 个通道对应堆叠的灰度帧，``n_actions`` 应与环境的动作数一致。将同一批画面重复输入 ``T`` 步，网络会为每个动作输出一个 Q 值，即该动作的预期累计回报：
 
-SpikingJelly中提供了4种膜电压编码方法，用作非脉冲神经元中膜电压序列的统计量，其中\ ``last-mem``\代表最终膜电压，\ ``max-mem``\代表最大膜电压，\ ``max-abs-mem``\代表最大绝对值的膜电压，而\ ``mean-mem``\代表平均膜电压。通过这种方式，SNN可以输出任意大小的浮点值，适用于强化学习中的Q值。
+.. code-block:: python
+
+    functional.set_step_mode(net, step_mode="m")
+    T = 8
+    frames = torch.rand(2, *input_shape)
+    q = net(frames.unsqueeze(0).expand(T, -1, -1, -1, -1))
+    print(q.shape)  # torch.Size([2, 4])
+    functional.reset_net(net)
+
+
+``neuron.NonSpikingLIFNode`` 的 ``decode`` 参数决定如何从膜电压序列中取出 Q 值。脉冲层使用 ``surrogate.ATan`` 计算替代梯度。完整脚本还支持 ``fr-mlp``：对最后一层 LIF 的脉冲在时间维取平均，再接 ``nn.Linear`` 输出 Q 值。
+
+SpikingJelly中提供了4种膜电压编码方法，用作非脉冲神经元中膜电压序列的统计量，其中\ ``last-mem``\代表最终膜电压，\ ``max-mem``\代表最大膜电压，\ ``max-abs-mem``\代表绝对值最大的膜电压（保留符号），而\ ``mean-mem``\代表平均膜电压。通过这种方式，SNN可以输出任意大小的浮点值，适用于强化学习中的Q值。
 
 训练DSQN
 -----------
 
-首先指定好训练参数如学习率等以及若干其他配置
-
-优化器默认使用Adam，并且使用第一个卷积层与随后的脉冲神经元层作为可学习的编码器
+先设置学习率和仿真步数 ``T``。训练脚本使用 Adam 优化器，第一个卷积层与随后的脉冲神经元层构成可学习的编码器。
 
 训练代码的编写需要遵循以下三个要点：
 
@@ -74,7 +94,7 @@ SpikingJelly中提供了4种膜电压编码方法，用作非脉冲神经元中�
 
 2. DSQN的损失函数与DQN算法相同。
 
-3. 每次网络仿真结束后，需要\ **重置**\ 网络状态
+3. 每次网络仿真结束后，调用 ``functional.reset_net(net)`` 重置网络状态，其中 ``net`` 是本次仿真的网络。
 
 DSQN 的完整代码位于 ``spikingjelly/activation_based/examples/dsqn``。脚本使用该目录中的本地 ``ptan`` 和 ``utils`` 包，因此应先进入目录再运行：
 
@@ -83,24 +103,9 @@ DSQN 的完整代码位于 ``spikingjelly/activation_based/examples/dsqn``。脚
     cd spikingjelly/activation_based/examples/dsqn
     python train.py --cuda --game breakout --T 8 --dec_type max-mem --seed 123
 
-    usage: train.py [--cuda] [--game GAME] [--T T] [--dec_type DEC] [--early_stop]
-                    [--eval_q] [--sticky_actions] [--frame_num FN] [--seed SEED]
+运行训练或 ``--help`` 前，按该目录的 README 配置 ``gym==0.18.0``、``gym[atari]`` 和 ``atari-py==0.2.5``。脚本依赖 Gym 的四项返回值 ``step`` 接口和 Atari 环境，安装 Gymnasium 后不能直接替代。
 
-    LIF DSQN Training
-
-    optional arguments:
-    --cuda              enable cuda
-    --game GAME         ATARI game (gym)
-    --T T               simulation time
-    --dec_type DEC      type of SNN decoder, e.g. max-mem, mean-mem, max-abs-mem, last-mem, fr-mlp
-    --early_stop        use stop reward to stop early
-    --eval_q            record the Q-value (eval)
-    --sticky_actions    use sticky actions
-    --frame_num FN      number of frames
-    --seed SEED         random seed to use
-
-需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 不一定带来更好的训练效果。\ ``T``
-太大时，SNN在时间上展开后会变成一个非常深的网络，这将导致BPTT计算梯度时容易衰减或爆炸。
+增大仿真步数 ``T`` 会增加反向传播时保存的中间状态和显存占用。过长的序列还可能导致随时间反向传播（BPTT）时梯度衰减或爆炸，因此应根据验证结果选择 ``T``。
 
 训练结果
 --------

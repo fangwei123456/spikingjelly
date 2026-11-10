@@ -5,15 +5,14 @@
 
 English version: :doc:`../en/monitor`
 
-在 :class:`spikingjelly.activation_based.monitor` 中定义了几个通用的监视器类，用户可以使用这些监视器实现复杂的数据\
-记录功能。下面以一个简单的网络为例进行介绍。
+:mod:`spikingjelly.activation_based.monitor` 提供了输出、输入、状态和梯度监视器。你将先用一个简单的多步网络记录脉冲，再学习记录膜电位和梯度。
 
 
 基本使用
 -------------------------------------------
-所有的监视器的用法类似，以 :class:`spikingjelly.activation_based.monitor.OutputMonitor` 为例进行介绍。
+先使用 :class:`spikingjelly.activation_based.monitor.OutputMonitor` 记录神经元输出。其他监视器采用相同的启停、索引和清理方式。
 
-首先我们搭建起一个简单的多步网络。为了避免无脉冲释放，我们将权重全部设置为正值：
+搭建一个简单的多步网络，并将权重设为正值，让神经元更容易发放脉冲：
 
 .. code-block:: python
 
@@ -53,7 +52,7 @@ English version: :doc:`../en/monitor`
 
     print(f'spike_seq_monitor.records=\n{spike_seq_monitor.records}')
 
-输出为：
+一次运行的输出示例如下：
 
 .. code-block:: shell
 
@@ -85,7 +84,7 @@ English version: :doc:`../en/monitor`
     print(f'net={net}')
     print(f'spike_seq_monitor.monitored_layers={spike_seq_monitor.monitored_layers}')
 
-输出为：
+输出如下：
 
 .. code-block:: shell
 
@@ -117,23 +116,14 @@ English version: :doc:`../en/monitor`
     print(f'spike_seq_monitor.records={spike_seq_monitor.records}')
     print(f"spike_seq_monitor['1']={spike_seq_monitor['1']}")
 
-输出为：
+输出如下：
 
 .. code-block:: shell
 
     spike_seq_monitor.records=[]
     spike_seq_monitor['1']=[]
 
-退出上述上下文后，钩子已经被移除，但 ``records`` 仍可读取。没有使用 ``with``
-创建监视器时，应在不再需要监视器后显式调用 ``close()``：
-
-.. code-block:: python
-
-    spike_seq_monitor.close()
-
-``disable()`` 仅暂停记录并保留钩子，以便通过 ``enable()`` 恢复；``close()`` 会
-永久移除钩子。删除监视器变量不能替代 ``close()``，因为仍存活模块上的钩子可能
-继续引用监视器。
+退出上述上下文后，钩子已经被移除，但 ``records`` 仍可读取。如果没有使用 ``with``，请在不再记录时调用 ``close()``。``disable()`` 只暂停记录并保留钩子，之后可以用 ``enable()`` 恢复；``close()`` 会永久移除钩子。仅删除监视器变量可能不会移除仍注册在模块上的钩子。
 
 
 :class:`OutputMonitor <spikingjelly.activation_based.monitor.OutputMonitor>` 还支持在记录数据时就对数据进行简单的处理，只需要\
@@ -169,7 +159,7 @@ English version: :doc:`../en/monitor`
         functional.reset_net(net)
         fr_monitor.close()
 
-输出为：
+一次运行的输出示例如下：
 
 .. code-block:: shell
 
@@ -203,7 +193,7 @@ English version: :doc:`../en/monitor`
         functional.reset_net(net)
         v_seq_monitor.close()
 
-输出为：
+一次运行的输出示例如下：
 
 .. code-block:: shell
 
@@ -228,11 +218,15 @@ English version: :doc:`../en/monitor`
 在一次多步前向传播中会被逐个时间步调用 ``T`` 次，因此针对这类神经元的监视器也会记录 ``T`` 次。设置 ``store_v_seq = True`` 后，\
 每个时间步的电压都会被追加到 ``v_seq`` 中，直到调用 ``functional.reset_net(net)`` ，因此该神经元的最后一条记录（例如 \
 ``v_seq_monitor[name][-1]`` ）就是完整的 ``[T, N, *]`` 电压序列；而 ``OutputMonitor`` 对该神经元记录的 ``T`` 个单步输出可以用 \
-``torch.stack(spike_seq_monitor[name])`` 拼接。由于该神经元的每条单步记录都是 ``v_seq`` 不断增长的快照，保留全部 ``T`` 条记录需要 \
+``torch.stack(spike_seq_monitor[name])`` 拼接。
+
+由于该神经元的每条单步记录都是 ``v_seq`` 不断增长的快照，保留全部 ``T`` 条记录需要 \
 :math:`O(T^2)` 的内存，并且在启用梯度时会保留每个快照的计算图。若只想记录当前时间步的电压，可以使用 \
 ``monitor.AttributeMonitor('v_seq', pre_forward=False, net=recurrent, instance=neuron.IFNode, function_on_attribute=lambda v_seq: v_seq[-1].clone())`` \
-（其中 ``recurrent`` 是容器模块），再用 ``torch.stack(v_seq_monitor[name])`` 重建完整序列；或者在每次前向传播之间调用 \
-``v_seq_monitor.clear_recorded_data()`` 。这里的 ``.clone()`` 不可省略：单独的 ``v_seq[-1]`` 只是一个视图，会让整个快照一直存活，\
+（其中 ``recurrent`` 是容器模块），再用 ``torch.stack(v_seq_monitor[name])`` 重建完整序列。\
+若要在每次前向传播之间丢弃已经记录的数据，可以调用 ``v_seq_monitor.clear_recorded_data()`` 。
+
+这里的 ``.clone()`` 不可省略：单独的 ``v_seq[-1]`` 只是一个视图，会让整个快照一直存活，\
 因此对其克隆（或在不需要梯度时使用 ``v_seq[-1].detach().clone()`` ）才是让保留内存降为 :math:`O(T)` 的关键。\
 监视器只作用于容器，是因为若传入整个网络，该函数也会作用于未被包裹的多步神经元，\
 把它们的 ``[T, N, *]`` 电压序列 ``v_seq`` 压缩为最后一个时间步。
@@ -254,7 +248,7 @@ English version: :doc:`../en/monitor`
         functional.reset_net(net)
         input_monitor.close()
 
-输出为：
+一次运行的输出示例如下：
 
 .. code-block:: shell
 
@@ -273,9 +267,9 @@ English version: :doc:`../en/monitor`
 
             [[0.4966, 0.6030]]])]
 
-记录模块的输入梯度 :math:`\frac{\partial L}{\partial Y}`
+记录模块的输出梯度 :math:`\frac{\partial L}{\partial Y}`
 --------------------------------------------------------------------------------------
-如果我们想要记录每一层脉冲神经元的输入梯度 :math:`\frac{\partial L}{\partial S}`，则可以使用 \
+如果我们想要记录每一层脉冲神经元的输出梯度 :math:`\frac{\partial L}{\partial S}`，则可以使用 \
 :class:`spikingjelly.activation_based.monitor.GradOutputMonitor` 轻松实现：
 
 .. code-block:: python
@@ -286,9 +280,9 @@ English version: :doc:`../en/monitor`
     functional.reset_net(net)
     spike_seq_grad_monitor.close()
 
-输出为：
+一次运行的输出示例如下：
 
-.. code-block:: python
+.. code-block:: text
 
     spike_seq_grad_monitor.records=
     [tensor([[[1., 1.]],
@@ -308,11 +302,11 @@ English version: :doc:`../en/monitor`
 由于我们使用 ``.sum().backward()``，因而损失传给最后一层输出脉冲的梯度全为1。
 
 
-记录模块的输出梯度 :math:`\frac{\partial L}{\partial X}`
+记录模块的输入梯度 :math:`\frac{\partial L}{\partial X}`
 --------------------------------------------------------------------------------------
-使用 :class:`spikingjelly.activation_based.monitor.GradInputMonitor` 可以轻松记录模块的输出梯度 :math:`\frac{\partial L}{\partial X}`。
+使用 :class:`spikingjelly.activation_based.monitor.GradInputMonitor` 可以轻松记录模块的输入梯度 :math:`\frac{\partial L}{\partial X}`。
 
-让我们构建一个深度网络，调节替代函数的 ``alpha`` 并比较不同 ``alpha`` 下的梯度的幅值：
+构建一个较深的网络，修改替代函数的 ``alpha``，并比较输入梯度的幅值：
 
 .. code-block:: python
 
@@ -351,7 +345,7 @@ English version: :doc:`../en/monitor`
     input_grad_monitor.close()
 
 
-输出为：
+一次运行的输出示例如下：
 
 .. code-block:: shell
 
@@ -373,31 +367,31 @@ English version: :doc:`../en/monitor`
 
 GPU 利用率采样
 -------------------------------------------
-:class:`spikingjelly.activation_based.monitor.GPUMonitor` 通过 ``nvidia-smi``
-定期采样整张 GPU 的利用率和显存占用。结果会包含同一 GPU 上的其他进程，不能替代
-:mod:`spikingjelly.activation_based.profiler` 中的模型级分析器。使用后必须停止并等待线程退出：
+:class:`spikingjelly.activation_based.monitor.GPUMonitor` 通过 ``nvidia-smi`` 定期采样整张 GPU 的利用率和显存占用。采样结果包含同一 GPU 上的其他进程；模型级分析请使用 :mod:`spikingjelly.activation_based.profiler`。把训练循环放在 ``try`` 块中，并在结束时停止监视线程：
 
 .. code-block:: python
 
     gpu_monitor = monitor.GPUMonitor(interval=10)
     try:
-        train()
+        ...  # 在这里运行训练循环
     finally:
         gpu_monitor.stop()
         gpu_monitor.join()
 
 降低内存占用
 -------------------------------------------
-如果我们需要记录大量数据，当被记录的数据是脉冲时，可以通过一些方法来降低内存占用。
+记录大量脉冲时，可以在写入监视器前分离计算图或压缩数据。
 
 启用梯度时，默认的恒等记录函数可能保留前向计算图。若记录不需要参与梯度计算，
 应在记录时分离张量：
 
 .. code-block:: python
 
-    spike_seq_monitor = monitor.OutputMonitor(
+    with monitor.OutputMonitor(
         net, neuron.IFNode, function_on_output=torch.Tensor.detach
-    )
+    ) as spike_seq_monitor:
+        with torch.no_grad():
+            net(x_seq)
 
 脉冲记录位压缩
 -------------------------------------------
@@ -422,14 +416,20 @@ GPU 利用率采样
 
 .. code-block:: python
 
-    spike_monitor = monitor.OutputMonitor(
+    with monitor.OutputMonitor(
         net,
         neuron.IFNode,
-        function_on_output=lambda value: functional.bit_spike_compress(value.detach()),
-    )
-    net(x_seq)
-    packed = spike_monitor.records[0]
-    spike = functional.bit_spike_decompress(packed, (T, N, C), torch.float32)
+        function_on_output=lambda value: (
+            functional.bit_spike_compress(value.detach()),
+            tuple(value.shape),
+            value.dtype,
+        ),
+    ) as spike_monitor:
+        with torch.no_grad():
+            net(x_seq)
+
+    packed, shape, dtype = spike_monitor.records[0]
+    spike = functional.bit_spike_decompress(packed, shape, dtype)
 
 CPU 和 CUDA 输入均支持位压缩。如果稀疏脉冲还需要进一步压缩，先将打包后的字节移至
 CPU，再使用通用压缩库。

@@ -1,15 +1,16 @@
 Timing-based SNNs with continuous events
 ========================================
 
-``timing_based`` exposes explicit event times. TTFS constrains the code, while the
-representation determines the implementation: a TTFS network that passes step-wise
-binary activations belongs to ``activation_based``. The models here solve continuous
-event responses without constructing a uniform time grid.
+You will encode inputs as spike times and pass these events between neurons in
+``timing_based``. The models solve responses in continuous time without a uniform
+time grid. Time to first spike (TTFS) means that a value is represented by the
+first spike time. TTFS networks that pass binary activations at discrete steps
+use ``activation_based``.
 
-Start with the compact event format below. Then choose the section matching the
-model you need:
+Start by packing spike times into the compact event format, then choose a model:
 
-* Tempotron: double-exponential PSP, one output spike, shunting and peak outputs.
+* Tempotron: double-exponential postsynaptic potential (PSP), one output spike,
+  shunting (blocking new inputs after firing) and peak outputs.
 * SRM: linear-ramp PSP with reset, allowing multiple output spikes.
 * CubicSRM: finite-support cubic PSP, one output spike and the general root solver.
 * CubicConv2d: shared CubicSRM weights over 2D receptive fields.
@@ -55,8 +56,9 @@ between calls; ``reset()`` is unnecessary.
 Compact event inputs
 --------------------
 
-Inputs are finite ``spike_times[E]``, int64 input-column ``input_indices[E]``, and
-int64 CSR ``batch_offsets[B+1]``. Offsets start at 0, are nondecreasing and end at E.
+Pack E events from B samples into three tensors: finite ``spike_times[E]``,
+int64 input-column ``input_indices[E]``, and int64 ``batch_offsets[B+1]``.
+This compressed sparse row (CSR) format uses offsets to delimit each sample. Offsets start at 0, are nondecreasing and end at E.
 Segments may be unordered; simultaneous events are grouped and repeated offsets
 represent empty trials. Out-of-window events are ignored with zero gradient.
 All tensors share the weights' device; times and weights share FP32/FP64 dtype
@@ -82,6 +84,10 @@ on CPU/CUDA.
    loss.backward()
    assert torch.isfinite(times.grad).all()
 
+``offsets=[0,3,3]`` packs two samples: three events in the first and none in
+the second. All three outputs have shape ``[2,1]``; the empty sample stays silent,
+so its ``t_spike`` is ``inf``.
+
 The stateless operator is :func:`spikingjelly.timing_based.functional.tempotron`.
 The module owns only ``weight[O,I]`` and hyperparameters. Weights are initialized
 from ``N(0,0.001²)`` with checkpoint key ``weight``. PSP normalization is independent
@@ -96,7 +102,9 @@ fixed receptive-field buffers ``mu`` and ``sigma2``. Inputs have shape
 
 .. code-block:: python
 
+   import torch
    from spikingjelly.timing_based.encoding import GaussianTuning
+   from spikingjelly.timing_based.neuron import Tempotron
 
    encoder = GaussianTuning(1, 4, torch.zeros(1), torch.ones(1)).double()
    x = torch.tensor([[[0.2, 0.7]]], dtype=torch.float64, requires_grad=True)
@@ -114,8 +122,7 @@ Autograd and losses
 -------------------
 
 Only first-order weight and input-time derivatives are supported. First-spike
-backward uses implicit differentiation of the threshold equation, not bisection
-branches. Peak values and times use local analytical derivatives. Shared-connection
+backward uses implicit differentiation of the threshold equation. Peak values and times use local analytical derivatives. Shared-connection
 and event contributions accumulate. Equal peaks select the earliest branch;
 event-boundary time derivatives select the first original event in stable order.
 Fixed-window peak times and non-firing ``t_spike`` branches have zero gradient.
@@ -137,21 +144,20 @@ MNIST example and performance scope
 
 .. code-block:: bash
 
-   uv run python -m spikingjelly.timing_based.examples.tempotron_mnist \
+   python -m spikingjelly.timing_based.examples.tempotron_mnist \
        --device cpu --duration 100 --batch-size 64 --dataset-dir ./data
 
 The example uses cross-entropy on ``5*v_max/v_threshold`` plus a linear threshold penalty for misfiring outputs, and classifies with ``v_max.argmax``.
 
-The Tempotron solver uses FP64 internally; CUDA uses fused implementations when Triton is installed.
+The Tempotron solver uses FP64 internally. CUDA operators select an available
+native CUDA, Triton or PyTorch implementation, in that order by default.
+Installing Triton alone does not guarantee its selection; device compatibility
+and operator availability also matter.
 
-The example defaults to a maximum of 40 epochs; use ``--epoch 100`` for an explicit
-full reproduction. Two completed single-seed 100-epoch runs reached a test plateau
-by 20–40 epochs and continued fitting training data afterward. The shorter cap is
-an experiment budget, not a guarantee that every task converges by 40 epochs. Test
-accuracy does not drive early stopping or checkpoint selection.
-
-The new interface replaces integer T, ret_type, mse_loss, the old checkpoint
-wrapper and GaussianTuning.encode. Use the interfaces shown above.
+Train for 40 epochs by default, or set ``--epoch 100`` for 100 epochs.
+The script reports training and test accuracy each epoch and saves the final model
+as ``tempotron_snn_mnist.ckpt`` in ``--model-output-dir``. It runs the requested
+number of epochs without early stopping or test-based checkpoint selection.
 
 Reference
 ---------
@@ -173,8 +179,7 @@ Multi-spike SRM and two-layer MNIST
 The input response is a linear-ramp PSP; each spike adds a step reset response,
 resetting voltage to zero while retaining current. With no leak or absolute
 refractory period, the model accepts multiple inputs, emits multiple outputs and
-continues accepting inputs after firing. This differs from double-exponential
-Tempotron dynamics and is not an equivalent acceleration. Spike k is the first
+continues accepting inputs after firing. Its ramp response gives different dynamics from the double-exponential Tempotron. Spike k is the first
 upward crossing of raw level ``k*threshold``. Sorted prefix sums, cumulative endpoint
 maxima and analytic roots solve FP64 times without a uniform grid. PyTorch
 differentiates the selected time/weight branch; event creation/deletion and ordering
@@ -214,7 +219,7 @@ surrogate or recovery rule.
 
 .. code-block:: bash
 
-   uv run python -m spikingjelly.timing_based.examples.srm_mnist \
+   python -m spikingjelly.timing_based.examples.srm_mnist \
        --device cuda:0 --dataset-dir ./data --output-dir ./srm-mnist \
        --batch-size 128 --epochs 10 --seed 0
 
@@ -222,8 +227,7 @@ Use the complete MNIST dataset: a 55000/5000 train/validation split, validation-
 checkpoint selection and early stopping (default patience=3), followed by final
 evaluation on all 10000 test examples. Save configuration, source fingerprints,
 epoch metrics, ``best.pt`` and ``result.json`` with test correct counts. Use
-``--device cpu`` for CPU. CUDA runs the same PyTorch mathematics without dedicated
-SRM kernels; no general speed advantage is claimed.
+``--device cpu`` for CPU. CUDA runs the same PyTorch mathematics without dedicated SRM kernels.
 
 Complete partitions and a third PSP model
 -----------------------------------------
@@ -267,7 +271,7 @@ does not replace these optimized paths.
 
 .. code-block:: bash
 
-   uv run python -m spikingjelly.timing_based.examples.cubic_srm_mnist \
+   python -m spikingjelly.timing_based.examples.cubic_srm_mnist \
        --device cuda:0 --dataset-dir ./data --output-dir ./cubic-srm-mnist \
        --hidden-features 64 --batch-size 128 --epochs 10 --seed 0
 
@@ -354,13 +358,13 @@ Convolution reduces local fan-in and adds output neurons, event routing, and sor
 Temporary coefficients grow with positions, channels, and local event counts.
 Performance comparisons must use the same network, events, and weights, and must
 include backward and peak memory. Chunking limits some construction intermediates;
-autograd still retains the tensors needed by every chunk. The measurements below
-do not compare this implementation with cuDNN time-step convolution.
+autograd still retains the tensors needed by every chunk. The following timings compare two event-routing methods for this network.
 
-Validation on a Tesla V100S (Torch 2.7.1+cu118, Triton 3.3.1): seed 0, B128,
-five full training epochs selected epoch 5, validation 92.24% and test **93.06%**
-(9306/10000). Final routing/gradient-guard code replayed all 10000 logits exactly,
-with identical finite B128 parameter gradients. This is a single-seed result.
+Reference results (commit `7341418a <https://github.com/fangwei123456/spikingjelly/commit/7341418a>`_, Tesla V100S):
+
+With Torch 2.7.1+cu118 and Triton 3.3.1, seed 0 and batch size 128, validation
+selected epoch 5 of five training epochs: validation accuracy was 92.24% and test
+accuracy was 93.06% (9306/10000). These are single-seed results.
 
 Three independent processes compared the same trained network, checkpoint,
 MNIST first batch and cross-entropy forward+backward, excluding optimizer.
@@ -391,11 +395,8 @@ of process medians (peak memory is the maximum observed across processes):
      - 104.00
      - 1583.22
 
-Historical documentation record: `7341418a <https://github.com/fangwei123456/spikingjelly/commit/7341418a>`_ (2026-10-14); Tesla V100S (Torch 2.7.1+cu118, Triton 3.3.1); not rerun on current V2.
-
-The unfold reference is restricted to one event per pixel and uses the same
-cubic solver and output packing; it is not a time-step model. The multi-event
-CSR path is not faster on this dense workload. Isolated routing forward+backward
+The unfold reference processes one event per pixel with the same cubic solver
+and output packing. The two routes have similar total latency on this dense workload. Isolated routing forward+backward
 at B128 takes 2.14 ms (unfold 1.28 ms); this includes input-time gradients unlike the
 image-input training step, so it is a scale comparison, not an exact subtraction
 from total time. The existing partition/root operations dominate overall cost.

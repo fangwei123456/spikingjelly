@@ -6,50 +6,24 @@ Installation Guide
 Prepare the environment
 --------------------------
 
-V2 requires Python >= 3.11 and Torch >= 2.6. Create an environment, then use the
-`PyTorch installation selector <https://pytorch.org/get-started/locally/>`_ to
-install Torch, torchvision and torchaudio for your target device:
+SpikingJelly 2.0 requires Python 3.11 or later and PyTorch 2.6 or later. Create a
+virtual environment, then install Torch, torchvision and torchaudio for your
+device with the command from the
+`PyTorch installation selector <https://pytorch.org/get-started/locally/>`_:
 
 .. code-block:: bash
 
     uv venv --python 3.11
     source .venv/bin/activate
 
-This guide uses uv for environments and installation. Install matching Torch,
-torchvision and torchaudio with the official commands so missing companion
-packages do not cause the installer to select another Torch. After installing
-SJ, use ``uv pip check`` to check dependency consistency.
+Install the three packages together with that one command. If you install only
+some of them, the installer may replace your Torch to satisfy the others.
 
-This guide follows the development source. PyPI installs contain released
-changes only; use the corresponding documentation for older versions. Minimum
-requirements do not mean every version and device has been verified. Tested
-environments include Torch 2.7.1 and GPU environments with Torch 2.11.0+cu128 /
-Triton 3.6.0.
+This page follows the development source. For a PyPI release, read the
+documentation of that version.
 
-V2 uses PEP 440 compatible semantic version numbers. The earlier ``0.0.0.0.X``
-scheme is historical: odd ``X`` denoted development versions and even ``X``
-denoted stable PyPI releases.
-
-Choose an installation
+Install SpikingJelly
 --------------------------
-
-CPU execution needs neither Triton nor native CUDA. NVIDIA CUDA users can
-install Triton, build native extensions manually, or prepare both. Triton stays
-optional and is not added by a regular installation.
-For ordinary GPU neurons, start with compatible Triton. Consider native builds
-for fused projections or when measurements show a benefit in eager execution.
-
-An existing Triton matching Torch and meeting SJ's minimum version needs no
-additional installation or upgrade. Check its version with
-``uv run --no-sync python -c "import triton; print(triton.__version__)"``;
-successful import does not verify every kernel or compilation profile. Install
-the extra when missing.
-
-.. figure:: /_static/tutorials/install/installation.svg
-    :alt: Installation decision tree: prepare Python and Torch; CPU uses a regular installation, while NVIDIA CUDA can use reference execution, optional Triton or manually built native CUDA.
-    :width: 100%
-
-    Both accelerators can coexist; modules need no backend configuration.
 
 .. list-table::
     :header-rows: 1
@@ -61,10 +35,30 @@ the extra when missing.
       - ``uv pip install spikingjelly``
     * - PyPI pre-release
       - ``uv pip install --pre spikingjelly``
-    * - Optional Triton
+    * - Release with Triton
       - ``uv pip install "spikingjelly[triton]"``
     * - Latest development source
       - ``uv pip install git+https://github.com/fangwei123456/spikingjelly.git``
+
+For CPU only, install the release. For NVIDIA GPUs, install the release with
+Triton: IF, LIF, PLIF and other neurons then use Triton kernels on CUDA
+automatically. If your environment already has a Triton build that matches Torch
+(3.2.0 or later), you do not need to install it again. Check its version with:
+
+.. code-block:: bash
+
+    python -c "import triton; print(triton.__version__)"
+
+Native CUDA extensions are built manually. You only need them for native
+operators such as fused projections, or when measurements show that the native
+implementation is faster; see :ref:`install-native-cuda-en`. Triton and native
+extensions can be installed together, and modules need no backend configuration.
+
+.. figure:: /_static/tutorials/install/installation.svg
+    :alt: Installation decision tree: prepare Python and Torch; CPU uses a regular installation, while NVIDIA CUDA can use reference execution, optional Triton or manually built native CUDA.
+    :width: 100%
+
+    Choose an installation for your device and needs.
 
 For the development source with Triton:
 
@@ -79,6 +73,8 @@ Installation maps the root ``ops/`` directory to ``spikingjelly._ops``; setting
 ``PYTHONPATH`` alone does not replace installation. See ``CONTRIBUTING.md`` in
 the repository for development conventions.
 
+After installation, run ``uv pip check`` to check that dependency versions are consistent.
+
 .. _install-native-cuda-en:
 
 Build native CUDA manually
@@ -86,9 +82,8 @@ Build native CUDA manually
 
 Regular wheels contain no precompiled native libraries. Manual source builds
 are currently recommended, normally downloading the PyPI sdist and compiling
-locally without a Git checkout. The following command requires the
-V2 release containing these operators to be published on PyPI; older releases
-cannot build the current operators through this command.
+locally without a Git checkout. This command requires SpikingJelly >= 2.0.0;
+older releases do not contain these operators.
 
 Prepare CUDA-enabled Torch, a matching CUDA Toolkit with ``nvcc``, and a C++
 compiler. Set ``CUDA_HOME`` if the toolkit is outside the default location.
@@ -107,7 +102,7 @@ an available target NVIDIA GPU:
 
 .. code-block:: bash
 
-    uv run --no-sync python -c \
+    python -c \
       'import torch; from spikingjelly.activation_based import functional; print(functional.neuron_implementation("lif", torch.device("cuda:0")))'
 
 A compatible native extension should report ``implementation: cuda``. If it
@@ -166,7 +161,7 @@ without native CUDA extensions. Not every platform's CUDA Torch includes usable 
 Execution after installation
 ------------------------------
 
-Move modules and inputs to the same device. Ordinary registered neurons follow
+Move modules and inputs to the same device. Registered ordinary neurons follow
 the selection below. CUDA checks candidates on first use for each device and
 execution path, then reuses the binding without online benchmarking.
 
@@ -184,7 +179,7 @@ Installing an implementation does not mean every call uses it:
 
     * - Feature
       - Requirements
-    * - Ordinary registered neurons
+    * - Registered ordinary neurons
       - Supported inputs, FP32 state and built-in surrogates can use fused execution. Ordinary module state follows input dtype; low-precision state or custom surrogates can use Torch reference equations.
     * - ComplementaryLIF (CLIF)
       - Matching CUDA FP32/FP16/BF16 tensors use optional Triton kernels, retaining the supplied spike function and state dtype. Auto mode can select Triton for training and inference, including ``torch.compile``; small batches may be slower. CPU, custom spike functions and other unsupported inputs use Torch formulas; an explicit Triton request rejects unsupported CUDA profiles. Select with ``SJ_CLIF_CUDA_IMPLEMENTATION=auto|triton|torch``; there is no native CUDA CLIF kernel.
@@ -216,6 +211,7 @@ With an available NVIDIA GPU, query ordinary neuron bindings:
 
 .. code-block:: python
 
+    import torch
     from spikingjelly.activation_based import functional
 
     device = torch.device("cuda:0")
@@ -248,5 +244,4 @@ Other optional dependencies
       - ``uv pip install "spikingjelly[fp8]"``; see :doc:`./precision` for scope. This does not enable every neuron FP8 combination.
 
 See the repository's ``pyproject.toml`` for other extras and version constraints.
-The current package has no CuPy dependency; see :doc:`./migrate_from_legacy` for
-retired installation options.
+See :doc:`./migrate_from_legacy` for CuPy installation options.

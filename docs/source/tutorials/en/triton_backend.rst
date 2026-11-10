@@ -7,8 +7,7 @@ From CPU to CUDA
 ----------------------------
 
 Create a neuron, then move it and its inputs to the target device. Neuron
-constructors and properties no longer expose backend selection. The following
-IF, LIF and PLIF training code runs on CPU or NVIDIA CUDA:
+execution is selected automatically. Train IF, LIF and PLIF on CPU or NVIDIA CUDA:
 
 .. code-block:: python
 
@@ -47,26 +46,23 @@ check performs no online profiling; importing SpikingJelly does not initialize
 CUDA either. Eager checks native CUDA, Triton and Torch in that order. Inductor
 expansion checks Triton, native CUDA and Torch. These orders are the same across
 GPU architectures; compatibility can change which implementation is available.
-Measure the workload you intend to run.
+With automatic selection, higher-order gradients use the Torch reference
+equations on every device.
 
-When selection reaches Triton, its distribution metadata must satisfy the
-``triton>=3.2.0`` installation contract. In auto mode, the 3.2 release series
-uses a compute-capability floor of 7.0; 3.3 and later use the current 8.0 policy.
-Pre-release/local suffixes do not change the release series: 3.3rc/dev belongs
-to 3.3, while 3.2.0rc still fails the separate minimum-version check.
-Explicit Triton requests bypass this auto architecture policy, not input,
-numerical or device constraints, and never silently switch providers.
-Missing or invalid version metadata makes auto skip Triton; explicit requests
-log that the version cannot be verified and attempt the installed provider.
-Repair the package metadata and use ``uv pip check`` to check the environment.
-These floors restore selection eligibility, not verified old-GPU support or
-complete compatibility: an older compiler may not recognize a newer GPU.
-Kernel/JIT/OOM errors after selection still propagate. No probe is run.
+Install ``triton>=3.2.0`` to make Triton available. Automatic selection requires
+compute capability 7.0 for Triton 3.2 and 8.0 for Triton 3.3 or later. Explicit
+Triton requests bypass this architecture policy but still enforce version,
+input and numerical constraints. Missing or invalid version metadata makes
+automatic selection skip Triton; an explicit request logs the problem and tries
+the installed provider. Use ``uv pip check`` to check your environment. Kernel,
+JIT and out-of-memory errors after selection propagate to the caller.
 
 Automatic dispatch covers IF, LIF, PLIF, QIF, EIF, Izhikevich, I-LIF,
-ActivationAwareIF and STBIF. Training modes, dtypes and surrogate support vary
-by family; consult the corresponding API. Other neurons retain their own
-execution paths, some without dedicated CUDA kernels.
+ActivationAwareIF, STBIF and CLIF. CLIF has Triton but no native CUDA kernel; its
+Triton boundary reads strided inputs and gradients directly, avoiding redundant
+layout copies while keeping contiguous outputs. Training modes, dtypes and
+surrogate support vary by family; consult the corresponding API. Other neurons
+retain their own execution paths, some without dedicated CUDA kernels.
 
 FewSpikeNode, OutlierAwareThresholdNode and HGNode use optional native CUDA or
 Triton fusion for compatible contiguous FP32 inference. Set
@@ -102,7 +98,7 @@ apply, and this contract does not cover FlexSN or fused projection kernels.
 
 Compiler-selected layouts and convolutions may introduce additional copies;
 inspect the generated code or a profile before claiming a copy-free model.
-Rebuild native extensions after this layout upgrade and regenerate compiled or
+After updating native extensions, rebuild them and regenerate compiled or
 exported graphs that assumed contiguous outputs. Layouts specialize Triton code;
 warm up the layouts to be measured before timing.
 
@@ -205,16 +201,14 @@ Final state and full voltage traces
 
 The default ``store_v_seq=False`` retains only final voltage. Set it to ``True``
 to monitor the temporal trace; the extra trace memory grows with time steps.
-Both policies support input and initial-state gradients. Final-state execution
-passed eager and fullgraph forward/backward checks on RTX 5090, Torch
-2.11.0+cu128 and Triton 3.6.0 with FP32/FP16/BF16 inputs. Compilation can use
-the default configuration.
+Both policies support input and initial-state gradients, including compiled
+execution. Use the default when you only need spikes and the final voltage.
 
 Troubleshooting
 ----------------------------
 
 * Missing extensions/dependencies or known incompatible devices allow auto mode
-  to check the next candidate. No available candidate produces an error.
+  to check the next candidate. If no candidate is available, selection raises an error.
 * Kernel, JIT, OOM or gradient failures raise errors; automatic selection does
   not hide execution failures.
 * For native loading incompatibility, check build/runtime Torch/CUDA versions and
@@ -227,5 +221,4 @@ Troubleshooting
 * For state/input shape, device or precision mismatches, check for retained state
   from an independent previous batch.
 
-The current package has no CuPy dependency. See :doc:`./migrate_from_legacy`
-for retired installation options and interfaces.
+See :doc:`./migrate_from_legacy` for installation and interface migration.

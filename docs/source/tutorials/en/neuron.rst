@@ -5,13 +5,16 @@ Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 中文版： :doc:`../cn/neuron`
 
-This tutorial is about :class:`spikingjelly.activation_based.neuron` and introduces the spiking neurons.
+You will create IF neurons with :mod:`spikingjelly.activation_based.neuron`,
+observe how they accumulate voltage and emit spikes, then define your own charge equation.
 
 Spiking Neuron Modules
 -------------------------------------------
-This section uses :class:`spikingjelly.activation_based.neuron.IFNode`, which outputs 0/1 spikes, to introduce spiking neurons.
 
-Firstly, let us import modules:
+:class:`spikingjelly.activation_based.neuron.IFNode` is an integrate-and-fire (IF) neuron.
+It accumulates input and outputs 1 when its voltage reaches the threshold, or 0 otherwise.
+
+Import the modules:
 
 .. code-block:: python
 
@@ -26,14 +29,14 @@ Define an IF neurons layer:
 
     if_layer = neuron.IFNode()
 
-There are some parameters for building IF neurons, and we can refer to API docs for more details. For the moment, we just focus on the following parameters:
+Start with the parameters for the threshold, reset and gradient. See the API documentation for the full list:
 
-    - **v_threshold** -- threshold of this neurons layer
+    - ``v_threshold``: threshold of this neurons layer
 
-    - **v_reset** -- reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
+    - ``v_reset``: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
 
-    - **surrogate_function** -- the function for calculating surrogate gradients of the heaviside step function in backward
+    - ``surrogate_function``: the function for calculating surrogate gradients of the heaviside step function in backward
 
 
 The number of IFNode neurons is determined by the shape of the first input after initialization or ``reset()``.
@@ -43,9 +46,9 @@ IFNode stores its membrane potential in ``v``. We can print the newly created la
 .. code-block:: python
 
     print(if_layer.v)
-    # if_layer.v=0.0
+    # 0.0
 
-We can find that ``if_layer.v`` is ``0.0`` because we have not given the neurons layer any input. Let us give different inputs and check the ``v.shape``. We can find that it is the same with the input:
+Before the first input, ``if_layer.v`` is the scalar ``0.0``. After the input, it becomes a tensor with the same shape as the single-step input:
 
 
 .. code-block:: python
@@ -64,7 +67,8 @@ We can find that ``if_layer.v`` is ``0.0`` because we have not given the neurons
 
 Call ``reset()`` before a new independent sample; see below for continuous sequences.
 
-What is the relationship between :math:`V[t]` and :math:`X[t]`? In spiking neurons, :math:`V[t]` is not determined by the input :math:`X[t]` at the current time-step ``t``, but also by the membrane potential :math:`V[t-1]` at the last time-step ``t-1``.
+The membrane potential :math:`V[t]` depends on the current input :math:`X[t]`
+and the previous membrane potential :math:`V[t-1]`.
 
 We use the sub-threshold neuronal dynamics :math:`\frac{\mathrm{d}V(t)}{\mathrm{d}t} = f(V(t), X(t))` to describe the charging of continuous-time spiking neurons. For the IF neuron, the charging function is:
 
@@ -72,7 +76,7 @@ We use the sub-threshold neuronal dynamics :math:`\frac{\mathrm{d}V(t)}{\mathrm{
 .. math::
     \frac{\mathrm{d}V(t)}{\mathrm{d}t} = X(t)
 
-:class:`spikingjelly.activation_based.neuron` uses the discrete-time difference equation to approximate the continuous-time ordinary differential equation. The discrete-time difference equation of the IF neuron is:
+:mod:`spikingjelly.activation_based.neuron` uses the discrete-time difference equation to approximate the continuous-time ordinary differential equation. The discrete-time difference equation of the IF neuron is:
 
 .. math::
     V[t] - V[t-1] = X[t]
@@ -95,16 +99,15 @@ Different spiking neurons have different charging equations but usually share
 the firing and reset equations. The
 :class:`spikingjelly.activation_based.neuron.SimpleBaseNode` interface expresses
 these stages directly through the
-``neuronal_charge → neuronal_fire → neuronal_reset`` path. Production neurons
-perform the equivalent computation in functional transitions or specialized
-kernels. The core firing expression in ``SimpleBaseNode.neuronal_fire`` is:
+``neuronal_charge → neuronal_fire → neuronal_reset`` path. Neurons such as ``IFNode`` perform the equivalent computation in explicit state
+transitions or specialized kernels. The core firing expression in ``SimpleBaseNode.neuronal_fire`` is:
 
 .. code-block:: python
 
     def neuronal_fire(self):
         return self.surrogate_function(self.v - self.v_threshold)
 
-``surrogate_function()`` is the Heaviside step function in forward, which returns 1 when input is greater or equal to 0, otherwise returns 0. We regard the ``tensor`` whose element is only 0 or 1 as the spike.
+The default ``surrogate_function`` is the Heaviside step function in forward, which returns 1 when input is greater or equal to 0, otherwise returns 0. We regard the ``tensor`` whose element is only 0 or 1 as the spike.
 
 Firing spike will consume the accumulated potential, and make the potential decrease instantly, which is the neuronal reset. In SNN, there are two kinds of reset:
 
@@ -112,8 +115,8 @@ Firing spike will consume the accumulated potential, and make the potential decr
 
 #. Soft reset: the membrane potential will decrease the threshold potential after firing: :math:`V[t] = V[t] - V_{threshold}`
 
-We can find that the neuron that uses soft reset does not need the attribute :math:`V_{reset}`. In the current implementation of :class:`spikingjelly.activation_based.neuron`, the default value of ``v_reset`` is ``0.0``, which means the neuron will use hard reset by default.\
-If we set ``v_reset = None``, then the neuron will use the soft reset.
+Soft reset needs no reset voltage. ``IFNode`` defaults to ``v_reset=0.0`` and
+uses hard reset. Set ``v_reset=None`` to use soft reset.
 ``SimpleBaseNode.neuronal_reset`` uses the following equivalent logic:
 
 .. code-block:: python
@@ -128,7 +131,8 @@ If we set ``v_reset = None``, then the neuron will use the soft reset.
 
 Three equations for describing spiking neurons
 ------------------------------------------------------
-Now we can use the three equations: neuronal charge, neuronal fire, and neuronal reset, to describe all kinds of spiking neurons:
+
+Use three discrete equations for charge, fire and reset to describe binary IF neurons:
 
 
 .. math::
@@ -165,7 +169,8 @@ The neuronal dynamics can be described by the following figure (the figure is ci
 
 Simulation
 -------------------------------------------
-Now let us give inputs to the spiking neurons step-by-step, check the membrane potential and output spikes, and plot them:
+
+Give the IF layer a constant input and plot its post-reset voltage and spikes:
 
 .. code-block:: python
 
@@ -212,7 +217,7 @@ Reset the neurons layer, and give the input with ``shape=[32]``. Then we can che
                                 ylabel='neuron index', int_x_ticks=True, x_max=T, figsize=figsize, dpi=dpi)
 
 
-    visualizing.plot_1d_spikes(spikes=s_list.numpy(), title='membrane sotentials', xlabel='simulating step',
+    visualizing.plot_1d_spikes(spikes=s_list.numpy(), title='output spikes', xlabel='simulating step',
                             ylabel='neuron index', figsize=figsize, dpi=dpi)
 
     plt.show()
@@ -230,8 +235,8 @@ Training IF, LIF and PLIF
 ----------------------------
 
 ``step_mode`` controls single- or multi-step execution, and the input selects
-the device. Move the module and inputs to the same device. PLIF's public class,
-``ParametricLIFNode``, has trainable parameters. This example uses random inputs
+the device. Move the module and inputs to the same device. The parametric
+leaky integrate-and-fire (PLIF) neuron, ``ParametricLIFNode``, has trainable parameters. This example uses random inputs
 to run forward/backward and check PLIF parameter updates:
 
 .. code-block:: python
@@ -261,7 +266,7 @@ to run forward/backward and check PLIF parameter updates:
 
 Module calls advance state such as ``node.v``. For independent samples/batches,
 call ``functional.reset_net`` after backward and parameter updates. Retain state
-for a continuous sequence; use ``functional.detach_net`` to truncate BPTT without
+for a continuous sequence; use ``functional.detach_net`` to truncate backpropagation through time (BPTT) without
 resetting voltage. See :doc:`./triton_backend` for execution/compilation/diagnostics
 and :doc:`./precision` for precision policies.
 
@@ -294,6 +299,7 @@ the third result is ``None``; the second always contains final state.
 
 Custom Spiking Neurons
 -------------------------------------------
+
 SpikingJelly has two interfaces for custom neurons. ``Simple`` describes the
 interface of ``SimpleBaseNode``; subclasses define the equations. It uses pure
 PyTorch to run charge, fire and reset in order, making it suitable for learning
@@ -319,7 +325,7 @@ neuron behavior or trying new dynamics.
 Inherit from ``SimpleBaseNode`` when only the neuron equation needs to change. Its
 single-step forward always applies charge, fire, and reset in order, and its
 multi-step forward invokes the complete single-step forward at every time step.
-Therefore, users normally only implement ``neuronal_charge``. ``SimpleIFNode`` and
+You only need to implement ``neuronal_charge``. ``SimpleIFNode`` and
 ``SimpleLIFNode`` use the same interface.
 
 ``SimpleBaseNode`` does not define a native functional transition. Calling
@@ -327,27 +333,25 @@ Therefore, users normally only implement ``neuronal_charge``. ``SimpleIFNode`` a
 :func:`to_functional_forward <spikingjelly.activation_based.base.to_functional_forward>`
 on a module derived from ``SimpleBaseNode`` uses the general fallback, which
 temporarily substitutes explicit registered memories, runs the regular forward,
-and restores those memories. This preserves the
-equation extension interface but is less efficient than native-functional neurons
-such as ``LIFNode``; it is not intended for high-performance workloads that
-repeatedly require functional conversion.
+and restores those memories. This preserves your custom equations but adds state-substitution overhead.
+For frequent explicit state transitions, use neurons such as ``LIFNode`` that
+implement the interface directly.
 
-Production ``MemoryModule`` implementations call
+``MemoryModule`` implementations using explicit state transitions call
 ``materialize_states(inputs, states, step_mode)`` before functional forward. Its
 default implementation returns states unchanged; override it only when scalar
 or empty states must become tensors based on the current inputs. ``inputs``
 contains the complete inputs of the current forward pass. An implementation may
 use ``step_mode`` to select the first time step as its reference in multi-step
 mode; it must not assume that every input has a time dimension. The method
-returns a new state tuple and must not mutate module memory. The former
-``BaseNode.v_float_to_tensor`` hook has been removed.
+returns a new state tuple and must not mutate module memory.
 
 Suppose we want to build a Square-Integrated-and-Fire neuron, whose neuronal charge equation is:
 
 .. math::
     V[t] = f(V[t-1], X[t]) = V[t-1] + X[t]^{2}
 
-We can implement this kind of neuron by the following codes:
+Define the charge equation in a subclass:
 
 .. code-block:: python
 
@@ -358,7 +362,7 @@ We can implement this kind of neuron by the following codes:
         def neuronal_charge(self, x: torch.Tensor):
             self.v = self.v + x.square()
 
-Use our ``SquareIFNode`` to implement the single/multi-step forward:
+Run ``SquareIFNode`` in single-step and multi-step modes:
 
 .. code-block:: python
 
@@ -380,7 +384,7 @@ Use our ``SquareIFNode`` to implement the single/multi-step forward:
     sif_layer.reset()
 
 
-The outputs are:
+Example output (random values will vary):
 
 .. code-block:: shell
 
@@ -400,15 +404,14 @@ The outputs are:
 To implement a production neuron that uses explicit functional state transitions,
 inherit from ``BaseNode`` and implement
 ``single_step_functional_forward``. Its interface is
-``(self, inputs, states, **kwargs) -> (outputs, updated_states)``. The method must
+``(self, inputs, states, **kwargs) -> (outputs, updated_states)``, where inputs,
+outputs and states are tuples. The method must
 not mutate registered module memories or the supplied ``states``. Override
 ``multi_step_functional_forward`` only when an independent sequence implementation
 or specialized kernel exists.
 
-.. warning::
+.. note::
 
-    Regular ``BaseNode`` forward is now functional-backed, and
-    ``neuronal_charge``, ``neuronal_fire``, and ``neuronal_reset`` have been
-    removed from it. Existing subclasses that customize Python neuron equations
-    through these methods should change their base class to ``SimpleBaseNode``;
-    their existing equations do not need to be rewritten. Production neurons should use the functional state interface described above.
+    Override charge, fire and reset equations in ``SimpleBaseNode`` subclasses.
+    Implement explicit state transitions in ``BaseNode`` subclasses.
+    See :doc:`./migrate_from_legacy` to migrate existing code.
