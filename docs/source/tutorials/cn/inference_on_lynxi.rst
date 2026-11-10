@@ -4,17 +4,17 @@
 
 .. warning::
 
-    We are looking for contributors to translate this tutorial to English!
+    欢迎参与本教程的英文翻译。
 
-本文基于 2022 年 HP300 和当时的 SDK 编写，未在当前硬件和 SDK 上复测。
+你将把 FashionMNIST 分类网络转换为灵汐支持的层，编译后在 HP300 上推理。编译和运行需要安装设备配套的 ``lyngor`` 与 ``lynpy`` SDK。
 
 在GPU上训练float16模型
 -------------------------------------------
 
-我们使用的是 `灵汐科技 <https://www.lynxi.com/>`_ 的lynxi HP300芯片，完全支持float16，对于float32也可支持但会有一定的计算误差。在上述环境中，使用float32容易出现误差逐层累计的情况，\
+我们使用的是 `灵汐科技 <https://www.lynxi.com/>`_ 的lynxi HP300芯片，完全支持float16，对于float32也可支持但会有一定的计算误差。在 HP300 上，使用float32容易出现误差逐层累计的情况，\
 因此最好使用float16。
 
-将 :class:`spikingjelly.activation_based.examples.conv_fashion_mnist` 中的网络稍作更改，改为使用float16训练：
+将 :class:`spikingjelly.activation_based.examples.conv_fashion_mnist` 中的网络稍作更改，改为使用float16训练。以下是训练脚本中需要调整的片段，保留脚本的导入、参数解析和其余训练步骤：
 
 .. code-block:: python
 
@@ -40,13 +40,13 @@
             test_acc += (out_fr.argmax(1) == label).half().sum().item()
             # ...
 
-将修改后的文件保存为 `w1.py`，进行训练。需要注意，训练时不再使用AMP：
+将修改后的文件保存为 ``w1.py``，进行训练。模型和输入已转为 ``float16``，命令中不要添加 ``-amp``：
 
 .. code-block:: shell
 
     python w1.py -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -opt sgd -lr 0.1 -j 8
 
-训练完成后：
+参考结果（2022-08-16，HP300，lyngor 1.1.0）：
 
 .. code-block:: shell
 
@@ -71,27 +71,28 @@
 转换到支持的网络层的函数。可以通过 :class:`spikingjelly.activation_based.lynxi_exchange.to_lynxi_supported_module` 将一个网络层或使用 :class:`spikingjelly.activation_based.lynxi_exchange.to_lynxi_supported_modules` \
 将多个网络层进行转换。
 
-需要注意的是，在下文记录的 2022 年 HP300 / lyngor 1.1.0 环境中，编译器不接受 5D tensor。本页没有在当前硬件和 SDK 上复测这一限制。`shape = [T, N, C, H, W]` 经常出现在多步模式下的卷积层之间。对于使用多步模式的网络，使用 :class:`to_lynxi_supported_module <spikingjelly.activation_based.lynxi_exchange.to_lynxi_supported_module>` 或 \
+HP300 的 lyngor 1.1.0 编译流程要求张量不超过 4 维。`shape = [T, N, C, H, W]` 经常出现在多步模式下的卷积层之间。对于使用多步模式的网络，使用 :class:`to_lynxi_supported_module <spikingjelly.activation_based.lynxi_exchange.to_lynxi_supported_module>` 或 \
 :class:`to_lynxi_supported_modules <spikingjelly.activation_based.lynxi_exchange.to_lynxi_supported_modules>` 进行转换时，会将输入视作 `shape = [TN, *]`。
 
-例如，查看转换神经元的源代码可以发现，在多步模式下，输入被当作 `shape = [TN, *]`，首先被reshape到 `shape = [T, N, *]` 然后才进行计算。转换后的神经元把多步输入的第 0 维当作 `T*N`，再 reshape 成 3D：
+转换后的神经元将首维视作 ``T*N``，在内部变成 ``[T, N, -1]`` 计算，再恢复输入形状。你可以在 CPU 上检查这一行为：
 
 .. code-block:: python
 
-    # spikingjelly/activation_based/lynxi_exchange.py
-    class BaseNode(nn.Module):
-        # ...
-        def forward(self, x: torch.Tensor, v: torch.Tensor = None):
-            # ...
-            elif self.step_mode == 'm':
-                x = x.reshape(self.T, x.shape[0] // self.T, -1)
-                # ...
+    import torch
+    from spikingjelly.activation_based import lynxi_exchange
+
+    node = lynxi_exchange.IFNode(step_mode="m", T=4)
+    x = torch.rand(8, 3, 2, 2)
+    print(node(x).shape)  # torch.Size([8, 3, 2, 2])
 
 接下来，我们将训练好的识别FashionMNIST的网络进行转换。原始网络的定义如下：
 
 .. code-block:: python
 
-    # spikingjelly/activation_based/examples/conv_fashion_mnist.py
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import functional, layer, neuron, surrogate
+
     class CSNN(nn.Module):
         def __init__(self, T: int, channels: int):
             super().__init__()
@@ -125,9 +126,13 @@
             return fr
         
 
-我们首先加载原始网络：
+加载训练得到的权重。以下片段使用完整脚本解析出的 ``args``：
 
 .. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import lynxi_exchange
+    from spikingjelly.activation_based.examples import conv_fashion_mnist
 
     net_sj = conv_fashion_mnist.CSNN(T=args.T, channels=args.channels)
     net_sj.eval()
@@ -141,11 +146,14 @@
 
     module_list = lynxi_exchange.to_lynxi_supported_modules(net_sj.conv_fc, args.T)
 
-需要注意的是，根据原始网络的定义，`net_sj.conv_fc` 的输出 `shape = [T, N, C]`；我们转换后，输出的 `shape = [TN, C]`。为了得到分类结果，我们需要求得发放率。
+根据原始网络的定义，`net_sj.conv_fc` 的输出 `shape = [T, N, C]`；我们转换后，输出的 `shape = [TN, C]`。为了得到分类结果，我们需要求得发放率。
 
 因此，新建一个网络：
 
 .. code-block:: python
+
+    import torch
+    import torch.nn as nn
 
     class InferenceNet(nn.Module):
         def __init__(self, T: int, modules_list: list):
@@ -195,6 +203,9 @@
 
 .. code-block:: python
 
+    lynxi_model_path = args.out_model_path
+    batch_size = args.b
+    device_id = args.lynxi_device
     output_path = lynxi_exchange.compile_lynxi_model(lynxi_model_path, net, in_data_type='float16',
                                                         out_data_type='float16',
                                                         input_shape_dict={'x': torch.Size([batch_size, 1, 28, 28])})
@@ -211,15 +222,18 @@
 
     net_lynxi = lynxi_exchange.load_lynxi_model(device_id, output_path)
 
-然后将pytorch的输入tensor转换为灵汐的tensor，送入网络；将输出的灵汐tensor转化为pytorch的tensor，便于计算正确率：
+使用完整脚本创建测试集加载器 ``test_data_loader``，批大小与编译时一致。将 PyTorch 输入转为 ``float16`` 灵汐张量，推理后再把输出转回 PyTorch 张量，计算正确率：
 
 .. code-block:: python
+
+    import tqdm
 
     test_acc = 0
     test_samples = 0
 
     with torch.no_grad():
         for img, label in tqdm.tqdm(test_data_loader, disable=False):
+            img = img.half()
             y = net_lynxi(lynxi_exchange.torch_tensor_to_lynxi(img, device_id))
             y = lynxi_exchange.lynxi_tensor_to_torch(y, shape=[label.shape[0], 10], dtype='float16')
             test_acc += (y.argmax(1) == label).half().sum().item()
@@ -228,18 +242,16 @@
     test_acc = test_acc / test_samples
     print(f'lynxi inference accuracy = {test_acc}')
 
-最终正确率为：
+上述参考运行的正确率为：
 
 .. code-block:: shell
 
     lynxi inference accuracy = 0.9316
 
-该数值来自上文 2022-08-16 的运行，不是当前命令的输出。
-
 完整代码和输入输出
 -------------------------------------------
 
-完整的代码位于 `spikingjelly/activation_based/examples/lynxi_fmnist_inference.py`。当前版本的示例脚本会直接使用 ``-data-dir`` 作为 FashionMNIST 根目录，因此运行时需要显式传入该参数。一个完整示例如下：
+完整的代码位于 `spikingjelly/activation_based/examples/lynxi_fmnist_inference.py`。示例脚本使用 ``-data-dir`` 作为 FashionMNIST 根目录，因此运行时需要显式传入该参数。运行命令如下：
 
 .. code-block:: shell
 
@@ -248,7 +260,7 @@
         -pt-path ./logs/T4_b128_sgd_lr0.1_c128/checkpoint_max.pth \
         -out-model-path ./lynxi_model
 
-    lynxi_exchange.py[line:185]-CRITICAL: lyngor.version=1.1.0
+    python -m spikingjelly.activation_based.examples.lynxi_fmnist_inference -h
     usage: lynxi_fmnist_inference.py [-h] [-T T] [-j N] [-data-dir DATA_DIR]
                                      [-channels CHANNELS] [-b B] [-pt-path PT_PATH]
                                      [-out-model-path OUT_MODEL_PATH]
@@ -270,7 +282,7 @@
                             device id for lynxi
 
 
-完整的输出日志为（编译在该机器上耗时约 19 分钟）：
+上述参考运行的日志节选如下，编译耗时约 19 分钟：
 
 .. code-block:: shell
 

@@ -12,7 +12,7 @@ English version: :doc:`../en/nir_exchange`
 
     图片来源： `What is the Neuromorphic Intermediate Representation (NIR)? <https://neuroir.org/docs/what/>`_
 
-SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
+SpikingJelly 的 ``nir_exchange`` 包提供了两个转换接口：
 
 * :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` ：将 SpikingJelly 模型导出为 NIR 图；
 * :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` ：将 NIR 图导入为 SpikingJelly 模型。
@@ -23,7 +23,7 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 
     .. code:: shell
 
-        pip install "spikingjelly[nir]"
+        uv pip install "spikingjelly[nir]"
 
 从 SpikingJelly 到 NIR
 ==========================
@@ -39,7 +39,7 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 * :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>` 和 :class:`ParametricLIFNode <spikingjelly.activation_based.neuron.ParametricLIFNode>`
 * :class:`CUBALIFNode <spikingjelly.activation_based.neuron.CUBALIFNode>`
 
-以下面的 SNN 模型为例：
+先搭建一个接收 ``[B, 3, 32, 32]`` 图像的 SNN，其中 ``B`` 是批大小：
 
 .. code:: python
 
@@ -55,7 +55,7 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
         neuron.ParametricLIFNode(10., decay_input=False, v_reset=0.0),
     )
 
-为了展示兼容性，这一示例故意混用了原生 PyTorch 的无状态层 ``nn.AvgPool2d, nn.Linear`` 和 SpikingJelly 包装后的无状态层 ``layer.Conv2d, layer.Flatten``。此外，本例中还使用了 ``neuron.IFNode`` 和 ``neuron.ParametricLIFNode`` 两种神经元模型。
+你可以混用原生 PyTorch 层与 SpikingJelly 层。这里用 ``nn.AvgPool2d`` 和 ``nn.Linear`` 搭配 ``layer.Conv2d``、``layer.Flatten``，并使用 IF 和参数化 LIF 神经元。
 
 调用 :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` ，即可将上述模型转换成 NIR 图并保存为 HDF5 文件：
 
@@ -77,7 +77,7 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 * ``net`` ：SpikingJelly 模型；
 * ``example_input`` ：模型输入的样例，用于确定子模块输入和输出的形状；
 * ``save_path`` ：HDF5 文件路径，用于保存 NIR 图（若为 ``None`` ，则不保存）；
-* ``dt`` ：NIR 模拟时间步长。建议设置成 ``1e-4`` 以对齐其它支持 NIR 的框架。
+* ``dt`` ：NIR 模拟时间步长，单位为秒，必须为正数，默认 ``1e-4``。导入时使用相同的值。
 
 运行后，当前目录下出现文件 ``example.nir``，其中包含以 HDF5 编码的 NIR 图。终端打印出的结果大致为：
 
@@ -112,21 +112,22 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
         metadata={}
     )
 
-这里，我们只展示了 ``NIRGraph`` 的结构，省略了具体的参数数值。可见，NIR 图由节点 ``nodes`` 和边 ``edges`` 组成。节点对应 SNN 模块，边指示了节点的输入输出关系。
+NIR 图由节点 ``nodes`` 和边 ``edges`` 组成。节点对应 SNN 模块，边表示模块之间的数据流；上方输出省略了参数数组的具体数值。
 
 .. note::
 
-    原模型中的 ``ParametricLIFNode`` 被转换成了 ``nir.LIF`` 节点。这是合理的，因为一旦膜电位时间常量 ``tau`` 固定下来，PLIF 神经元就将变成 LIF 神经元。
+    导出会将 ``ParametricLIFNode`` 转为 ``nir.LIF``，使用导出时的膜电位时间常量 ``tau``。重新导入后，时间常量不再是可学习参数。
 
 .. note::
 
-    不同于 PyTorch 和 SpikingJelly 模型， ``NIRGraph`` 中的节点大多蕴含 **输入输出形状** 信息。例如，上方例子中的 ``'_3': Flatten(...)`` 节点指明了输入形状为 ``[16, 16, 16]`` ，输出形状为 ``[4096]`` ； ``'_5': LIF(...)`` 的输入输出形状则都为 ``[10]`` 。显然，NIR 图中的形状信息是不包含时间维度 ``T`` 和批量维度 ``B`` 的；换言之，NIR只 **描述单样本、单个时间步上的模型结构** 。
+    NIR 节点记录单个样本、单个时间步的输入输出形状。例如，``'_3': Flatten(...)`` 将 ``[16, 16, 16]`` 展平为 ``[4096]``，``'_5': LIF(...)`` 的输入和输出均为 ``[10]``。这些形状不含时间维度 ``T`` 和批量维度 ``B``。
 
-    PyTorch / SpikingJelly 模型的子模块不含输入输出形状信息，但 NIR 图却需要这些信息。为了获取输入输出形状信息，:func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` 要求用户给出 ``example_input`` 样例输入。 ``example_input`` 可以具有时间或批量维度，具体取决于 PyTorch / SpikingJelly 模型的需求。 :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` 函数内部将调用 PyTorch 的 `ShapeProp <https://github.com/pytorch/pytorch/blob/main/torch/fx/passes/shape_prop.py>`_ 功能来获取输入输出形状信息。
+    提供 ``example_input`` 时，应按模型要求保留批量维度和时间维度，并匹配模型的设备与数据类型。导出函数通过 PyTorch 的 `ShapeProp <https://github.com/pytorch/pytorch/blob/main/torch/fx/passes/shape_prop.py>`_ 运行样例输入，推导各层形状。
+
 
 .. warning::
 
-    NIR 无法区分 SpikingJelly 的 soft reset 与 hard reset，因此会拒绝 ``v_reset=None`` 的神经元。分组卷积以及无法被 NIR 精确表示的池化选项也会被拒绝。
+    NIR 无法区分 SpikingJelly 的 软重置与硬重置，因此会拒绝 ``v_reset=None`` 的神经元。分组卷积以及无法被 NIR 精确表示的池化选项也会被拒绝。
 
 从 NIR 到 SpikingJelly
 ==========================
@@ -134,6 +135,9 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 函数 :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` 可以将已有的 NIR 图转换成 SpikingJelly 模型。以上一节生成的 NIR 图为例：
 
 .. code:: python
+
+    import torch
+    from spikingjelly.activation_based import nir_exchange
 
     gm = nir_exchange.import_from_nir(graph="./example.nir", dt=1e-4)
     x = torch.rand(9, 3, 32, 32) # [B, C, H, W]
@@ -143,7 +147,7 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
     # 将返回的状态传回模型以继续运行。
     y, state = gm(x, state)
 
-此处，:func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` 参数的含义是：
+输出形状为 ``[9, 10]``，每张图像对应 10 个输出神经元。:func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` 参数的含义是：
 
 * ``graph`` ：``NIRGraph`` 对象，或指向 HDF5 NIR 文件的字符串/``Path``。
 * ``dt`` ：NIR 图的模拟时间步长。与 :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` 的 ``dt`` 参数一致。
@@ -163,9 +167,12 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 
 .. note::
 
-    :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` 还提供了 ``dtype`` ， ``device`` 和 ``step_mode`` 参数，用于控制所返回的 SpikingJelly 模型的数据类型、设备、步进模式。例如，可以通过以下方式得到多步模式的 SpikingJelly 模型：
+    :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` 还提供了 ``dtype`` ， ``device`` 和 ``step_mode`` 参数，用于控制所返回的 SpikingJelly 模型的数据类型、设备、步进模式。默认值分别为 ``torch.float32``、``"cpu"`` 和 ``"s"``。以下代码以多步模式导入，输出形状为 ``[7, 9, 10]``：
 
     .. code:: python
+
+        import torch
+        from spikingjelly.activation_based import nir_exchange
 
         gm = nir_exchange.import_from_nir(
             "./example.nir", dt=1e-4, step_mode="m"

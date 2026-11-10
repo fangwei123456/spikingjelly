@@ -12,7 +12,7 @@ Author: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_
 
     Image source: `What is the Neuromorphic Intermediate Representation (NIR)? <https://neuroir.org/docs/what/>`_
 
-The ``nir_exchange`` package provides two key interfaces:
+The ``nir_exchange`` package provides two conversion interfaces:
 
 * :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` : export a SpikingJelly model to an NIR graph;
 * :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` : convert an NIR graph to a SpikingJelly model.
@@ -23,7 +23,7 @@ The ``nir_exchange`` package provides two key interfaces:
 
     .. code:: shell
 
-        pip install "spikingjelly[nir]"
+        uv pip install "spikingjelly[nir]"
 
 From SpikingJelly to NIR
 ============================
@@ -39,7 +39,7 @@ From SpikingJelly to NIR
 * :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>` and :class:`ParametricLIFNode <spikingjelly.activation_based.neuron.ParametricLIFNode>`
 * :class:`CUBALIFNode <spikingjelly.activation_based.neuron.CUBALIFNode>`
 
-Consider the following SNN model as an example:
+First, build an SNN that takes images shaped ``[B, 3, 32, 32]``, where ``B`` is the batch size:
 
 .. code:: python
 
@@ -55,7 +55,7 @@ Consider the following SNN model as an example:
         neuron.ParametricLIFNode(10., decay_input=False, v_reset=0.0),
     )
 
-To demonstrate compatibility, this example deliberately mixes native PyTorch stateless layers ``nn.AvgPool2d, nn.Linear`` with the SpikingJelly-wrapped stateless layers ``layer.Conv2d, layer.Flatten``. In addition, two neuron models, ``neuron.IFNode`` and ``neuron.ParametricLIFNode``, are used in this example.
+You can mix native PyTorch and SpikingJelly layers. Here, ``nn.AvgPool2d`` and ``nn.Linear`` work alongside ``layer.Conv2d`` and ``layer.Flatten``, with IF and parametric LIF neurons.
 
 By calling :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>`, the above model can be converted into an NIR graph and saved as an HDF5 file:
 
@@ -77,7 +77,7 @@ The meanings of the parameters of :func:`export_to_nir <spikingjelly.activation_
 * ``net``: the SpikingJelly model;
 * ``example_input``: an example input to the model, used to determine the input and output shapes of submodules;
 * ``save_path``: the path to the HDF5 file used to save the NIR graph (if ``None``, the graph is not saved);
-* ``dt``: the simulation time step used in NIR. It is recommended to set this value to ``1e-4`` in order to align with other frameworks that support NIR.
+* ``dt``: the NIR simulation time step in seconds. It must be positive and defaults to ``1e-4``. Use the same value when importing.
 
 After execution, a file named ``example.nir`` will appear in the current directory, containing the HDF5-encoded NIR graph. The output printed in the terminal is roughly as follows:
 
@@ -112,17 +112,18 @@ After execution, a file named ``example.nir`` will appear in the current directo
         metadata={}
     )
 
-Here, only the structure of the ``NIRGraph`` is shown. As can be seen, an NIR graph consists of nodes (``nodes``) and edges (``edges``). Nodes correspond to SNN modules, while edges indicate the input-output relationships between nodes.
+An NIR graph contains nodes (``nodes``) and edges (``edges``). Nodes correspond to SNN modules, and edges describe data flow between them. The output above omits parameter array values.
 
 .. note::
 
-    The original ``ParametricLIFNode`` in the model is converted into a ``nir.LIF`` node. This is reasonable because once the membrane time constant ``tau`` is fixed, a PLIF neuron degenerates into an LIF neuron.
+    Export converts ``ParametricLIFNode`` to ``nir.LIF`` using the membrane time constant ``tau`` at export time. After importing, the time constant is no longer a learnable parameter.
 
 .. note::
 
-    Unlike PyTorch and SpikingJelly models, most nodes in an ``NIRGraph`` explicitly contain **input and output shape** information. For example, the ``'_3': Flatten(...)`` node in the above example specifies an input shape of ``[16, 16, 16]`` and an output shape of ``[4096]``; the ``'_5': LIF(...)`` node has both input and output shapes equal to ``[10]``. Clearly, the shape information in an NIR graph does not include the time dimension ``T`` or the batch dimension ``B``. In other words, NIR **describes the model structure for a single sample at a single time step only**.
+    NIR nodes record input and output shapes for one sample at one time step. For example, ``'_3': Flatten(...)`` flattens ``[16, 16, 16]`` to ``[4096]``, and ``'_5': LIF(...)`` has input and output shapes of ``[10]``. These shapes exclude the time dimension ``T`` and batch dimension ``B``.
 
-    Submodules in PyTorch / SpikingJelly models do not carry input-output shape information, whereas NIR graphs require it. To obtain such shape information, :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` requires the user to provide ``example_input``. ``example_input`` may include a time or batch dimension, depending on the requirements of the PyTorch / SpikingJelly model. Internally, :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>` invokes PyTorch’s `ShapeProp <https://github.com/pytorch/pytorch/blob/main/torch/fx/passes/shape_prop.py>`_ utility to infer input and output shapes.
+    When providing ``example_input``, include the batch and time dimensions required by your model, and match its device and data type. The export function runs the example input through PyTorch's `ShapeProp <https://github.com/pytorch/pytorch/blob/main/torch/fx/passes/shape_prop.py>`_ to infer layer shapes.
+
 
 .. warning::
 
@@ -131,9 +132,12 @@ Here, only the structure of the ``NIRGraph`` is shown. As can be seen, an NIR gr
 From NIR to SpikingJelly
 ==========================
 
-The function :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` converts an existing NIR graph into a SpikingJelly model. Using the NIR graph generated in the previous section as an example
+The function :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` converts an existing NIR graph into a SpikingJelly model. Load the file you just exported:
 
 .. code:: python
+
+    import torch
+    from spikingjelly.activation_based import nir_exchange
 
     gm = nir_exchange.import_from_nir(graph="./example.nir", dt=1e-4)
     x = torch.rand(9, 3, 32, 32) # [B, C, H, W]
@@ -143,7 +147,7 @@ The function :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.
     # Continue from the returned state.
     y, state = gm(x, state)
 
-Here, the arguments of :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` means:
+The output shape is ``[9, 10]``, with 10 output neurons per image. The arguments of :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` mean:
 
 * ``graph``: A ``NIRGraph`` object or a string/``Path`` pointing to an HDF5 NIR file.
 * ``dt``: The simulation time step of the NIR graph. This parameter should be consistent with the ``dt`` argument of :func:`export_to_nir <spikingjelly.activation_based.nir_exchange.to_nir.export_to_nir>`.
@@ -163,9 +167,12 @@ Currently, :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.fr
 
 .. note::
 
-    :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` also provides the ``dtype``, ``device``, and ``step_mode`` arguments, which control the data type, device, and step mode of the returned SpikingJelly model. For example, a multi-step SpikingJelly model can be obtained as follows.
+    :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.from_nir.import_from_nir>` also provides the ``dtype``, ``device``, and ``step_mode`` arguments, which control the data type, device, and step mode of the returned SpikingJelly model. The defaults are ``torch.float32``, ``"cpu"``, and ``"s"``, respectively. Import in multi-step mode as follows to obtain output shaped ``[7, 9, 10]``:
 
     .. code:: python
+
+        import torch
+        from spikingjelly.activation_based import nir_exchange
 
         gm = nir_exchange.import_from_nir(
             "./example.nir", dt=1e-4, step_mode="m"

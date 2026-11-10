@@ -1,16 +1,18 @@
 基本概念
 =======================================
+
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 English version: :doc:`../en/basic_concept`
 
-本教程介绍了 ``spikingjelly.activation_based`` 的一些基本概念，推荐所有用户在使用SpikingJelly框架前进行阅读。
+你将用 ``spikingjelly.activation_based`` 创建一个脉冲神经元层，输入时间序列，
+再比较逐步和逐层运行网络的结果。
 
-SpikingJelly框架是基于PyTorch的SNN深度学习框架，使用SpikingJelly框架的用户应该首先熟悉PyTorch的使用。\
-如果用户对PyTorch不甚了解，我们推荐用户先学习 `PyTorch的基础教程 <https://pytorch.org/tutorials/>`_ 。
+SpikingJelly 是基于 PyTorch 的脉冲神经网络（SNN）框架。如果你还不熟悉 PyTorch，请先学习 `PyTorch的基础教程 <https://pytorch.org/tutorials/>`_ 。
 
 基于激活值的表示方法
 -------------------------------------------
+
 ``spikingjelly.activation_based`` 的 IF/LIF 示例使用取值仅为0或1的张量表示二值脉冲，例如：
 
 .. code-block:: python
@@ -25,21 +27,23 @@ SpikingJelly框架是基于PyTorch的SNN深度学习框架，使用SpikingJelly�
 
 数据格式
 -------------------------------------------
+
 在 ``spikingjelly.activation_based`` 中，数据有两种格式，分别为：
 
-* 表示单个时刻的数据，其 ``shape = [N, *]``，其中 ``N`` 是batch维度，``*`` 表示任意额外的维度
-* 表示多个时刻的数据，其 ``shape = [T, N, *]``，其中 ``T`` 是数据的时间维度， ``N`` 是batch维度，``*`` 表示任意额外的维度
+* 表示单个时刻的数据，其 ``shape = [N, *]``，其中 ``N`` 是批量维度，``*`` 表示任意额外的维度
+* 表示多个时刻的数据，其 ``shape = [T, N, *]``，其中 ``T`` 是数据的时间维度， ``N`` 是批量维度，``*`` 表示任意额外的维度
 
 
 步进模式
 -------------------------------------------
+
 ``spikingjelly.activation_based`` 中的模块，具有两种传播模式，分别是单步模式（single-step）和多步模式（multi-step）。\
 在单步模式下，数据使用 ``shape = [N, *]`` 的格式；而在多步模式下，数据使用 ``shape = [T, N, *]`` 的格式。
 
 模块在初始化时可以指定其使用的步进模式 ``step_mode``，也可以在构建后直接进行修改：
 
 .. code-block:: python
-    
+
     import torch
     from spikingjelly.activation_based import neuron
 
@@ -48,9 +52,9 @@ SpikingJelly框架是基于PyTorch的SNN深度学习框架，使用SpikingJelly�
     net.step_mode = 's'
     # 's' is the single-step mode
 
-如果我们想给单步模式的模块输入 ``shape = [T, N, *]`` 的序列数据，通常需要手动做一个时间上的循环，\
+如果我们想给单步模式的模块输入 ``shape = [T, N, *]`` 的序列数据，需要沿时间维度循环，\
 将数据拆成 ``T`` 个 ``shape = [N, *]`` 的数据并逐步输入进去。\
-让我们新建一层IF神经元，设置为单步模式，将数据逐步输入并得到输出：
+创建一层 IF 神经元，将数据逐步输入并收集输出：
 
 .. code-block:: python
 
@@ -73,7 +77,7 @@ SpikingJelly框架是基于PyTorch的SNN深度学习框架，使用SpikingJelly�
     y_seq = torch.cat(y_seq)
     # y_seq.shape = [T, N, C, H, W]
 
-:class:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` 提供了将 ``shape = [T, N, *]`` 的序列数据输入到单步模块进行逐步的前向传播的封装，\
+:func:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` 提供了将 ``shape = [T, N, *]`` 的序列数据输入到单步模块进行逐步的前向传播的封装，\
 使用起来更加方便：
 
 .. code-block:: python
@@ -90,7 +94,7 @@ SpikingJelly框架是基于PyTorch的SNN深度学习框架，使用SpikingJelly�
     y_seq = functional.multi_step_forward(x_seq, net_s)
     # y_seq.shape = [T, N, C, H, W]
 
-但是，直接将模块设置成多步模块，其实更为便捷：
+你也可以将模块设为多步模式，直接传入整个序列：
 
 .. code-block:: python
 
@@ -111,11 +115,12 @@ IFNode、LIFNode 等神经元和 ``layer`` 中的常用层默认单步；FlexSN 
 
 状态的保存和重置
 -------------------------------------------
-SNN中的神经元等模块，与RNN类似，带有隐藏状态，其输出 :math:`Y[t]` 不仅仅与当前时刻的输入 :math:`X[t]` 有关，\
-还与上一个时刻末的状态 :math:`H[t-1]` 有关，即 :math:`Y[t] = f(X[t], H[t-1])`。
+
+SNN 中的神经元与 RNN 类似，带有隐藏状态。输出 :math:`Y[t]` 由当前输入
+:math:`X[t]` 和上一时刻的状态 :math:`H[t-1]` 共同决定，即 :math:`Y[t] = f(X[t], H[t-1])`。
 
 PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.RNN` 的API文档。而在 ``spikingjelly.activation_based`` 中，\
-状态会被保存在模块内部。例如，我们新建一层IF神经元，设置为单步模式，查看给与输入前的默认电压，和给与输入后的电压：
+状态会被保存在模块内部。例如，我们新建一层IF神经元，设置为单步模式，查看给予输入前的默认电压，和给予输入后的电压：
 
 .. code-block:: python
 
@@ -135,7 +140,7 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
 
     '''
     IFNode(
-    v_threshold=1.0, v_reset=0.0, detach_reset=False
+    v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=s
     (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
     )
     the initial v=0.0
@@ -145,9 +150,9 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
     '''
 
 
-在初始化后，IF神经元层的 ``v`` 会被设置为0，首次给与输入后 ``v`` 会自动广播到与输入相同的 ``shape``。
+在初始化后，IF神经元层的 ``v`` 会被设置为0，首次给予输入后 ``v`` 会自动广播到与输入相同的 ``shape``。
 
-在输入新的独立样本或独立序列前，应调用模块的 ``self.reset()`` 清除之前的状态，让其恢复到初始化状态；\
+在输入新的独立样本或独立序列前，应调用模块的 ``net_s.reset()`` 清除之前的状态，让其恢复到初始化状态；\
 同一连续序列的时间步之间保留状态：
 
 .. code-block:: python
@@ -175,39 +180,48 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
     check point 3: v=tensor([0.8728, 0.9031, 0.2278, 0.5089, 0.1059, 0.0479, 0.5008, 0.8530])
     '''
 
-方便起见，还可以通过调用 :class:`spikingjelly.activation_based.functional.reset_net` 将整个网络中的所有有状态模块进行重置。
+方便起见，还可以通过调用 :func:`spikingjelly.activation_based.functional.reset_net` 将整个网络中的所有有状态模块进行重置。
 
 处理完一批独立样本后需要重置网络：
 
 .. code-block:: python
 
-    from spikingjelly.activation_based import functional
-    # ...
-    for x, label in tqdm(train_data_loader):
-        # ...
+    import torch
+    from spikingjelly.activation_based import functional, layer, neuron
+
+    net = torch.nn.Sequential(layer.Linear(3, 2), neuron.IFNode())
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.01)
+    criterion = torch.nn.MSELoss()
+    batches = [(torch.rand(4, 3), torch.zeros(4, 2)) for _ in range(2)]
+    for x, target in batches:
         optimizer.zero_grad()
         y = net(x)
-        loss = criterion(y, label)
+        loss = criterion(y, target)
         loss.backward()
         optimizer.step()
-
         functional.reset_net(net)
-        # Never forget to reset the network!
 
-如果忘了重置，在推理时可能输出错误的结果，而在训练时则会直接报错：
+如果忘了重置，在推理时可能混入上一个样本的状态，训练时还可能遇到以下错误：
 
 .. code-block:: shell
 
-    RuntimeError: Trying to backward through the graph a second time (or directly access saved variables after they have already been freed). 
-    Saved intermediate values of the graph are freed when you call .backward() or autograd.grad(). 
+    RuntimeError: Trying to backward through the graph a second time (or directly access saved variables after they have already been freed).
+    Saved intermediate values of the graph are freed when you call .backward() or autograd.grad().
     Specify retain_graph=True if you need to backward through the graph a second time or if you need to access saved variables after calling backward.
 
 传播模式
 -------------------------------------------
+
 若一个网络全部由单步模块构成，则整个网络的计算顺序是按照逐步传播(step-by-step)的模式进行，例如：
 
 .. code-block:: python
 
+    import torch
+    from spikingjelly.activation_based import neuron
+
+    T = 4
+    x_seq = torch.rand(T, 2, 3)
+    net = neuron.IFNode(step_mode="s")
     y_seq_step_by_step = []
     for t in range(T):
         x = x_seq[t]
@@ -218,7 +232,7 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
 
 如果网络全部由多步模块构成，则整个网络的计算顺序是按照逐层传播(layer-by-layer)的模式进行，例如：
 
-.. code-block:: python 
+.. code-block:: python
 
     import torch
     import torch.nn as nn
@@ -244,12 +258,12 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
 本例的 :class:`torch.nn.Sequential` 已经实现逐层调用，无需显式编写 ``for i in range(net.__len__())``：
 
 .. code-block:: python
-    
+
     functional.reset_net(net)
     with torch.no_grad():
         y_seq_layer_by_layer = net(x_seq)
 
-本例中两种计算顺序的结果相同。训练态 BatchNorm 等按 batch 统计的层，在两种顺序下统计范围不同（N 与 T×N），结果也不同：
+下面用一个卷积网络比较两种顺序，输出完全一致。如果网络包含训练态 BatchNorm 这类按批量计算统计量的层，逐步传播每次统计 ``N`` 个样本，逐层传播统计 ``T×N`` 个样本，两者的结果就会不同。
 
 .. code-block:: python
 
@@ -294,7 +308,7 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
         max_error = (y_seq_layer_by_layer - y_seq_step_by_step).abs().max()
         print(f'max_error={max_error}')
 
-上面这段代码的输出为：
+上面这段代码的示例输出（随机数会随运行变化）：
 
 .. code-block:: shell
 
@@ -337,13 +351,12 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
 SNN的计算图有2个维度，分别是时间步数和网络深度，网络的传播实际上就是生成完整计算图的过程，正如上面的2张图片所示。\
 实际上，逐步传播是深度优先遍历，而逐层传播是广度优先遍历。
 
-尽管两者区别仅在于计算顺序，但计算速度和内存消耗上会略有区别。\
+计算顺序会影响并行度和内存消耗。
 
-* 在使用梯度替代法训练时，通常推荐使用逐层传播。在正确构建网络的情况下，逐层传播的并行度更大，速度更快
-* 在内存受限时使用逐步传播，例如ANN2SNN任务中需要用到非常大的 ``T``。因为在逐层传播模式下，对无状态的层而言，真正的 batch size 是 ``TN`` 而不是 ``N`` (参见下一个教程)，当 ``T`` 太大时\
-  内存消耗极大
+* 使用替代梯度训练时推荐逐层传播。无状态层一次处理全部时间步，并行度更高，一般也更快。
+* 内存受限时使用逐步传播，例如 ANN2SNN 任务需要很大的 ``T``。逐层传播时，无状态层的实际批量大小是 ``TN`` 而不是 ``N`` （见 :doc:`./container`），``T`` 很大时内存消耗也很大。
 
 设备与执行
 ----------------------------
 
-将模块和输入移动到同一设备即可。神经元不要求选择 backend；CPU/CUDA 使用方式见 :doc:`./neuron`，编译和诊断见 :doc:`./triton_backend`。
+将模块和输入移动到同一设备即可。神经元会自动选择执行后端；CPU/CUDA 使用方式见 :doc:`./neuron`，编译和诊断见 :doc:`./triton_backend`。

@@ -1,11 +1,11 @@
 脉冲Transformer构建、训练和改进
 =======================================
 
-本教程作者： `周昭坤 <https://github.com/ZK-Zhou>`_ , `黄一凡 (AllenYolk) <https://github.com/AllenYolk>`_
+作者： `周昭坤 <https://github.com/ZK-Zhou>`_、`黄一凡 (AllenYolk) <https://github.com/AllenYolk>`_
 
 English version: :doc:`../en/spikformer`
 
-本教程介绍如何用 SpikingJelly 构建 Spikformer [#spikformer]_ 并改进 SSA 实现。Spikformer 的结构由三个主要组件组成：脉冲块分割前馈模块（Spiking Patch Splitting，SPS）、脉冲自注意力机制（Spiking Self Attention，SSA）和多层感知模块（Multi-Layer Perceptron，MLP），堆叠方式是一个 SPS 加若干个 SSA-MLP 组合块。训练流程见 :doc:`./train_large_scale_snn`；Spikformer 的分布式训练配置见 :doc:`./distributed_training`。具体的 SSA 和 Spikformer 如图所示：
+你将先实现 Spikformer [#spikformer]_ 的注意力模块，再构建完整的图像分类网络。Spikformer 的结构由三个主要组件组成：脉冲块分割前馈模块（Spiking Patch Splitting，SPS）、脉冲自注意力机制（Spiking Self Attention，SSA）和多层感知模块（Multi-Layer Perceptron，MLP），堆叠方式是一个 SPS 加若干个 SSA-MLP 组合块。训练流程见 :doc:`./train_large_scale_snn`；Spikformer 的分布式训练配置见 :doc:`./distributed_training`。具体的 SSA 和 Spikformer 如图所示：
 
 .. image:: ../../_static/tutorials/spikformer/spikformer-overview.png
     :width: 100%
@@ -19,10 +19,9 @@ English version: :doc:`../en/spikformer`
 
     import torch
     import torch.nn as nn
-    import numpy as np
     from spikingjelly.activation_based import neuron
 
-脉冲自注意力机制的Query、Key和Value均为脉冲序列，具体做法是在三个张量输出时添加脉冲神经元，耦合脉冲神经元来避免引入负值，取消了Softmax函数，构建脉冲自注意力机制：
+SSA 接收形状为 ``[T, B, N, C]`` 的序列，其中 T 是时间步数，B 是批量大小，N 是词元数量，C 是通道数。分别用线性投影、批归一化和 LIF 神经元生成 Q、K、V。神经元输出非负的二值脉冲，注意力直接使用它们的矩阵乘积，不使用 Softmax：
 
 .. code-block:: python
 
@@ -81,23 +80,25 @@ English version: :doc:`../en/spikformer`
 
             return x
 
-基于SSA和MLP构建脉冲Transformer的Block。下面的片段是结构示意：``MLP`` 代表通道在后的脉冲前馈模块，本页不定义它，因此该片段本身不可运行。SpikingJelly 提供 :class:`spikingjelly.activation_based.model.spikformer.SpikformerMLP` ，但它是 token-last 格式且需要 ``out_features`` 参数，不能直接替换下面的调用。注意此处使用SEW形式残差，若使用MS形式残差则需在SSA和MLP中更改脉冲神经元的位置：
+将 SSA 与 :class:`spikingjelly.activation_based.model.spikformer.SpikformerMLP` 组合成 Transformer 块。MLP 要求词元维在最后，因此在调用前后转置张量。下面的加法使用 SEW 形式的残差，即分支先产生脉冲再相加；若改用 MS 形式的残差，则需调整 SSA 和 MLP 中神经元的位置：
 
 .. code-block:: python
+
+    from spikingjelly.activation_based.model.spikformer import SpikformerMLP
 
     class Block(nn.Module):
         def __init__(self, dim, num_heads, mlp_ratio=4.):
             super().__init__()
             self.attn = SSA(dim, num_heads=num_heads)
             mlp_hidden_dim = int(dim * mlp_ratio)
-            self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim, out_features=dim)
+            self.mlp = SpikformerMLP(in_features=dim, hidden_features=mlp_hidden_dim, out_features=dim)
 
         def forward(self, x):
             x = x + self.attn(x)
-            x = x + self.mlp(x)
+            x = x + self.mlp(x.transpose(-1, -2)).transpose(-1, -2)
             return x
 
-最后加入前馈模块，组成Spikformer。包含 patch splitting、上述 block 和读出层的完整模型由 :func:`spikingjelly.activation_based.model.spikformer.spikformer_ti` 提供：
+要构建包含图像分块、词元维在后的 Transformer 块和读出层的完整模型，可以使用 :func:`spikingjelly.activation_based.model.spikformer.spikformer_ti`：
 
 .. code-block:: python
 
@@ -105,36 +106,39 @@ English version: :doc:`../en/spikformer`
     from spikingjelly.activation_based.model.spikformer import spikformer_ti
     from spikingjelly.activation_based import functional
 
-    net = spikformer_ti(T=4, img_size_h=32, img_size_w=32, num_classes=10)
+    net = spikformer_ti(T=4, img_size_h=32, img_size_w=32, num_classes=10).eval()
     functional.set_step_mode(net, 'm')
     x_seq = torch.rand([4, 2, 3, 32, 32])
-    y_seq = net(x_seq)
+    with torch.no_grad():
+        y_seq = net(x_seq)
     print(f'y_seq.shape={y_seq.shape}')
     functional.reset_net(net)
 
-``spikformer_ti`` 是 tiny 配置。``spikformer_s`` 和 ``spikformer_cifar10`` 分别提供 small ImageNet 和 CIFAR-10 配置及其训练默认参数。
+输出为 ``y_seq.shape=torch.Size([4, 2, 10])``，即每个时间步、每张图像各有一个类别得分向量。分类时用 ``y_seq.mean(0)`` 沿时间维取平均，处理下一批独立图像前重置神经元状态。
 
-读者还可以根据处理任务的分辨率和复杂性设计分层的Spikformer，参考QKformer。
+``spikformer_ti`` 是微型配置。``spikformer_s`` 和 ``spikformer_cifar10`` 分别提供小型 ImageNet 和 CIFAR-10 模型配置。训练默认参数由相应的训练配置类提供。
+
+如果任务需要多种空间分辨率，你可以参考 QKformer 设计分层的 Spikformer。
 
 SSA实现方式改进
 -----------------------
 
-SpikingJelly ``0.0.0.1.0`` 提供了 SSA 的高效实现 :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>` 。
+SpikingJelly 提供了词元维在后的 SSA 实现 :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>` 。
 相比上一节中的 ``SSA``， :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>` 从以下方向做出改进。
 
-#. 假设输入和输出的形状是 ``[T, B, C, N]`` ，而非 ``[T, B, N, C]`` （ **token-last** ， 而非 channel-last ）。使用 ``Conv1d``，而非 ``Linear`` 。如此一来， ``BatchNorm1d`` 的前后无需转置。
-#. 将 Q，K，V 的三组 Conv-BN-LIF 合并成一组，其 channel 数为原本的 3 倍。如此一来，可以一次性生成 ``q, k, v`` 三组张量。
-#. 修改张量乘法的顺序。原本的实现中， ``q, k, v`` 形状均为 ``[T, B, N, C]`` ，所做的张量乘法为 ``q @ k.transpose(-2, -1) @ v``。改进后的实现中， ``q, k, v`` 的形状均为 ``[T, B, C, N]`` ，所做张量乘法变为 ``v @ k.transpose(-2, -1) @ q`` 。
+#. 输入和输出使用 ``[T, B, C, N]``，即词元维在最后。投影层使用 ``Conv1d``，省去 ``BatchNorm1d`` 前后的转置。
+#. 将 Q、K、V 的三组 Conv-BN-LIF 合并成一组，通道数为原来的 3 倍，一次生成 ``q, k, v``。
+#. 分头后的 ``q, k, v`` 从 ``[T, B, num_heads, N, C // num_heads]`` 变为 ``[T, B, num_heads, C // num_heads, N]``。逐头计算时，乘法从 ``q @ k.transpose(-2, -1) @ v`` 变为 ``v @ k.transpose(-2, -1) @ q``。
 
 .. note::
 
-    记原始形如 ``[T, B, N, C]`` 的 ``q, k, v`` 张量为 :math:`Q, K, V` 。则 SSA 中张量乘法（即：批量矩阵乘法）可表示为：
+    推导时只考虑一个注意力头，并用 C 表示该头的通道数。记原始形如 ``[T, B, N, C]`` 的 ``q, k, v`` 张量为 :math:`Q, K, V` 。则 SSA 中张量乘法（即：批量矩阵乘法）可表示为：
 
     .. math::
 
         X = Q K^T V ,
 
-    其中 :math:`K^T` 代表对 :math:`K` 的最后两个维度做转置。改进后的 ``q, k, v`` 以及张量乘法所得的 ``x`` 都形如 ``[T, B, C, N]``，相当于 :math:`Q^T, K^T, V^T, X^T`。记这些 token-last 的张量为 :math:`Q', K', V', X'` ，则有
+    其中 :math:`K^T` 代表对 :math:`K` 的最后两个维度做转置。改进后的 ``q, k, v`` 以及张量乘法所得的 ``x`` 都形如 ``[T, B, C, N]``，相当于 :math:`Q^T, K^T, V^T, X^T`。记这些词元维在后的张量为 :math:`Q', K', V', X'` ，则有
 
     .. math::
 
@@ -143,7 +147,7 @@ SpikingJelly ``0.0.0.1.0`` 提供了 SSA 的高效实现 :class:`SpikingSelfAtte
            &= V^T K Q^T \\
            &= V' K'^T Q' .
 
-    所以对于改进后的 token-last 张量而言，张量乘法顺序应为 ``v @ k.transpose(-2, -1) @ q`` 。
+    所以对于改进后的词元维在后张量而言，张量乘法顺序应为 ``v @ k.transpose(-2, -1) @ q`` 。
 
 下面的实现展示上述改动。完整实现见 :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>` 的文档与源码。
 
@@ -197,7 +201,7 @@ SpikingJelly ``0.0.0.1.0`` 提供了 SSA 的高效实现 :class:`SpikingSelfAtte
 
 .. note::
 
-    使用 token-last 张量格式后，``MLP`` 的实现方式也应从 ``Linear`` 改为 ``Conv1d``，以避免不必要的涉及数据复制的 ``reshape`` 操作。
+    使用词元维在后张量格式后，``MLP`` 的实现方式也应从 ``Linear`` 改为 ``Conv1d``，以避免不必要的涉及数据复制的 ``reshape`` 操作。
 
 改进脉冲Transformer
 -------------------------------

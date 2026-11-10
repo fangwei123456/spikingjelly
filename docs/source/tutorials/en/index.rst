@@ -1,10 +1,11 @@
 英文教程 | English Tutorials
 ========================================
 
-See :doc:`./install`, then :doc:`./basic_concept` and :doc:`./neuron`.
-See :doc:`./triton_backend`
-for GPU execution/compilation and :doc:`./precision` for numerical policies.
-Use :doc:`./flexsn` for custom dynamics and :doc:`./migrate_from_legacy` for old code.
+Prepare your environment with :doc:`./install`, then read :doc:`./basic_concept`
+and :doc:`./neuron` to learn about step modes, neuron state and resetting.
+:doc:`./lif_fc_mnist` is the first complete training example. See
+:doc:`./triton_backend` to accelerate or compile a network on a GPU, and
+:doc:`./migrate_from_legacy` to migrate code from older versions.
 
 The following tutorials are currently available only in Chinese: :doc:`DSQN <../cn/dsqn>`, :doc:`ILC-SAN <../cn/ilc_san>`, and :doc:`Lynxi inference <../cn/inference_on_lynxi>`.
 
@@ -21,12 +22,8 @@ The following tutorials are currently available only in Chinese: :doc:`DSQN <../
 
 .. toctree::
     :maxdepth: 1
-    :caption: Intermediate
+    :caption: Training your first SNN
 
-    /tutorials/en/stdp
-    /tutorials/en/timing_based
-    /tutorials/en/ann2snn
-    /tutorials/en/ann2snn_transformer
     /tutorials/en/lif_fc_mnist
     /tutorials/en/conv_fashion_mnist
     /tutorials/en/recurrent_connection_and_stateful_synapse
@@ -35,16 +32,30 @@ The following tutorials are currently available only in Chinese: :doc:`DSQN <../
 
 .. toctree::
     :maxdepth: 1
-    :caption: Advanced
+    :caption: Learning rules, models and conversion
+
+    /tutorials/en/stdp
+    /tutorials/en/timing_based
+    /tutorials/en/ann2snn
+    /tutorials/en/ann2snn_transformer
+    /tutorials/en/spikformer
+
+.. toctree::
+    :maxdepth: 1
+    :caption: Performance and scale
 
     /tutorials/en/triton_backend
     /tutorials/en/flexsn
     /tutorials/en/memopt
-    /tutorials/en/op_counter
     /tutorials/en/precision
+    /tutorials/en/op_counter
     /tutorials/en/distributed_training
     /tutorials/en/train_large_scale_snn
-    /tutorials/en/spikformer
+
+.. toctree::
+    :maxdepth: 1
+    :caption: Hardware and model exchange
+
     /tutorials/en/lava_exchange
     /tutorials/en/nir_exchange
 

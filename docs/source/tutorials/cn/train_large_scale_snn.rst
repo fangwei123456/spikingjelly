@@ -7,13 +7,12 @@ English version: :doc:`../en/train_large_scale_snn`
 
 使用 ``activation_based.model``
 ----------------------------------------------
-在 :class:`spikingjelly.activation_based.model` 中定义了一些经典网络模型，可以直接拿来使用，使用方法与 \
-:class:`torchvision.models` 类似。以Spiking ResNet [#ResNet]_ 为例：
+先用 :mod:`spikingjelly.activation_based.model` 创建 Spiking ResNet [#ResNet]_，
+再输入一个包含四个时间步的图像序列。模型工厂的用法与 :mod:`torchvision.models` 类似：
 
 .. code-block:: python
 
   import torch
-  import torch.nn as nn
   from spikingjelly.activation_based import surrogate, neuron, functional
   from spikingjelly.activation_based.model import spiking_resnet
 
@@ -30,7 +29,10 @@ English version: :doc:`../en/train_large_scale_snn`
       print(f'y_seq.shape={y_seq.shape}')
       functional.reset_net(s_resnet18)
 
-输出为：
+模型结构的输出省略了部分层。输出形状为 ``[T, N, classes]``，即四个时间步、
+一张图像和 1000 个类别分数。处理下一个独立批次前，用 ``reset_net`` 清空神经元状态。
+
+输出：
 
 .. code-block:: shell
 
@@ -51,16 +53,18 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
 
 .. code-block:: python
 
+  from spikingjelly.activation_based import neuron, surrogate
+  from spikingjelly.activation_based.model import spiking_resnet
+
   s_resnet18 = spiking_resnet.spiking_resnet18(pretrained=True, spiking_neuron=neuron.IFNode, surrogate_function=surrogate.ATan(), detach_reset=True)
 
 使用 ``activation_based.examples.common.train_classify``
 ----------------------------------------------------------------
 
-:class:`spikingjelly.activation_based.examples.common.train_classify` 是根据 `torchvision 0.12 references <https://github.com/pytorch/vision/tree/release/0.12/references>`_ \
-的分类代码进行改动而来，使用这个模块可以很方便的进行训练。
-
-:class:`spikingjelly.activation_based.examples.common.train_classify.Trainer` 提供了较为灵活的训练方式，预留了一些接口给用户改动。\
-例如， :class:`spikingjelly.activation_based.examples.common.train_classify.Trainer.set_optimizer` 定义了如何设置优化器，默认为：
+:mod:`spikingjelly.activation_based.examples.common.train_classify` 提供训练循环，
+改编自 `torchvision 0.12 references <https://github.com/pytorch/vision/tree/release/0.12/references>`_。
+你可以继承 ``Trainer``，修改其中某个训练步骤。例如，``Trainer.set_optimizer``
+负责选择优化器。下面摘录了它支持的选择，以及训练循环调用它的位置：
 
 .. code-block:: python
 
@@ -92,10 +96,11 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
         optimizer = self.set_optimizer(args, parameters)
         # ...
 
-如果我们增加一个优化器，例如 ``Adamax`` ，只需要继承并重写此方法，例如：
+要添加 ``Adamax``，重写 ``set_optimizer``，并保留继承的优化器选择：
 
 .. code-block:: python
 
+  import torch
   from spikingjelly.activation_based.examples.common import train_classify
 
   class MyTrainer(train_classify.Trainer):
@@ -112,11 +117,13 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
 
 .. code-block:: shell
 
-  (pytorch-env) PS spikingjelly> python -m spikingjelly.activation_based.examples.common.train_classify -h
+  python -m spikingjelly.activation_based.examples.common.train_classify -h
 
 如果想增加参数，仍然可以通过继承的方式实现：
 
 .. code-block:: python
+
+  from spikingjelly.activation_based.examples.common import train_classify
 
   class MyTrainer(train_classify.Trainer):
       def get_args_parser(self, add_help=True):
@@ -124,9 +131,7 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
           parser.add_argument('--do-something', type=str, help="do something")
           return parser
 
-:class:`Trainer <spikingjelly.activation_based.examples.common.train_classify.Trainer>` 的许多其他函数都可以进行补充修改或覆盖，方法类似，不再赘述。
-
-对于 ``Trainer`` 及用户自己继承实现的子类，可以通过如下方式调用并进行训练：
+解析命令行参数后，将它们传给你的训练器：
 
 .. code-block:: python
 
@@ -141,9 +146,10 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
 
 在ImageNet上训练
 ----------------------------------------------
- ``Trainer`` 默认的数据加载函数 :class:`load_ImageNet <spikingjelly.activation_based.examples.common.train_classify.Trainer.load_ImageNet>` 加载 ImageNet [#ImageNet]_ 数据集。\
- 结合 :class:`Trainer <spikingjelly.activation_based.examples.common.train_classify.Trainer>` 和 :class:`spikingjelly.activation_based.model.spiking_resnet`，我们可以轻松训练\
- 大型深度SNN，示例代码如下：
+准备 ImageNet [#ImageNet]_，在数据目录下按 ``train/<class>`` 和 ``val/<class>``
+组织图像。``Trainer.load_ImageNet`` 会读取这个目录结构。下面的子类把每张图像
+重复 ``T`` 个时间步，并在计算分类损失前对输出分数取时间平均。继承的训练循环
+会在每个批次结束后重置神经元状态。启动训练时，需要显式传入 ``--T``：
 
 .. code-block:: python
 
@@ -189,7 +195,7 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
       args = trainer.get_args_parser().parse_args()
       trainer.main(args)
 
-代码位于 :class:`spikingjelly.activation_based.examples.train_imagenet`，可以直接运行。
+代码位于 :mod:`spikingjelly.activation_based.examples.train_imagenet`，可以直接运行。
 在单卡上进行训练：
 
 .. code-block:: shell

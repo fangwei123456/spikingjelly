@@ -5,15 +5,14 @@
 
 English version: :doc:`../en/monitor`
 
-在 :class:`spikingjelly.activation_based.monitor` 中定义了几个通用的监视器类，用户可以使用这些监视器实现复杂的数据\
-记录功能。下面以一个简单的网络为例进行介绍。
+:mod:`spikingjelly.activation_based.monitor` 提供了输出、输入、状态和梯度监视器。你将先用一个简单的多步网络记录脉冲，再学习记录膜电位和梯度。
 
 
 基本使用
 -------------------------------------------
-所有的监视器的用法类似，以 :class:`spikingjelly.activation_based.monitor.OutputMonitor` 为例进行介绍。
+先使用 :class:`spikingjelly.activation_based.monitor.OutputMonitor` 记录神经元输出。其他监视器采用相同的启停、索引和清理方式。
 
-首先我们搭建起一个简单的多步网络。为了避免无脉冲释放，我们将权重全部设置为正值：
+搭建一个简单的多步网络，并将权重设为正值，让神经元更容易发放脉冲：
 
 .. code-block:: python
 
@@ -53,7 +52,7 @@ English version: :doc:`../en/monitor`
 
     print(f'spike_seq_monitor.records=\n{spike_seq_monitor.records}')
 
-输出为：
+一次运行的输出示例如下：
 
 .. code-block:: shell
 
@@ -85,7 +84,7 @@ English version: :doc:`../en/monitor`
     print(f'net={net}')
     print(f'spike_seq_monitor.monitored_layers={spike_seq_monitor.monitored_layers}')
 
-输出为：
+输出如下：
 
 .. code-block:: shell
 
@@ -117,23 +116,14 @@ English version: :doc:`../en/monitor`
     print(f'spike_seq_monitor.records={spike_seq_monitor.records}')
     print(f"spike_seq_monitor['1']={spike_seq_monitor['1']}")
 
-输出为：
+输出如下：
 
 .. code-block:: shell
 
     spike_seq_monitor.records=[]
     spike_seq_monitor['1']=[]
 
-退出上述上下文后，钩子已经被移除，但 ``records`` 仍可读取。没有使用 ``with``
-创建监视器时，应在不再需要监视器后显式调用 ``close()``：
-
-.. code-block:: python
-
-    spike_seq_monitor.close()
-
-``disable()`` 仅暂停记录并保留钩子，以便通过 ``enable()`` 恢复；``close()`` 会
-永久移除钩子。删除监视器变量不能替代 ``close()``，因为仍存活模块上的钩子可能
-继续引用监视器。
+退出上述上下文后，钩子已经被移除，但 ``records`` 仍可读取。如果没有使用 ``with``，请在不再记录时调用 ``close()``。``disable()`` 只暂停记录并保留钩子，之后可以用 ``enable()`` 恢复；``close()`` 会永久移除钩子。仅删除监视器变量可能不会移除仍注册在模块上的钩子。
 
 
 :class:`OutputMonitor <spikingjelly.activation_based.monitor.OutputMonitor>` 还支持在记录数据时就对数据进行简单的处理，只需要\
@@ -169,7 +159,7 @@ English version: :doc:`../en/monitor`
         functional.reset_net(net)
         fr_monitor.close()
 
-输出为：
+一次运行的输出示例如下：
 
 .. code-block:: shell
 
@@ -203,7 +193,7 @@ English version: :doc:`../en/monitor`
         functional.reset_net(net)
         v_seq_monitor.close()
 
-输出为：
+一次运行的输出示例如下：
 
 .. code-block:: shell
 
@@ -258,7 +248,7 @@ English version: :doc:`../en/monitor`
         functional.reset_net(net)
         input_monitor.close()
 
-输出为：
+一次运行的输出示例如下：
 
 .. code-block:: shell
 
@@ -290,7 +280,7 @@ English version: :doc:`../en/monitor`
     functional.reset_net(net)
     spike_seq_grad_monitor.close()
 
-输出为：
+一次运行的输出示例如下：
 
 .. code-block:: text
 
@@ -316,7 +306,7 @@ English version: :doc:`../en/monitor`
 --------------------------------------------------------------------------------------
 使用 :class:`spikingjelly.activation_based.monitor.GradInputMonitor` 可以轻松记录模块的输入梯度 :math:`\frac{\partial L}{\partial X}`。
 
-让我们构建一个深度网络，调节替代函数的 ``alpha`` 并比较不同 ``alpha`` 下的梯度的幅值：
+构建一个较深的网络，修改替代函数的 ``alpha``，并比较输入梯度的幅值：
 
 .. code-block:: python
 
@@ -355,7 +345,7 @@ English version: :doc:`../en/monitor`
     input_grad_monitor.close()
 
 
-输出为：
+一次运行的输出示例如下：
 
 .. code-block:: shell
 
@@ -377,22 +367,20 @@ English version: :doc:`../en/monitor`
 
 GPU 利用率采样
 -------------------------------------------
-:class:`spikingjelly.activation_based.monitor.GPUMonitor` 通过 ``nvidia-smi``
-定期采样整张 GPU 的利用率和显存占用。结果会包含同一 GPU 上的其他进程，不能替代
-:mod:`spikingjelly.activation_based.profiler` 中的模型级分析器。使用后必须停止并等待线程退出：
+:class:`spikingjelly.activation_based.monitor.GPUMonitor` 通过 ``nvidia-smi`` 定期采样整张 GPU 的利用率和显存占用。采样结果包含同一 GPU 上的其他进程；模型级分析请使用 :mod:`spikingjelly.activation_based.profiler`。把训练循环放在 ``try`` 块中，并在结束时停止监视线程：
 
 .. code-block:: python
 
     gpu_monitor = monitor.GPUMonitor(interval=10)
     try:
-        train()
+        ...  # 在这里运行训练循环
     finally:
         gpu_monitor.stop()
         gpu_monitor.join()
 
 降低内存占用
 -------------------------------------------
-如果我们需要记录大量数据，当被记录的数据是脉冲时，可以通过一些方法来降低内存占用。
+记录大量脉冲时，可以在写入监视器前分离计算图或压缩数据。
 
 启用梯度时，默认的恒等记录函数可能保留前向计算图。若记录不需要参与梯度计算，
 应在记录时分离张量：

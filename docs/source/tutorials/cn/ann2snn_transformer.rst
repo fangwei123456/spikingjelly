@@ -1,17 +1,17 @@
 Transformer ANN2SNN 转换
 ========================
 
-本页作者：`黄一凡 (AllenYolk) <https://github.com/AllenYolk>`_
+作者：`黄一凡 (AllenYolk) <https://github.com/AllenYolk>`_
 
 English version: :doc:`../en/ann2snn_transformer`
 
-本页介绍 ``spikingjelly.activation_based.ann2snn`` 中面向 Transformer 的 ANN2SNN 转换路径，包括 ``TransformerTDEquivalentRecipe`` 基线、基于 Spatio-Temporal Approximation (STA) [#sta]_ 的 ``STATransformerRecipe``、用于 SpikeZIP-compatible QANN 的 ``SpikeZIPTFQANNRecipe`` [#spikezip]_，以及基于校准的 ``Qwen2SNNRecipe``。如果要做经典 CNN 上的 ReLU-to-IFNode rate coding 转换，请阅读 :doc:`ann2snn`。
+要用 ``spikingjelly.activation_based.ann2snn`` 转换 Transformer，先根据你的模型选择转换方案： ``TransformerTDEquivalentRecipe`` 基线、基于 Spatio-Temporal Approximation (STA) [#sta]_ 的 ``STATransformerRecipe``、用于兼容 SpikeZIP 的 QANN 的 ``SpikeZIPTFQANNRecipe`` [#spikezip]_，以及基于校准的 ``Qwen2SNNRecipe``。如果要做经典 CNN 上的 ReLU 到 IF 神经元率编码转换，请阅读 :doc:`ann2snn`。
 
 .. list-table::
     :header-rows: 1
 
-    * - Recipe
-      - 输出
+    * - 转换方案
+      - 内部表示
       - 是否二值
       - 执行方式
     * - ``TransformerTDEquivalentRecipe``
@@ -33,17 +33,17 @@ English version: :doc:`../en/ann2snn_transformer`
 
 以下示例用于推理。
 
-Path 1: 差分等价基线
+路径 1： 差分等价基线
 -------------------------------------------
 
-``TransformerTDEquivalentRecipe`` 是一个不需要 dataloader 的替换路径：把当前支持的 Transformer 算子替换为 TD-equivalent 模块。它是本页最小的 Transformer 转换基线：不做 STA 校准，也不维护内部时间循环，只依赖已有 TD 算子表达累计差分。
+先用 ``TransformerTDEquivalentRecipe`` 检查时间差分（TD）等价性。它将受支持的 Transformer 算子替换为输出相邻累计结果之差的模块。时间序列由你提供，无需校准数据加载器。
 
-后面的 ``STATransformerRecipe`` 可以理解为同一累计差分和显式 step-mode 思路的模型级增强：它加入 dataloader 校准和 spike encoder，并面向完整 Transformer FX graph。二者不是同一个 recipe，也不是严格的 API 超集；它们的支持边界和实验含义不同。
+``STATransformerRecipe`` 在累计差分的基础上加入校准和脉冲编码器。两种转换方案支持的计算图操作不同，选择前需检查模型中的算子。
 
 在线差分
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Transformer 模型包含仿射投影、LayerNorm 或 RMSNorm、GELU 或 SiLU、attention、残差加法、mask 以及 tensor 常量等组件。ReLU-to-IFNode rate-coding 规则无法覆盖这些组件，需另辟蹊径。常用的方法是进行时间差分。
+Transformer 模型包含仿射投影、LayerNorm 或 RMSNorm、GELU 或 SiLU、注意力、残差加法、掩码以及张量常量等组件。ReLU 到 IF 神经元率编码规则无法覆盖这些组件。你可以用时间差分来处理这些运算。
 
 以普通 ANN 输入 :math:`x` 为例，可把它嵌入为如下差分输入序列：
 
@@ -57,7 +57,7 @@ Transformer 模型包含仿射投影、LayerNorm 或 RMSNorm、GELU 或 SiLU、a
 
     X^{(t)} = \sum_{\tau=0}^{t} x^{(\tau)}.
 
-因此 :math:`X^{(0)} = X^{(1)} = \cdots = x`。令 :math:`f` 表示原 ANN 中的一个函数或模块，例如仿射投影、LayerNorm、GELU 或 attention block。转换后的 TD-equivalent 模块不是 :math:`f` 本身，而是 :math:`f` 在相邻累计输入上的差分。记该差分模块为 :math:`F_t`：
+因此 :math:`X^{(0)} = X^{(1)} = \cdots = x`。令 :math:`f` 表示原 ANN 中的一个函数或模块，例如仿射投影、LayerNorm、GELU 或注意力块。TD 等价模块输出 :math:`f` 在相邻累计输入上的差分。记该差分模块为 :math:`F_t`：
 
 .. math::
 
@@ -76,20 +76,20 @@ Transformer 模型包含仿射投影、LayerNorm 或 RMSNorm、GELU 或 SiLU、a
     = f\left(X^{(T-1)}\right) - f\left(X^{(-1)}\right)
     = f(x).
 
-这个恒等式解释了 TD-equivalent 路径为什么成立：如果每个转换模块都只输出累计结果的差分，常量与 bias 只计算一次，那么把所有时间步的输出相加就恢复了 ANN 模块的输出。STA 的在线等价部分也复用这一思想。
+这个恒等式解释了 TD 等价路径为什么成立：如果每个转换模块都只输出累计结果的差分，常量与偏置只计算一次，那么把所有时间步的输出相加就恢复了 ANN 模块的输出。STA 的在线等价部分也复用这一思想。
 
-在线等价路径现在遵循显式的 SpikingJelly step-mode 约定。具体来说，
+按 SpikingJelly 的步进模式约定准备输入：
 
 * 原 ANN 的 ``model(x)`` 是一次完整的 ANN 推理，不包含时间展开；
 * 转换后模型在 ``step_mode="s"`` 下的一次调用只执行一个差分时间步，外层时间循环需由用户编写；转换后的模块每次调用接收当前时间步的差分输入 :math:`x^{(t)}`，并在内部维护累计输入 :math:`X^{(t-1)}` 和累计输出 :math:`f(X^{(t-1)})`，以此实现差分计算；
-* ``step_mode="m"`` 时，转换后模型接收首个维度为时间维的完整差分序列张量，并返回完整输出序列；此时通常能够沿时间维度并行（或向量化）计算；
+* ``step_mode="m"`` 时，转换后模型接收首个维度为时间维的完整差分序列张量，并返回完整输出序列；TD 算子可沿时间维批量计算累计输入。
 
 对普通 ANN 样本 :math:`x` 做推理时，常用的差分输入序列是 :math:`x^{(0)}=x`、后续时间步皆为 0，正如上面的例子所示。而如果输入本身已经是时间序列，则直接传入对应的差分序列。
 
 BERT SST-2 示例
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``TransformerTDEquivalentRecipe`` 可以把 Transformer 中常见的核心算子转换为 TD-equivalent 有状态模块，使转换后的模型按照 SpikingJelly 的 ``step_mode`` 约定执行单步或多步推理。除下文的 BERT 算子外，recipe 也会把 ``nn.RMSNorm`` 转换为 ``TDRMSNorm``，把 ``nn.SiLU`` 和 ``torch.nn.functional.silu`` 转换为 ``TDSiLU``；这些算子的输出是浮点时间差分，而非二值脉冲。这里以 BERT 风格的 SST-2 分类为例，转换边界设在 embedding 输出之后：原 Hugging Face BERT embedding 层仍然接收整数 ``input_ids``；而 ANN2SNN 转换图从浮点 ``embedding_output`` 和 ``extended_attention_mask`` 起步，覆盖 encoder、pooler、dropout 和 classifier wrapper。完整可运行示例位于 ``spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_td_equivalent``。
+``TransformerTDEquivalentRecipe`` 可以把 Transformer 中常见的核心算子转换为 TD 等价有状态模块，使转换后的模型按照 SpikingJelly 的 ``step_mode`` 约定执行单步或多步推理。除下文的 BERT 算子外，转换方案也会把 ``nn.RMSNorm`` 转换为 ``TDRMSNorm``，把 ``nn.SiLU`` 和 ``torch.nn.functional.silu`` 转换为 ``TDSiLU``；这些算子的输出是浮点时间差分，而非二值脉冲。这里以 BERT 风格的 SST-2 分类为例，转换边界设在嵌入层输出之后：原 Hugging Face BERT 嵌入层仍然接收整数 ``input_ids``；而 ANN2SNN 转换图从浮点 ``embedding_output`` 和 ``extended_attention_mask`` 起步，覆盖编码器、池化器、随机失活层和分类器包装模型。完整可运行示例位于 ``spikingjelly.activation_based.ann2snn.examples.bert_sst2_transformer_td_equivalent``。
 
 Hugging Face 依赖是可选依赖，只在运行该示例时安装：
 
@@ -97,7 +97,7 @@ Hugging Face 依赖是可选依赖，只在运行该示例时安装：
 
     uv pip install transformers datasets
 
-建议先运行一个小的验证切片：
+先用少量验证样本检查流程：
 
 .. code-block:: shell
 
@@ -126,9 +126,12 @@ Hugging Face 依赖是可选依赖，只在运行该示例时安装：
       --time-steps 8 \
       --output benchmark/output/bert_sst2_transformer_td_equivalent_t8_full.json
 
-转换产物遵循相同的显式 step-mode 约定：
+示例脚本通过 ``TransformerTDEquivalentRecipe(time_steps=8)`` 构建 ``converted``。取得嵌入输出和静态掩码后，推理步骤如下：
 
 .. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import functional
 
     functional.set_step_mode(converted, "m")
     functional.reset_net(converted)
@@ -139,11 +142,12 @@ Hugging Face 依赖是可选依赖，只在运行该示例时安装：
         dtype=embedding_output.dtype,
     )
     embedding_seq[0] = embedding_output
-    logits = converted(embedding_seq, extended_attention_mask).sum(dim=0)
+    with torch.no_grad():
+        logits = converted(embedding_seq, extended_attention_mask).sum(dim=0)
 
-``extended_attention_mask`` 是静态控制 tensor，传入时保持原样，不添加时间维。
+``extended_attention_mask`` 是静态控制张量，传入时保持原样，不添加时间维。
 
-下表数据在 NVIDIA A100-SXM4-80GB 上，使用 SST-2 validation split 的 872 条样本测得：
+参考结果（提交 `0e24f7d3 <https://github.com/fangwei123456/spikingjelly/commit/0e24f7d3>`_，NVIDIA A100-SXM4-80GB）：
 
 .. list-table:: BERT SST-2 Transformer TD-equivalent 转换结果
     :header-rows: 1
@@ -152,7 +156,7 @@ Hugging Face 依赖是可选依赖，只在运行该示例时安装：
     * - 方法
       - 验证样本
       - 时间步
-      - Accuracy (%)
+      - 准确率 (%)
     * - ANN
       - 872
       - -
@@ -162,9 +166,7 @@ Hugging Face 依赖是可选依赖，只在运行该示例时安装：
       - 8
       - 92.431
 
-历史文档记录： `0e24f7d3 <https://github.com/fangwei123456/spikingjelly/commit/0e24f7d3>`_ （2026-07-05）；NVIDIA A100-SXM4-80GB；未在当前 V2 上复测。
-
-Accuracy 下降 0.000 个百分点。评测前，示例会先在前两个 batch 上比对 FX-friendly wrapper 与原 Hugging Face classifier 的 logits。本次 ``batch_size=32`` 的完整运行中，ANN wrapper 推理耗时约 1.60 秒，转换模型约 9.20 秒。关键 stdout 行如下：
+准确率下降 0.000 个百分点。评测前，示例会先在前两个批次上比对适合 FX 追踪的包装模型与原 Hugging Face 分类器的分类得分。本次 ``batch_size=32`` 的完整运行中，ANN 包装模型推理耗时约 1.60 秒，转换模型约 9.20 秒。对应输出如下：
 
 .. code-block:: shell
 
@@ -173,23 +175,23 @@ Accuracy 下降 0.000 个百分点。评测前，示例会先在前两个 batch 
     TRANSFORMER_TD_EQUIVALENT {"accuracy": 0.9243119266055045, "total": 872, "seconds": 9.204399347305298}
     DROP 0.0
 
-Path 2: STA 转换
+路径 2： STA 转换
 -----------------------------------------------
 
-STA 沿用 Path 1 的累计差分、显式步进模式和时间维求和读出，并在选定的非线性与 attention 输出处加入校准后的脉冲编码器。此 recipe 使用累计浮点算子和校准后的输出编码器，未复现论文完整的 UGO/TCSA pipeline；下文结果针对本实现。
+STA 沿用路径 1 的累计差分、显式步进模式和时间维求和读出，并在选定的非线性与注意力输出处加入校准后的脉冲编码器。此转换方案使用累计浮点算子和校准后的输出编码器，未复现论文完整的 UGO/TCSA 流程；下文结果针对本实现。
 
-STA spike encoder
+STA 脉冲编码器
 ^^^^^^^^^^^^^^^^^
 
-``STATransformerRecipe(mode="spiking_encoder")`` 会在选中的增量后加入 spike encoder。对模拟增量
-:math:`a^{(t)}` 和阈值 :math:`V`，encoder 维护残差膜电位 :math:`r^{(t)}`。
+``STATransformerRecipe(mode="spiking_encoder")`` 会在选中的增量后加入脉冲编码器。对模拟增量
+:math:`a^{(t)}` 和阈值 :math:`V`，编码器维护残差膜电位 :math:`r^{(t)}`。
 初始残差为 0：
 
 .. math::
 
     r^{(-1)} = 0.
 
-每个时间步，encoder 先累加模拟增量：
+每个时间步，编码器先累加模拟增量：
 
 .. math::
 
@@ -220,21 +222,26 @@ STA spike encoder
     \sum_{t=0}^{T-1} a^{(t)}
     - r^{(T-1)}
 
-也就是说，encoder 输出的脉冲之和等于模拟增量之和减去最终残差。若 :math:`a^{(t)}` 就是 STA 差分 :math:`F_t(X^{(t)})`，那么模拟增量之和就是 ANN 模块的输出 :math:`f(x)`，脉冲编码的结果与它只差最终残差。STA 校准阈值时使用的是 ``time_steps``，因此在激活范围固定时，更大的 :math:`T` 对应更细的时间量化。
+也就是说，编码器输出的脉冲之和等于模拟增量之和减去最终残差。若 :math:`a^{(t)}` 就是 STA 差分 :math:`F_t(X^{(t)})`，那么模拟增量之和就是 ANN 模块的输出 :math:`f(x)`，脉冲编码的结果与它只差最终残差。STA 校准阈值时使用的是 ``time_steps``，因此在激活范围固定时，更大的 :math:`T` 对应更细的时间量化。
 
-借助在线累计差分，转换后的模型可以在累计输入上调用这些算子，再对输出增量做编码，从而在保留算子语义的同时在选定的输出位置引入脉冲式的时序通信。仿射模块、``LayerNorm``、``GELU``、``MultiheadAttention`` 和浮点 FX tensor 常量各自维护一份在线累计差分状态。bias 与图中的常量只注入一次。静态 attention mask 等控制 tensor 在各时间步保留，不会被置零。
+借助在线累计差分，转换后的模型可以在累计输入上调用这些算子，再对输出增量做编码，从而在保留算子语义的同时在选定的输出位置引入脉冲式的时序通信。仿射模块、``LayerNorm``、``GELU``、``MultiheadAttention`` 和浮点 FX 张量常量各自维护一份在线累计差分状态。偏置与图中的常量只注入一次。静态注意力掩码等控制张量在各时间步保留，不会被置零。
 
-本教程推荐的配置是 ``STATransformerRecipe(mode="spiking_encoder")``。该模式会在 ``LayerNorm``、``GELU`` 和 ``MultiheadAttention`` 的输出侧接入校准后的有状态 spike encoder，同时保持主干 affine projection 处于在线等价模式。阈值由 dataloader 校准，并依赖 ``time_steps``。
+使用 ``STATransformerRecipe(mode="spiking_encoder")``。该模式会在 ``LayerNorm``、``GELU`` 和 ``MultiheadAttention`` 的输出侧接入校准后的有状态脉冲编码器，同时保持主干仿射投影处于在线等价模式。阈值由数据加载器校准，并依赖 ``time_steps``。
 
-使用 Recipe
+使用转换方案
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``STATransformerRecipe`` 是一个 FX graph recipe。最简 Python API 使用 ``FXConverter``（``Converter`` 为兼容名）执行转换：
+先在一个小型 LayerNorm/GELU 网络上试用 STA。用一批浮点输入校准，再用 ``FXConverter`` 执行转换：
 
 .. code-block:: python
 
+    import torch
+    from torch import nn
     from spikingjelly.activation_based import ann2snn
 
+    model = nn.Sequential(nn.Linear(4, 8), nn.LayerNorm(8), nn.GELU()).eval()
+    x = torch.randn(2, 3, 4)
+    calibration_loader = [x]
     recipe = ann2snn.STATransformerRecipe(
         dataloader=calibration_loader,
         time_steps=8,
@@ -242,23 +249,22 @@ STA spike encoder
         threshold_mode="mse",
         threshold_scale=0.5,
     )
-    converted = ann2snn.FXConverter(recipe=recipe, device="cuda:0").convert(model)
+    converted = ann2snn.FXConverter(recipe=recipe, device="cpu").convert(model)
     converted.eval()
 
-``time_steps`` 属于 recipe 参数，因为它参与阈值校准，也用于在转换图中展开那些无法从运行时输入推断序列长度的常量。
+``time_steps`` 属于转换方案参数，因为它参与阈值校准，也用于在转换图中展开那些无法从运行时输入推断序列长度的常量。
 
-STA 当前有三种模式：
+选择受支持的 STA 模式：
 
 * ``equivalent``：无需校准的累计差分基线；
-* ``spiking_encoder``：在非线性和 attention 输出上使用校准 spike encoder；
-* ``spiking_affine``：当前 step-mode 对齐 STA 后端会明确拒绝。
+* ``spiking_encoder``：在非线性和注意力输出上使用校准脉冲编码器。
 
-本教程的模型级结果使用 ``spiking_encoder``。
+步进后端会拒绝 ``spiking_affine``。下面的校准模型使用 ``spiking_encoder``。
 
-Step-mode 执行
+步进模式执行
 ^^^^^^^^^^^^^^
 
-``STATransformerRecipe`` 是 FX graph recipe，转换产物是 ``fx.GraphModule``，也就是 ``nn.Module`` 的子类。用户通过 ``functional.set_step_mode`` 递归设置内部模块的 step-mode。下面的单步示例展示普通 ANN 输入 ``x`` 的 ``[x, 0, 0, ...]`` 差分序列；每次 ``converted(x_t)`` 调用只是一个 STA 时间步，最后的 ``y`` 才对应原 ANN 级别的一次读出。如果已有时间序列输入，则按同样方式逐时间步传入对应差分。处理独立序列前需要重置状态：
+``STATransformerRecipe`` 是 FX 计算图转换方案，转换产物是 ``fx.GraphModule``，也就是 ``nn.Module`` 的子类。用户通过 ``functional.set_step_mode`` 递归设置内部模块的步进模式。下面的单步示例展示普通 ANN 输入 ``x`` 的 ``[x, 0, 0, ...]`` 差分序列；每次 ``converted(x_t)`` 调用只是一个 STA 时间步，最后的 ``y`` 才对应原 ANN 级别的一次读出。如果已有时间序列输入，则按同样方式逐时间步传入对应差分。处理独立序列前需要重置状态：
 
 .. code-block:: python
 
@@ -268,13 +274,14 @@ Step-mode 执行
     functional.set_step_mode(converted, "s")
     functional.reset_net(converted)
 
-    y = None
-    for t in range(converted.time_steps):
-        x_t = x if t == 0 else torch.zeros_like(x)
-        y_t = converted(x_t)
-        y = y_t if y is None else y + y_t
+    with torch.no_grad():
+        y = None
+        for t in range(converted.time_steps):
+            x_t = x if t == 0 else torch.zeros_like(x)
+            y_t = converted(x_t)
+            y = y_t if y is None else y + y_t
 
-如果要触发逐层多步加速，将转换产物切换为 ``step_mode="m"``，并输入第 0 维为时间维的序列 tensor：
+要逐层执行多步计算，将转换产物切换为 ``step_mode="m"``，并输入第 0 维为时间维的序列张量：
 
 .. code-block:: python
 
@@ -285,12 +292,13 @@ Step-mode 执行
 
     x_zeros = torch.zeros_like(x).expand(converted.time_steps - 1, *x.shape)
     x_seq = torch.cat((x.unsqueeze(0), x_zeros), dim=0)
-    y_seq = converted(x_seq)
-    y = y_seq.sum(dim=0)
+    with torch.no_grad():
+        y_seq = converted(x_seq)
+        y = y_seq.sum(dim=0)
 
-多输入模型同样需要用户显式构造浮点输入序列。``attn_mask`` 等具名静态控制 tensor 保持原样，不要额外添加时间维。最终累计读出由用户对输出时间维求和，或按输出结构递归求和。
+多输入模型同样需要用户显式构造浮点输入序列。``attn_mask`` 等具名静态控制张量保持原样，不要额外添加时间维。最终累计读出由用户对输出时间维求和，或按输出结构递归求和。
 
-多步后端的限制比任意 PyTorch 图更严格。当前会拒绝 ``mode="spiking_affine"``、``spike_linear=True``、``spike_conv2d=True``、请求或使用 attention weights 的 ``MultiheadAttention`` 调用、``key_padding_mask``、functional ``scaled_dot_product_attention``，以及不支持的 FX tensor 操作。遇到这些报错时，请将模型改写为受支持的 sequence-preserving 模块和操作。
+多步后端的限制比任意 PyTorch 图更严格。当前会拒绝 ``mode="spiking_affine"``、``spike_linear=True``、``spike_conv2d=True``、请求或使用注意力权重的 ``MultiheadAttention`` 调用、``key_padding_mask``、functional ``scaled_dot_product_attention``，以及不支持的 FX 张量操作。遇到这些报错时，请将模型改写为受支持的保持序列结构的模块和操作。
 
 ViT-B/16 ImageNet 示例
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -324,7 +332,7 @@ ViT-B/16 ImageNet 示例
       --time-steps 8 \
       --threshold-scale 0.5
 
-下表数据在 NVIDIA A100-SXM4-80GB 上使用完整 50000 张 ImageNet 验证集测得：
+参考结果（提交 `d7ed92d8 <https://github.com/fangwei123456/spikingjelly/commit/d7ed92d8>`_，NVIDIA A100-SXM4-80GB）：
 
 .. list-table:: ViT-B/16 ImageNet STA 转换结果
     :header-rows: 1
@@ -349,11 +357,9 @@ ViT-B/16 ImageNet 示例
       - 80.700
       - 95.202
 
-历史文档记录： `d7ed92d8 <https://github.com/fangwei123456/spikingjelly/commit/d7ed92d8>`_ （2026-07-05）；NVIDIA A100-SXM4-80GB；未在当前 V2 上复测。
+Top-1 下降 0.368 个百分点。本次 ``batch_size=16`` 的完整运行中，ANN 基线推理耗时约 181.6 秒，STA 转换模型耗时约 1834.0 秒。如需对比单步和多步耗时，请使用专门的步进模式评测。
 
-Top-1 下降 0.368 个百分点。本次 ``batch_size=16`` 的完整运行中，ANN baseline 推理耗时约 181.6 秒，STA 转换模型耗时约 1834.0 秒。如需对比 single-step 和 multi-step 耗时，请使用专门的 step-mode benchmark。
-
-关键 stdout 行如下：
+对应输出如下：
 
 .. code-block:: shell
 
@@ -361,38 +367,42 @@ Top-1 下降 0.368 个百分点。本次 ``batch_size=16`` 的完整运行中，
     STA_SPIKING_ENCODER_T8_S0p5 {"top1": 0.807, "top5": 0.95202, "total": 50000, "seconds": 1833.9626359939575}
     DROP 0.0036799999999999056
 
-Path 3: SpikeZIP 转换
+路径 3： SpikeZIP 转换
 ------------------------------------------
 
 转换限制与 API
 ^^^^^^^^^^^^^^
 
-``SpikeZIPTFQANNRecipe`` 将量化 ANN (QANN) 转化为 SNN。它要求输入模型必须已经是 SpikeZIP-compatible QANN。当前支持两类 attention module contract：
+``SpikeZIPTFQANNRecipe`` 将量化 ANN（QANN） 转化为 SNN。它要求输入模型必须已经是兼容 SpikeZIP 的 QANN。当前支持两类注意力模块约定：
 
-* RoBERTa 风格 self-attention 需要暴露 ``query``、``key``、``value`` linear layers，``num_attention_heads``、``attention_head_size``、``all_head_size``、``dropout``，以及带 ``s``、``sym``、``pos_max``、``neg_min``、``level`` 属性的 ``query_quan``、``key_quan``、``value_quan``、``attn_quan``、``after_attn_quan`` quantizers；
-* ViT 风格 self-attention 需要暴露 ``qkv``、``proj`` linear layers，带上述量化属性的 ``quan_q``、``quan_k``、``quan_v``、``attn_quan``、``after_attn_quan``、``quan_proj`` quantizers，以及 ``num_heads``、``head_dim``、``scale``、``attn_drop`` 和 ``proj_drop``。
+* RoBERTa 风格自注意力需要暴露 ``query``、``key``、``value`` 线性层，``num_attention_heads``、``attention_head_size``、``all_head_size``、``dropout``，以及带 ``s``、``sym``、``pos_max``、``neg_min``、``level`` 属性的 ``query_quan``、``key_quan``、``value_quan``、``attn_quan``、``after_attn_quan`` 量化器；
+* ViT 风格自注意力需要暴露 ``qkv``、``proj`` 线性层，带上述量化属性的 ``quan_q``、``quan_k``、``quan_v``、``attn_quan``、``after_attn_quan``、``quan_proj`` 量化器，以及 ``num_heads``、``head_dim``、``scale``、``attn_drop`` 和 ``proj_drop``。
 
-recipe 会把 QANN 侧的 quantizers 和 Transformer 算子替换为透明的 SNN 侧 ST-BIF、SESA attention 乘法、Spike-Softmax、Spike-LayerNorm、embedding 与 linear module。该算法直接针对 ``nn.Module`` 进行改动，不执行 FX tracing，故应使用 ``ModuleConverter``：
+转换方案将 QANN 侧的量化器和 Transformer 算子替换为 SNN 侧的 ST-BIF、SESA 注意力乘法、Spike-Softmax、Spike-LayerNorm、嵌入层与线性模块。该算法复制模型，再替换 ``nn.Module`` 树中的模块，不执行 FX 追踪，故应使用 ``ModuleConverter``：
 
 .. code-block:: python
 
     from spikingjelly.activation_based import ann2snn
+    from spikingjelly.activation_based.ann2snn.examples.roberta_spikezip_qann_synthetic import (
+        TinyQRobertaClassifier,
+    )
 
+    qann = TinyQRobertaClassifier().eval()
     recipe = ann2snn.SpikeZIPTFQANNRecipe(
         time_steps=32,
         model_family="roberta",
     )
-    converted = ann2snn.ModuleConverter(recipe=recipe, device="cuda:0").convert(qann)
+    converted = ann2snn.ModuleConverter(recipe=recipe, device="cpu").convert(qann)
     converted.eval()
 
-用户可以通过 ``functional.set_step_mode`` 控制 single-step 或 multi-step 执行，并显式传入单个时间步或首维为时间维的序列 tensor。
+用户可以通过 ``functional.set_step_mode`` 控制单步或多步执行，并显式传入单个时间步或首维为时间维的序列张量。
 
-SpikeZIP 使用的 ST-BIF 神经元只用于推理。构造参数会被复制并与计算图分离；前向输入、状态或 buffer 需要梯度时会抛出异常，Torch、Triton 和原生 CUDA 路径都没有实现 backward。它适合运行已经转换好的 QANN-to-SNN 模型，不应用于端到端梯度训练或微调。
+SpikeZIP 使用的 ST-BIF 神经元只用于推理。构造参数会被复制并与计算图分离；前向输入、状态或缓冲区需要梯度时会抛出异常，Torch、Triton 和原生 CUDA 路径都没有实现反向传播。它适合运行已经转换好的 QANN 到 SNN 模型，不应用于端到端梯度训练或微调。
 
-Synthetic RoBERTa parity 示例
+合成 RoBERTa 一致性示例
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-本节以 RoBERTa 为例，简单验证 SpikeZIP-compatible QANN 可被转换为 SNN 模型，并且用户显式累计后的 SNN logits 能与 QANN logits 对齐：
+运行合成 RoBERTa 示例，将累计的 SNN 分类得分与原 QANN 的得分进行比较：
 
 .. code-block:: shell
 
@@ -403,15 +413,17 @@ Synthetic RoBERTa parity 示例
       --seq-len 5 \
       --output benchmark/output/roberta_spikezip_qann_synthetic_cpu.json
 
-该示例也接受 ``--qann-checkpoint``，用于加载同一 tiny QANN 架构保存出来的 ``state_dict``。真实 SpikeZIP checkpoint 需要先确保 QANN 模型的 RoBERTa-style attention 模块暴露 ``query_quan`` 等带 ``s``、``sym``、``pos_max``、``neg_min``、``level`` 属性的 quantizer，再传给 ``ModuleConverter(recipe=SpikeZIPTFQANNRecipe(...))``。
+该示例也接受 ``--qann-checkpoint``，用于加载同一微型 QANN 架构保存出来的 ``state_dict``。真实 SpikeZIP 权重文件需要先确保 QANN 模型的 RoBERTa 风格注意力模块暴露 ``query_quan`` 等带 ``s``、``sym``、``pos_max``、``neg_min``、``level`` 属性的量化器，再传给 ``ModuleConverter(recipe=SpikeZIPTFQANNRecipe(...))``。
 
-预期 stdout 会包含接近 0 的 parity error 和 ST-BIF state 摘要：
+预期标准输出会包含接近 0 的一致性误差和 ST-BIF 状态摘要：
 
 .. code-block:: shell
 
     {"accumulated_sequence_shape": [32, 3, 2], "max_abs_diff": 3.2782554626464844e-07, "mean_abs_diff": 8.630255621255856e-08, "recipe": "SpikeZIPTFQANNRecipe", "stbif_state": {"max_accumulated": 0.75, "min_accumulated": -1.0}}
 
-下表结果在 CPU 上通过上面的命令测得。它说明：只要输入已经是 SpikeZIP-compatible QANN，SpikeZIP 路径就能完成 RoBERTa 风格语言 Transformer 的转换。
+用最大绝对误差检查转换后的分类得分是否在你设定的容差内。
+
+参考结果（提交 `39ba6e93 <https://github.com/fangwei123456/spikingjelly/commit/39ba6e93>`_，CPU）：
 
 .. list-table:: SpikeZIP synthetic RoBERTa QANN-to-SNN parity
     :header-rows: 1
@@ -419,23 +431,21 @@ Synthetic RoBERTa parity 示例
 
     * - 模型
       - 时间步
-      - Batch / 序列长度
-      - Max abs diff
-      - Mean abs diff
-    * - Synthetic RoBERTa QANN
+      - 批量 / 序列长度
+      - 最大绝对误差
+      - 平均绝对误差
+    * - 合成 RoBERTa QANN
       - 32
       - 3 / 5
       - 3.278e-07
       - 8.630e-08
 
-历史文档记录： `39ba6e93 <https://github.com/fangwei123456/spikingjelly/commit/39ba6e93>`_ （2026-07-07）；CPU；未在当前 V2 上复测。
-
-SpikeZIP ViT-Small ImageNet Benchmark
+SpikeZIP ViT-Small ImageNet 评测
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-对于真实 SpikeZIP-compatible ViT-Small QANN checkpoint，可以使用 ``benchmark/benchmark_ann2snn_spikezip_vit_qann.py`` 运行 ImageNet validation。该脚本会记录 QANN baseline 正确率、转换后 SNN 正确率、prediction agreement、logits 差异、耗时、CUDA 设备信息和峰值显存。
+对于真实兼容 SpikeZIP 的 ViT-Small QANN 权重文件，可以使用 ``benchmark/benchmark_ann2snn_spikezip_vit_qann.py`` 运行 ImageNet 验证集。该脚本会记录 QANN 基线正确率、转换后 SNN 正确率、预测一致率、分类得分差异、耗时、CUDA 设备信息和峰值显存。
 
-本教程使用的 ``vit-small-imagenet-relu-q32-81.59.pth`` 来自 SpikeZIP-TF 官方仓库：`ViT-Small-ReLU-Q32 pretrained QANN <https://github.com/Intelligent-Computing-Research-Group/SpikeZIP-TF>`_，对应 Hugging Face checkpoint 为 `XianYiyk/SpikeZIP-TF-vit-small-patch16-relu-q32 <https://huggingface.co/XianYiyk/SpikeZIP-TF-vit-small-patch16-relu-q32>`_。官方 README 标注的 md5 前缀为 ``8207d3e``。下载后，把下面命令中的 ``--checkpoint`` 替换为该文件的本地路径，并把 ``--imagenet-root`` 替换为本地 ImageNet root：
+参考结果使用的 ``vit-small-imagenet-relu-q32-81.59.pth`` 来自 SpikeZIP-TF 官方仓库：`ViT-Small-ReLU-Q32 pretrained QANN <https://github.com/Intelligent-Computing-Research-Group/SpikeZIP-TF>`_，对应 Hugging Face 权重文件为 `XianYiyk/SpikeZIP-TF-vit-small-patch16-relu-q32 <https://huggingface.co/XianYiyk/SpikeZIP-TF-vit-small-patch16-relu-q32>`_。官方 README 标注的 md5 前缀为 ``8207d3e``。下载后，把下面命令中的 ``--checkpoint`` 替换为该文件的本地路径，并把 ``--imagenet-root`` 替换为本地 ImageNet 根目录：
 
 .. code-block:: shell
 
@@ -451,7 +461,7 @@ SpikeZIP ViT-Small ImageNet Benchmark
       --samples 50000 \
       --output benchmark/output/spikezip_vit_small_imagenet_t64.json
 
-下表的完整验证结果在 ``g2`` 的 NVIDIA A100-SXM4-80GB 上测得，ImageNet validation 使用全部 50,000 个样本：
+参考结果（提交 `39ba6e93 <https://github.com/fangwei123456/spikingjelly/commit/39ba6e93>`_，NVIDIA A100-SXM4-80GB）：
 
 .. list-table:: SpikeZIP ViT-Small ImageNet QANN-to-SNN 结果
     :header-rows: 1
@@ -463,12 +473,12 @@ SpikeZIP ViT-Small ImageNet Benchmark
       - Top-1 (%)
       - Top-5 (%)
       - 说明
-    * - QANN baseline
+    * - QANN 基线
       - -
       - 50000
       - 81.476
       - 95.922
-      - checkpoint baseline
+      - 权重基线
     * - SpikeZIP SNN
       - 64
       - 50000
@@ -476,37 +486,35 @@ SpikeZIP ViT-Small ImageNet Benchmark
       - 96.034
       - ``step_mode="m"``，CUDA 实现自动选择
 
-历史文档记录： `39ba6e93 <https://github.com/fangwei123456/spikingjelly/commit/39ba6e93>`_ （2026-07-07）；NVIDIA A100-SXM4-80GB；未在当前 V2 上复测。
+Top-1 差值为 ``+0.090`` 个百分点，Top-1 预测一致率为 ``97.34%``。QANN 推理耗时 ``79.20`` 秒；SNN 推理耗时 ``3719.15`` 秒（``61.99`` 分钟），使用 ``snn_batch_size=4``，峰值 CUDA 已分配显存为 ``25.63`` GiB。评测中 ``parity_pass=false`` 是因为该字段使用 ``torch.allclose(snn_logits, qann_logits, atol=parity_atol, rtol=1e-5)`` 检查分类得分；本次记录的 ``parity_atol`` 为 ``1e-4``。
 
-Top-1 差值为 ``+0.090`` 个百分点，Top-1 prediction agreement 为 ``97.34%``。QANN 推理耗时 ``79.20`` 秒；SNN 推理耗时 ``3719.15`` 秒（``61.99`` 分钟），使用 ``snn_batch_size=4``，峰值 CUDA allocated memory 为 ``25.63`` GiB。benchmark 中 ``parity_pass=false`` 是因为该字段使用 ``torch.allclose(snn_logits, qann_logits, atol=parity_atol, rtol=1e-5)`` 检查 logits；本次记录的 ``parity_atol`` 为 ``1e-4``。
+路径 4： Qwen2 离线多步转换
+---------------------------
 
-Path 4: Qwen2 离线多步转换
---------------------------
-
-``Qwen2SNNRecipe`` 是面向 evaluation-mode Hugging Face Qwen2 causal LM 的
-``ModuleConverter`` recipe。可用 ``uv pip install -e '.[qwen]'`` 安装固定版本的
+``Qwen2SNNRecipe`` 是面向评估模式下的 Hugging Face Qwen2 因果语言模型的
+``ModuleConverter`` 转换方案。可用 ``uv pip install -e '.[qwen]'`` 安装固定版本的
 可选依赖。校准阶段生成可复用的 ``Qwen2SNNCalibration``；转换阶段使用当前
-SpikingJelly 的 TD RMSNorm、TD linear、TD SiLU/product、TD SDPA 和基于
-``ActivationAwareIFNode`` 的 ``SignedQCFSSequenceEncoder`` 替换完整 decoder。
+SpikingJelly 的 TD RMSNorm、TD 线性层、TD SiLU/逐元素乘积、TD SDPA 和基于
+``ActivationAwareIFNode`` 的 ``SignedQCFSSequenceEncoder`` 替换完整解码器。
 
 转换后的 SNN 显式使用 ``[T,B,S,H]`` 时间布局，并按照
-``layerwise_offline_multistep`` 调度。因此总调度更接近 :math:`L T`，而不是在线
-T 步推理。独立 prompt 前应调用
-``functional.reset_net(model)``，KV cache continuation 通过 ``past_key_values``
+``layerwise_offline_multistep`` 调度。对于 :math:`L` 层解码器，逐层执行 T 步的总调度约为 :math:`L T`。
+独立提示词前应调用
+``functional.reset_net(model)``，键值缓存续接通过 ``past_key_values``
 显式传递。
 
-公共 Qwen2 路径提供真实的 ``signed_if`` 时间序列执行（以及用于等价性检查的
-``exact_td``），质量评测不会用 count-domain 快路径替代脉冲序列。
+使用 ``signed_if`` 执行显式脉冲序列推理，使用 ``exact_td`` 检查 TD 等价性，
+使用 ``qcfs_sg`` 进行可微计数重建。下文参考质量结果使用 ``signed_if``。
 
 转换后得到什么模型
 ^^^^^^^^^^^^^^^^^^^^
 
-转换不会改变 Qwen2 的 token embedding、decoder 层数、hidden size、GQA head
-布局、LM head 的权重与维度或原有的权重共享关系，也不会训练新的权重。
-在这些 TD 算子之间，Qwen2 recipe 新增 signed QCFS 编码边界：
+转换不会改变 Qwen2 的词元嵌入、解码器层数、隐藏维度、分组查询注意力头
+布局、语言模型输出头的权重与维度或原有的权重共享关系，也不会训练新的权重。
+在这些 TD 算子之间，Qwen2 转换方案新增有符号 QCFS 编码边界：
 
-LM head 的模块表示也会复制为 ``TDLinear``，但最终 forward 在沿 T 求和后使用其
-保留的权重计算 logits；权重数值、维度以及与 embedding 的共享关系不变。
+语言模型输出头的模块表示也会复制为 ``TDLinear``，但最终前向传播在沿 T 求和后使用其
+保留的权重计算分类得分；权重数值、维度以及与嵌入层的共享关系不变。
 
 .. code-block:: text
 
@@ -541,29 +549,26 @@ LM head 的模块表示也会复制为 ``TDLinear``，但最终 forward 在沿 T
         v
     sum over T -> LM head -> logits [B,S,V]
 
-一个有 :math:`L` 个 decoder block 的转换模型包含 :math:`4L+1` 个 signed
-encoder：embedding 后 1 个，每个 block 内 Q、K、V 和 MLP 中间激活各 1 个。
-每个 signed encoder 又包含一对正、负
+一个有 :math:`L` 个解码器块的转换模型包含 :math:`4L+1` 个有符号
+编码器：嵌入层后 1 个，每个块内 Q、K、V 和 MLP 中间激活各 1 个。
+每个有符号编码器又包含一对正、负
 ``ActivationAwareIFNode``，所以共有 :math:`8L+2` 个 IFNode 模块实例。每个
-实例在整个输入张量上逐元素运行，表示一组共享逐通道阈值的神经元，而不是单个
-标量神经元。
+实例在整个输入张量上逐元素运行，表示一组共享逐通道阈值的神经元。
 
-这是一种混合的显式多步模型。真正的二值发放发生在 signed encoder 内；TD
-RMSNorm、linear、SiLU/product 和 attention 传播的是浮点 temporal difference，
-其元素可以为负，并不都是 ``0/1`` 脉冲。这里的“Qwen SNN”具体指在选定激活
-边界使用真实 IF 动力学和 spike-count 表示，同时用 TD 算子保持 Transformer
-运算语义，而不是把 Qwen 的所有运算都变成二值事件。
+二值发放发生在有符号编码器内部。TD RMSNorm、线性层、SiLU/逐元素乘积和注意力
+传播可为负的浮点时间差分。模型在选定激活边界使用 IF 动力学，并结合浮点
+Transformer 运算。
 
 运行下文的推理示例时，必须先调用 ``eval()``，并在 ``torch.no_grad()`` 或
 ``torch.inference_mode()`` 中执行。转换保留可训练参数；公共模型还支持用于后训练的
 可微 QCFS 计数重建模式 ``qcfs_sg``。
 
-Signed QCFS encoder 与 IF 神经元
+有符号 QCFS 编码器与 IF 神经元
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``SignedQCFSSequenceEncoder`` 是编码规则及其执行容器，内部的一对
-``ActivationAwareIFNode`` 才是实际运行膜电位动力学的模块。给定静态 signed
-激活 :math:`x`，encoder 先拆成
+``ActivationAwareIFNode`` 才是实际运行膜电位动力学的模块。给定静态有符号
+激活 :math:`x`，编码器先拆成
 
 .. math::
 
@@ -578,8 +583,8 @@ Signed QCFS encoder 与 IF 神经元
     I_t^- = \frac{x^-}{T}, \qquad 0 \leq t < T.
 
 也就是说，调用者只向 ``encode(x)`` 传入一次静态激活，但 IF 神经元看到的是
-T 个 :math:`x/T`，而不是第 0 步收到 :math:`x`、其余步收到 0。每个 IF 使用
-逐通道阈值 :math:`s`、偏移 :math:`s/2`、无泄漏积分和 soft reset：
+T 个 :math:`x^+/T` 或 :math:`x^-/T`。每个 IF 使用
+逐通道阈值 :math:`s`、偏移 :math:`s/2`、无泄漏积分和减法重置：
 
 .. math::
 
@@ -593,14 +598,13 @@ T 个 :math:`x/T`，而不是第 0 步收到 :math:`x`、其余步收到 0。每
 
     V_t = H_t - S_t s.
 
-偏移 :math:`s/2` 使总脉冲计数对应舍入，而 soft reset 从膜电位减去阈值而不是
-清零，从而保留减去阈值后的余量。两个 IF 的二值输出按 :math:`s` 缩放并相减：
+偏移 :math:`s/2` 使总脉冲计数对应舍入。减法重置从膜电位减去阈值，保留余量。两个 IF 的二值输出按 :math:`s` 缩放并相减：
 
 .. math::
 
     Y_t = (S_t^+ - S_t^-)s.
 
-因此 encoder 的接口输出是显式序列 ``[T,...]``，每个元素属于
+因此编码器的接口输出是显式序列 ``[T,...]``，每个元素属于
 :math:`\{-s,0,s\}`，其时间和满足
 
 .. math::
@@ -611,13 +615,13 @@ T 个 :math:`x/T`，而不是第 0 步收到 :math:`x`、其余步收到 0。每
         \operatorname{round}\left(\frac{x}{s}\right), -T, T
     \right)s.
 
-实现还会校正 BF16 累积和 round-to-even 边界处偶发的计数不一致，使实际时间和
+实现还会校正 BF16 累积和舍入到最近偶数边界处偶发的计数不一致，使实际时间和
 遵守上式。这个修正不改变常规输入使用 :math:`x/T` 恒定电流的事实。
 
 T 维由谁消费
 ^^^^^^^^^^^^^^
 
-QCFS encoder 只承诺产生 ``[T,...]``；是否以及何时沿 T 求和，由下游模块决定。
+QCFS 编码器只承诺产生 ``[T,...]``；是否以及何时沿 T 求和，由下游模块决定。
 当前 Qwen2 产物模型有三种消费方式：
 
 .. list-table::
@@ -627,31 +631,29 @@ QCFS encoder 只承诺产生 ``[T,...]``；是否以及何时沿 T 求和，由�
    * - 下游位置
      - 如何消费输入
      - 输出
-   * - TD 算子和 residual
+   * - TD 算子和残差
      - 消费完整 T 步；TD 算子可在内部使用累计状态
      - 仍为 ``[T,...]``
-   * - 下一个 signed QCFS 边界
+   * - 下一个有符号 QCFS 边界
      - 先用 ``sequence.sum(0)`` 恢复聚合激活，再重新编码
      - 一条新的 ``[T,...]`` 脉冲序列
-   * - KV cache 或最终 LM head
-     - 沿 T 求和后缓存或计算 logits
+   * - 键值缓存或最终语言模型输出头
+     - 沿 T 求和后缓存或计算分类得分
      - 不再含 T 维的浮点张量
 
-不要把 TD 算子内部为执行算子而计算的 ``cumsum`` 与 QCFS 边界的
-``sum(dim=0)`` 混淆：前者仍返回 T 个 temporal difference，后者真正折叠时间
-维，然后启动一次新的 signed spike-count 编码。
+TD 算子内部的 ``cumsum`` 产生 T 个累计输入。算子应用 ANN 函数后，再对结果
+求差分，得到 T 个输出。QCFS 边界处的 ``sum(dim=0)`` 则移除时间维，随后启动
+一次新的有符号脉冲计数编码。
 
-decoder block 之间也不会自动折叠 T。一个 block 的 TD down projection 与
-residual 输出完整 ``[T,B,S,H]``，并原样进入下一个 block；到下一 block 的
-Q/K/V 编码边界时才分别求和并重新编码。类似地，一个 block 内 attention 输出
-保持 T，直到 MLP 中间激活的 signed encoder 才再次求和并重新编码。因此该模型
-不是一条脉冲从 embedding 在线穿过全部层的流水线，而是“带 T 传播若干 TD
-算子，再聚合和重新编码”的逐层离线调度。
+解码器块之间也不会自动折叠 T。一个块的 TD 降维投影与
+残差输出完整 ``[T,B,S,H]``，并原样进入下一个块；到下一块的
+Q/K/V 编码边界时才分别求和并重新编码。类似地，一个块内注意力输出
+保持 T，直到 MLP 中间激活的有符号编码器才再次求和并重新编码。执行时，T 步序列依次通过一组 TD 算子，再聚合和重新编码，随后继续传播。
 
-``exact_td`` 与 ``signed_if``
+选择编码模式
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-两个 execution mode 使用相同的 TD decoder，但在每个编码边界采取不同操作：
+三种编码模式共用解码器模块，在各编码边界生成不同的序列：
 
 .. list-table::
    :header-rows: 1
@@ -666,21 +668,21 @@ Q/K/V 编码边界时才分别求和并重新编码。类似地，一个 block �
      - 否
      - 保留浮点 :math:`x`，用于 TD 等价性检查
    * - ``signed_if``
-     - 正、负 IF 分别接收 ``ReLU(x)/T`` 与 ``ReLU(-x)/T`` 后产生的 signed spikes
+     - 正、负 IF 分别接收 ``ReLU(x)/T`` 与 ``ReLU(-x)/T`` 后产生的有符号脉冲
      - 是
      - 重建为量化并裁剪后的 :math:`x`
    * - ``qcfs_sg``
-     - QCFS 计数重建，等价于编码脉冲序列的时间求和，本身不是脉冲序列
+     - ``[reconstruct(x), 0, ..., 0]``，首步为 QCFS 计数重建值
      - 否，跳过神经元时间循环
      - 以多级脉冲计数替代梯度可微地重建同样的量化并裁剪后的 :math:`x`
 
 ``exact_td`` 分支不会调用 ``SignedQCFSSequenceEncoder`` 或其中的 IF 神经元；
-模型对象虽然仍持有这些模块，但该次 forward 会绕过它们。因此 ``exact_td`` 与
-dense Qwen 之间只应剩下浮点和算子实现误差，而 ``signed_if`` 还包含每个编码
+模型对象虽然仍持有这些模块，但该次前向传播会绕过它们。因此 ``exact_td`` 与
+稠密 Qwen 之间只应剩下浮点和算子实现误差，而 ``signed_if`` 还包含每个编码
 边界的舍入和饱和误差。``qcfs_sg`` 跳过神经元时间循环并以可微方式重建同一个计数，
-因此它不是严格的二值多步重放；下文质量结果使用 ``signed_if``。
+其零尾序列用于可微训练；下文质量结果使用 ``signed_if``。
 
-T、校准 levels 与量化误差
+T、校准量化等级与量化误差
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Qwen2 校准会为每个通道估计绝对激活边界 :math:`R`。当
@@ -692,7 +694,7 @@ Qwen2 校准会为每个通道估计绝对激活边界 :math:`R`。当
     s = \frac{R}{\text{calibration\_levels}}
 
 决定。为简化公式，这里假设 :math:`R \geq 10^{-6}`；实现会先用
-``clamp_min(1e-6)`` 防止零 scale。T 决定一个二值 IF 在一次编码窗口中最多
+``clamp_min(1e-6)`` 防止零尺度。T 决定一个二值 IF 在一次编码窗口中最多
 发放多少个脉冲。于是
 
 .. math::
@@ -702,7 +704,7 @@ Qwen2 校准会为每个通道估计绝对激活边界 :math:`R`。当
     |x|_{\max} = Ts.
 
 配置要求 ``0 < calibration_levels <= time_steps``。这样 :math:`Ts` 至少覆盖
-校准边界 :math:`R`；若 T 小于 levels，连 :math:`R` 本身都会被截断。
+校准边界 :math:`R`；若 T 小于量化等级，连 :math:`R` 本身都会被截断。
 
 因此在 ``calibration_levels`` 固定时，增大 T 不会让相邻可表示值之间的间隔
 :math:`s` 变小；它扩大的是动态范围，并降低激活被裁剪到 :math:`\pm Ts` 的
@@ -718,19 +720,18 @@ Qwen2 校准会为每个通道估计绝对激活边界 :math:`R`。当
 之外的尾部激活，以及 Q/K/V、SwiGLU 和多次重新编码中的分布偏移预留裕量，意在
 用更高的多步计算和显存成本减少饱和误差。若只增大
 ``calibration_levels``，:math:`s` 与 :math:`Ts` 会同时缩小；若要保持当前
-动态范围并细化量化间隔，还必须按比例增大 T，或采用其他 scale/range 设计。
+动态范围并细化量化间隔，还必须按比例增大 T，或采用其他尺度与范围设计。
 
-这一点与前文某些把阈值直接绑定到 ``time_steps`` 的转换路径不同：Qwen2 recipe
+这一点与前文某些把阈值直接绑定到 ``time_steps`` 的转换路径不同：Qwen2 转换方案
 显式分离 ``time_steps`` 和 ``calibration_levels``。阅读后文结果表时，应把 T
-理解为计数容量，把 levels 理解为校准范围内的分辨率；最终配置是质量与成本的
-实验工作点，并不证明该 T 是理论最优值。
+理解为计数容量，把量化等级理解为校准范围内的分辨率；选择时需结合这两个值，权衡量化误差与计算开销。
 
 最小校准与推理示例
 ^^^^^^^^^^^^^^^^^^^^
 
-下面的示例从本地加载 Qwen2.5 checkpoint，校准逐通道 scale，转换完整 decoder，
-并执行真实的多步路径。这里的小型 prompt 集只用于演示 API；后文质量结果是历史
-测量值，完整运行配置未记录，因此不是当前 runner 的精确复现目标。
+加载本地 Qwen2.5 权重，校准逐通道尺度，再转换解码器。两个短提示词可用于试用
+接口。评估质量时，请选用有代表性的文本，并遵循
+``benchmark/snn_llm/qwen_conversion/README.md`` 中的校准流程。
 
 .. code-block:: python
 
@@ -776,7 +777,7 @@ Qwen2 校准会为每个通道估计绝对激活边界 :math:`R`。当
     torch.save(calibration.state_dict(), "qwen2_snn_calibration.pt")
 
     recipe = ann2snn.Qwen2SNNRecipe(calibration, config)
-    snn = ann2snn.ModuleConverter(recipe, device=device).convert(ann)
+    snn = ann2snn.ModuleConverter(recipe, device=device).convert(ann).eval()
     del ann
 
     batch = tokenizer("SpikingJelly is", return_tensors="pt")
@@ -791,24 +792,26 @@ Qwen2 校准会为每个通道估计绝对激活边界 :math:`R`。当
             use_cache=False,
         )
     next_token = output.logits[:, -1].argmax(dim=-1)
+    print(tokenizer.batch_decode(next_token.unsqueeze(-1)))
 
 校准状态只包含张量和基础 Python 值，可用
 ``Qwen2SNNCalibration.from_state_dict(torch.load(..., weights_only=True))``
 恢复；校准元数据必须与转换配置完全一致。CPU 使用 Torch 参考实现；CUDA 自动选择兼容的 ActivationAwareIF 推理实现。
 
-正式质量证据
+参考准确率
 ^^^^^^^^^^^^^^
 
-固定的 BF16 评测使用完整 WikiText-2 test split（584 个窗口、298937 个 target
-tokens）和六个 zero-shot 任务：LAMBADA、PIQA、HellaSwag、WinoGrande、
+固定的 BF16 评测使用完整 WikiText-2 测试集（584 个窗口、298937 个目标词元）和六个零样本任务：LAMBADA、PIQA、HellaSwag、WinoGrande、
 ARC-Easy、ARC-Challenge。``平均下降`` 和 ``最大下降`` 表示六任务中
-dense accuracy 减去 SNN accuracy 的百分点。
+稠密模型准确率减去 SNN 准确率的百分点。
+
+参考结果（提交 `c98d8ac4 <https://github.com/fangwei123456/spikingjelly/commit/c98d8ac4>`_，NVIDIA A100）：
 
 .. list-table:: Qwen2.5 Base 离线多步质量
    :header-rows: 1
 
    * - 模型
-     - T / levels / quantile
+     - T / 量化等级 / 分位数
      - Dense PPL
      - SNN PPL
      - PPL 退化
@@ -832,11 +835,9 @@ dense accuracy 减去 SNN accuracy 的百分点。
      - 8.57%
      - 0.41 / 1.96
 
-历史文档记录： `c98d8ac4 <https://github.com/fangwei123456/spikingjelly/commit/c98d8ac4>`_ （2026-07-22）；NVIDIA A100；未在当前 V2 上复测。表中 T、levels、quantile 为保留的转换参数；完整 ``quality_eval.py``／``quality_aggregate.py`` 运行参数未记录。
-
-这些结果只证明离线逐层调度的质量，不代表延迟或能耗优势。在 A100 实测中，高 T
-路径仍显著慢于 dense Qwen。3B checkpoint 受 Qwen Research License 约束，
-SpikingJelly 不重新分发该权重。当前 runner 的运行方式见
+在 A100 实测中，高 T 的离线逐层执行显著慢于稠密 Qwen。选择配置时，应同时
+检查推理时间和质量。3B 权重文件受 Qwen Research License 约束，
+SpikingJelly 不重新分发该权重。评估运行方式见
 ``benchmark/snn_llm/qwen_conversion/README.md``。
 
 .. [#sta] Jiang Y., et al., "Spatio-Temporal Approximation: A Training-Free SNN Conversion for Transformers", ICLR 2024.

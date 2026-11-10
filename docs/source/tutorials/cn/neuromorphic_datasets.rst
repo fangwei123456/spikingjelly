@@ -5,7 +5,7 @@
 
 English version: :doc:`../en/neuromorphic_datasets`
 
-``spikingjelly.datasets`` 中集成了常用的神经形态数据集，包括 N-MNIST [#NMNIST]_, CIFAR10-DVS [#CIFAR10DVS]_, DVS128 Gesture [#DVS128Gesture]_, N-Caltech101 [#NMNIST]_, ASLDVS [#ASLDVS]_ 等。所有数据集的处理都遵循类似的步骤，开发人员也可以很轻松的添加新数据集代码。在本节教程中，我们将以 DVS128 Gesture 为例，展示如何使用惊蜇框架处理神经形态数据集。
+``spikingjelly.datasets`` 提供 N-MNIST [#NMNIST]_、CIFAR10-DVS [#CIFAR10DVS]_、DVS128 Gesture [#DVS128Gesture]_、N-Caltech101 和 ASLDVS [#ASLDVS]_ 等神经形态数据集。你将以 DVS128 Gesture 为例，依次准备原始文件、读取事件、积分为帧，并处理变长序列。
 
 自动下载和手动下载
 -----------------------
@@ -19,10 +19,10 @@ CIFAR10-DVS等数据集支持自动下载。支持自动下载的数据集，在
     from spikingjelly.datasets import DVS128Gesture
 
     print('CIFAR10-DVS downloadable', CIFAR10DVS.downloadable())
-    print('resource, url, md5/n', CIFAR10DVS.resource_url_md5())
+    print('resource, url, md5\n', CIFAR10DVS.resource_url_md5())
 
     print('DVS128Gesture downloadable', DVS128Gesture.downloadable())
-    print('resource, url, md5/n', DVS128Gesture.resource_url_md5())
+    print('resource, url, md5\n', DVS128Gesture.resource_url_md5())
 
 输出为：
 
@@ -35,7 +35,7 @@ CIFAR10-DVS等数据集支持自动下载。支持自动下载的数据集，在
     resource, url, md5
      [('DvsGesture.tar.gz', 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', '8a5c71fb11e24e5ca5b11866ca6c00a1'), ('gesture_mapping.csv', 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', '109b2ae64a0e1f3ef535b18ad7367fd1'), ('LICENSE.txt', 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', '065e10099753156f18f51941e6e44b66'), ('README.txt', 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', 'a0663d3b1d8307c329a43d949ee32d19')]
 
-DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 函数会打印出获取下载地址的网址。DVS128 Gesture数据集可以从 https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794 进行下载。box网站不支持在不登陆的情况下使用代码直接下载，因此用户需要手动从网站上下载。将数据集下载到 ``D:/datasets/DVS128Gesture/download``，下载完成后这个文件夹的目录结构为
+DVS128 Gesture 不支持自动下载。请从 https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794 下载 4 个文件，并放入 ``D:/datasets/DVS128Gesture/download``。目录结构应为：
 
 .. code:: bash
 
@@ -48,13 +48,13 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
 .. Note::
 
-    不同框架对DVS128 Gesture数据集的预处理方式可能不同，这或许导致不同的训练集和测试集样本数量。请参考 :class:`spikingjelly.datasets.dvs128_gesture.DVS128Gesture` 的API文档获取更多信息。
+    不同框架的预处理方式会产生不同的训练集和测试集样本数。SpikingJelly 的划分规则和样本数见 :class:`spikingjelly.datasets.dvs128_gesture.DVS128Gesture`。
 
 
-获取Event数据
+获取事件数据
 -----------------------
 
-创建训练集和测试集，其中参数 ``data_type='event'`` 表示我们使用Event数据。
+先创建训练集。``data_type='event'`` 表示每个样本返回原始事件字典：
 
 .. code:: python
 
@@ -63,10 +63,10 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
     root_dir = 'D:/datasets/DVS128Gesture'
     train_set = DVS128Gesture(root_dir, train=True, data_type='event')
 
-运行这段代码，惊蜇框架将会完成以下工作：
+首次运行时，SpikingJelly 会完成以下准备工作：
 
 #. 若处理后的数据目录不存在，SpikingJelly 校验（或下载）原始文件的 MD5，再解压到 ``extract`` 目录；已存在的 ``extract`` 会直接复用，不做完整性检查。若准备过程中断，需按报错提示清理目录和 ``.building`` 标记后重试。
-#. DVS128 Gesture中的每个样本，是在不同光照环境下，对不同表演者进行录制的手势视频。一个AER文件中包含了多个手势，对应的会有一个csv文件来标注整个视频内各个时间段内都是哪种手势。因此，单个的视频文件并不是一个类别，而是多个类别的集合。惊蜇框架会启动多线程进行划分，将每个视频中的每个手势类别文件单独提取出来
+#. 每个 AER 文件记录一位表演者在一种光照环境下完成的多个手势，相邻的 CSV 文件给出各手势的时间段和类别。SpikingJelly 使用多线程按这些标注切分文件，每个切分结果只包含一个手势。
 
 提取各个手势类别需要一定时间。成功后，同级目录下会生成包含训练集和测试集的
 ``events_np`` 文件夹：
@@ -96,15 +96,12 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
     p [1 0 0 ... 1 0 0]
     label 0
 
-其中 ``event`` 使用字典格式存储Events数据，键为 ``['t', 'x', 'y', 'p']``； ``label`` 是数据的标签，DVS128 Gesture共有11类。
-字典中的值是独立的 NumPy 数组，``t`` 的单位为微秒。
+``event`` 是键为 ``['t', 'x', 'y', 'p']`` 的字典，每个值都是独立的 NumPy 数组；``t`` 的单位为微秒。``label`` 是 0 到 10 之间的类别标签。
 
-获取Frame数据
+获取帧数据
 -----------------------
 
-将原始的Event流积分成Frame数据，是常用的处理方法，我们采用 [#PLIF]_ 的实现方式。我们将原始的Event数据记为 :math:`E(x_{i}, y_{i}, t_{i}, p_{i}), 0 \leq i < N`；设置 ``split_by='number'`` 表示从Event数量 :math:`N` 上进行划分，接近均匀地划分为 ``frames_number=20``， 也就是 :math:`T` 段。记积分后的Frame数据中的某一帧
-为 :math:`F(j)`，在 :math:`(p, x, y)` 位置的像素值为 :math:`F(j, p, x, y)`；:math:`F(j)` 是从Event流中索引介于 :math:`j_{l}` 和 :math:`j_{r}` 的Event
-积分而来：
+把事件流积分为帧是常用的预处理方法，这里采用 [#PLIF]_ 的实现。将事件记为 :math:`E(x_{i}, y_{i}, t_{i}, p_{i}), 0 \leq i < N`。设置 ``split_by='number'`` 和 ``frames_number=20`` 后，程序按事件数量将序列近似均分为 :math:`T=20` 段。记第 :math:`j` 帧为 :math:`F(j)`，位置 :math:`(p, x, y)` 的像素值为 :math:`F(j, p, x, y)`。该帧由索引在 :math:`j_{l}` 与 :math:`j_{r}` 之间的事件积分得到：
 
 .. math::
 
@@ -114,13 +111,13 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
 其中 :math:`\lfloor \cdot \rfloor` 是向下取整，:math:`\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` 是示性函数，当且仅当 :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})` 时取值为1，否则为0。
 
-运行下列代码，惊蜇框架就会开始进行积分，创建Frame数据集：
+创建帧数据集时，SpikingJelly 会执行积分：
 
 .. code:: python
 
     train_set = DVS128Gesture(root_dir, train=True, data_type='frame', frames_number=20, split_by='number')
 
-运行后，同级目录下会出现 ``frames_number_20_split_by_number`` 文件夹，这里存放了积分生成的Frame数据。
+处理完成后，``root_dir/frames_number_20_split_by_number`` 保存积分生成的帧。
 
 打印一个数据：
 
@@ -135,7 +132,7 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
     (20, 2, 128, 128)
 
-查看1个积分好的Frame数据：
+播放一个帧序列：
 
 .. code:: python
 
@@ -151,13 +148,9 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 固定时间间隔积分
 ----------------------------
 
-使用固定时间间隔积分，更符合实际物理系统。例如每 ``10 ms`` 积分一次，则首末事件时间差为 ``L ms`` 的数据，可以得到  ``math.ceil(L / 10)`` 帧。但
-神经形态数据集中每个样本的长度往往不相同，因此会得到不同长度的帧数据。使用惊蜇框架提供的 :class:`spikingjelly.datasets.utils.pad_sequence_collate`
-和 :class:`spikingjelly.datasets.utils.padded_sequence_mask` 可以很方便的对不等长数据进行对齐和还原。
+固定时长积分让每一帧覆盖相同的物理时间。若每 ``10 ms`` 积分一次，首末事件相差 ``L ms`` 的样本会生成 :math:`\lceil L / 10 \rceil` 帧。不同样本会得到不同的序列长度。:class:`spikingjelly.datasets.utils.pad_sequence_collate` 可以在批次内补齐序列，:class:`spikingjelly.datasets.utils.padded_sequence_mask` 则标出有效时间步。
 
-示例代码：
-
-DVS128 Gesture 的时间单位为微秒，``duration=1000000`` 即 1 秒。
+DVS128 Gesture 的时间单位为微秒，因此 ``duration=1000000`` 表示每帧 1 秒：
 
 .. code:: python
 
@@ -201,21 +194,18 @@ DVS128 Gesture 的时间单位为微秒，``duration=1000000`` 即 1 秒。
 自定义积分方法
 -----------------------
 
-惊蜇框架支持用户自定义积分方法。用户只需要提供积分函数 ``custom_integrate_function`` 以及保存frames的文件夹名 ``custom_integrated_frames_dir_name``。
-``custom_integrate_function`` 是用户定义的函数，输入是 ``events, H, W``，其中 ``events`` 是一个 Python 字典，键为
-``['t', 'x', 'y', 'p']`` 值为 ``numpy.ndarray`` 类型。``H`` 是数据高度，``W`` 是数据宽度。例如，对于DVS手势数据集，H=128, W=128。
-这个函数的返回值应该是frames。
+你也可以传入 ``custom_integrate_function`` 自定义积分方法。函数接收 ``events, H, W``：``events`` 是键为 ``['t', 'x', 'y', 'p']`` 的字典，值为 ``numpy.ndarray``；``H`` 和 ``W`` 是帧的高度和宽度。DVS128 Gesture 的 ``H`` 与 ``W`` 都是 128。函数需要返回帧数组。
 
-``custom_integrated_frames_dir_name`` 可以为 ``None``，在这种情况下，保存frames的文件夹名会被设置成 ``custom_integrate_function.__name__``。
+``custom_integrated_frames_dir_name`` 用于指定缓存目录。传入 ``None`` 时，目录名取自 ``custom_integrate_function.__name__``。
 
-
-例如，我们定义这样一种积分方式：随机将全部events一分为二，然后积分成2帧。我们可定义如下函数：
+以下函数随机选择一个切分点，把事件积分为 2 帧：
 
 .. code:: python
 
     from typing import Dict
     import numpy as np
     from spikingjelly.datasets.utils import integrate_events_segment_to_frame
+
     def integrate_events_to_2_frames_randomly(events: Dict, H: int, W: int):
         index_split = np.random.randint(low=0, high=len(events['t']))
         frames = np.zeros([2, 2, H, W])
@@ -224,15 +214,13 @@ DVS128 Gesture 的时间单位为微秒，``duration=1000000`` 即 1 秒。
         frames[1] = integrate_events_segment_to_frame(x, y, p, H, W, index_split, len(events['t']))
         return frames
 
-接下来创建数据集：
+把函数传给数据集构造器：
 
 .. code:: python
 
     train_set = DVS128Gesture(root_dir, train=True, data_type='frame', custom_integrate_function=integrate_events_to_2_frames_randomly)
 
-运行完毕后，在 ``root_dir`` 目录下出现了 ``integrate_events_to_2_frames_randomly`` 文件夹，保存了我们的frame数据。
-
-查看一下我们积分得到的数据：
+处理完成后，``root_dir/integrate_events_to_2_frames_randomly`` 会保存生成的帧。读取一个样本进行播放：
 
 .. code:: python
 
@@ -243,7 +231,7 @@ DVS128 Gesture 的时间单位为微秒，``duration=1000000`` 即 1 秒。
 .. image:: ../../_static/tutorials/neuromorphic_datasets/dvsg2.*
     :width: 100%
 
-惊蜇框架还支持其他的积分方式，阅读API文档以获取更多信息。
+其他积分方式和参数见神经形态数据集 API 文档。
 
 .. [#NMNIST] Orchard, Garrick, et al. “Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades.” Frontiers in Neuroscience, vol. 9, 2015, pp. 437–437.
 

@@ -5,8 +5,8 @@ SNN 分布式训练与推理
 
 English version: :doc:`../en/distributed_training`
 
-本页包括训练、评测和离线推理的高层接口，自定义模型与运行循环的接入方式，以及
-4 卡 RTX 4090 上的吞吐和显存结果。
+先在多张 GPU 上训练图像分类模型，再导出权重进行评测或预测。
+语言模型使用 Megatron Core 训练接口，离线推理则可以选择 MCore 或 SGLang。
 Vision 与 LLM 使用不同的精度配置入口，见 :doc:`./precision`。
 
 高层 API
@@ -18,8 +18,14 @@ Vision 与 LLM 使用不同的精度配置入口，见 :doc:`./precision`。
 ~~~~~~~~
 
 ``spikingjelly.activation_based.distributed.vision`` 提供基于 PyTorch DDP、FSDP2、
-张量并行和流水线并行的图像分类训练入口：``vision.TrainingConfig`` 描述任务，
-``vision.train_classification`` 执行训练。
+张量并行和流水线并行的图像分类训练入口。DDP 复制模型并将批次分配到不同 GPU，
+FSDP2 还会对训练状态分片。张量并行（TP）拆分单层计算，流水线并行（PP）把连续
+阶段放在不同 GPU 上。数据并行（DP）表示模型副本处理不同样本。
+
+将示例保存为 ``train_vision.py``，把 ImageNet 根目录改为你的数据路径，
+其中应包含 ``train/<class>`` 和 ``val/<class>`` 子目录。使用
+``torchrun --standalone --nproc-per-node=4 train_vision.py`` 启动。
+``vision.TrainingConfig`` 描述任务，``vision.train_classification`` 执行训练：
 
 .. code-block:: python
 
@@ -49,6 +55,7 @@ Vision 与 LLM 使用不同的精度配置入口，见 :doc:`./precision`。
         memopt_checkpoint_budget="balanced",
     )
     metrics = vision.train_classification(config)
+    print(metrics)
 
 仓库中的合成数据入口可以直接验证安装和并行配置：
 
@@ -95,6 +102,9 @@ validation loss 和 validation accuracy。直接调用库时须启用
 
 .. code-block:: python
 
+    from spikingjelly.activation_based.distributed import vision
+    from spikingjelly.activation_based.model.sew_resnet import SEWResNet34Config
+
     neuron_config = vision.NeuronConfig(
         class_path=(
             "spikingjelly.activation_based.neuron.integrate_and_fire.IFNode"
@@ -105,12 +115,12 @@ validation loss 和 validation accuracy。直接调用库时须启用
     )
     model_config = SEWResNet34Config(neuron_config=neuron_config)
 
-七种融合内置替代梯度之外的选择（见 :doc:`./surrogate`）会让所有神经元退回 Torch
-参考递推。
+IF/LIF 神经元使用七种融合内置替代梯度之外的选择时（见 :doc:`./surrogate`），
+会执行 Torch 参考递推。
 
 外部神经元导入后调用 ``vision.register_neuron_class(MyNeuron)``；外部替代梯度调用
 ``vision.register_surrogate_class(MySurrogate)``。神经元和替代梯度类路径不会触发自动导入。
-推理 artifact 使用 schema v2；v1 artifact 需要重新导出。
+推理时使用 ``export_inference_artifact`` 导出的 schema v2 推理文件。
 
 ``input_layout`` 显式声明 DataLoader batch 的布局。``"NCHW"`` 接收静态图像
 ``[N, C, H, W]``；single-step 直接对同一 batch 调用模型 ``T`` 次，multi-step
@@ -177,8 +187,7 @@ config、optimizer 和 dataset 配置位于 ``benchmark/snn_llm/cli.py``，可�
 ^^^^^^^^
 
 推理接口按是否处于训练生命周期以及是否需要 ground truth 分为四类。validation
-与 test 使用相同的评测计算，区别只是调用时机和数据集，因此不增加重复的
-``validate`` / ``test`` 函数。
+与 test 使用相同的评测函数，传入对应的数据集即可。
 
 .. list-table:: Vision 与 LLM 推理接口分工
     :header-rows: 1
@@ -288,7 +297,7 @@ checkpoint 的 TP x PP x CP 拓扑；任意 GPU 都不会聚合完整模型，�
 推理时改用其他 TP/PP/DP 拓扑。
 
 仓库中的 SpikeLM、Qwen2 recipe 和 external runtime model 位于
-``benchmark/snn_llm``，用于演示该 seam，并不作为 wheel 内置模型支持。其 adapter
+``benchmark/snn_llm``，用于演示模型接入，并不作为 wheel 内置模型支持。其 adapter
 在内部保留 ``[token, T, hidden]``，仅在 RadixAttention/KV cache 边界并入 head 维。
 自定义模型必须同时提供 export 回调和可导入的 SGLang external model package。
 
@@ -320,7 +329,7 @@ attention metadata。SpikeLM 与 Qwen2 adapter 使用 SGLang 原生 stage 分层
         main()
 
 ``benchmark/snn_llm/sglang_benchmark.py`` 提供可复现的 offline Engine 测量入口；
-实验 protocol、吞吐/延迟指标和结果统一放在后文“实测结果”的 SGLang 小节。
+你可以用吞吐和延迟测量结果选择适合自己负载的并行拓扑。
 
 底层 API
 --------
@@ -331,7 +340,8 @@ attention metadata。SpikeLM 与 Qwen2 adapter 使用 SGLang 原生 stage 分层
 ``vision.ModelBuilder.build`` 构建当前 PP stage、配置模型并行并返回 FSDP2 分片位置。
 实现可参考 ``SEWResNet34Builder`` 和 ``SpikformerBuilder``。
 
-最小声明形式如下。这个例子没有定义模型特定的 checkpoint 边界，因此明确拒绝
+先在模型包中定义 ``build_my_model``，再按以下骨架实现构建器。
+这个例子没有定义模型特定的检查点边界，因此明确拒绝
 非零 ``memopt_level``；实际实现应像内置 builder 一样在返回前应用 memopt。
 
 .. code-block:: python
@@ -368,7 +378,7 @@ attention metadata。SpikeLM 与 Qwen2 adapter 使用 SGLang 原生 stage 分层
             model = build_my_model(self.config)
             model = parallelize_my_model(model, process_group)
             model.to(device)
-            return model, ("blocks",), None, None
+            return model, ("block",), None, None
 
 ``parallelize_my_model`` 由模型作者定义。下面的例子直接使用
 ``spikingjelly.activation_based.distributed.tensor_parallel`` 中的公开组件替换模型层：
@@ -418,11 +428,13 @@ rowwise 层消费该本地张量。
     dp_group = mesh["dp"].get_group()
     tp_group = mesh["tp"].get_group()
 
+    torch.manual_seed(0)
     model = build_my_model()
     model = parallelize_my_model(model, tp_group).cuda(local_rank)
     functional.set_step_mode(model, step_mode)
     model = DistributedDataParallel(
-        model, device_ids=[local_rank], process_group=dp_group
+        model, device_ids=[local_rank], process_group=dp_group,
+        broadcast_buffers=step_mode == "m",
     )
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
@@ -447,6 +459,9 @@ rowwise 层消费该本地张量。
 
             optimizer.zero_grad(set_to_none=True)
             if step_mode == "s":
+                source = dist.get_global_rank(dp_group, 0)
+                for buffer in model.module.buffers():
+                    dist.broadcast(buffer, src=source, group=dp_group)
                 logits = torch.stack([model(x_t) for x_t in sequence]).mean(0)
             else:
                 logits = model(sequence).mean(0)
@@ -871,7 +886,7 @@ batch 下的加速比。完整中位数、三次运行范围和 batch 配置见
 功能测试还覆盖了 BF16 的 TP4、PP4、TP2 × PP2、CP4、TP2 × CP2、PP2 × CP2，
 以及 TP4/PP4/CP4 的 FP8。所有组合都得到有限 loss、有限梯度，且 SNN 模块上存在非零梯度。
 在 7 GiB 显存预算下，planner 选择 TP4、SpikingJelly memopt 和 MCore selective
-``core_attn`` 重计算。planner 自身给出的 6.28 GiB/卡 是静态规划输入；强制按该方案
+``core_attn`` 重计算。planner 自身给出的 6.28 GiB/卡是静态规划输入；强制按该方案
 运行两步时，实际峰值约为 7.26 GiB/卡。TP2 × PP2 的 sharded model/optimizer checkpoint 也已验证从
 step 1 恢复到 step 2。
 
@@ -891,9 +906,9 @@ Core 0.18.2 和 Triton 3.4.0。
 Vision 评测
 ^^^^^^^^^^^
 
-下方历史曲线使用 BF16、``T=4``、1000 类和缓存的全零 224 × 224 合成图像。
-现行 benchmark 要求通过 ``--cifar10-data`` 或 ``--data`` 指定固定真实图像子集；
-seeded-random 默认值只用于 smoke。两种 protocol 的结果不能混在一条曲线中。
+参考结果使用 BF16、``T=4``、1000 类和缓存的全零 224 × 224 图像。
+测量自己的负载时，通过 ``--cifar10-data`` 或 ``--data`` 指定固定真实图像子集。
+默认的固定种子随机输入可以用来检查配置。比较吞吐时，应使用相同的输入方案。
 
 每个吞吐点从新进程启动，使用 4 个 DataLoader workers，预热 5 个 batch、测量
 10 个 batch，并独立重复三次。计时包含 H2D、forward、通信和指标归约，不包含
@@ -930,8 +945,7 @@ pipeline group。SEW 下采样 block 位于 stage 边界前，Spikformer blocks 
 PP 分别达到单卡的 1.56 倍和 2.11 倍。固定 K 后 PP 吞吐在中等 batch 达峰，随后
 随每块样本和显存继续增大而平滑进入容量尾部。
 
-纯 TP4 在两个模型上仍低于单卡，但曲线已经稳定；这是模型计算/通信比限制，不是调度
-波动。SEW 每 batch 需要 16 次、合计约 1.41 GB 的 rowwise all-reduce，Spikformer
+纯 TP4 在两个模型上仍低于单卡，通信占据了较多工作量。SEW 每 batch 需要 16 次、合计约 1.41 GB 的 rowwise all-reduce，Spikformer
 需要 12 次、约 0.92 GB。使用两个 TP2 replica 的四卡 ``TP2 × DP2`` 可达到
 1226.1 和 858.6 images/s，说明实际部署应以 TP 容纳模型、再以 DP 扩展吞吐。
 
@@ -1083,17 +1097,17 @@ artifact 使用确定性初始化的 32 层模型：hidden 2560、20 heads、FFN
     左：SpikeLM-2.78B 在 32/64 requests 下的单卡与 PP4 output 吞吐；中：
     Qwen2.5-0.5B 单卡与 DP4 output 吞吐；右：单卡共享前缀的 input/output 吞吐。
 
-PP 不是无条件加速。在 32 requests、64 input/64 output 时，SpikeLM-2.78B 的单卡和
+在 32 个请求、64 个输入词元和 64 个输出词元时，SpikeLM-2.78B 的单卡和
 PP4 分别为 1074.8 和 786.9 output tokens/s，PP4 只有 0.73 倍；通信和 pipeline
 bubble 尚未摊薄。请求数增至 64 后，同一 workload 下单卡为 1031.1 tokens/s，PP4
 为 1416.9 tokens/s，即 1.37 倍。此时 p99 TTFT 从 2430.9 ms 降到 446.4 ms，
 而 p99 TPOT 从 33.2 ms 增到 39.8 ms。在这台主机上，PP4 需要足够并发才能提高
-吞吐；这一结果不代表单请求延迟也会降低。
+吞吐。评估单请求延迟时，还需要分别比较首词元延迟和后续词元间隔。
 
 Qwen2.5-0.5B 的 DP4 使用每个 replica 32 个请求，总 output 吞吐为 5845.5
 tokens/s，是单卡 1486.5 tokens/s 的 3.93 倍，TPOT 基本不变。单卡输入从 128 tokens 增至 2176 tokens（共享前缀为 2048 tokens）时，
 p99 TTFT 从 116.8 ms 增至 138.6 ms，输出吞吐基本不变（1486.5 → 1517.1 tokens/s）。CSV 也保留了小模型 PP2 的中位数，
-该点仍低于单卡。并行拓扑需要按模型规模和并发选择。
+该点仍低于单卡。
 
 容量测试还将 12.6B SpikeLM 导出为 564 个 tensor、25,173,851,048 bytes，并在
 PP4 上加载和生成，无需单卡持有完整模型。

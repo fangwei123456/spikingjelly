@@ -5,9 +5,9 @@
 
 .. warning::
 
-    We are looking for contributors to translate this tutorial to English!
+    欢迎参与本教程的英文翻译。
 
-本节教程将介绍如何使用替代梯度方法训练一个层内连接增强的脉冲行动器网络。
+你将用替代梯度训练层内连接增强的脉冲行动器网络（ILC-SAN），将环境状态映射为连续动作。替代梯度用平滑函数的导数近似脉冲发放函数的导数，让网络能够反向传播。
 
 从头搭建一个 `层内连接增强的脉冲行动器网络 <https://ieeexplore.ieee.org/document/10423179>`_
 -----------------------------------------------------------------------------------------------
@@ -15,6 +15,11 @@
 我们使用TD3算法将层内连接增强的脉冲行动器网络（ILC-SAN）与两个深度评价器（critic）网络协同训练。ILC-SAN首先采用群体编码器将状态编码为对应的脉冲序列，然后经由骨干SNN处理后输入到群体解码器中，得到最终的连续动作，其具体代码如下：
 
 .. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import encoding
+    from spikingjelly.activation_based.examples.ilc_san.ilc_san import SpikeMLP, PopDecoder
 
     class PopSpikeActor(nn.Module):
         def __init__(self, obs_dim, act_dim, enc_pop_dim, dec_pop_dim, hidden_sizes,
@@ -39,9 +44,13 @@
             out_pop_spikes = self.snn(in_pop_vals)
             return self.act_limit * torch.tanh(self.decoder(out_pop_spikes))
 
-群体编码器采用可学习的高斯感受野，根据后续的处理方式不同可以分为三类，其中采用确定性编码的群体编码器如下：
+群体编码用多个神经元表示一个状态分量。输入形状为 ``[N, obs_dim]``，编码后的形状为 ``[spike_ts, N, obs_dim * enc_pop_dim]``。``pop-det`` 生成确定性脉冲，``pop-ran`` 随机采样脉冲，``pop-raw`` 直接输出高斯响应。确定性编码器的实现如下，``pop_dim`` 须大于 1，``std`` 须为正数：
 
 .. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import functional, neuron, surrogate
 
     class PopSpikeEncoderDeterministic(nn.Module):
         """ Learnable Population Coding Spike Encoder with Deterministic Spike Trains"""
@@ -81,6 +90,10 @@
 
 .. code-block:: python
 
+    from collections import OrderedDict
+    import torch.nn as nn
+    from spikingjelly.activation_based import functional, layer, neuron, surrogate
+
     class SpikeMLP(nn.Module):
         def __init__(self, in_pop_dim, act_dim, dec_pop_dim, hidden_sizes):
             super().__init__()
@@ -113,6 +126,9 @@
 
 .. code-block:: python
 
+    import torch.nn as nn
+    from spikingjelly.activation_based import functional, layer, neuron
+
     class PopDecoder(nn.Module):
         """ Learnable Population Coding Decoder """
         def __init__(self, act_dim, pop_dim, spike_ts, decode='last-mem'):
@@ -141,14 +157,12 @@
 
 其中非脉冲神经元的膜电压编码方法需要通过参数\ ``decode``\ 设置。
 
-SpikingJelly中提供了4种膜电压编码方法，用作非脉冲神经元中膜电压序列的统计量，其中\ ``last-mem``\代表最终膜电压，\ ``max-mem``\代表最大膜电压，\ ``max-abs-mem``\代表最大绝对值的膜电压，而\ ``mean-mem``\代表平均膜电压。通过这种方式，SNN可以输出任意大小的浮点值，适用于强化学习中的连续动作值。
+SpikingJelly中提供了4种膜电压编码方法，用作非脉冲神经元中膜电压序列的统计量，其中\ ``last-mem``\代表最终膜电压，\ ``max-mem``\代表最大膜电压，\ ``max-abs-mem``\代表绝对值最大的膜电压（保留符号），而\ ``mean-mem``\代表平均膜电压。通过这种方式，SNN可以输出任意大小的浮点值，解码结果形状为 ``[N, act_dim]``。行动器再通过 ``tanh`` 和 ``act_limit`` 将动作限制在环境允许的范围内。
 
 训练ILC-SAN
 -----------
 
-首先指定好训练参数如学习率等以及若干其他配置
-
-优化器默认使用Adam
+先设置学习率和仿真步数 ``T``。训练脚本使用 Adam 优化器。
 
 训练代码的编写需要遵循以下三个要点：
 
@@ -156,7 +170,7 @@ SpikingJelly中提供了4种膜电压编码方法，用作非脉冲神经元中�
 
 2. ILC-SAN的损失函数与TD3算法相同。
 
-3. 每次网络仿真结束后，需要\ **重置**\ 网络状态
+3. 每次网络仿真结束后，调用 ``functional.reset_net(net)`` 重置网络状态，其中 ``net`` 是本次仿真的网络。
 
 ILC-SAN 的完整代码位于 ``spikingjelly/activation_based/examples/ilc_san``。先进入该目录，再查看或运行训练脚本：
 
@@ -165,10 +179,9 @@ ILC-SAN 的完整代码位于 ``spikingjelly/activation_based/examples/ilc_san``
     cd spikingjelly/activation_based/examples/ilc_san
     python hybrid_td3_cuda_norm.py --help
 
-``hybrid_td3_cuda_norm.py`` 在解析参数之前就 import 了 ``gym``。请先按该目录的 README 安装依赖（``gym==0.18.0`` 和 ``MuJoCo==2.1.0``）；这些版本面向 Python 3.9 及更早版本，在 Python 3.11 上尚未验证。``--help`` 同样需要这些依赖才能打印。
+运行训练或 ``--help`` 前，按该目录的 README 配置 ``gym==0.18.0`` 和 ``MuJoCo==2.1.0``。脚本依赖 Gym 的四项返回值 ``step`` 接口，训练需要 CUDA 设备。
 
-训练该 SNN 所需的显存与仿真步数 ``T`` 线性相关，更长的 ``T`` 不一定带来更好的训练效果。\ ``T``
-太大时，SNN在时间上展开后会变成一个非常深的网络，这将导致BPTT计算梯度时容易衰减或爆炸。
+增大仿真步数 ``T`` 会增加反向传播时保存的中间状态和显存占用。过长的序列还可能导致随时间反向传播（BPTT）时梯度衰减或爆炸，因此应根据验证结果选择 ``T``。
 
 训练结果
 --------

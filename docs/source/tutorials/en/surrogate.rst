@@ -5,8 +5,8 @@ Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 中文版： :doc:`../cn/surrogate`
 
-As mentioned in :doc:`./neuron`, the Heaviside function :math:`S[t] = \Theta(H[t] - V_{threshold})` is used to describe the neuronal firing.\
-The Heaviside function is:
+The Heaviside function :math:`S[t] = \Theta(H[t] - V_{threshold})` is used to describe the neuronal firing.\
+See :doc:`./neuron` for the firing equation. The Heaviside function is:
 
 .. math::
 
@@ -16,34 +16,29 @@ The Heaviside function is:
     0, & x < 0
     \end{cases}
 
-The step function has zero derivative for x≠0 and no derivative at x=0, so gradient descent receives no useful gradient. To solve this problem, the surrogate gradient method \
-is proposed. Refer to `Surrogate Gradient Learning in Spiking Neural Networks <https://arxiv.org/abs/1901.09948>`_ for more details.
+The step function has zero derivative for x≠0 and no derivative at x=0, so gradient descent receives no useful gradient. Use a surrogate gradient to supply the gradient needed for backpropagation. Refer to `Surrogate Gradient Learning in Spiking Neural Networks <https://arxiv.org/abs/1901.09948>`_ for more details.
 
-The surrogate function is used to generate spikes, as shown by
-:meth:`SimpleBaseNode.neuronal_fire <spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_fire>`:
+:meth:`SimpleBaseNode.neuronal_fire <spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_fire>`
+uses a surrogate function to compute spikes. Call it directly to inspect the threshold decision:
 
 .. code-block:: python
 
-    # spikingjelly.activation_based.neuron
-    class SimpleBaseNode(base.MemoryModule):
-        def __init__(..., surrogate_function: Callable = surrogate.Sigmoid(), ...)
-        # ...
-        self.surrogate_function = surrogate_function
-        # ...
-        
+    import torch
+    from spikingjelly.activation_based import neuron
 
-        def neuronal_fire(self):
-            return self.surrogate_function(self.v - self.v_threshold)
+    node = neuron.SimpleIFNode()
+    node.v = torch.tensor([0.5, 1.0, 1.5])
+    print(node.neuronal_fire())
+    # tensor([0., 1., 1.])
 
-The surrogate gradient method uses :math:`y = \Theta(x)` in forward and :math:`\frac{\mathrm{d}y}{\mathrm{d}x} = \sigma'(x)`, rather than :math:`\frac{\mathrm{d}y}{\mathrm{d}x} = \Theta'(x)` \
-in backward, where :math:`\sigma(x)` is the surrogate function. In most cases, :math:`\sigma(x)` is a continuous and smooth function whose shape is similar to :math:`\Theta(x)`.\ 
-:class:`spikingjelly.activation_based.surrogate` provides many frequently-used surrogate functions. For example, the Sigmoid function :class:`spikingjelly.activation_based.surrogate.Sigmoid` is :math:`\sigma(x, \alpha) = \frac{1}{1 + \exp(-\alpha x)}`.\ 
+The surrogate gradient method uses :math:`y = \Theta(x)` in forward and :math:`\frac{\mathrm{d}y}{\mathrm{d}x} = \sigma'(x)` in backward, where the surrogate function :math:`\sigma(x)` is usually a smooth, continuous function shaped like :math:`\Theta(x)`.\
+:mod:`spikingjelly.activation_based.surrogate` provides many frequently-used surrogate functions. For example, the Sigmoid function :class:`spikingjelly.activation_based.surrogate.Sigmoid` is :math:`\sigma(x, \alpha) = \frac{1}{1 + \exp(-\alpha x)}`.\
 The following figure shows the primitive Heaviside function, the sigmoid function when ``alpha=5`` and its gradient:
 
 .. image:: ../../_static/API/activation_based/surrogate/Sigmoid.*
     :width: 100%
 
-We can use the surrogate function easily, just as we use other functions:
+Call the Sigmoid surrogate and inspect its forward output and input gradient:
 
 .. code-block:: python
 
@@ -60,7 +55,7 @@ We can use the surrogate function easily, just as we use other functions:
     print(f'y={y}')
     print(f'x.grad={x.grad}')
 
-The outputs are:
+Example output (random values will vary):
 
 .. code-block:: shell
 
@@ -69,7 +64,7 @@ The outputs are:
     y=tensor([0., 1., 1., 1., 1., 1., 1., 1.], grad_fn=<sigmoidBackward>)
     x.grad=tensor([0.9351, 0.4231, 0.6557, 0.5158, 0.7451, 0.4759, 0.4943, 0.7913])
 
-All surrogate functions have a module style API, e.g., :class:`spikingjelly.activation_based.surrogate.Sigmoid`, and a functional style API, e.g., :class:`spikingjelly.activation_based.surrogate.sigmoid`.\ 
+Common surrogate functions have a module style API, e.g., :class:`spikingjelly.activation_based.surrogate.Sigmoid`, and a functional style API, e.g., :class:`spikingjelly.activation_based.surrogate.sigmoid`.\
 The module style API uses Camel-Case to name modules, while the functional API uses Snake-Case to name functions. Their relationship is similar to ``torch.nn`` and ``torch.nn.functional``.\
 Here are some examples:
 
@@ -105,7 +100,7 @@ Surrogates and automatic execution
 
 Ordinary fused neuron paths support Sigmoid, ATan, PiecewiseQuadratic,
 PiecewiseExp, SoftSign, SuperSpike and Erf. Pass the object as ``surrogate_function``
-without selecting a backend. Standalone forward/backward example:
+and let execution select the backend. Run this example to check forward outputs and gradients:
 
 .. code-block:: python
 
@@ -124,7 +119,8 @@ without selecting a backend. Standalone forward/backward example:
 
 Ordinary IF/LIF/PLIF neurons also accept other surrogates or Python callables
 that satisfy their APIs and can run through Torch reference equations.
-``spiking=False`` selects a continuous primitive. Fused step-function firing
+For classes that implement a continuous primitive, such as Sigmoid,
+``spiking=False`` returns that primitive. Fused step-function firing
 accepts fixed built-in configurations; custom surrogates and trainable surrogate
 parameters use the corresponding reference path.
 

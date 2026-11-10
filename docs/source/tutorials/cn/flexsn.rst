@@ -1,7 +1,7 @@
 FlexSN
 ======
 
-本页作者：`黄一凡 (AllenYolk) <https://github.com/AllenYolk>`_、`wei.fang <https://github.com/fangwei123456>`_
+作者：`黄一凡 (AllenYolk) <https://github.com/AllenYolk>`_、`wei.fang <https://github.com/fangwei123456>`_
 
 English version: :doc:`../en/flexsn`
 
@@ -9,12 +9,12 @@ English version: :doc:`../en/flexsn`
 SpikingJelly 神经元，并为多步 CUDA 计算生成 Triton 内核。预定义 IF、LIF、PLIF
 神经元的设备分发用法见 :doc:`./triton_backend`。
 
-自定义多步神经元使用 FlexSN；固定神经元使用公开的 neuron/functional 接口。
-旧 Auto CUDA 转译器和神经元代码生成模板已删除。
+你可以用 FlexSN 定义自己的神经元动力学。使用内置神经元时，调用公开的
+神经元或函数式接口。
 
 .. note::
 
-    本页的 ``torch.sigmoid`` 输出连续值，用来展示函数组合和梯度。内置 LIF 则采用
+    示例中的 ``torch.sigmoid`` 输出连续值，用来展示函数组合和梯度。内置 LIF 则采用
     阶跃前向和替代梯度，两者不等价。构造时会用单位 Tensor 执行 core，因此 core
     应保持纯函数，不捕获 Tensor 或模块；参数通过 ``static_inputs`` 传入。
 
@@ -37,7 +37,7 @@ SpikingJelly 神经元，并为多步 CUDA 计算生成 Triton 内核。预定�
         -> (*outputs, *updated_states)
 
 返回值末尾的 ``num_states`` 个 Tensor 必须与输入状态一一对应。以输入不衰减、
-软重置的 LIF 神经元为例：
+软重置 LIF 的平滑近似为例：
 
 .. code-block:: python
 
@@ -57,7 +57,7 @@ SpikingJelly 神经元，并为多步 CUDA 计算生成 Triton 内核。预定�
 --------------------
 
 考虑一个具有双输入、双输出和双状态的神经元。``rho`` 调整第一个输出的阈值，
-``y`` 决定膜电位采用硬重置还是软重置：
+``y`` 控制硬重置与软重置的混合比例：
 
 .. code-block:: python
 
@@ -111,7 +111,8 @@ SpikingJelly 神经元，并为多步 CUDA 计算生成 Triton 内核。预定�
     print(v_seq.shape, rho_seq.shape)
     print(final_v.shape, final_rho.shape)
 
-当 ``core`` 只有一个输出时，``forward`` 直接返回 Tensor；有多个输出时返回 tuple。
+输出和状态序列的形状为 ``[16, 3, 32, 32]``，最终状态的形状为
+``[3, 32, 32]``。当 ``core`` 只有一个输出时，``forward`` 直接返回 Tensor；有多个输出时返回 tuple。
 ``states`` 和 ``state_seqs`` 始终是 tuple。处理完一段独立序列后，应调用 ``reset()``
 清除托管状态。
 
@@ -181,7 +182,8 @@ PLIF 动力学使用可训练参数控制膜电位衰减：
         (x_seq,), v0, static_inputs=(torch.tensor(1.0),)
     )
 
-静态 Tensor 必须是标量，或与单步输入具有相同元素数；不支持任意广播。
+输入和状态的单步元素数、数据类型及设备必须相同。静态张量也须使用相同的数据类型
+和设备，并且是标量或与单步输入具有相同元素数；不支持任意广播。
 显式 ``()`` 表示没有静态输入，仅在未注册静态输入时有效。底层的
 ``single_step_functional_forward`` 和 ``multi_step_functional_forward`` 仍须
 显式传入 ``static_inputs``。
@@ -202,19 +204,15 @@ Triton 内核，已知不支持融合的组合使用 Torch/HOP 路径。构造�
     compiled = torch.compile(model, fullgraph=True)
     output = compiled(torch.randn(8, 64, 512, device="cuda"))
 
-支持的 CUDA core 会在首次接收真实 CUDA 输入时编译。选择实现后遇到不支持的算子或
-kernel 错误时会直接报告。
+支持的 CUDA core 会在首次接收真实 CUDA 输入时编译。选定 Triton 后的内核错误
+会直接报告。
 
-使用限制与迁移
---------------
+使用限制
+--------
 
 * 多步输入的首维是时间维 ``T``；``T == 0`` 会被拒绝。
 * 单步模式直接执行 core；自动 CUDA 融合只用于 ``step_mode="m"``。
 * 修改 step mode 会保留最终状态，但清除派生的 ``state_seqs``。
-* 旧构造参数 ``num_inputs``、``num_outputs``、``example_inputs``、
-  ``example_outputs`` 和 ``requires_grad`` 已删除。
-* 旧 ``FlexSNKernel`` 和 ``FlexSN.kernel`` 已删除；显式状态调用统一使用
-  ``functional_forward``。
 
 训练与状态管理
 ----------------------------

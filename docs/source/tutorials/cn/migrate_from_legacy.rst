@@ -1,13 +1,13 @@
-升级到 V2
+升级到 SpikingJelly 2.0
 =======================================
 
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 English version: :doc:`../en/migrate_from_legacy`
 
-V2 包含不兼容的接口变化，请按下表更新旧配置。
+如果你的项目仍使用旧版接口，请先在下表中找到对应项，再按当前示例核对参数、返回值和 checkpoint 键。
 
-V2：自动执行与接口迁移
+2.0：自动执行与接口迁移
 -------------------------------------------
 
 .. list-table:: 旧用法与当前用法
@@ -88,12 +88,10 @@ IF/LIF/PLIF 序列 functional 接口显式接收初态，返回脉冲、最终�
 单步 ``lif_step`` 返回 ``(spike, v_next)``；多步 ``lif_multi_step`` 返回三个值。
 迁移时按 :doc:`./neuron` 与公开 API 核对参数和返回值，避免只改函数名后缀。
 
-正常使用无需选择实现。安装与诊断见 :doc:`./triton_backend`，精度配置见
-:doc:`./precision`，自定义动力学见 :doc:`./flexsn`，省显存与投影见 :doc:`./memopt`。
-不提供自动迁移脚本，也不保证旧完整模块 pickle/checkpoint 可直接恢复。
-优先使用可信来源的 ``state_dict``，在当前模型定义下检查键和形状。
+日常使用无需选择实现。安装与诊断见 :doc:`./triton_backend`，精度配置见 :doc:`./precision`，自定义动力学见 :doc:`./flexsn`，省显存与投影见 :doc:`./memopt`。
+
+迁移需要手动完成。旧版保存的完整模块 pickle 或 checkpoint 可能无法直接加载；优先使用可信来源的 ``state_dict``，并在当前模型定义下检查键和形状。
 
 子包重命名
 -------------------------------------------
-``clock_driven``/``event_driven`` 的重命名随 0.0.0.0.14 发布，说明见
-`0.0.0.0.14 版本文档 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`_。
+旧 ``clock_driven`` 对应当前的 ``activation_based``，旧 ``event_driven`` 对应当前的 ``timing_based``。这次重命名随 0.0.0.0.14 发布，迁移示例见 `0.0.0.0.14 版本文档 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`_。

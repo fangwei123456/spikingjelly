@@ -1,14 +1,14 @@
-Upgrade to V2
+Upgrade to SpikingJelly 2.0
 =======================================
 
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 中文版： :doc:`../cn/migrate_from_legacy`
 
-V2 has breaking interface changes. Update old configuration using the table below.
+If your project still uses legacy interfaces, find each old item in the table, then check the current arguments, return values, and checkpoint keys against the linked APIs.
 
-V2: automatic execution and interface migration
------------------------------------------------
+2.0: automatic execution and interface migration
+------------------------------------------------
 
 .. list-table:: Previous usage and current usage
     :header-rows: 1
@@ -91,14 +91,10 @@ Single-step ``lif_step`` returns ``(spike, v_next)``; ``lif_multi_step`` returns
 three values. Check arguments and return values in :doc:`./neuron` and the
 public API when migrating a function name.
 
-Normal usage needs no implementation choice. See :doc:`./triton_backend` for
-installation/diagnostics, :doc:`./precision` for policies, :doc:`./flexsn` for
-custom dynamics and :doc:`./memopt` for memory optimization/projections.
-There is no automatic migration script or promise that an old whole-module
-pickle/checkpoint loads directly. Prefer trusted ``state_dict`` files and check
-keys/shapes against the current model definition.
+Normal usage does not require selecting an implementation. See :doc:`./triton_backend` for installation and diagnostics, :doc:`./precision` for precision policies, :doc:`./flexsn` for custom dynamics, and :doc:`./memopt` for memory optimization and projections.
+
+Migration is manual. Whole-module pickles or checkpoints saved by an older version may not load directly. Prefer trusted ``state_dict`` files, then check their keys and shapes against the current model definition.
 
 Package rename
 -------------------------------------------
-The ``clock_driven``/``event_driven`` rename shipped in 0.0.0.0.14 and is
-documented in the `0.0.0.0.14 documentation <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en>`_.
+The old ``clock_driven`` package maps to ``activation_based``, and ``event_driven`` maps to ``timing_based``. This rename shipped in 0.0.0.0.14; see the `0.0.0.0.14 documentation <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en>`_ for migration examples.

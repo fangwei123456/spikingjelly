@@ -5,7 +5,7 @@
 
 English version: :doc:`../en/surrogate`
 
-在 :doc:`./neuron` 中我们已经提到过，描述神经元放电过程的 :math:`S[t] = \Theta(H[t] - V_{threshold})`，使用了一个Heaviside阶跃函数：
+神经元放电方程（见 :doc:`./neuron`）:math:`S[t] = \Theta(H[t] - V_{threshold})`，使用了 Heaviside 阶跃函数：
 
 .. math::
     \Theta(x) =
@@ -14,31 +14,25 @@ English version: :doc:`../en/surrogate`
     0, & x < 0
     \end{cases}
 
-阶跃函数的导数在 x≠0 处为 0，在 x=0 处不存在，梯度下降得不到有用的梯度。为了解决这一问题，各种梯度替代法(the surrogate gradient method)被相继提出，参见\
-此综述 `Surrogate Gradient Learning in Spiking Neural Networks <https://arxiv.org/abs/1901.09948>`_。
+阶跃函数的导数在 x≠0 处为 0，在 x=0 处不存在，梯度下降得不到有用的梯度。你可以用替代梯度法提供反向传播所需的梯度，参见综述 `Surrogate Gradient Learning in Spiking Neural Networks <https://arxiv.org/abs/1901.09948>`_。
 
-替代函数在神经元中被用于生成脉冲，查看
 :meth:`SimpleBaseNode.neuronal_fire <spikingjelly.activation_based.neuron.SimpleBaseNode.neuronal_fire>`
-的源代码可以发现：
+使用替代函数计算脉冲。你可以直接调用它观察阈值判断：
 
 .. code-block:: python
 
-    # spikingjelly.activation_based.neuron
-    class SimpleBaseNode(base.MemoryModule):
-        def __init__(..., surrogate_function: Callable = surrogate.Sigmoid(), ...)
-        # ...
-        self.surrogate_function = surrogate_function
-        # ...
+    import torch
+    from spikingjelly.activation_based import neuron
 
-        def neuronal_fire(self):
-            return self.surrogate_function(self.v - self.v_threshold)
+    node = neuron.SimpleIFNode()
+    node.v = torch.tensor([0.5, 1.0, 1.5])
+    print(node.neuronal_fire())
+    # tensor([0., 1., 1.])
 
 
-梯度替代法的原理是，在前向传播时使用 :math:`y = \Theta(x)`，而在反向传播时则使用 :math:`\frac{\mathrm{d}y}{\mathrm{d}x} = \sigma'(x)`，而非\
-:math:`\frac{\mathrm{d}y}{\mathrm{d}x} = \Theta'(x)`，其中 :math:`\sigma(x)` 即为替代函数。:math:`\sigma(x)` 通常是一个形状与 :math:`\Theta(x)` \
-类似，但光滑连续的函数。
+梯度替代法的原理是，在前向传播时使用 :math:`y = \Theta(x)`，而在反向传播时则使用 :math:`\frac{\mathrm{d}y}{\mathrm{d}x} = \sigma'(x)`，其中 :math:`\sigma(x)` 即为替代函数，一般是形状与 :math:`\Theta(x)` 相近、但光滑连续的函数。
 
-在 :class:`spikingjelly.activation_based.surrogate` 中提供了一些常用的替代函数，其中Sigmoid函数 :math:`\sigma(x, \alpha) = \frac{1}{1 + \exp(-\alpha x)}` \
+在 :mod:`spikingjelly.activation_based.surrogate` 中提供了一些常用的替代函数，其中Sigmoid函数 :math:`\sigma(x, \alpha) = \frac{1}{1 + \exp(-\alpha x)}` \
 为 :class:`spikingjelly.activation_based.surrogate.Sigmoid`，下图展示了原始的Heaviside阶跃函数 ``Heaviside``、 ``alpha=5`` 时的Sigmoid原函数 ``Primitive`` \
 以及其梯度 ``Gradient``：
 
@@ -46,7 +40,7 @@ English version: :doc:`../en/surrogate`
     :width: 100%
 
 
-替代函数的使用比较简单，使用替代函数就像是使用函数一样：
+调用 Sigmoid 替代函数，观察前向输出和输入梯度：
 
 .. code-block:: python
 
@@ -63,7 +57,7 @@ English version: :doc:`../en/surrogate`
     print(f'y={y}')
     print(f'x.grad={x.grad}')
 
-输出为：
+示例输出（随机数会随运行变化）：
 
 .. code-block:: shell
 
@@ -72,7 +66,7 @@ English version: :doc:`../en/surrogate`
     y=tensor([0., 1., 1., 1., 1., 1., 1., 1.], grad_fn=<sigmoidBackward>)
     x.grad=tensor([0.9351, 0.4231, 0.6557, 0.5158, 0.7451, 0.4759, 0.4943, 0.7913])
 
-每个替代函数，除了有形如 :class:`spikingjelly.activation_based.surrogate.Sigmoid` 的模块风格API，也提供了形如 :class:`spikingjelly.activation_based.surrogate.sigmoid` 函数风格的API。\
+常用替代函数有形如 :class:`spikingjelly.activation_based.surrogate.Sigmoid` 的模块风格API，也提供了形如 :class:`spikingjelly.activation_based.surrogate.sigmoid` 函数风格的API。\
 模块风格的API使用驼峰命名法，而函数风格的API使用下划线命名法，关系类似于 ``torch.nn`` 和 ``torch.nn.functional``，下面是几个示例：
 
 ===============  ===============
@@ -100,7 +94,7 @@ English version: :doc:`../en/surrogate`
     print(f'x.grad={x.grad}')
 
 
-替代函数通常会有1个或多个控制形状的超参数，例如 :class:`spikingjelly.activation_based.surrogate.Sigmoid` 中的 ``alpha``。\
+替代函数可以有一个或多个控制形状的超参数，例如 :class:`spikingjelly.activation_based.surrogate.Sigmoid` 中的 ``alpha``。\
 例如 Sigmoid（alpha=4）和 ATan（alpha=2）的默认值使 x=0 处梯度为 1；其他函数见 API 文档。
 
 替代梯度与自动执行
@@ -108,7 +102,7 @@ English version: :doc:`../en/surrogate`
 
 普通融合神经元路径支持 Sigmoid、ATan、PiecewiseQuadratic、PiecewiseExp、
 SoftSign、SuperSpike 和 Erf；替代梯度对象仍通过 ``surrogate_function`` 传入，
-不需要选择 backend。下面是独立前后向示例：
+执行后端会自动选择。运行以下示例，检查前向输出和反向梯度：
 
 .. code-block:: python
 
@@ -125,8 +119,8 @@ SoftSign、SuperSpike 和 Erf；替代梯度对象仍通过 ``surrogate_function
     assert torch.isfinite(x.grad).all()
     node.reset()
 
-普通 IF/LIF/PLIF 也接受符合其 API 要求的其他替代梯度或 Python callable，可通过
-Torch 参考公式执行。``spiking=False`` 使用连续原函数，融合阶跃发放路径只接受
+普通 IF/LIF/PLIF 也接受符合其 API 要求的其他替代梯度或 Python 可调用对象，可通过
+Torch 参考公式执行。支持连续原函数的类（例如 Sigmoid）可用 ``spiking=False`` 返回原函数值，融合阶跃发放路径只接受
 固定的内置配置；自定义或带可训练参数的替代梯度需使用对应的参考路径。
 
 显式神经元精度要求受支持的内置替代梯度，见 :doc:`./precision`。

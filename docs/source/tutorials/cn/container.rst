@@ -1,16 +1,17 @@
 包装器
 =======================================
+
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 English version: :doc:`../en/container`
 
-SpikingJelly中主要提供了如下几种包装器：
+将单步模块接入序列网络时，你可以选择以下容器或函数：
 
-* 函数风格的 :class:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` 和模块风格的 :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>`
-* 函数风格的 :class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` 和模块风格的 :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>`
+* 函数风格的 :func:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` 和模块风格的 :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>`
+* 函数风格的 :func:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` 和模块风格的 :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>`
 * 对单步模块进行包装以进行单步/多步传播的 :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>`
 
-:class:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` 可以将一个单步模块进行多步传播，而 \
+:func:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` 可以将一个单步模块进行多步传播，而 \
 :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` 则可以将一个单步模块包装成多步模块，例如：
 
 .. code-block:: python
@@ -51,24 +52,24 @@ SpikingJelly中主要提供了如下几种包装器：
         H = 8
         W = 8
         x_seq = torch.rand([T, N, C, H, W])
-        
+
         conv = nn.Conv2d(C, 8, kernel_size=3, padding=1, bias=False)
         bn = nn.BatchNorm2d(8)
         bn.eval()
-        
+
         y_seq = functional.multi_step_forward(x_seq, (conv, bn))
         # y_seq.shape = [T, N, 8, H, W]
-        
+
         net = layer.MultiStepContainer(conv, bn)
         z_seq = net(x_seq)
         # z_seq.shape = [T, N, 8, H, W]
-        
+
         # z_seq is identical to y_seq
 
 Conv、Linear 等逐样本计算的层没有时间依赖，可以使用函数风格的 \
-:class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` 或模块风格的 \
+:func:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` 或模块风格的 \
 :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` 进行包装。\
-:class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` 将 \
+:func:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` 将 \
 ``shape = [T, N, *]`` 的数据首先变换为 ``shape = [TN, *]``，再送入无状态的网络层进行计算，\
 输出的结果会被重新变换为 ``shape = [T, N, *]``。这样将各时间步合并为一次调用。训练态 BatchNorm 会因统计范围变为 T×N 而产生不同结果，下面使用 eval 模式：
 
@@ -98,7 +99,7 @@ Conv、Linear 等逐样本计算的层没有时间依赖，可以使用函数风
         # z_seq.shape = [T, N, 8, H, W]
 
         # z_seq is identical to y_seq
-        
+
         p_seq = functional.seq_to_ann_forward(x_seq, (conv, bn))
         # p_seq.shape = [T, N, 8, H, W]
 
@@ -106,9 +107,11 @@ Conv、Linear 等逐样本计算的层没有时间依赖，可以使用函数风
         q_seq = net(x_seq)
         # q_seq.shape = [T, N, 8, H, W]
 
-        # q_seq is identical to p_seq, and also identical to y_seq and z_seq
+        torch.testing.assert_close(q_seq, p_seq)
+        torch.testing.assert_close(q_seq, y_seq)
+        torch.testing.assert_close(q_seq, z_seq)
 
-:class:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` 的输入也可以是 tensor tuple，\
+:func:`seq_to_ann_forward <spikingjelly.activation_based.functional.seq_to_ann_forward>` 的输入也可以是 tensor tuple，\
 tuple中每个tensor的形状均为 ``shape = [T, N, *]``，且 ``T`` 和 ``N`` 相同；每个tensor的时间和批量维度会被分别展平，\
 展平后的tensor作为位置参数一起送入第一个无状态的网络层。若给出多个无状态的网络层，则只有第一层接收全部展平后的tensor，\
 后续的层依次接收前一层的输出作为单个参数。例如，多步模式的 \
@@ -146,14 +149,12 @@ tuple中每个tensor的形状均为 ``shape = [T, N, *]``，且 ``T`` 和 ``N`` 
 在多步模式下，若给定 ``output_size``，会在展平 ``[T, N]`` 后传递给底层 PyTorch 模块。\
 它可以是仅包含空间尺寸的形式（例如 ``(H, W)``），也可以是底层模块针对展平后输入所支持的完整输出尺寸。
 
-常用的网络层，在 :class:`spikingjelly.activation_based.layer` 已经定义过，更推荐使用 :class:`spikingjelly.activation_based.layer` 中的网络层，\
-而不是使用 :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` 手动包装，\
-尽管 :class:`spikingjelly.activation_based.layer` 中的网络层实际上就是用包装器包装 `forward` 函数实现的。\
-:class:`spikingjelly.activation_based.layer` 中的网络层，优势在于：
+先检查 :mod:`spikingjelly.activation_based.layer` 是否已有你需要的层。
+直接使用这些层有两个好处：
 
 * 支持单步和多步模式，而 :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` 和 :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` 包装的层，只支持多步模式
-* 包装器会使得 ``state_dict`` 的 ``keys()`` 也增加一层包装，给加载权重带来麻烦
-  
+* 容器会给 ``state_dict`` 的键增加前缀，加载权重时需要匹配这些键。
+
 例如
 
 .. code-block:: python
@@ -213,8 +214,8 @@ tuple中每个tensor的形状均为 ``shape = [T, N, *]``，且 ``T`` 和 ``N`` 
     net_container is trying to load state dict from ann...
     net_container can not load! The error message is
     Error(s) in loading state_dict for Sequential:
-        Missing key(s) in state_dict: "0.0.weight", "0.1.weight", "0.1.bias", "0.1.running_mean", "0.1.running_var". 
-        Unexpected key(s) in state_dict: "0.weight", "1.weight", "1.bias", "1.running_mean", "1.running_var", "1.num_batches_tracked". 
+        Missing key(s) in state_dict: "0.0.weight", "0.1.weight", "0.1.bias", "0.1.running_mean", "0.1.running_var".
+        Unexpected key(s) in state_dict: "0.weight", "1.weight", "1.bias", "1.running_mean", "1.running_var", "1.num_batches_tracked".
     net_origin is trying to load state dict from ann...
     Load success!
 
@@ -286,11 +287,11 @@ tuple中每个tensor的形状均为 ``shape = [T, N, *]``，且 ``T`` 和 ``N`` 
         # y.shape = [N, C, H, W]
         functional.reset_net(net)
 
-使用 :class:`set_step_mode <spikingjelly.activation_based.functional.set_step_mode>` 改变 :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` 是安全的，只会改变包装器本身的 ``step_mode``，\
+使用 :func:`set_step_mode <spikingjelly.activation_based.functional.set_step_mode>` 改变 :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` 时，只会改变容器本身的 ``step_mode``，\
 而包装器内的模块仍然保持单步：
 
 .. code-block:: python
-    
+
     import torch
     from spikingjelly.activation_based import neuron, layer, functional
 
@@ -305,9 +306,9 @@ tuple中每个tensor的形状均为 ``shape = [T, N, *]``，且 ``T`` 和 ``N`` 
         print(f'net.step_mode={net.step_mode}')
         print(f'net[0].step_mode={net[0].step_mode}')
 
-如果模块本身就支持单步和多步模式的切换，则不推荐使用 :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` 或 :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` 对其进行包装。\
+如果模块本身支持单步和多步模式，直接使用它自身的前向方法，无需再用 :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` 或 :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` 对其进行包装。\
 因为包装器使用的多步前向传播，可能不如模块自身定义的前向传播速度快。
 
 
-通常需要用到 :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` 或 :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` 的\
+可以用到 :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` 或 :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` 的\
 是一些没有定义多步的模块，例如一个在 ``torch.nn`` 中存在，但在 ``spikingjelly.activation_based.layer`` 中不存在的网络层。

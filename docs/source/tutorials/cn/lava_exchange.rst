@@ -16,26 +16,26 @@ Lava框架简介
 
 ``SpikingJelly -> Lava DL -> Lava -> Loihi``
 
-与Lava相关的模块，都定义在 :class:`spikingjelly.activation_based.lava_exchange` 中。
+与Lava相关的模块，都定义在 :mod:`spikingjelly.activation_based.lava_exchange` 中。
 
 .. note::
 
     Lava-DL 是可选依赖。SpikingJelly 不安装它，也没有 ``spikingjelly[lava]``
-    这个 extra。``TNX_to_NXT``、``to_lava_neuron``、``BlockContainer`` 等转换
+    这个可选依赖组。``TNX_to_NXT``、``to_lava_neuron``、``BlockContainer`` 等转换
     函数只在 ``import lava.lib.dl.slayer`` 成功时定义，否则这些名字不存在。
 
     PyPI 上的 ``lava-dl==0.6.0`` 要求 Python >=3.10,<3.11 和 torch>=2.3.1,<2.4，
-    而 SpikingJelly 2.0.0 要求 Python >=3.11 和 torch>=2.6。下面的示例没有在
-    2.0.0 环境中运行过。
+    而 SpikingJelly 2.0.0 要求 Python >=3.11 和 torch>=2.6。这两个发行版的依赖
+    范围不相容；运行转换示例前，需要准备兼容的 Lava-DL 与 SpikingJelly 环境。
 
 基本转换
 -------------------------------------------
 
 数据格式转换
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Lava DL默认数据格式为 ``shape = [N, *, T]``，其中 ``N`` 是batch维度，``T`` 是time-step维度。而SpikingJelly中的模块在多步模式(``step_mode = 'm'``)下，使用的数据格式是\
-``shape = [T, N, *]``。因此，``lava_exchange`` 提供了两种格式的相互转换函数，:class:`TNX_to_NXT <spikingjelly.activation_based.lava_exchange.TNX_to_NXT>` 和\
-:class:`NXT_to_TNX <spikingjelly.activation_based.lava_exchange.NXT_to_TNX>`。示例如下：
+Lava DL默认数据格式为 ``shape = [N, *, T]``，其中 ``N`` 是批量维度，``T`` 是时间步维度。而SpikingJelly中的模块在多步模式（``step_mode = 'm'``）下，使用的数据格式是\
+``shape = [T, N, *]``。因此，``lava_exchange`` 提供了两种格式的相互转换函数，:func:`TNX_to_NXT <spikingjelly.activation_based.lava_exchange.TNX_to_NXT>` 和\
+:func:`NXT_to_TNX <spikingjelly.activation_based.lava_exchange.NXT_to_TNX>`。示例如下：
 
 
 .. code-block:: python
@@ -65,9 +65,10 @@ Lava DL默认数据格式为 ``shape = [N, *, T]``，其中 ``N`` 是batch维度
 
 神经元转换
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-当前支持将 SpikingJelly 的 IF 和 LIF 神经元转换为 Lava DL 神经元。
+你可以转换 IF 和 LIF 神经元。两者都要求 ``v_reset=0.0``，LIF 还要求
+``decay_input=False``；不满足条件时会抛出 ``ValueError``。
 
-使用 :class:`to_lava_neuron <spikingjelly.activation_based.lava_exchange.to_lava_neuron>` 进行转换，示例如下：
+使用 :func:`to_lava_neuron <spikingjelly.activation_based.lava_exchange.to_lava_neuron>` 进行转换，示例如下：
 
 .. code-block:: python
 
@@ -87,7 +88,7 @@ Lava DL默认数据格式为 ``shape = [N, *, T]``，其中 ``N`` 是batch维度
     print('output of sj(reshaped to NXT):\n', lava_exchange.TNX_to_NXT(if_sj(x_seq_sj)))
     print('output of lava:\n', if_la(x_seq_la))
 
-对于相同的输入，两者的脉冲张量相同。本节 IF 和 LIF 示例都使用未设随机种子的 ``torch.rand``，打印数值会随运行变化。
+比较打印出的两组脉冲，观察转换前后的输出。Lava DL 会量化神经元动态，临近阈值的输入可能产生不同的脉冲。IF 和 LIF 示例使用未设随机种子的 ``torch.rand``，数值会随运行变化。
 
 使用LIF神经元的示例如下：
 
@@ -113,10 +114,10 @@ Lava DL默认数据格式为 ``shape = [N, *, T]``，其中 ``N`` 是batch维度
 
 突触转换
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-常用的卷积、全连接、池化层都支持转换。需要注意的是：
+你可以转换二维卷积、全连接和二维池化层，需满足以下约束：
 
-* 不支持bias
-* Lava只支持求和池化，相当于是平均池化不做平均
+* 卷积和全连接层须设置 ``bias=False``。
+* 转换后的池化层执行求和池化，不会除以窗口中的元素数。
 
 示例如下：
 
@@ -145,7 +146,7 @@ Lava DL默认数据格式为 ``shape = [N, *, T]``，其中 ``N`` 是batch维度
     fc_la=Dense(4, 2, kernel_size=(1, 1, 1), stride=(1, 1, 1), bias=False)
     sp_la=Pool(1, 1, kernel_size=(2, 2, 1), stride=(2, 2, 1), bias=False)
 
-Lava DL中几乎所有突触都是由 :class:`torch.nn.Conv3d` 实现的，因此打印出来会显示含有3个元素的tuple的 ``kernel_size`` 和 ``stride``。
+Lava DL中几乎所有突触都是由 :class:`torch.nn.Conv3d` 实现的，因此打印出来会显示包含 3 个元素的元组形式的 ``kernel_size`` 和 ``stride``。
 
 
 BlockContainer
@@ -159,20 +160,20 @@ BlockContainer
 具体信息，请参考 `Lava: Deep Learning <https://lava-nc.org/dl.html#deep-learning>`_。
 
 `Blocks <https://lava-nc.org/lava-lib-dl/slayer/block/modules.html>`_ 可以被视作突触和神经元组成的集合。例如，:class:`lava.lib.dl.slayer.block.cuba.Conv` 实际上就是由卷积\
-突触和CUBA神经元组成的。
+突触和基于电流的 LIF（CUBA）神经元组成的。
 
-需要注意的是，为了进行网络部署，``Blocks`` 中的突触权重和神经元的神经动态都进行了量化，因此 ``Blocks`` 并不是简单的\
-``synapse + neuron``，而是 ``quantize(synapse) + quantize(neuron)``。
+部署时，``Blocks`` 会量化突触权重和神经元动态，计算过程可写为
+``quantize(synapse) + quantize(neuron)``。
 
-SpikingJelly提供了 :class:`BlockContainer <spikingjelly.activation_based.lava_exchange.BlockContainer>` ，主要特点如下：
+你可以使用 :class:`BlockContainer <spikingjelly.activation_based.lava_exchange.BlockContainer>` ，主要特点如下：
 
 * 支持替代梯度训练
-* 对突触和神经动态进行了量化，与 :class:`lava.lib.dl.slayer.block` 具有完全相同的输出
+* 对突触和神经动态进行了量化，以对齐 Lava DL 的计算
 * 支持直接转换为一个 :class:`lava.lib.dl.slayer.block`
 
 目前 ``BlockContainer`` 仅支持 :class:`lava_exchange.CubaLIFNode <spikingjelly.activation_based.lava_exchange.CubaLIFNode>`，但也支持\
 自动将输入的 :class:`IFNode <spikingjelly.activation_based.neuron.IFNode>` 和 :class:`LIFNode <spikingjelly.activation_based.neuron.LIFNode>` 转换为 ``CubaLIFNode``。\
-例如：
+转换 IF/LIF 时会使用 ``CubaLIFNode`` 默认的替代梯度和重置梯度设置。若要指定这些设置，直接传入配置好的 ``CubaLIFNode``。例如：
 
 .. code-block:: python
 
@@ -210,11 +211,15 @@ SpikingJelly提供了 :class:`BlockContainer <spikingjelly.activation_based.lava
 
 MNIST CSNN示例
 -------------------------------------------
-最后，让我们训练一个用于分类MNIST的卷积SNN，并转换到Lava DL框架。
+你可以用这些模块搭建 MNIST 卷积 SNN，训练后再转换到 Lava DL。
 
 网络定义如下：
 
 .. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import lava_exchange, neuron, surrogate
 
     class MNISTNet(nn.Module):
         def __init__(self, channels: int = 16):
@@ -261,7 +266,7 @@ MNIST CSNN示例
         def forward(self, x):
             return self.conv_fc(x)
 
-我们为其增加一个转换到Lava DL网络的转换函数，在训练完成后可以使用：
+将以下 ``to_lava`` 方法放入上面的 ``MNISTNet`` 类，与 ``forward`` 同级，训练后即可调用：
 
 .. code-block:: python
 
@@ -275,9 +280,12 @@ MNIST CSNN示例
 
         return nn.Sequential(*ret)
 
-接下来，对这个网络进行训练即可。训练流程与普通网络区别不大，只是在 ``lava_exchange.BlockContainer`` 内部，突触和神经动态都做了量化，这会导致正确率低于普通网络。部分训练代码如下：
+训练时，``lava_exchange.BlockContainer`` 会量化突触权重和神经元动态，量化可能影响正确率。以下是训练循环片段，需先按完整脚本创建 ``net``、``args``、优化器和数据加载器：
 
 .. code-block:: python
+
+    import torch.nn.functional as F
+    from spikingjelly.activation_based import encoding, functional
 
     functional.set_step_mode(net, "m")
     encoder = encoding.PoissonEncoder(step_mode='m')
@@ -329,21 +337,23 @@ MNIST CSNN示例
 
 .. code-block:: python
 
+    import os
+    import h5py
+
     def export_hdf5(net, filename):
-        # network export to hdf5 format
-        h = h5py.File(filename, 'w')
-        layer = h.create_group('layer')
-        for i, b in enumerate(net):
-            handle = layer.create_group(f'{i}')
-            b.export_hdf5(handle)
+        with h5py.File(filename, "w") as h:
+            layer = h.create_group("layer")
+            for i, b in enumerate(net):
+                handle = layer.create_group(f"{i}")
+                b.export_hdf5(handle)
 
     export_hdf5(net_ladl, os.path.join(args.out_dir, 'net_la.net'))
 
-完整的代码位于 :class:`spikingjelly.activation_based.examples.lava_mnist`，命令行参数如下：
+完整的代码位于 :mod:`spikingjelly.activation_based.examples.lava_mnist`，命令行参数如下：
 
 .. code-block:: shell
 
-    (lava-env) wfang@mlg-ThinkStation-P920:~/tempdir/w1$ python -m spikingjelly.activation_based.examples.lava_mnist -h
+    python -m spikingjelly.activation_based.examples.lava_mnist -h
     usage: lava_mnist.py [-h] [-T T] [-b B] [-device DEVICE] [-data-dir DATA_DIR]
                         [-channels CHANNELS] [-epochs EPOCHS] [-lr LR] [-out-dir OUT_DIR]
 
@@ -359,11 +369,13 @@ MNIST CSNN示例
     -out-dir OUT_DIR    path for saving weights
 
 
-在启动后，会首先训练网络，然后转换到Lava DL并进行推理，最后将hdf5格式的网络导出：
+运行以下命令训练网络、检查转换后的正确率，并导出 HDF5 文件。
+
+参考结果（MNIST，``T=32``，16 个训练轮次）：
 
 .. code-block:: shell
 
-    (lava-env) wfang@mlg-ThinkStation-P920:~/tempdir/w1$ python -m spikingjelly.activation_based.examples.lava_mnist -T 32 -device cuda:0 -b 128 -epochs 16 -data-dir /datasets/MNIST/ -lr 0.1 -channels 16
+    python -m spikingjelly.activation_based.examples.lava_mnist -T 32 -device cuda:0 -b 128 -epochs 16 -data-dir /datasets/MNIST/ -lr 0.1 -channels 16
     Namespace(T=32, b=128, device='cuda:0', data_dir='/datasets/MNIST/', channels=16, epochs=16, lr=0.1, out_dir='./')
     Namespace(T=32, b=128, device='cuda:0', data_dir='/datasets/MNIST/', channels=16, epochs=16, lr=0.1, out_dir='./')
     epoch = 0, train_loss = 1.7607, train_acc = 0.7245, test_loss = 1.5243, test_acc = 0.9443, max_test_acc = 0.9443

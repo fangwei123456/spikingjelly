@@ -5,12 +5,11 @@ Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 中文版： :doc:`../cn/stdp`
 
-STDP updates synaptic weights from neuronal activity. This tutorial covers traces,
-gradient training and a MNIST example. For supported scope, time units, reward
+You will use STDP (spike timing dependent plasticity) to update synaptic weights
+from neuronal activity, then combine it with gradient descent and run a MNIST classifier. For supported scope, time units, reward
 alignment and interface migration, see :doc:`../../APIs/spikingjelly.activation_based.learning`.
 
-Researchers of SNNs are always interested in biological learning rules. In SpikingJelly, STDP(Spike Timing Dependent Plasticity) \
-is also provided and can be applied to convolutional or linear layers.
+You can apply STDP to linear, Conv1d and Conv2d layers with dilation 1 and no groups.
 
 STDP(Spike Timing Dependent Plasticity)
 -----------------------------------------------------
@@ -78,14 +77,13 @@ STDP Learner
 :class:`spikingjelly.activation_based.learning.STDPLearner` can apply STDP learning on convolutional or linear layers. \
 See :class:`spikingjelly.activation_based.learning.STDPLearner` for the full API.
 
-Now let us use ``STDPLearner`` to build a ``4x3`` network, initializing weights to ``0.4``:
+Use ``STDPLearner`` to build a ``4x3`` network, initializing weights to ``0.4``:
 
 .. code-block:: python
 
     import torch
     import torch.nn as nn
     from spikingjelly.activation_based import neuron, layer, learning
-    from matplotlib import pyplot as plt
 
     def f_weight(x):
         return torch.clamp(x, -1, 1.)
@@ -161,7 +159,7 @@ Run each step and record trajectories. Slice batch/feature zero for plotting:
 
 The complete codes are available at ``spikingjelly/activation_based/examples/plasticity/stdp_trace.py``.
 
-Let us plot ``in_spike, out_spike, trace_pre, trace_post, weight``:
+Plot ``in_spike, out_spike, trace_pre, trace_post, weight``:
 
 .. image:: ../../_static/tutorials/stdp/stdp_trace.*
     :width: 100%
@@ -181,11 +179,11 @@ not stop it. Release hooks with ``close()`` when finished.
 
 Combine STDP Learning with Gradient Descent
 -----------------------------------------------------
-A widely used method with STDP is using gradient descent and STDP to train different layers in an SNN. \
-With ``STDPLearner``, we can combine STDP learning with gradient descent easily.
+You can train different SNN layers with STDP and gradient descent using
+``STDPLearner``.
 
 Our goal is to build a deep SNN, train convolutional layers with STDP, and train linear layers with gradient descent. \
-First, let us define the hyper-parameters:
+Define the hyperparameters:
 
 
 .. code-block:: python
@@ -281,11 +279,10 @@ implement an example. Hence, we create the samples manually:
     x_seq = (torch.rand([T, N, C, H, W]) > 0.5).float()
     target = torch.randint(low=0, high=10, size=[N])
 
-Then we will use the two optimizers to update the parameters. Note that the following codes are different from the plain \
-gradient descent we use before.
+Use the two optimizers in the following order to update both parameter groups.
 
 
-First, let us clear all gradients, do a forward, calculate the loss and do a backward:
+Clear gradients, run the forward pass and backpropagate the loss:
 
 .. code-block:: python
 
@@ -295,7 +292,7 @@ First, let us clear all gradients, do a forward, calculate the loss and do a bac
     loss = F.cross_entropy(y, target)
     loss.backward()
 
-Note that even though ``optimizer_gd`` will only update parameters in ``params_gradient_descent``, ``loss.backward()`` will \
+Although ``optimizer_gd`` will only update parameters in ``params_gradient_descent``, ``loss.backward()`` will \
 calculate and set ``.grad`` to all parameters including those we want to calculate the weight variation (implemented by on ``.grad``) by STDP.
 
 Thus, we need to clear the gradients of ``params_stdp``:
@@ -345,15 +342,15 @@ use ``--show`` and ``--output-dir`` to change this.
 
 .. code-block:: bash
 
-    uv run --no-sync python -m spikingjelly.activation_based.examples.plasticity.stdp_trace
-    uv run --no-sync python -m spikingjelly.activation_based.examples.plasticity.mstdp
-    uv run --no-sync python -m spikingjelly.activation_based.examples.plasticity.mstdpet
+    python -m spikingjelly.activation_based.examples.plasticity.stdp_trace
+    python -m spikingjelly.activation_based.examples.plasticity.mstdp
+    python -m spikingjelly.activation_based.examples.plasticity.mstdpet
 
 MSTDP/MSTDPET use ``exp(-1/tau)`` decay; ordinary STDP uses ``1-1/tau``.
 Call reward step immediately after each forward. ``reward[t]`` modulates previous
 eligibility; the first update is zero. An empty step does not advance time; reward
 after final activity needs another forward. MSTDP accepts scalar or ``[M]`` reward;
-MSTDPET accepts scalar reward. Remove ``batch_size`` from MSTDP construction;
+MSTDPET accepts scalar reward. MSTDP infers batch size from activity;
 reset the network's temporal state as well when starting independent samples.
 
 Complete MNIST example
@@ -396,7 +393,7 @@ A is fast own-spike adaptation current, reducing repeated responses. B is a slow
 intrinsic excitability current, using unlabeled local rate error to adjust participation.
 M is actual batch size, N neuron count, and T sample duration. B starts uniformly in
 [-0.01,0] and freezes after training. This rate controller does not guarantee the target
-while weights change; its biophysical accuracy and global stability have not been verified.
+while weights change.
 Positive B may cause spontaneous activity. Sparsity and mean rates are diagnostic
 measures; accuracy measures task performance.
 
@@ -446,10 +443,10 @@ simulation steps; current-filter tau is at least one.
 
 .. code-block:: bash
 
-    uv run --no-sync python -m spikingjelly.activation_based.examples.plasticity.stdp_mnist \
+    python -m spikingjelly.activation_based.examples.plasticity.stdp_mnist \
         --device cuda:0 --seed 0 --data-dir logs/plasticity/data --download \
         --output-dir logs/plasticity/current/seed-0
-    uv run --no-sync python -m spikingjelly.activation_based.examples.plasticity.stdp_mnist \
+    python -m spikingjelly.activation_based.examples.plasticity.stdp_mnist \
         --device cuda:0 --checkpoint logs/plasticity/current/seed-0/selected.pt \
         --data-dir logs/plasticity/data --output-dir logs/plasticity/current/seed-0
 
@@ -464,7 +461,8 @@ Measured results
 The frozen feedforward control receives identical initial weights and input spikes,
 disabling only STDP weight updates. Its B still adapts during training, its fast
 dynamics remain active, and its neuron classes are assigned independently afterwards.
-The example targets a three-seed mean of at least 90%; individual seeds may fall below 90%.
+
+Reference results (commit `da6ff9a9 <https://github.com/fangwei123456/spikingjelly/commit/da6ff9a9>`_, V100S-PCIE-32GB):
 
 .. list-table:: Full MNIST tests: regular IF input and current LIF
    :header-rows: 1
@@ -486,23 +484,16 @@ The example targets a three-seed mean of at least 90%; individual seeds may fall
      - 84.06%
      - +6.00
 
-Independent validation selected the recipe and one epoch: same-width Poisson full
-training gave 88.76%; IF evaluation of that frozen model gave 89.16%; fresh IF short
-training gave 86.72%/control 82.94%; fresh IF full training gave 89.58%/control 83.04%.
-These four measurements come from separate training or evaluation stages. Seeds 1/2
-then trained from scratch with the selected recipe and epoch count. All three models/maps
-were fixed before official testing. Test scores did not select the recipe, and all seeds
-are included in the report.
-
-Historical documentation record: `da6ff9a9 <https://github.com/fangwei123456/spikingjelly/commit/da6ff9a9>`_ (2026-10-12); V100S-PCIE-32GB; not rerun on current V2.
+Validation selected the configuration and one training epoch. Seeds 1 and 2
+then trained from scratch with that configuration. All three models and neuron
+class assignments were fixed before evaluating the complete test set.
 
 Mean accuracy is 90.2233%, population standard deviation is 0.2894 percentage points,
 and mean paired improvement is 6.4667 percentage points. Every seed uses all 10,000 test
 samples. One silent seed 0 sample is counted as an error. Environment: Python 3.11.14,
 PyTorch 2.7.1+cu118, torchvision 0.22.1+cu118, V100S-PCIE-32GB testing.
-These results apply to this shallow recipe. Arbitrary deep networks have not been
-verified, and the model does not reproduce the original Diehl/Cook network. The experiment
-retains raw JSON, configurations, checkpoints, source hashes and commands.
+Use these results as a reference for this shallow network. The neuron dynamics differ
+from the original Diehl/Cook model.
 
 .. [#STDP] Bi, Guo-qiang, and Mu-ming Poo. "Synaptic modifications in cultured hippocampal neurons: dependence on spike timing, synaptic strength, and postsynaptic cell type." Journal of neuroscience 18.24 (1998): 10464-10472.
 

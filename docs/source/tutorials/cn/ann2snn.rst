@@ -1,30 +1,30 @@
 ANN转换SNN
 =======================================
-本页作者：`DingJianhao <https://github.com/DingJianhao>`_、`fangwei123456 <https://github.com/fangwei123456>`_、`Lv Liuzhenghao <https://github.com/Lyu6PosHao>`_、`黄一凡 (AllenYolk) <https://github.com/AllenYolk>`_
+作者：`DingJianhao <https://github.com/DingJianhao>`_、`fangwei123456 <https://github.com/fangwei123456>`_、`Lv Liuzhenghao <https://github.com/Lyu6PosHao>`_、`黄一凡 (AllenYolk) <https://github.com/AllenYolk>`_
 
 English version: :doc:`../en/ann2snn`
 
 .. admonition:: ANN2SNN 教程导航
 
-    当前 ANN2SNN 教程按转换流程拆分：
+    根据你的模型选择转换流程：
 
-    #. 本页介绍当前 Recipe API 中基于 FX graph 的 rate-coded CNN 转换：``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` 定义算法，``FXConverter`` 执行转换（``Converter`` 为兼容名）。
+    #. CNN 率编码转换使用 FX 计算图：``RateCodingRecipe`` / ``LocalThresholdBalancingRecipe`` 定义算法，``FXConverter`` 执行转换（``Converter`` 为兼容名）。
     #. :doc:`Transformer ANN2SNN 转换 <ann2snn_transformer>` 介绍面向 Transformer 模型的 ``STATransformerRecipe``、``SpikeZIPTFQANNRecipe`` 和离线多步 ``Qwen2SNNRecipe``。
 
     旧版 ANN2SNN API 见 `0.0.0.0.14 版本文档 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`_。
 
-本节介绍 ``spikingjelly.activation_based.ann2snn``，展示如何用当前 Recipe API 将训练好的前馈 ANN 转换为 SNN 并在 SpikingJelly 中仿真。
+你将训练一个小型 MNIST 分类网络，用 ``spikingjelly.activation_based.ann2snn`` 将 ReLU 激活转换为脉冲神经元，再累计多个时间步的输出进行图像分类。
 
 相关 API 见 :mod:`spikingjelly.activation_based.ann2snn`。
 
-本页介绍的 rate-coding 路径基于 ``torch.fx``。``torch.fx`` 会将 ``nn.Module`` 实例 trace 为计算图表示，然后由 ANN2SNN FX recipe 对该计算图进行变换。ANN2SNN 也提供不 trace FX graph 的 ``ModuleConverter``，用于 SpikeZIP 和 Qwen2 这类直接替换 ``nn.Module`` tree 的转换；这些路径见 Transformer ANN2SNN 教程。
+率编码转换使用 ``torch.fx``。``torch.fx`` 会将 ``nn.Module`` 实例追踪为计算图表示，然后由 ANN2SNN FX 转换方案对该计算图进行变换。ANN2SNN 也提供不追踪 FX 计算图的 ``ModuleConverter``，用于 SpikeZIP 和 Qwen2 这类直接替换 ``nn.Module`` 树的转换；这些路径见 Transformer ANN2SNN 教程。
 
 ANN转换SNN的理论基础
 --------------------
 
-与 ANN 相比，SNN 使用离散脉冲通信，有利于高效计算，但直接训练 SNN 往往需要更多资源。一种做法是先训练 ANN，再将其转换为行为相近的 SNN。这需要建立 ANN 激活值和 SNN 发放率之间的联系。对于 rate-coded SNN，输出类别由脉冲计数读出。核心问题是：脉冲神经元的发放率能否近似 ANN 神经元的激活值？
+与 ANN 相比，SNN 使用离散脉冲通信，有利于高效计算，但直接训练 SNN 往往需要更多资源。一种做法是先训练 ANN，再将其转换为行为相近的 SNN。这需要建立 ANN 激活值和 SNN 发放率之间的联系。率编码用一段时间内的脉冲计数表示激活值。下面的分类网络在最后一个线性层输出模拟得分，沿时间累计这些得分后即可选出类别。转换依赖于脉冲神经元的发放率对 ANN 激活值的近似。
 
-ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的相关性，其中膜电位会通过减去 :math:`V_{threshold}` 重置。这里的神经元更新方式就是 `神经元教程 <https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/neuron.html>`_ 中介绍的 Soft reset 方式。``RateCodingRecipe`` 利用这一关系进行转换。
+ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的相关性，其中膜电位会通过减去 :math:`V_{threshold}` 重置。这里的神经元更新方式就是 `神经元教程 <https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/neuron.html>`_ 中介绍的减法重置方式。``RateCodingRecipe`` 利用这一关系进行转换。
 
 实验：IF神经元脉冲发放频率和输入的关系
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -70,7 +70,7 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 
 脉冲发放频率在一定范围内与输入 :math:`x_{i}` 的大小成正比。
 
-接下来，让我们画出IF神经元脉冲发放频率和输入 :math:`x_{i}` 的曲线，并与 :math:`\mathrm{ReLU}(x_{i})` 对比：
+画出 IF 神经元脉冲发放频率和输入 :math:`x_{i}` 的曲线，并与 :math:`\mathrm{ReLU}(x_{i})` 对比：
 
 .. code-block:: python
 
@@ -100,7 +100,7 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 
 文献 [#f1]_ 证明，恒定输入在 ``[0, V_threshold]`` 内时，采用减法重置的 IF 神经元发放率随 T 增大逼近归一化的 ReLU 激活值。
 
-针对神经网络第一层，考虑 SNN 神经元发放率 :math:`r` 和对应 ANN 激活值 :math:`a` 之间的关系。假定输入恒定为 :math:`z \in [0,1]`。对于采用减法重置的IF神经元，其膜电位V随时间变化为：
+针对神经网络第一层，考虑 SNN 神经元发放率 :math:`r` 和对应 ANN 激活值 :math:`a` 之间的关系。假定输入恒定为 :math:`z \in [0,V_{threshold}]`。对于采用减法重置的IF神经元，其膜电位V随时间变化为：
 
 .. math::
     V_t=V_{t-1}+z-V_{threshold}\theta_t
@@ -124,7 +124,7 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 因此，当仿真步数 :math:`T` 趋于无穷时：
 
 .. math::
-    r = a (a>0)
+    r = a, \qquad 0 \leq a \leq 1
 
 类似地，针对神经网络更高层，文献 [#f1]_ 进一步说明层间发放率满足：
 
@@ -138,11 +138,11 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 
 转换主要解决两个问题：
 
-1. 在 evaluation mode 下，具有 running mean 和 running variance 的 BatchNorm 是固定仿射变换，可以折叠进前一个卷积层，转换后不再需要单独的 BN 模块。``RateCodingRecipe`` 会在融合前切换到 eval 模式。此路径不能折叠 ``track_running_stats=False`` 的 BN。
+1. 在评估模式下，具有运行均值和方差的 BatchNorm 是固定仿射变换，可以折叠进前一个卷积层，转换后不再需要单独的 BN 模块。``RateCodingRecipe`` 会在融合前切换到评估模式。此路径不能折叠 ``track_running_stats=False`` 的 BN。
 
-2. 按转换理论，ANN 每层的输入输出需要限制在 [0,1] 范围内，需要对参数进行缩放（模型归一化）。
+2. 要用二值神经元的发放率表示非负 ReLU 激活，需要将其缩放到 [0, 1]（模型归一化）。按分位数选择尺度时，离群值可能仍超出这个范围，使发放率饱和。
 
-◆ BatchNorm参数吸收
+BatchNorm参数吸收
 
 假定BatchNorm的参数为 :math:`\gamma` (``BatchNorm.weight``)， :math:`\beta` (``BatchNorm.bias``)， :math:`\mu` (``BatchNorm.running_mean``)，
 :math:`\sigma` （包含数值稳定项 ``eps``，:math:`\sigma = \sqrt{\mathrm{running\_var} + \mathrm{eps}}`）。具体参数定义详见
@@ -154,7 +154,7 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 .. math::
     \bar{b} = \frac{\gamma}{\sigma} (b - \mu) + \beta
 
-◆ 模型归一化
+模型归一化
 
 对于某个参数模块，假定得到了其输入张量和输出张量，其输入张量的最大值为 :math:`\lambda_{pre}`，输出张量的最大值为 :math:`\lambda` 那么，归一化后的权重 :math:`\hat{W}` 为：
 
@@ -168,35 +168,43 @@ ANN 中的 ReLU 激活与采用减法重置的 IF 神经元发放率有很强的
 
 ANN每层输出中常常存在较大的离群值，导致整体神经元发放率降低。鲁棒归一化将缩放因子从张量最大值改为张量的p分位点，推荐分位点为99.9% [#f1]_。
 
-BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。随后 rate-coding recipe 会将 ReLU 激活替换为 IF 神经元。对于 ANN 中的平均池化，转换后的模型保留空间下采样。由于 IF 神经元会在时间上近似 ReLU 激活，在空间下采样后立即再增加一个 IF 神经元通常对结果影响很小。当前 rate-coding recipe 没有通用的最大池化转换规则。文献中使用基于动量累计脉冲的门控函数控制脉冲通道 [#f1]_。因此，本教程的示例模型仍推荐使用 ``AvgPool2d``。仿真时，依照该转换理论，转换后的 SNN 应输入恒定的模拟输入。使用 Poisson 编码器可能引入额外的准确率损失。
+转换方案在校准前融合 BatchNorm，再将 ReLU 替换为缩放与 IF 神经元的组合。平均池化保留空间下采样行为。初次搭建模型时，可以使用 ``AvgPool2d``。对于匹配的 ReLU-MaxPool 组合，``channel_wise=True, pre_spike_maxpool=True`` 会将池化移到脉冲神经元之前；这与文献 [#f1]_ 中基于动量的脉冲门控方法不同。仿真时，每个时间步输入相同的模拟值。Poisson 编码会引入采样噪声，可能降低准确率。
 
 实现与可选配置
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-当前 ann2snn API 将算法定义和执行流程分离。对于本页的 rate-coding CNN 转换，使用 FX 路径：
+转换方案定义转换算法，转换器将它应用到你的模型。CNN 率编码转换使用 FX 路径：
 
 * ``FXConversionRecipe`` 持有算法参数和算法相关的图变换。兼容名 ``ConversionRecipe`` 等价于 ``FXConversionRecipe``。
-* ``FXConverter`` 是执行器。兼容名 ``Converter`` 等价于 ``FXConverter``。它接收 FX recipe，用 ``torch.fx`` trace 模型，并通过 ``convert(model)`` 依次调用 recipe 的 FX 转换步骤。
-* 直接 ``nn.Module`` tree 转换使用 ``ModuleConversionRecipe`` 和 ``ModuleConverter``，不执行 FX tracing，也不会由 ``Converter`` 自动分发。
+* ``FXConverter`` 是执行器。兼容名 ``Converter`` 等价于 ``FXConverter``。它接收 FX 转换方案，用 ``torch.fx`` 追踪模型，并通过 ``convert(model)`` 依次调用转换方案的 FX 转换步骤。
+* 直接 ``nn.Module`` 树转换使用 ``ModuleConversionRecipe`` 和 ``ModuleConverter``，不执行 FX 追踪，也不会由 ``Converter`` 自动分发。
 
-如果要做 ReLU-to-IFNode 的 rate-coding 转换，使用 ``RateCodingRecipe``。该 recipe 需要校准 dataloader，因为它会在替换 ReLU 前统计激活范围。常见模式包括：
+如果要将 ReLU 激活转换为 IF 神经元，使用 ``RateCodingRecipe``。该转换方案需要校准数据加载器，因为它会在替换 ReLU 前统计激活范围。常见模式包括：
 
 * ``mode="max"``：MaxNorm，使用最大激活值 [#f2]_。
 * ``mode="99.9%"``：RobustNorm，使用 99.9% 激活分位点 [#f1]_。
 * ``mode`` 为 ``(0, 1]`` 内的浮点数：按该比例缩放最大激活值。
 
+统计量按批计算，再用指数移动平均合并（默认 ``momentum=0.1``）。比较不同转换方案时，保持校准数据顺序一致。
+
 ``RateCodingRecipe`` 也持有 ``fuse_flag`` 等选项。当 ``fuse_flag=True`` （默认值）时，Conv-BatchNorm 会在校准前被融合。
 
-最简单的 rate-coding 调用如下：
+先用一个未训练的小型 ANN 和一批校准数据试用转换接口：
 
 .. code-block:: python
 
+    import torch
+    from torch import nn
     from spikingjelly.activation_based import ann2snn
 
+    x = torch.rand(2, 4)
+    T = 16
+    ann = nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 2)).eval()
+    train_loader = [x]
     recipe = ann2snn.RateCodingRecipe(dataloader=train_loader, mode="max")
     snn = ann2snn.FXConverter(recipe=recipe).convert(ann)
 
-转换产物的运行方式与 ``spikingjelly.activation_based`` 中其他模块一致。单步模式下，用户显式编写时间循环。Rate-coding 和 LTB 模型在每个时间步接收同一个静态 ANN 输入：
+转换产物的运行方式与 ``spikingjelly.activation_based`` 中其他模块一致。单步模式下，用户显式编写时间循环。率编码和 LTB 模型在每个时间步接收同一个静态 ANN 输入：
 
 .. code-block:: python
 
@@ -205,12 +213,13 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
     functional.set_step_mode(snn, "s")
     functional.reset_net(snn)
 
-    y = None
-    for t in range(T):
-        y_t = snn(x)
-        y = y_t if y is None else y + y_t
+    with torch.no_grad():
+        y = None
+        for t in range(T):
+            y_t = snn(x)
+            y = y_t if y is None else y + y_t
 
-如果要运行 layer-wise 多步路径，输入第 0 维为时间维的序列，并显式做累计读出：
+如果要运行逐层多步路径，输入第 0 维为时间维的序列，并显式做累计读出：
 
 .. code-block:: python
 
@@ -218,14 +227,15 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
     functional.reset_net(snn)
 
     x_seq = x.unsqueeze(0).expand(T, *x.shape)
-    y_seq = snn(x_seq)
-    y = y_seq.sum(dim=0)
+    with torch.no_grad():
+        y_seq = snn(x_seq)
+        y = y_seq.sum(dim=0)
 
 转换后 ReLU 模块被删除，SNN 需要的新模块（包括 ``VoltageScaler``、``IFNode`` 等）会作为 ``spiking_*`` 子模块创建在原父模块下。使用 ``RateCodingRecipe`` 时，转换后模型的类型为 ``fx.GraphModule``，所以可以使用 ``snn.graph.print_tabular()`` 查看生成的计算图。更多 API 参见 `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_。
 
 .. note::
 
-    本页的 FX 转换使用 ``FXConverter(recipe=...)`` 和 ``FXConverter.convert(model)``。``Converter`` 保留为兼容名，只接受 ``FXConversionRecipe`` / ``ConversionRecipe``。旧的公开函数已移除，包括 ``convert_to_spiking_neurons()``、``replace_by_td_operators()``、``fuse()``、``set_voltagehook()``、``replace_by_neurons()`` 和 ``replace_by_ifnode()``。
+    向 ``FXConverter(recipe=...)`` 传入转换方案实例，再调用 ``convert(model)``。它也接受字符串别名 ``"transformer_td_equivalent"``。率编码和 STA 需要包含校准设置的转换方案实例；直接转换模块树时使用 ``ModuleConverter``。
 
 
 识别MNIST
@@ -234,7 +244,7 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
 构建并训练 ANN
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-下面用 ``ann2snn`` 搭建一个简单卷积网络，对 MNIST 数据集进行分类。
+先搭建卷积 ANN 来识别 MNIST 手写数字，再用 ``ann2snn`` 转换。
 
 完整的可运行示例是 ``spikingjelly.activation_based.ann2snn.examples.cnn_mnist``。网络结构定义在 ``ann2snn.sample_models.mnist_cnn`` 中：
 
@@ -270,7 +280,7 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
             x = self.network(x)
             return x
 
-注意：如果需要展开 tensor，在网络中定义 ``nn.Flatten`` 模块，在 ``forward`` 中调用它，而不是使用 ``view``。
+展开张量时，在网络中定义 ``nn.Flatten`` 并在 ``forward`` 中调用它；转换器能据此区分时间维和特征维。
 
 定义基本运行选项：
 
@@ -284,7 +294,7 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
     batch_size = 100
     T = 50
 
-``T`` 是 SNN 推理时使用的仿真步数。转换前先创建 MNIST dataloader：
+``T`` 是 SNN 推理时使用的仿真步数。转换前先创建 MNIST 数据加载器：
 
 .. code-block:: python
 
@@ -312,7 +322,7 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
         dataset=test_data_dataset, batch_size=50, shuffle=True, drop_last=False
     )
 
-建议先从头训练这个 MNIST ANN。早期提供的 `预训练权重 <https://ndownloader.figshare.com/files/34960191>`_ 可供选用，链接可能失效。下面训练 ANN、保存权重并验证准确率：
+训练 ANN、保存权重并验证准确率。你也可以选用 `预训练权重 <https://ndownloader.figshare.com/files/34960191>`_：
 
 .. code-block:: python
 
@@ -345,49 +355,55 @@ BatchNorm 融合和模型归一化是在脉冲替换前进行的代数变换。�
 使用Converter进行转换
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-ANN 训练完成。选择 rate-coding recipe，传入确定性校准 dataloader，由 ``Converter`` 执行转换：
+ANN 训练完成。选择率编码转换方案，传入确定性校准数据加载器，由 ``Converter`` 执行转换：
 
 .. code-block:: python
+
+    from spikingjelly.activation_based import ann2snn
 
     recipe = ann2snn.RateCodingRecipe(dataloader=calibration_data_loader, mode="max")
     model_converter = ann2snn.FXConverter(recipe=recipe)
     snn_model = model_converter.convert(model)
 
-``snn_model`` 即转换后的 SNN 模型。查看其网络结构，``BatchNorm2d`` 模块已消失——默认 rate-coding recipe 在校准前将 BatchNorm 参数吸收进了前面的 Conv 层：
+``snn_model`` 即转换后的 SNN 模型。查看其网络结构，``BatchNorm2d`` 模块已消失，默认率编码转换方案在校准前将 BatchNorm 参数吸收进了前面的 Conv 层：
 
 .. code-block:: text
 
-    CNN(
+    GraphModule(
       (network): Module(
-        (0): Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1))
+        (0): Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1), step_mode=s)
         ...
         (spiking_0): Module(
-          (scaler0): VoltageScaler(0.193247)
+          (scaler0): VoltageScaler(0.193247, step_mode=s)
           (if_node): IFNode(
             v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s
             (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
           )
-          (scaler1): VoltageScaler(5.174733)
+          (scaler1): VoltageScaler(5.174733, step_mode=s)
         )
         ...
       )
     )
 
-每个被校准的 ReLU 都被替换为一组 ``scaler0 -> IFNode -> scaler1``。
+缩放值取决于训练权重和校准批次。每个被校准的 ReLU 都被替换为一组 ``scaler0 -> IFNode -> scaler1``。
 
-其它 recipe 与自定义 recipe
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+其他转换方案与自定义转换方案
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-上面的 MNIST 示例使用 rate coding 将 ReLU 激活转换为 IF 神经元。对于 Transformer 模型，可以改用 ``TransformerTDEquivalentRecipe``：
+上面的 MNIST 示例使用率编码将 ReLU 激活转换为 IF 神经元。对于 Transformer 模型，可以改用 ``TransformerTDEquivalentRecipe``：
 
 .. code-block:: python
 
+    import torch.nn as nn
+    from spikingjelly.activation_based import ann2snn
+
+    transformer_ann = nn.Sequential(nn.Linear(4, 8), nn.GELU(), nn.Linear(8, 2)).eval()
     recipe = ann2snn.TransformerTDEquivalentRecipe()
     td_model = ann2snn.FXConverter(recipe=recipe).convert(transformer_ann)
 
-该 recipe 不需要 dataloader，不插入 ``VoltageHook``，也不运行 rate-coding 校准。它将当前支持的 ANN 模块和 attention 调用替换为 TD-equivalent 算子，但不覆盖完整的 fully spike-driven LLM 转换。在这些 TD 算子中，``ann_forward(...)`` 是普通无状态 PyTorch 路径；``single_step_forward(...)`` 是有状态 temporal-difference 单步传播，处理独立序列前应先 ``reset()``。
+该转换方案不需要数据加载器，不插入 ``VoltageHook``，也不运行率编码校准。它将当前支持的 ANN 模块和注意力调用替换为 TD 等价算子，但不覆盖完整的完全脉冲驱动的大语言模型转换。在这些 TD 算子中，``ann_forward(...)`` 是普通无状态 PyTorch 路径；``single_step_forward(...)`` 是有状态时间差分单步传播，处理独立序列前应先 ``reset()``。
 
-要添加新的 FX graph 转换算法，继承 ``FXConversionRecipe`` （或兼容名 ``ConversionRecipe``）并覆盖需要改变的步骤方法即可。未覆盖的方法使用基类的默认 no-op 实现。Recipe 不是执行器，不应提供 ``convert()``、``run()`` 或 ``__call__()``：
+要添加新的 FX 计算图转换算法，继承 ``FXConversionRecipe`` （或兼容名 ``ConversionRecipe``）并覆盖需要改变的步骤方法即可。未覆盖的方法使用基类的默认空操作实现。转换方案不是执行器，不应提供 ``convert()``、``run()`` 或 ``__call__()``：
 
 .. code-block:: python
 
@@ -398,7 +414,7 @@ ANN 训练完成。选择 rate-coding recipe，传入确定性校准 dataloader�
 
 FX 路径固定步骤顺序为 ``validate`` -> ``before_trace`` -> ``after_trace`` -> ``insert_observers`` -> ``calibrate`` -> ``replace`` -> ``finalize``。
 
-如果算法不需要 FX graph，而是直接替换 ``nn.Module`` tree，应继承 ``ModuleConversionRecipe`` 并用 ``ModuleConverter`` 执行。该路径只有 ``validate`` -> ``convert_module`` 两步，不存在 ``before_trace`` 或 ``finalize``：
+如果算法不需要 FX 计算图，而是直接替换 ``nn.Module`` 树，应继承 ``ModuleConversionRecipe`` 并用 ``ModuleConverter`` 执行。该路径只有 ``validate`` -> ``convert_module`` 两步，不存在 ``before_trace`` 或 ``finalize``：
 
 .. code-block:: python
 
@@ -412,16 +428,16 @@ FX 路径固定步骤顺序为 ``validate`` -> ``before_trace`` -> ``after_trace
 率编码实现
 ^^^^^^^^^^
 
-``RateCodingRecipe`` 直接匹配类型严格为 ``nn.ReLU`` 的模块，使用
+使用默认标量校准时，``RateCodingRecipe`` 匹配类型严格为 ``nn.ReLU`` 的模块，使用
 ``VoltageHook`` 完成校准，然后将每个激活替换为
 ``VoltageScaler(1 / s) -> IFNode -> VoltageScaler(s)``。若要自定义神经元构造，
 传入 ``neuron_factory=lambda scale: ...``；该可调用对象会收到当前层的校准尺度。
-不同激活或不同转换算法应实现为独立 recipe。
+不同激活或不同转换算法应实现为独立转换方案。
 
 不同转换模式的对比
 ^^^^^^^^^^^^^^^^^^
 
-按照这个例子，也可以比较 ``RateCodingRecipe`` 中不同归一化模式的时间步收敛曲线。完整示例脚本保留了这一旧实验，可以用 ``--plot-mode-sweep`` 运行：
+使用 ``--plot-mode-sweep`` 比较 ``RateCodingRecipe`` 各归一化模式的准确率随时间步的变化：
 
 .. code-block:: shell
 
@@ -429,11 +445,7 @@ FX 路径固定步骤顺序为 ``validate`` -> ``before_trace`` -> ``after_trace
       --time-steps 50 \
       --plot-mode-sweep
 
-历史文档记录： `237dde3e <https://github.com/fangwei123456/spikingjelly/commit/237dde3e>`_ （2026-06-26）；NVIDIA GeForce RTX 4090；未在当前 V2 上复测。当前脚本不再打印各阶段耗时，也不再保存图片。
-
-该实验在 2.0 之前的一次运行（NVIDIA GeForce RTX 4090，``T=50``）测得：
-
-ANN 验证正确率为 0.9870，各归一化模式的结果如下：
+参考结果（提交 `237dde3e <https://github.com/fangwei123456/spikingjelly/commit/237dde3e>`_，NVIDIA GeForce RTX 4090，``T=50``，ANN 验证准确率 0.9870）：
 
 .. list-table:: 归一化模式对比
     :header-rows: 1
@@ -470,12 +482,12 @@ ANN 验证正确率为 0.9870，各归一化模式的结果如下：
 
 .. image:: ../../_static/tutorials/5_ann2snn/accuracy_mode_recipe_api.png
 
-本次运行中 RobustNorm 最早达到较高正确率，最终也最高。将最大值缩放到 1/4 或 1/5 时收敛更早，但最终低 1 到 3 个百分点。
+这次运行中 RobustNorm 的最终准确率最高。将最大值缩放到 1/4 或 1/5 时收敛较早，但最终准确率分别比 RobustNorm 低 1.14 和 3.76 个百分点。
 
-转换 recipe 对比
+转换方案对比
 ^^^^^^^^^^^^^^^^
 
-除了基础的 ``RateCodingRecipe``，SpikingJelly 还提供 ``LocalThresholdBalancingRecipe``，用于在转换阶段估计局部阈值。该 recipe 参考 local threshold balancing 方法 [#f3]_。下面比较 ANN、legacy 标量阈值 RobustNorm 转换和 LTB recipe。完整可运行入口仍是 ``spikingjelly.activation_based.ann2snn.examples.cnn_mnist``：
+除了基础的 ``RateCodingRecipe``，SpikingJelly 还提供 ``LocalThresholdBalancingRecipe``，用于在转换阶段估计局部阈值。该转换方案参考局部阈值平衡方法 [#f3]_。下面比较 ANN、标量阈值 RobustNorm 转换和 LTB 转换方案。运行入口为 ``spikingjelly.activation_based.ann2snn.examples.cnn_mnist``：
 
 .. code-block:: shell
 
@@ -483,7 +495,9 @@ ANN 验证正确率为 0.9870，各归一化模式的结果如下：
       --time-steps 32 \
       --output /tmp/ann2snn_mnist_t32.json
 
-下表由该命令生成，JSON 输出为 ``/tmp/ann2snn_mnist_t32.json``。其中 RobustNorm 使用 ``RateCodingRecipe(dataloader=..., mode="99.9%")``。LTB 使用 ``LocalThresholdBalancingRecipe(dataloader=...)``。本次 MNIST 结果使用完整训练集 60000 张样本作为校准集，使用完整测试集 10000 张样本评估：
+该命令将你的运行结果保存到 ``/tmp/ann2snn_mnist_t32.json``。其中 RobustNorm 使用 ``RateCodingRecipe(dataloader=..., mode="99.9%")``。LTB 使用 ``LocalThresholdBalancingRecipe(dataloader=...)``。本次 MNIST 结果使用完整训练集 60000 张样本作为校准集，使用完整测试集 10000 张样本评估：
+
+参考结果（提交 `83b836be <https://github.com/fangwei123456/spikingjelly/commit/83b836be>`_）：
 
 .. list-table:: MNIST CNN 转换结果
     :header-rows: 1
@@ -499,7 +513,7 @@ ANN 验证正确率为 0.9870，各归一化模式的结果如下：
       - 10000
       - -
       - 98.70
-    * - RobustNorm（legacy，标量阈值）
+    * - RobustNorm（标量阈值）
       - 60000
       - 10000
       - 32
@@ -510,16 +524,14 @@ ANN 验证正确率为 0.9870，各归一化模式的结果如下：
       - 32
       - 98.53
 
-历史文档记录： `83b836be <https://github.com/fangwei123456/spikingjelly/commit/83b836be>`_ （2026-06-28）；硬件未记录；未在当前 V2 上复测。
-
 ResNet-18 转换
 --------------
 
-为了展示同一套 recipe 在更大规模模型上的行为，可以运行 ImageNet ResNet-18 示例。该脚本使用 torchvision 的 ``ResNet18_Weights.IMAGENET1K_V1`` 权重和对应预处理。校准集为 ImageNet 训练集中的确定性 50000 张子集，评估集为完整 ImageNet 验证集 50000 张。示例命令假设 ``/path/to/imagenet`` 下包含 ``train/`` 和 ``val/`` 两个目录；如果数据集组织在额外的 ``ILSVRC2012/`` 等子目录下，请将 ``--data-root`` 指向真正包含这两个目录的位置。
+为了展示同一套转换方案在更大规模模型上的行为，可以运行 ImageNet ResNet-18 示例。该脚本使用 torchvision 的 ``ResNet18_Weights.IMAGENET1K_V1`` 权重和对应预处理。校准集为 ImageNet 训练集中的确定性 50000 张子集，评估集为完整 ImageNet 验证集 50000 张。示例命令假设 ``/path/to/imagenet`` 下包含 ``train/`` 和 ``val/`` 两个目录；如果数据集组织在额外的 ``ILSVRC2012/`` 等子目录下，请将 ``--data-root`` 指向真正包含这两个目录的位置。
 
 .. note::
 
-    SpikingJelly 中的 ``LocalThresholdBalancingRecipe`` 是在当前 ANN2SNN recipe 框架内对 local threshold balancing 主要思想的工程化实现，并不是 LTB 原文 [#f3]_ 完整 pipeline 的复现。部分论文中特定的工程细节和评测设置没有纳入当前实现。因此，下表中的精度应理解为 SpikingJelly 该 recipe 实现的结果，不能直接视为 LTB 原文方法的官方精度，也不应与论文结果直接对比。
+    ``LocalThresholdBalancingRecipe`` 参考文献 [#f3]_ 实现局部阈值估计。它的转换和评估设置与论文的完整流程不同，因此应将下表结果与同次运行中的 ANN 基线比较。
 
 复现命令如下：
 
@@ -536,7 +548,9 @@ ResNet-18 转换
       --delay-start auto \
       --output /tmp/ann2snn_imagenet_t32_delayauto_calib50k_tutorial.json
 
-命令中的 ``robust_legacy`` 对应不启用 ``channel_wise`` 和 ``half_threshold`` 的 legacy 标量阈值 ``RateCodingRecipe``。``--delay-start auto`` 会在评估前估计 delayed readout 的起始时间步，用于跳过 SNN 早期 transient。该设置只影响读出窗口，不改变转换后的神经元动力学。下表中的 LTB 完整运行自动估计的 ``delay_start`` 为 27；该值依赖模型、校准数据和实现细节，用户运行时可能得到不同数值。
+命令中的 ``robust_legacy`` 对应不启用 ``channel_wise`` 和 ``half_threshold`` 的标量阈值 ``RateCodingRecipe``。``--delay-start auto`` 会在评估前估计延迟读出的起始时间步，用于跳过 SNN 早期暂态。该设置只影响读出窗口，不改变转换后的神经元动力学。下表中的 LTB 完整运行自动估计的 ``delay_start`` 为 27；该值依赖模型、校准数据和实现细节，用户运行时可能得到不同数值。
+
+参考结果（提交 `33766fc7 <https://github.com/fangwei123456/spikingjelly/commit/33766fc7>`_）：
 
 .. list-table:: ImageNet ResNet-18 转换结果
     :header-rows: 1
@@ -554,7 +568,7 @@ ResNet-18 转换
       - -
       - 69.756
       - 89.074
-    * - RobustNorm（legacy，标量阈值）
+    * - RobustNorm（标量阈值）
       - 50000
       - 50000
       - 32
@@ -567,9 +581,7 @@ ResNet-18 转换
       - 65.472
       - 86.636
 
-历史文档记录： `33766fc7 <https://github.com/fangwei123456/spikingjelly/commit/33766fc7>`_ （2026-07-05）；硬件未记录；未在当前 V2 上复测。
-
-在较深的 ImageNet CNN 上，缺少 per-channel 归一化的标量阈值 robust normalization 转换精度较低（Top-1 仅 12.462%）。LTB recipe 通过局部阈值估计将 Top-1 提升至 65.472%。
+在较深的 ImageNet CNN 上，缺少逐通道归一化的标量阈值鲁棒归一化转换精度较低（Top-1 仅 12.462%）。LTB 转换方案通过局部阈值估计将 Top-1 提升至 65.472%。
 
 .. [#f1] Rueckauer B, Lungu I-A, Hu Y, Pfeiffer M and Liu S-C (2017) Conversion of Continuous-Valued Deep Networks to Efficient Event-Driven Networks for Image Classification. Front. Neurosci. 11:682.
 .. [#f2] Diehl, Peter U. , et al. Fast classifying, high-accuracy spiking deep networks through weight and threshold balancing. Neural Networks (IJCNN), 2015 International Joint Conference on IEEE, 2015.

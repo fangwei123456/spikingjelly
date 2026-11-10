@@ -1,17 +1,20 @@
 Basic Concepts
 =======================================
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 中文版：:doc:`基本概念 <../cn/basic_concept>`
 
 Translator: `Qiu Haonan <https://github.com/Maybe2022>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
-This tutorial introduces ``spikingjelly.activation_based``. It is recommended that all users read this tutorial before using SpikingJelly.
+You will create a spiking neuron layer with ``spikingjelly.activation_based``,
+feed it a time sequence, and compare two ways to run a network.
 
 SpikingJelly is a PyTorch-based framework for spiking neural networks (SNNs). If you are new to PyTorch, start with the `PyTorch Tutorials <https://pytorch.org/tutorials/>`_.
 
 Activation-based Representation
 -------------------------------------------
+
 The IF/LIF examples in ``spikingjelly.activation_based`` represent binary spikes with tensors whose element is only 0 or 1. For example:
 
 .. code-block:: python
@@ -26,6 +29,7 @@ The IF/LIF examples in ``spikingjelly.activation_based`` represent binary spikes
 
 Data Format
 -------------------------------------------
+
 In ``spikingjelly.activation_based``, data has two formats:
 
 * Data in a single time-step with ``shape = [N, *]``, where ``N`` is the batch dimension, ``*`` represents any extra dimensions.
@@ -34,12 +38,13 @@ In ``spikingjelly.activation_based``, data has two formats:
 
 Step Mode
 -------------------------------------------
-Modules in ``spikingjelly.activation_based`` have two propagation modes, which are the single-step mode 's' and the multi-step mode 'm'. In single-step mode, the data use the ``shape = [N, *]`` format. In multi-step mode, the data use the ``shape = [T, N, *]`` format.
 
-The user can set ``step_mode`` of a module in its ``__init__`` or change ``step_mode`` anytime after the module is built.
+Step-aware modules in ``spikingjelly.activation_based`` support propagation modes, which are the single-step mode 's' and the multi-step mode 'm'. In single-step mode, the data use the ``shape = [N, *]`` format. In multi-step mode, the data use the ``shape = [T, N, *]`` format.
+
+You can set ``step_mode`` of a module in its ``__init__`` or change ``step_mode`` anytime after the module is built.
 
 .. code-block:: python
-    
+
     import torch
     from spikingjelly.activation_based import neuron
 
@@ -50,7 +55,7 @@ The user can set ``step_mode`` of a module in its ``__init__`` or change ``step_
 
 If we want to input the sequence data with ``shape = [T, N, *]`` to a single-step module, we need to implement a for-loop in time-steps manually, \
 which splits the sequence data into ``T`` data with ``shape = [N, *]`` and sends the data step-by-step. \
-Let's create a new layer of IF neurons, set it to single-step mode, and input sequence data step-by-step:
+Create an IF layer, feed it one step at a time, and collect the outputs:
 
 .. code-block:: python
 
@@ -73,7 +78,7 @@ Let's create a new layer of IF neurons, set it to single-step mode, and input se
     y_seq = torch.cat(y_seq)
     # y_seq.shape = [T, N, C, H, W]
 
-:class:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` wraps the for-loop in time-steps for single-step modules to handle sequence data with ``shape = [T, N, *]``, which is more convenient to use:
+:func:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` wraps the for-loop in time-steps for single-step modules to handle sequence data with ``shape = [T, N, *]``, which is more convenient to use:
 
 .. code-block:: python
 
@@ -89,7 +94,7 @@ Let's create a new layer of IF neurons, set it to single-step mode, and input se
     y_seq = functional.multi_step_forward(x_seq, net_s)
     # y_seq.shape = [T, N, C, H, W]
 
-However, the best usage is to set the module as a multi-step module directly:
+You can also set the module to multi-step mode and pass the entire sequence:
 
 .. code-block:: python
 
@@ -110,11 +115,13 @@ IFNode, LIFNode and common layers in ``layer`` default to single-step mode; modu
 
 Saving and Resetting of States
 -------------------------------------------
-Similar to RNN, neurons and other modules in SNN have hidden states, and their outputs :math:`Y[t]` are determined not only by the input :math:`X[t]` at the current time-step `t`, \
-but also by the state :math:`H[t-1]` at last time-step `t-1`, which is :math:`Y[t] = f(X[t], H[t-1])`.
+
+Like RNNs, SNN neurons have hidden states. The output :math:`Y[t]` depends on
+the current input :math:`X[t]` and the previous state :math:`H[t-1]`:
+:math:`Y[t] = f(X[t], H[t-1])`.
 
 In PyTorch, RNN outputs not only :math:`Y` but also :math:`H`. Refer to :class:`torch.nn.RNN` for more details. Different from PyTorch, the states are stored inside the module in ``spikingjelly.activation_based``. \
-For example, let us create a new layer of IF neurons, set them to single-step mode, and check the default voltage before and after giving inputs:
+Create a single-step IF layer and inspect its voltage before and after an input:
 
 .. code-block:: python
 
@@ -134,7 +141,7 @@ For example, let us create a new layer of IF neurons, set them to single-step mo
 
     '''
     IFNode(
-    v_threshold=1.0, v_reset=0.0, detach_reset=False
+    v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=s
     (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
     )
     the initial v=0.0
@@ -146,7 +153,7 @@ For example, let us create a new layer of IF neurons, set them to single-step mo
 
 After initialization, the ``v`` of the IF neurons layer is set to 0 and is automatically broadcast to have the same ``shape`` as the input.
 
-Before a new independent sample or sequence, we should clear the previous states of the neurons and reset them to the initialization states, which can be done by calling the module's ``self.reset()`` function. State is retained between time steps of the same continuous sequence:
+Before a new independent sample or sequence, we should clear the previous states of the neurons and reset them to the initialization states, which can be done by calling the module's ``net_s.reset()`` function. State is retained between time steps of the same continuous sequence:
 
 
 .. code-block:: python
@@ -174,39 +181,48 @@ Before a new independent sample or sequence, we should clear the previous states
     check point 3: v=tensor([0.8728, 0.9031, 0.2278, 0.5089, 0.1059, 0.0479, 0.5008, 0.8530])
     '''
 
-For convenience, we can also call :class:`spikingjelly.activation_based.functional.reset_net` to reset all modules in a network.
+For convenience, we can also call :func:`spikingjelly.activation_based.functional.reset_net` to reset all modules in a network.
 
 Reset the network after processing a batch of independent samples:
 
 .. code-block:: python
 
-    from spikingjelly.activation_based import functional
-    # ...
-    for x, label in tqdm(train_data_loader):
-        # ...
+    import torch
+    from spikingjelly.activation_based import functional, layer, neuron
+
+    net = torch.nn.Sequential(layer.Linear(3, 2), neuron.IFNode())
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.01)
+    criterion = torch.nn.MSELoss()
+    batches = [(torch.rand(4, 3), torch.zeros(4, 2)) for _ in range(2)]
+    for x, target in batches:
         optimizer.zero_grad()
         y = net(x)
-        loss = criterion(y, label)
+        loss = criterion(y, target)
         loss.backward()
         optimizer.step()
-
         functional.reset_net(net)
-        # Never forget to reset the network!
 
-If we forget to reset, we may get a wrong output during inference or an error during training:
+Without a reset, the previous sample can affect inference, and training may raise this error:
 
 .. code-block:: shell
 
-    RuntimeError: Trying to backward through the graph a second time (or directly access saved variables after they have already been freed). 
-    Saved intermediate values of the graph are freed when you call .backward() or autograd.grad(). 
+    RuntimeError: Trying to backward through the graph a second time (or directly access saved variables after they have already been freed).
+    Saved intermediate values of the graph are freed when you call .backward() or autograd.grad().
     Specify retain_graph=True if you need to backward through the graph a second time or if you need to access saved variables after calling backward.
 
 Propagation Patterns
 -------------------------------------------
+
 If all modules in a network are single-step modules, the computation graph of the entire network is built step-by-step. For example:
 
 .. code-block:: python
 
+    import torch
+    from spikingjelly.activation_based import neuron
+
+    T = 4
+    x_seq = torch.rand(T, 2, 3)
+    net = neuron.IFNode(step_mode="s")
     y_seq_step_by_step = []
     for t in range(T):
         x = x_seq[t]
@@ -217,7 +233,7 @@ If all modules in a network are single-step modules, the computation graph of th
 
 If all modules in a network are multi-step modules, the computation graph of the entire network is built layer-by-layer. For example:
 
-.. code-block:: python 
+.. code-block:: python
 
     import torch
     import torch.nn as nn
@@ -243,12 +259,12 @@ If all modules in a network are multi-step modules, the computation graph of the
 In this example, :class:`torch.nn.Sequential` already calls the layers in order, so you do not need an explicit ``for i in range(net.__len__())`` loop:
 
 .. code-block:: python
-    
+
     functional.reset_net(net)
     with torch.no_grad():
         y_seq_layer_by_layer = net(x_seq)
 
-The two execution orders produce the same results in this example. Training-mode BatchNorm uses different batch statistics (N versus T×N), so its results differ:
+The convolutional network below gives identical outputs in both orders. If a network contains a layer that computes batch statistics, such as BatchNorm in training mode, step-by-step propagation sees ``N`` samples per call and layer-by-layer propagation sees ``T×N``, so the results differ:
 
 .. code-block:: python
 
@@ -336,10 +352,10 @@ The following figure shows how the computation graph is built in the layer-by-la
 There are two dimensions in the computation graph of SNN, which are the time-step and the depth dimension. As the above figures show, the propagation of SNN is the building of the computation graph.\
 We can find that the step-by-step propagation pattern is a Depth-First-Search (DFS) for traversing the computation graph, while the layer-by-layer propagation pattern is a Breadth-First-Search (BFS) for traversing the computation graph.
 
-Although the difference is only in the building order of the computation graph, there are still some slight differences in computation speed and memory consumption of the two propagation patterns.
+The computation order affects parallelism and memory consumption.
 
-* When using the surrogate gradient method to train SNN directly, it is recommended to use the layer-by-layer propagation pattern. When the network is built correctly, the layer-by-layer propagation pattern has the advantage of parallelism and speed.
-* Using step-by-step propagation pattern when memory is limited. For example, a large ``T`` is required in the ANN2SNN task. In the layer-by-layer propagation pattern, the real batch size for stateless layers is ``TN`` rather than ``N`` (refer to the next tutorial). when ``T`` is too large, the memory consumption may be too large.
+* Layer-by-layer propagation is recommended for surrogate-gradient training. Stateless layers process all time steps in one call, which gives more parallelism and is usually faster.
+* Use step-by-step propagation when memory is limited, for example when an ANN2SNN task needs a large ``T``. In layer-by-layer propagation, stateless layers see a batch of ``TN`` instead of ``N`` (see :doc:`./container`), so a large ``T`` uses a lot of memory.
 
 Device and execution
 ----------------------------

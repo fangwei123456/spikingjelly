@@ -5,9 +5,9 @@ Author: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_
 
 中文版： :doc:`../cn/op_counter`
 
-This tutorial covers ``spikingjelly.activation_based.op_counter``. It counts
-FLOPs, memory accesses, SynOps, MACs, and ACs during one execution, then uses
-those counts to estimate energy. Results depend on input shape, spike sparsity,
+Use ``spikingjelly.activation_based.op_counter`` to count FLOPs, memory accesses,
+SynOps, MACs, and ACs during one execution and estimate energy from those counts.
+Results depend on input shape, spike sparsity,
 and ``train``/``eval`` mode, so profile a configuration that represents the
 target workload.
 
@@ -23,10 +23,10 @@ Runtime Counting Modes
 * ``FunctionCounterMode`` intercepts ``torch.*`` functions;
 * ``ModuleCounterMode`` records executed ``nn.Module`` forward and backward events.
 
-The modes are active only inside their contexts and do not modify the model.
-Multiple counters can observe the same execution. Unlike static shape analysis,
-runtime counting distinguishes binary spikes from dense activations and reflects
-changes in input sparsity and execution stage.
+The modes observe calls inside their contexts. The model still runs normally,
+so its neuron state and training buffers can change. Multiple counters can observe
+the same execution. Runtime counting distinguishes binary spikes from dense
+activations and reflects input sparsity and execution stage.
 
 Basic Counting Workflow
 ++++++++++++++++++++++++
@@ -91,12 +91,16 @@ and qualified child paths.
 .. code-block:: python
 
     memory_counter = op_counter.NeuromorphicMemoryAccessCounter()
+    from spikingjelly.activation_based import functional
+
+    functional.reset_net(model)
     with op_counter.ModuleCounterMode(
         [memory_counter], model=model, strict=True
-    ):
+    ) as mode:
         _ = model(x)
 
     print(memory_counter.get_counts()["Global"])
+    print(mode.get_unsupported(memory_counter))
 
 After any mode exits, call ``mode.get_unsupported(counter)`` to inspect subjects
 skipped by a non-strict run.
@@ -115,7 +119,8 @@ Available Counters
 * :class:`ACCounter <spikingjelly.activation_based.op_counter.ac.ACCounter>`:
   counts addition-like arithmetic work that is not modeled as MAC.
 
-The counters measure different work. A spike-driven linear layer may produce
+A MAC is a multiply followed by an addition; an AC is an addition. SynOps count
+spike-driven synaptic additions. The counters measure different work. A spike-driven linear layer may produce
 SynOps and ACs but no MACs. ``SynOpCounter`` counts only binary spike inputs;
 dense floating-point inputs produce zero SynOps.
 
@@ -171,6 +176,62 @@ The result is the workload point for a roofline chart; combine it with hardware
 peak FLOPs and bandwidth. The counts use an idealized model: two FLOPs per MAC,
 one read per logical input, and one write per logical output. They exclude
 tiling, caches, fusion, bank conflicts, and physical DRAM traffic.
+
+Energy Estimation Example
++++++++++++++++++++++++++++++++++++
+
+Simple Energy Example
+---------------------
+
+Run inference estimators after ``model.eval()``. The first example uses Simple
+Energy:
+
+.. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import op_counter
+
+    model = nn.Linear(8, 4, bias=False).eval()
+    x = torch.rand(2, 8)
+
+    report = op_counter.estimate_simple_energy(model, x)
+
+    print("total energy (pJ):", report.energy_total_pj)
+    print("compute energy (pJ):", report.energy_compute_pj)
+    print("MAC energy (pJ):", report.energy_mac_pj)
+    print("AC energy (pJ):", report.energy_ac_pj)
+    print("memory energy (pJ):", report.energy_memory_pj)
+    print("counts:", report.counts)
+
+Select another cost regime explicitly:
+
+.. code-block:: python
+
+    cfg = op_counter.SimpleEnergyConfig(
+        cost_config=op_counter.SimpleEnergyCostConfig.fp16()
+    )
+    report_fp16 = op_counter.estimate_simple_energy(model, x, config=cfg)
+    print("FP16-regime energy (pJ):", report_fp16.energy_total_pj)
+
+The Lemaire estimator also includes addressing and neuron state:
+
+.. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import neuron, op_counter
+
+    model_snn = nn.Sequential(
+        nn.Linear(8, 16, bias=False),
+        neuron.IFNode(),
+        nn.Linear(16, 4, bias=False),
+    ).eval()
+    spike_x = (torch.rand(2, 8) > 0.5).float()
+
+    lemaire_report = op_counter.estimate_lemaire_energy(model_snn, spike_x)
+    print("Lemaire total (pJ):", lemaire_report.total_pj)
+    print("Lemaire breakdown:", lemaire_report.breakdown_pj)
 
 High-Level Energy Models
 ++++++++++++++++++++++++
@@ -314,62 +375,6 @@ and zero-valued inputs do not reduce its energy. Its main limits are:
   model using SpikeSim constants and SpikingJelly's documented A/R/Z sparse formula;
 * The default ``require_if_lif_neurons=True`` accepts only IF/LIF-style neurons.
 
-Energy Estimation Example
-+++++++++++++++++++++++++++++++++++
-
-Simple Energy Example
----------------------
-
-Run inference estimators after ``model.eval()``. The first example uses Simple
-Energy:
-
-.. code-block:: python
-
-    import torch
-    import torch.nn as nn
-    from spikingjelly.activation_based import op_counter
-
-    model = nn.Linear(8, 4, bias=False).eval()
-    x = torch.rand(2, 8)
-
-    report = op_counter.estimate_simple_energy(model, x)
-
-    print("total energy (pJ):", report.energy_total_pj)
-    print("compute energy (pJ):", report.energy_compute_pj)
-    print("MAC energy (pJ):", report.energy_mac_pj)
-    print("AC energy (pJ):", report.energy_ac_pj)
-    print("memory energy (pJ):", report.energy_memory_pj)
-    print("counts:", report.counts)
-
-Select another cost regime explicitly:
-
-.. code-block:: python
-
-    cfg = op_counter.SimpleEnergyConfig(
-        cost_config=op_counter.SimpleEnergyCostConfig.fp16()
-    )
-    report_fp16 = op_counter.estimate_simple_energy(model, x, config=cfg)
-    print("FP16-regime energy (pJ):", report_fp16.energy_total_pj)
-
-The Lemaire estimator also includes addressing and neuron state:
-
-.. code-block:: python
-
-    import torch
-    import torch.nn as nn
-    from spikingjelly.activation_based import neuron, op_counter
-
-    model_snn = nn.Sequential(
-        nn.Linear(8, 16, bias=False),
-        neuron.IFNode(),
-        nn.Linear(16, 4, bias=False),
-    ).eval()
-    spike_x = (torch.rand(2, 8) > 0.5).float()
-
-    lemaire_report = op_counter.estimate_lemaire_energy(model_snn, spike_x)
-    print("Lemaire total (pJ):", lemaire_report.total_pj)
-    print("Lemaire breakdown:", lemaire_report.breakdown_pj)
-
 Validation and Sources
 ++++++++++++++++++++++
 
@@ -388,43 +393,28 @@ Primary Sources
 Source-Model Conformance
 ------------------------
 
-This benchmark checks conformance with the source models, not hardware accuracy.
-Each case records one
-``(E_origin, E_SJ)`` pair. SpikeSim and NeuroMC use pinned author code. Lemaire
-has no public code, so its reference values follow equations (1)--(20).
+Use the reference comparisons to check whether an estimator implements its
+source formulas. They compare analytical models; they do not measure hardware
+energy. SpikeSim and NeuroMC use the pinned author code above. Lemaire uses
+published equations (1) to (20), with one ``N_out`` fanout per observed FC input
+spike, consistent with the paper's definition of ``theta_in``.
 
-SpikeSim and Lemaire cases come from parameter grids in the script. NeuroMC
-covers all FE, BE, and WE fragments from the official S-ResNet-18, S-ResNet-50,
-and S-VGG-16 workloads, for 786 cases in total. SpikingJelly runs the matching
-PyTorch forward or backward execution; author modules are reloaded before each
-case to avoid shared mutable state.
+Read the comparison metrics as follows:
 
-Lemaire did not publish source code; the paper states that code and models are
-available from the authors on request. For FC cases, ``theta_in`` is the observed
-input-spike count. Equation (2) multiplies this value by ``N_in`` again, unlike
-the definition and Eqs. (8), (10), (15), and (17). This benchmark counts one
-``N_out`` fanout per observed input spike.
-
-Kendall's tau-b is the primary metric, with a paired 2,000-sample 95% bootstrap
-interval. Spearman's rho and log-Pearson ``r`` are secondary metrics. Raw P90
-measures absolute symmetric error without calibration. Scale-adjusted P90
-removes the median multiplicative scale and is used only to diagnose shape
-error. NeuroMC FE, BE, WE, and aggregate results must all satisfy
-``tau-b >= 0.90``, raw ``P90 <= 1.50x``, and median scale within
-``[0.80x, 1.25x]``.
-
-* **Kendall's tau-b** compares the ordering of every pair of cases. ``1`` means
+* Kendall's tau-b compares the ordering of every pair of cases. ``1`` means
   identical ordering, ``0`` means no consistent ranking association, and
   ``-1`` means completely reversed ordering.
-* **Spearman's rho** correlates the ranks of the two score sets. It also ranges
+* Spearman's rho correlates the ranks of the two score sets. It also ranges
   from ``-1`` to ``1`` and is more sensitive than tau-b to how far individual
   cases move in the ranking.
-* The **raw P90 symmetric factor** is the empirical 90th percentile of
+* The raw P90 symmetric factor is the empirical 90th percentile of
   ``exp(abs(log(E_SJ / E_origin)))``. ``1.0x`` is ideal; ``1.5x`` places that
   percentile between ``1 / 1.5`` and ``1.5`` times the reference value.
-* The **scale-adjusted P90 symmetric factor** applies the same calculation
+* The scale-adjusted P90 symmetric factor applies the same calculation
   after removing the median log ratio. Comparing it with raw P90 separates a
   mostly fixed scale bias from workload-dependent shape error.
+
+Reference results (commit 96af9648, pinned source models):
 
 .. list-table:: Validation results
    :header-rows: 1
@@ -463,13 +453,7 @@ error. NeuroMC FE, BE, WE, and aggregate results must all satisfy
      - 1.00x
      - 1.00x
 
-Each NeuroMC phase contains 262 fragments. Raw P90 is ``1.000x`` for FE,
-``1.001x`` for BE, and ``1.000x`` for WE; all three phase tau-b and median-scale
-values round to ``1.000``, and both phase-level and aggregate results pass the
-gates. All 288 Lemaire cases also pass. SpikeSim's 216 cases match because the
-dense runtime directly implements the author formula.
-
-**Limitations:**
+Limitations:
 
 * The NeuroMC implementation and reference share the same author model. This is
   a conformance check, not independent validation.
@@ -502,7 +486,7 @@ represent the full network.
    event. The differences reflect memory, mapping, and activity assumptions;
    they do not identify one model as more accurate.
 
-For cross-model comparisons, tau-b at or above ``0.90`` usually indicates
+For cross-model comparisons, tau-b at or above ``0.90`` indicates
 highly consistent rankings, while ``0.70`` to ``0.90`` indicates strong
 correlation. These are interpretive ranges, not correctness gates; high
 correlation does not imply close absolute energy values.

@@ -108,9 +108,8 @@ Changes
 - Removed ``STBIFNode.cur_output``; ``functional.stbif_step`` and
   ``functional.stbif_multi_step`` return ``(out, q, acc_q)``. Consume returned spikes,
   update tuple unpacking, rebuild native extensions and regenerate compiled/exported graphs.
-- ``NonSpikingBaseNode(decode=...)`` and ``NoisyNonSpikingBaseNode(decode=...)`` accept
-  ``last-mem`` instead of ``last_mem`` (``last-me`` for the noisy node); the old names now
-  return the whole membrane potential sequence.
+- ``NonSpikingBaseNode(decode="last-mem")`` and its noisy variant now return the last membrane
+  potential; unsupported ``decode`` values raise ``ValueError``. Replace ``last_mem`` or ``last-me`` with ``last-mem``.
 
 2.0.0 - 2026-10-18
 ------------------
