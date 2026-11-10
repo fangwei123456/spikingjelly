@@ -492,7 +492,7 @@ Reference results (2026-08-30, RTX 5090 32 GiB, Transformer Engine 2.17.1;
 
 The training cases use 1024 classes to meet the Transformer Engine 2.17.1 FP8
 backward alignment requirement. A 1000-class head failed with ``lda % 16 == 0``.
-FP16/BF16 is faster in these measured configurations. To profile your model:
+For inference, FP16 and BF16 are faster than every FP8 configuration. For training, FP16 is fastest; FP8 with FP16 fallback is faster than BF16 but still slower than FP16. To profile your model:
 
 .. code-block:: bash
 

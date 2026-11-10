@@ -223,7 +223,8 @@ try it with two residual blocks:
             return module.conv, module.neuron
         return ()
 
-    sample = torch.zeros(4, 8, 128, device="cuda")
+    # Probe with representative non-binary inputs; all-zero inputs would enable spike compression.
+    sample = torch.rand(4, 8, 128, device="cuda")
     model = torch.nn.Sequential(ResidualBlock(), ResidualBlock()).cuda()
     memopt.optimize_memory(
         model,
