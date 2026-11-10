@@ -84,9 +84,7 @@ def test_nonspiking_last_mem_decode_returns_the_last_membrane_potential():
     sequence = neuron.NonSpikingLIFNode(tau=2.0, decode=None)(x)
     torch.testing.assert_close(lif(x), sequence[-1])
 
-    noisy = NoisyNonSpikingIFNode(
-        num_node=3, is_training=False, T=4, decode="last-mem"
-    )
+    noisy = NoisyNonSpikingIFNode(num_node=3, is_training=False, T=4, decode="last-mem")
     noisy_sequence = NoisyNonSpikingIFNode(
         num_node=3, is_training=False, T=4, decode=None
     )(x)
