@@ -172,6 +172,15 @@ class Dropout2d(Dropout):
         return F.dropout2d(torch.ones_like(x), self.p, training=True)
 
 
+class _DropConnectNormal(torch.distributions.Normal):
+    r"""Normal samples with support for deterministic, zero-variance outputs."""
+
+    arg_constraints = {
+        **torch.distributions.Normal.arg_constraints,
+        "scale": torch.distributions.constraints.nonnegative,
+    }
+
+
 class DropConnectLinear(base.MemoryModule):
     def __init__(
         self,
@@ -403,7 +412,7 @@ class DropConnectLinear(base.MemoryModule):
                 None if self.bias is None else self.bias.square(),
             )
         )
-        samples = torch.distributions.normal.Normal(mu, sigma2.sqrt()).sample(
+        samples = _DropConnectNormal(mu, sigma2.sqrt()).sample(
             torch.Size([self.samples_num])
         )
         if self.activation is not None:
