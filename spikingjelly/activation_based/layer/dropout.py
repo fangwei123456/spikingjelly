@@ -393,6 +393,9 @@ class DropConnectLinear(base.MemoryModule):
             )
             return (output,), updated_states
 
+        if not 0 <= self.p <= 1:
+            raise ValueError("p must be between 0 and 1")
+
         mu = (1 - self.p) * F.linear(input, self.weight, self.bias)
         sigma2 = (
             self.p
@@ -403,9 +406,11 @@ class DropConnectLinear(base.MemoryModule):
                 None if self.bias is None else self.bias.square(),
             )
         )
-        samples = torch.distributions.normal.Normal(mu, sigma2.sqrt()).sample(
-            torch.Size([self.samples_num])
-        )
+        with torch.no_grad():
+            samples = torch.normal(
+                mu.expand(self.samples_num, *mu.shape),
+                sigma2.sqrt().expand(self.samples_num, *sigma2.shape),
+            )
         if self.activation is not None:
             samples = self.activation(samples)
         output = samples.mean(dim=0)

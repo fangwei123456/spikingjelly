@@ -15,6 +15,11 @@ Unreleased
 Fixes
 ~~~~~
 
+spikingjelly.activation_based.layer
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``DropConnectLinear`` inference handles zero-variance outputs, including silent spikes and zero drop probability.
+
 spikingjelly.activation_based.neuron
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

@@ -346,3 +346,37 @@ def test_ws_linear_matches_standardized_weight_values_and_gradients(gain, step_m
     expected.square().sum().backward()
     for actual_input, expected_input in zip([x, *parameters], [x_ref, *reference]):
         torch.testing.assert_close(actual_input.grad, expected_input.grad)
+
+
+def test_drop_connect_eval_mixed_zero_variance():
+    activation = nn.PReLU(init=0.5)
+    module = layer.DropConnectLinear(
+        2, 2, bias=False, p=0.5, samples_num=8, activation=activation
+    ).eval()
+    with torch.no_grad():
+        module.weight.copy_(torch.tensor([[0.0, 0.0], [-1.0, -2.0]]))
+    x = torch.tensor([[0.0, 0.0], [1.0, 2.0]], requires_grad=True)
+    mu = 0.5 * F.linear(x, module.weight)
+    std = (0.25 * F.linear(x.square(), module.weight.square())).sqrt()
+    torch.manual_seed(918)
+    samples = torch.distributions.Normal(mu, std, validate_args=False).sample((8,))
+    expected = activation(samples).mean(0)
+    torch.manual_seed(918)
+
+    actual = module(x)
+
+    torch.testing.assert_close(actual, expected)
+    assert torch.equal(actual[0], torch.zeros(2))
+    assert torch.equal(actual[:, 0], torch.zeros(2))
+    assert torch.isfinite(actual).all()
+    actual.sum().backward()
+    assert activation.weight.grad is not None
+    assert x.grad is None
+    assert module.weight.grad is None
+
+
+@pytest.mark.parametrize("p", [-0.25, 1.25, float("nan")])
+def test_drop_connect_eval_rejects_invalid_probability_with_zero_variance(p):
+    module = layer.DropConnectLinear(2, 1, bias=False, p=p).eval()
+    with pytest.raises(ValueError, match="p must be between 0 and 1"):
+        module(torch.zeros(1, 2))
