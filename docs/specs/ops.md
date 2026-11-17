@@ -53,6 +53,9 @@ opaque calls.
 - Higher-order gradients run the reference equations.
 - Kernels accept the seven built-in surrogates when `spiking=True` and `alpha` is a
   Python scalar. In automatic mode, other surrogates use Torch reference.
+- In automatic mode, multi-step IF, LIF and PLIF with a non-FP32 state or an
+  unsupported input dtype use Torch reference and emit one `RuntimeWarning` per device
+  and reason, because the caller can fix the dtype.
 - Explicit `neuron_storage`, `neuron_fwd` or `neuron_bwd` precision requires CUDA
   Triton for multi-step IF, LIF and PLIF, and never falls back.
 - CUDA providers require NVIDIA CUDA; selection raises on HIP builds.

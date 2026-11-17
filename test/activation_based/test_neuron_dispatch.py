@@ -7,7 +7,6 @@ import pytest
 import torch
 from torch._subclasses.fake_tensor import FakeTensorMode
 
-
 FAMILIES = (
     "if_",
     "lif",
@@ -59,10 +58,10 @@ def test_fixable_torch_fallback_warns_once(warn, monkeypatch):
 
 
 def test_low_precision_state_is_a_fixable_fallback_reason():
+    from spikingjelly._ops.surrogate import _surrogate_spec
     from spikingjelly.activation_based.functional.neuron import (
         _torch_reference_reason,
     )
-    from spikingjelly._ops.surrogate import _surrogate_spec
     from spikingjelly.activation_based.surrogate import Sigmoid
 
     spec = _surrogate_spec(Sigmoid())
@@ -451,6 +450,7 @@ def test_explicit_precision_node_fullgraph(family):
 def test_availability_priority_is_cached_per_device_and_strict_override(monkeypatch):
     from contextlib import nullcontext
     from types import SimpleNamespace
+
     from spikingjelly._ops import selection
     from spikingjelly.activation_based import functional
 
@@ -638,6 +638,7 @@ def test_native_binary_and_ptx_compatibility(
 def triton_selection_environment(monkeypatch):
     from contextlib import nullcontext
     from types import SimpleNamespace
+
     from spikingjelly._ops import selection
 
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda index: (7, 0))
@@ -792,6 +793,7 @@ def test_triton_policy_preserves_selection_cache_and_execution_errors(
 
     selected = triton_selection_environment("triton")
     from types import SimpleNamespace
+
     from spikingjelly._ops import selection
 
     monkeypatch.setattr(
@@ -829,6 +831,7 @@ def test_native_priority_does_not_consult_triton_metadata(
     monkeypatch, triton_selection_environment
 ):
     from types import SimpleNamespace
+
     from spikingjelly._ops import selection
 
     def native(*args):
@@ -863,6 +866,7 @@ def test_optional_triton_import_failure_keeps_auto_and_explicit_distinct(
     monkeypatch, triton_selection_environment
 ):
     from types import SimpleNamespace
+
     from spikingjelly._ops import selection
 
     def missing(name, package):
