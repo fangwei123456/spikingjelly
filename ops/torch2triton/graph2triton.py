@@ -126,6 +126,8 @@ FX_TO_TRITON = {
         f"({_uw(args[0])} >= 0.).to({_uw(args[0])}.dtype)"
     ),
     "detach.default": lambda args, kwargs: f"{_uw(args[0])}",
+    # torch >= 2.14 traces Tensor.detach() (and some views) as aten.alias: same value, no copy
+    "alias.default": lambda args, kwargs: f"{_uw(args[0])}",
     "sigmoid.default":  # triton does not support exponential operations on fp16
     lambda args, kwargs: (
         f"tl.sigmoid({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"

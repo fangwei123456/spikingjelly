@@ -212,6 +212,24 @@ def test_multi_input_output_and_state_counts(device, detach_first_output):
         torch.testing.assert_close(actual, reference)
 
 
+def test_triton_codegen_accepts_detach_traced_as_alias():
+    """Recent torch traces Tensor.detach() as aten.alias.default; codegen must lower it (no GPU needed)."""
+    pytest.importorskip("triton")
+    from spikingjelly._ops.flexsn.kernel import _build_kernels
+    from spikingjelly.activation_based.neuron.flexsn_trace import _trace_core
+
+    def core(x, v):
+        h = v + (x - v) * 0.5
+        spike = torch.sigmoid(h - 1.0)
+        return spike, h - spike.detach()  # detached reset, as in most surrogate-gradient neurons
+
+    module = FlexSN(core, 1)
+    wrapped = module._wrapped_core(module._num_inputs, module._num_outputs)
+    graphs = _trace_core(wrapped, (torch.zeros(1), torch.zeros(1)), module._num_outputs, 1)
+    kernels = _build_kernels(wrapped.__name__, module._num_inputs, 1, module._num_outputs, *graphs)
+    assert kernels
+
+
 def test_constructor_rejects_invalid_or_captured_core_values():
     with pytest.raises(ValueError, match="num_states"):
         FlexSN(_lif_core, -1)
