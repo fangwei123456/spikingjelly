@@ -54,9 +54,11 @@ def _require_automatic_torch(
     key = (index, reason)
     if key in selection._selections:
         return
+    first = False
     with selection._lock:
         if key not in selection._selections:
             selection._selections[key] = None
+            first = True
             logger.info(
                 "ops selection operator={} device=cuda:{} ({}) implementation=torch-reference profile=fallback reason={}",
                 selection._namespace,
@@ -64,15 +66,24 @@ def _require_automatic_torch(
                 torch.cuda.get_device_name(index),
                 reason,
             )
-            if warn:
-                # The logger is silent by default; a fallback the caller can fix
-                # (e.g. a low-precision state) should not cost 10-100x unnoticed.
-                warnings.warn(
-                    f"{selection._namespace} on cuda:{index} falls back to the slow "
-                    f"Torch reference implementation: {reason}.",
-                    RuntimeWarning,
-                    stacklevel=3,
-                )
+    # Outside the lock: the provider lookup below takes it.
+    if first and warn and _has_cuda_kernel(selection, device):
+        # The logger is silent by default; a fallback the caller can fix
+        # (e.g. a low-precision state) should not cost 10-100x unnoticed.
+        warnings.warn(
+            f"{selection._namespace} on cuda:{index} falls back to the slow "
+            f"Torch reference implementation: {reason}.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+
+
+def _has_cuda_kernel(selection: "_CudaSelection", device: torch.device) -> bool:
+    """Whether automatic selection would give a kernel for a supported profile."""
+    try:
+        return selection._get_cuda_selection(device).name != "torch"
+    except (ImportError, OSError, RuntimeError):
+        return False
 
 
 def _require_provider(

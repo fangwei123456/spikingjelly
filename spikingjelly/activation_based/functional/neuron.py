@@ -391,7 +391,7 @@ def if_step(
 
     执行一条已确定 Torch 路径的 IF 单步状态转移，返回 ``(spike, v_next)``。
     该函数不读取 module memory，不管理 ``training/eval``，也不原地修改 ``x`` 或
-    ``v``。
+    ``v``。CUDA 执行与回退告警与 :func:`if_multi_step` 相同。
 
     :param x: 当前输入张量，shape 通常为 ``[N, *]``
     :type x: torch.Tensor
@@ -417,6 +417,7 @@ def if_step(
     Run one IF single-step state transition for a selected Torch path and return
     ``(spike, v_next)``. This function does not read module memory, does not manage
     ``training/eval``, and does not mutate ``x`` or ``v`` in place.
+    CUDA dispatch and fallback warnings follow :func:`if_multi_step`.
 
     :param x: Current input tensor, conventionally shaped ``[N, *]``
     :type x: torch.Tensor
@@ -987,7 +988,7 @@ def lif_step(
     * **中文**
 
     执行一个 LIF 单步状态转移，返回 ``(spike, v_next)``。该函数不读写模块
-    状态，surrogate 梯度是否记录由 autograd 状态决定。
+    状态，surrogate 梯度是否记录由 autograd 状态决定。CUDA 执行与回退告警与 :func:`lif_multi_step` 相同。
 
     :param x: 当前输入张量
     :type x: torch.Tensor
@@ -1017,6 +1018,7 @@ def lif_step(
     Run one LIF single-step state transition and return ``(spike, v_next)``.
     The function does not read or write module state; autograd context determines
     whether surrogate gradients are recorded.
+    CUDA dispatch and fallback warnings follow :func:`lif_multi_step`.
 
     :param x: Current input tensor
     :type x: torch.Tensor
@@ -1245,7 +1247,7 @@ def plif_step(
     * **中文**
 
     执行 PLIF 单步状态转移，返回 ``(spike, v_next)``。``w`` 是显式参数，不从
-    module 读取。
+    module 读取。CUDA 执行与回退告警与 :func:`plif_multi_step` 相同。
 
     :param x: 当前输入张量
     :type x: torch.Tensor
@@ -1274,6 +1276,7 @@ def plif_step(
 
     Run one PLIF single-step state transition and return ``(spike, v_next)``.
     ``w`` is an explicit parameter and is not read from a module.
+    CUDA dispatch and fallback warnings follow :func:`plif_multi_step`.
 
     :param x: Current input tensor
     :type x: torch.Tensor
@@ -2265,13 +2268,13 @@ def stbif_step(
 def _torch_reference_reason(spec, x_seq, v, w=None):
     """Why a CUDA LIF/IF/PLIF call cannot use the native kernels (``None``: it can).
 
-    Returns ``(reason, fixable)``; ``fixable`` reasons are dtype choices the caller
-    can change, so they are reported with a warning instead of only a debug log.
+    Returns ``(reason, fixable)``; ``fixable`` marks a non-FP32 state, which the caller
+    can change, so it is reported with a warning instead of only a debug log.
     """
     if spec is None:
         return "Torch reference implementation required", False
     if x_seq.dtype not in _DTYPES:
-        return f"input dtype {x_seq.dtype} has no CUDA kernel", True
+        return f"input dtype {x_seq.dtype} has no CUDA kernel", False
     if v.dtype != torch.float32:
         return (
             f"neuron state dtype is {v.dtype}, CUDA kernels need a float32 state "
@@ -2308,6 +2311,8 @@ def lif_multi_step(
     * **中文**
 
     对 ``[T, ...]`` 输入执行 LIF 序列状态转移，使用显式初态并返回脉冲、最终电位及可选电位序列。设备类型决定 CPU 或 CUDA 执行，CUDA 实现按设备和执行配置自动选择。兼容 Python surrogate 的参考实现由 Torch 自动微分。
+    CUDA 自动模式下，若可用 kernel 因非 FP32 状态而改用 Torch 参考实现，
+    每个设备与原因只发出一次 ``RuntimeWarning``；``-W error`` 会将其变为异常。
 
     :param x_seq: 时间优先的输入序列，形状 ``[T, ...]``。
         compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
@@ -2346,6 +2351,9 @@ def lif_multi_step(
     * **English**
 
     Run the LIF sequence transition on a time-major ``[T, ...]`` input with an explicit initial state. Return spikes, final voltage, and an optional voltage trace. CPU/CUDA execution follows the tensor device; CUDA implementations are selected automatically by device and execution profile. The Torch reference supports Python surrogate callables and autograd.
+    In automatic CUDA mode, when a non-FP32 state makes an available kernel fall back to
+    the Torch reference, one ``RuntimeWarning`` is emitted per device and reason; ``-W
+    error`` turns it into an exception.
 
     :param x_seq: Time-major input sequence shaped ``[T, ...]``.
         Native CUDA/Triton kernels directly access compact nonoverlapping layouts
@@ -2485,6 +2493,8 @@ def if_multi_step(
     * **中文**
 
     执行显式状态序列转移，不修改输入或模块 memory。输入设备自动分发到支持的注册实现；不适用的 surrogate 或状态 dtype 使用 Torch 参考公式。具体输出状态与梯度遵循神经元动力学定义。
+    CUDA 自动模式下，若可用 kernel 因非 FP32 状态而改用 Torch 参考实现，
+    每个设备与原因只发出一次 ``RuntimeWarning``；``-W error`` 会将其变为异常。
 
     :param x_seq: CPU/NVIDIA CUDA 浮点输入 [T, ...]，T >= 1；神经元维度非空。
         FP32/FP16/BF16 使用注册算子，其余支持的 dtype 使用 Torch 参考实现。
@@ -2523,6 +2533,9 @@ def if_multi_step(
     * **English**
 
     Run an explicit-state sequence transition without mutating inputs or module memory. The input device selects a supported registered implementation; unsupported surrogate or state-dtype profiles use the Torch reference formulas. Output states and gradients follow the neuron dynamics.
+    In automatic CUDA mode, when a non-FP32 state makes an available kernel fall back to
+    the Torch reference, one ``RuntimeWarning`` is emitted per device and reason; ``-W
+    error`` turns it into an exception.
 
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1`` and nonempty neuron dimensions. Default accelerated profiles support FP32, FP16, or BF16.
         Native CUDA/Triton kernels directly access compact nonoverlapping layouts
@@ -2643,6 +2656,8 @@ def plif_multi_step(
     * **中文**
 
     执行显式状态序列转移，不修改输入或模块 memory。输入设备自动分发到支持的注册实现；不适用的 surrogate 或状态 dtype 使用 Torch 参考公式。具体输出状态与梯度遵循神经元动力学定义。
+    CUDA 自动模式下，若可用 kernel 因非 FP32 状态而改用 Torch 参考实现，
+    每个设备与原因只发出一次 ``RuntimeWarning``；``-W error`` 会将其变为异常。
 
     :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
         compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
@@ -2684,6 +2699,9 @@ def plif_multi_step(
     * **English**
 
     Run an explicit-state sequence transition without mutating inputs or module memory. The input device selects a supported registered implementation; unsupported surrogate or state-dtype profiles use the Torch reference formulas. Output states and gradients follow the neuron dynamics.
+    In automatic CUDA mode, when a non-FP32 state makes an available kernel fall back to
+    the Torch reference, one ``RuntimeWarning`` is emitted per device and reason; ``-W
+    error`` turns it into an exception.
 
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1`` and nonempty neuron dimensions. Default accelerated profiles support FP32, FP16, or BF16.
         Native CUDA/Triton kernels directly access compact nonoverlapping layouts
