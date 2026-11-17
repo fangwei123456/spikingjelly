@@ -221,12 +221,17 @@ def test_triton_codegen_accepts_detach_traced_as_alias():
     def core(x, v):
         h = v + (x - v) * 0.5
         spike = torch.sigmoid(h - 1.0)
-        return spike, h - spike.detach()  # detached reset, as in most surrogate-gradient neurons
+        # detached reset, as in most surrogate-gradient neurons
+        return spike, h - spike.detach()
 
     module = FlexSN(core, 1)
     wrapped = module._wrapped_core(module._num_inputs, module._num_outputs)
-    graphs = _trace_core(wrapped, (torch.zeros(1), torch.zeros(1)), module._num_outputs, 1)
-    kernels = _build_kernels(wrapped.__name__, module._num_inputs, 1, module._num_outputs, *graphs)
+    graphs = _trace_core(
+        wrapped, (torch.zeros(1), torch.zeros(1)), module._num_outputs, 1
+    )
+    kernels = _build_kernels(
+        wrapped.__name__, module._num_inputs, 1, module._num_outputs, *graphs
+    )
     assert kernels
 
 
