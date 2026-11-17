@@ -91,7 +91,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 - Few-spike tracing and incompatible optional Triton imports retain reference execution in automatic mode.
 
 - ST-BIF uses one-third less FP32 state memory and fewer inference allocations.
-- `FlexSN` Triton kernels no longer recompile for each sequence length or batch size, and unroll time loops only up to `SJ_TRITON_NEURON_KERNEL_STATIC_RANGE_MAX_T`, cutting long-sequence compile time from minutes to seconds.
+- `FlexSN` Triton kernels take the batch size at runtime and use a runtime time loop above `SJ_TRITON_NEURON_KERNEL_STATIC_RANGE_MAX_T`, so long sequences no longer recompile per length or batch size and compile in seconds instead of minutes.
 - Removed `STBIFNode.cur_output`; `functional.stbif_step` and
   `functional.stbif_multi_step` return `(out, q, acc_q)`. Consume returned spikes,
   update tuple unpacking, rebuild native extensions and regenerate compiled/exported graphs.

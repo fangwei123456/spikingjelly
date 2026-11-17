@@ -273,9 +273,14 @@ def test_triton_kernels_take_runtime_sequence_length_and_width(monkeypatch):
     wrapped = module._wrapped_core(module._num_inputs, module._num_outputs)
     examples = (torch.zeros(1), torch.zeros(1))
     graphs = _trace_core(wrapped, examples, module._num_outputs, 1)
-    kernels = _build_kernels(
-        wrapped.__name__, module._num_inputs, 1, module._num_outputs, *graphs
-    )
+    try:
+        kernels = _build_kernels(
+            wrapped.__name__, module._num_inputs, 1, module._num_outputs, *graphs
+        )
+    except RuntimeError as error:  # older Triton autotuners query the GPU driver
+        if "active drivers" not in str(error):
+            raise
+        pytest.skip("Triton has no active driver on this host")
     for key in (
         "inference_kernel",
         "inference_final_state_kernel",
