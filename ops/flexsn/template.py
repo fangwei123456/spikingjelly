@@ -69,27 +69,64 @@ import triton.language as tl
 def flexsn_{kernel_type}_kernel_{hash}(
     {kernel_input_signature}, # inputs (including init states)
     {kernel_output_signature}, # outputs
-    T: tl.constexpr,
-    NCL: tl.constexpr,
+    T,
+    NCL,
+    T_STATIC: tl.constexpr,
     BLOCK_NCL: tl.constexpr,
     dtype: tl.constexpr,
 ):
+    # T and NCL are runtime values, so one binary serves every batch size and every
+    # long sequence. T_STATIC == T (> 0) fully unrolls short sequences; T_STATIC == 0
+    # uses a runtime loop (see configure.triton_neuron_kernel_static_range_max_T).
     pid_ncl = tl.program_id(0)
     indices = (pid_ncl * BLOCK_NCL + tl.arange(0, BLOCK_NCL))[None, :].to(tl.int64)
     mask = indices < NCL
 
     {init_state_loads}
 
-    for t in tl.static_range({loop_range}):
+    if T_STATIC > 0:
+{static_loop}
+    else:
+{dynamic_loop}
+
+    {tail}
+"""
+
+
+loop_template = """
+    for t in {range_fn}({loop_range}):
         time_offset = t * tl.full((), NCL, tl.int64)
         {loads}
 
         {computes}
 
         {stores}
-
-    {tail}
 """
+
+
+def _indent(code: str) -> str:
+    return "\n".join(
+        INDENTATION + line if line.strip() else line for line in code.split("\n")
+    )
+
+
+def _format_kernel(*, loads, computes, stores, loop_range, static_loop_range, **kwargs):
+    def loop(range_fn, loop_range):
+        return _indent(
+            loop_template.format(
+                range_fn=range_fn,
+                loop_range=loop_range,
+                loads=loads,
+                computes=computes,
+                stores=stores,
+            )
+        ).strip("\n")
+
+    return kernel_template.format(
+        static_loop=loop("tl.static_range", static_loop_range),
+        dynamic_loop=loop("tl.range", loop_range),
+        **kwargs,
+    )
 
 
 def _get_inference_kernel(core_str: str, core_name: str, info: _FlexSNInfo):
@@ -133,7 +170,7 @@ def _get_inference_kernel(core_str: str, core_name: str, info: _FlexSNInfo):
     core_args += ", "
     core_args += ", ".join([f"v{i}" for i in range(num_states)])
 
-    kernel_str = kernel_template.format(
+    kernel_str = _format_kernel(
         core_str=core_str,
         autotune_restore=autotune_restore,
         kernel_type="inference",
@@ -142,6 +179,7 @@ def _get_inference_kernel(core_str: str, core_name: str, info: _FlexSNInfo):
         kernel_output_signature=kernel_output_signature,
         init_state_loads=init_state_loads,
         loop_range="0, T, 1",
+        static_loop_range="0, T_STATIC, 1",
         loads=loads,
         computes=f"{lhs} = {core_name}({core_args})",
         stores=stores,
@@ -198,7 +236,7 @@ def _get_inference_final_state_kernel(core_str: str, core_name: str, info: _Flex
     core_args += ", "
     core_args += ", ".join([f"v{i}" for i in range(num_states)])
 
-    kernel_str = kernel_template.format(
+    kernel_str = _format_kernel(
         core_str=core_str,
         autotune_restore=autotune_restore,
         kernel_type="inference_final_state",
@@ -207,6 +245,7 @@ def _get_inference_final_state_kernel(core_str: str, core_name: str, info: _Flex
         kernel_output_signature=kernel_output_signature,
         init_state_loads=init_state_loads,
         loop_range="0, T, 1",
+        static_loop_range="0, T_STATIC, 1",
         loads=loads,
         computes=f"{lhs} = {core_name}({core_args})",
         stores=stores,
@@ -261,7 +300,7 @@ def _get_forward_kernel(
     core_args += ", "
     core_args += ", ".join([f"v{i}" for i in range(num_states)])
 
-    kernel_str = kernel_template.format(
+    kernel_str = _format_kernel(
         core_str=core_str,
         autotune_restore=autotune_restore,
         kernel_type="forward",
@@ -270,6 +309,7 @@ def _get_forward_kernel(
         kernel_output_signature=kernel_output_signature,
         init_state_loads=init_state_loads,
         loop_range="0, T, 1",
+        static_loop_range="0, T_STATIC, 1",
         loads=loads,
         computes=f"{lhs} = {core_name}({core_args})",
         stores=stores,
@@ -361,7 +401,7 @@ def _get_backward_kernel(
         ]
     )
 
-    kernel_str = kernel_template.format(
+    kernel_str = _format_kernel(
         core_str=core_str,
         autotune_restore=autotune_restore,
         kernel_type="backward",
@@ -369,7 +409,8 @@ def _get_backward_kernel(
         kernel_input_signature=kernel_input_signature,
         kernel_output_signature=kernel_output_signature,
         init_state_loads=init_state_loads,
-        loop_range="T-1, -1, -1",
+        loop_range="T - 1, -1, -1",
+        static_loop_range="T_STATIC - 1, -1, -1",
         loads=loads,
         computes=computes,
         stores=stores,

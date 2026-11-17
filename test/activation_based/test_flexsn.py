@@ -259,6 +259,68 @@ def test_cuda_runtime_lifetime_survives_copy_and_rebuilds():
     assert copied._triton_handle is not None
 
 
+def test_triton_kernels_take_runtime_sequence_length_and_width(monkeypatch):
+    pytest.importorskip("triton")
+    from spikingjelly import configure
+    from spikingjelly._ops.flexsn import launch
+    from spikingjelly._ops.flexsn.kernel import _build_kernels
+    from spikingjelly.activation_based.neuron.flexsn_trace import _trace_core
+
+    def core(x, v):
+        return _lif_core(x, v, 0.8)
+
+    module = FlexSN(core, 1)
+    wrapped = module._wrapped_core(module._num_inputs, module._num_outputs)
+    examples = (torch.zeros(1), torch.zeros(1))
+    graphs = _trace_core(wrapped, examples, module._num_outputs, 1)
+    kernels = _build_kernels(
+        wrapped.__name__, module._num_inputs, 1, module._num_outputs, *graphs
+    )
+    for key in (
+        "inference_kernel",
+        "inference_final_state_kernel",
+        "forward_kernel",
+        "backward_kernel",
+    ):
+        fn = kernels[key].fn
+        constexprs = {p.name for p in fn.params if p.is_constexpr}
+        # T / NCL as constexpr recompiled the kernel for every sequence length
+        # and batch size, and fully unrolled long sequences.
+        assert "T" not in constexprs and "NCL" not in constexprs
+        assert "tl.range(" in fn.src and "tl.static_range(" in fn.src
+
+    monkeypatch.setattr(configure, "triton_neuron_kernel_static_range_max_T", 8)
+    assert launch._t_static(8) == 8
+    assert launch._t_static(9) == 0
+    assert launch._t_static(1000) == 0
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("T", [5, 37])
+def test_cuda_runtime_time_loop_matches_reference(monkeypatch, T):
+    pytest.importorskip("triton")
+    from spikingjelly import configure
+
+    monkeypatch.setattr(configure, "triton_neuron_kernel_static_range_max_T", 16)
+    threshold = torch.nn.Parameter(torch.tensor(0.8, device="cuda"))
+    module = FlexSN(_lif_core, 1, (threshold,), store_state_seqs=True).cuda()
+    for batch in (2, 7):
+        x = torch.randn(T, batch, 3, device="cuda", requires_grad=True)
+        initial = torch.randn(batch, 3, device="cuda", requires_grad=True)
+        module.states = (initial,)
+        actual = module(x)
+        expected, final, state_seq = _reference(x, initial, threshold)
+        torch.testing.assert_close(actual, expected)
+        torch.testing.assert_close(module.states[0], final)
+        torch.testing.assert_close(module.state_seqs[0], state_seq)
+        inputs = (x, initial, threshold)
+        got = torch.autograd.grad(actual.sum() + module.states[0].sum(), inputs)
+        want = torch.autograd.grad(expected.sum() + final.sum(), inputs)
+        for g, w in zip(got, want):
+            torch.testing.assert_close(g, w)
+    assert module._triton_handle is not None
+
+
 def test_nondifferentiable_core_reports_unsupported_training_graph():
     from spikingjelly.activation_based.neuron.flexsn_trace import _trace_core
 

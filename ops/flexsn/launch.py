@@ -10,7 +10,7 @@ except (ImportError, OSError) as e:
     logger.info("Optional Triton dependency unavailable: {}", e)
     triton = dummy.DummyImport()
 
-from ..triton_runtime import type_dict
+from ..triton_runtime import type_dict, use_static_range_for_triton_neuron_kernel
 from .info import _FlexSNInfo
 
 __all__: list[str] = []
@@ -21,6 +21,11 @@ def _num_elements_per_step(x: torch.Tensor) -> int:
     for dim in x.shape[1:]:
         n *= dim
     return n
+
+
+def _t_static(T: int) -> int:
+    # > 0: fully unrolled loop specialised on T; 0: one runtime-loop binary for all long T.
+    return T if use_static_range_for_triton_neuron_kernel(T) else 0
 
 
 def _make_grid(ncl: int):
@@ -54,6 +59,7 @@ def _inference(f, info: _FlexSNInfo, *args) -> tuple:
         *outputs,
         T=T,
         NCL=NCL,
+        T_STATIC=_t_static(T),
         dtype=type_dict[dtype],
     )
     return tuple(outputs)
@@ -77,6 +83,7 @@ def _inference_final_state(f, info: _FlexSNInfo, *args) -> tuple:
         *final_states,
         T=T,
         NCL=NCL,
+        T_STATIC=_t_static(T),
         dtype=type_dict[dtype],
     )
     return (*output_seqs, *final_states)
@@ -97,6 +104,7 @@ def _forward(f, info: _FlexSNInfo, *args) -> tuple:
         *returns,
         T=T,
         NCL=NCL,
+        T_STATIC=_t_static(T),
         dtype=type_dict[dtype],
     )
     return tuple(returns)
@@ -140,6 +148,7 @@ def _backward(
         *grad_inputs,
         T=T,
         NCL=NCL,
+        T_STATIC=_t_static(T),
         dtype=type_dict[dtype],
     )
     return tuple(grad_inputs)
