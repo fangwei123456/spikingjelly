@@ -2275,14 +2275,15 @@ def _torch_reference_reason(spec, x_seq, v, w=None):
         return "Torch reference implementation required", False
     if x_seq.dtype not in _DTYPES:
         return f"input dtype {x_seq.dtype} has no CUDA kernel", False
+    # Checked before the state: a float32 state would not enable the kernel here.
+    if w is not None and (w.ndim != 0 or w.dtype not in _DTYPES):
+        return "Torch reference implementation required", False
     if v.dtype != torch.float32:
         return (
             f"neuron state dtype is {v.dtype}, CUDA kernels need a float32 state "
             f"(keep v in float32, e.g. PrecisionConfig(neuron_storage='fp32'); "
             f"{x_seq.dtype} inputs are supported)"
         ), True
-    if w is not None and (w.ndim != 0 or w.dtype not in _DTYPES):
-        return "Torch reference implementation required", False
     return None, False
 
 

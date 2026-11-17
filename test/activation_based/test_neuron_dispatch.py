@@ -87,6 +87,13 @@ def test_low_precision_state_is_a_fixable_fallback_reason():
     w = torch.tensor(0.5)
     assert _torch_reference_reason(spec, x, state32, w) == (None, False)
     assert _torch_reference_reason(spec, x, state32, w.expand(3))[0] is not None
+    # An ineligible PLIF weight blocks the kernel whatever the state dtype, so a
+    # low-precision state must not produce the (unactionable) state warning.
+    state16 = state32.bfloat16()
+    for weight in (w.expand(3), w.reshape(1), w.to(torch.float64)):
+        reason, fixable = _torch_reference_reason(spec, x, state16, weight)
+        assert reason is not None and not fixable
+    assert _torch_reference_reason(spec, x, state16, w.bfloat16())[1]
 
 
 @pytest.mark.parametrize("family", FAMILIES)
