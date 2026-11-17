@@ -42,7 +42,8 @@ Every explicit-state transition has the form
   `neuronal_reset` hooks. It is pure PyTorch and exists for readable customization.
 - **`FlexSN`** is for custom dynamics. A user writes a core, and FlexSN picks Torch,
   Triton or a higher-order-operator path itself. It does not use `ops` selection or its
-  environment overrides.
+  environment overrides. Its Triton kernels take `T` and the step size at runtime and
+  unroll the time loop only up to `SJ_TRITON_NEURON_KERNEL_STATIC_RANGE_MAX_T`.
 
 A new built-in neuron needs reference equations in `ops`, a transition in `functional`,
 and a module here. Custom neurons use explicit-state transitions or FlexSN.
