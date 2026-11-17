@@ -1,6 +1,7 @@
 import importlib
 import os
 import threading
+import warnings
 from functools import partial
 from importlib import metadata
 from typing import Callable, NamedTuple, Optional
@@ -32,7 +33,10 @@ _COMPILE_CUDA_PRIORITIES = dict.fromkeys(
 
 
 def _require_automatic_torch(
-    selection: "_CudaSelection", device: torch.device, reason: str
+    selection: "_CudaSelection",
+    device: torch.device,
+    reason: str,
+    warn: bool = False,
 ) -> None:
     if device.type != "cuda" or selection._requested == "torch":
         return
@@ -60,6 +64,15 @@ def _require_automatic_torch(
                 torch.cuda.get_device_name(index),
                 reason,
             )
+            if warn:
+                # The logger is silent by default; a fallback the caller can fix
+                # (e.g. a low-precision state) should not cost 10-100x unnoticed.
+                warnings.warn(
+                    f"{selection._namespace} on cuda:{index} falls back to the slow "
+                    f"Torch reference implementation: {reason}.",
+                    RuntimeWarning,
+                    stacklevel=3,
+                )
 
 
 def _require_provider(

@@ -36,6 +36,48 @@ def test_reference_only_profile_accepts_explicit_torch(requested, monkeypatch):
             _require_automatic_torch(_selection, torch.device("cuda:0"), reason)
 
 
+@pytest.mark.parametrize("warn", [False, True])
+def test_fixable_torch_fallback_warns_once(warn, monkeypatch):
+    import warnings
+
+    from spikingjelly._ops.lif import _selection
+    from spikingjelly._ops.selection import _require_automatic_torch
+
+    monkeypatch.setattr(_selection, "_requested", "auto")
+    monkeypatch.setattr(_selection, "_selections", {})
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda index: "fake")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        for _ in range(3):
+            _require_automatic_torch(
+                _selection, torch.device("cuda:0"), "state dtype", warn=warn
+            )
+    messages = [str(w.message) for w in caught if w.category is RuntimeWarning]
+    assert len(messages) == (1 if warn else 0)
+    if warn:
+        assert "slow Torch reference" in messages[0] and "state dtype" in messages[0]
+
+
+def test_low_precision_state_is_a_fixable_fallback_reason():
+    from spikingjelly.activation_based.functional.neuron import (
+        _torch_reference_reason,
+    )
+    from spikingjelly._ops.surrogate import _surrogate_spec
+    from spikingjelly.activation_based.surrogate import Sigmoid
+
+    spec = _surrogate_spec(Sigmoid())
+    x = torch.zeros(4, 3, dtype=torch.bfloat16)
+    state32 = torch.zeros(3)
+    assert _torch_reference_reason(spec, x, state32) == (None, False)
+    reason, fixable = _torch_reference_reason(spec, x, state32.bfloat16())
+    assert fixable and "torch.bfloat16" in reason and "float32" in reason
+    reason, fixable = _torch_reference_reason(None, x, state32)
+    assert reason is not None and not fixable
+    w = torch.tensor(0.5)
+    assert _torch_reference_reason(spec, x, state32, w) == (None, False)
+    assert _torch_reference_reason(spec, x, state32, w.expand(3))[0] is not None
+
+
 @pytest.mark.parametrize("family", FAMILIES)
 def test_forward_and_backward_have_explicit_device_kernels(family):
     package = importlib.import_module(f"spikingjelly._ops.{family}")

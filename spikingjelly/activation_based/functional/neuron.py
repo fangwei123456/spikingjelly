@@ -2262,6 +2262,27 @@ def stbif_step(
     return out_seq[0], q_next, acc_q_next
 
 
+def _torch_reference_reason(spec, x_seq, v, w=None):
+    """Why a CUDA LIF/IF/PLIF call cannot use the native kernels (``None``: it can).
+
+    Returns ``(reason, fixable)``; ``fixable`` reasons are dtype choices the caller
+    can change, so they are reported with a warning instead of only a debug log.
+    """
+    if spec is None:
+        return "Torch reference implementation required", False
+    if x_seq.dtype not in _DTYPES:
+        return f"input dtype {x_seq.dtype} has no CUDA kernel", True
+    if v.dtype != torch.float32:
+        return (
+            f"neuron state dtype is {v.dtype}, CUDA kernels need a float32 state "
+            f"(keep v in float32, e.g. PrecisionConfig(neuron_storage='fp32'); "
+            f"{x_seq.dtype} inputs are supported)"
+        ), True
+    if w is not None and (w.ndim != 0 or w.dtype not in _DTYPES):
+        return "Torch reference implementation required", False
+    return None, False
+
+
 def lif_multi_step(
     x_seq: torch.Tensor,
     v: torch.Tensor,
@@ -2395,14 +2416,13 @@ def lif_multi_step(
             voltage if store_v_seq else None,
         )
 
-    if spec is None or x_seq.dtype not in _DTYPES or v.dtype != torch.float32:
+    reason, fixable = _torch_reference_reason(spec, x_seq, v)
+    if reason is not None:
         from ..._ops.lif.reference import multi_step
         from ..._ops.lif import _selection
         from ..._ops.selection import _require_automatic_torch
 
-        _require_automatic_torch(
-            _selection, x_seq.device, "Torch reference implementation required"
-        )
+        _require_automatic_torch(_selection, x_seq.device, reason, warn=fixable)
         if surrogate_function is None:
             from ..surrogate import Sigmoid
 
@@ -2564,14 +2584,13 @@ def if_multi_step(
             surrogate_function=surrogate_function,
         )
         return spikes, voltage[-1].clone(), voltage if store_v_seq else None
-    if spec is None or x_seq.dtype not in _DTYPES or v.dtype != torch.float32:
+    reason, fixable = _torch_reference_reason(spec, x_seq, v)
+    if reason is not None:
         from ..._ops.if_.reference import multi_step
         from ..._ops.if_ import _selection
         from ..._ops.selection import _require_automatic_torch
 
-        _require_automatic_torch(
-            _selection, x_seq.device, "Torch reference implementation required"
-        )
+        _require_automatic_torch(_selection, x_seq.device, reason, warn=fixable)
         if surrogate_function is None:
             from ..surrogate import Sigmoid
 
@@ -2732,20 +2751,13 @@ def plif_multi_step(
             surrogate_function=surrogate_function,
         )
         return spikes, voltage[-1].clone(), voltage if store_v_seq else None
-    if (
-        spec is None
-        or x_seq.dtype not in _DTYPES
-        or v.dtype != torch.float32
-        or w.ndim != 0
-        or w.dtype not in _DTYPES
-    ):
+    reason, fixable = _torch_reference_reason(spec, x_seq, v, w)
+    if reason is not None:
         from ..._ops.plif.reference import multi_step
         from ..._ops.plif import _selection
         from ..._ops.selection import _require_automatic_torch
 
-        _require_automatic_torch(
-            _selection, x_seq.device, "Torch reference implementation required"
-        )
+        _require_automatic_torch(_selection, x_seq.device, reason, warn=fixable)
         if surrogate_function is None:
             from ..surrogate import Sigmoid
 
