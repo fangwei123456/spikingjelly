@@ -20,7 +20,6 @@ Changes since `2.0.0.dev0`. For older releases, see
 - `FlexSN.functional_forward` defaults to registered static inputs, enabling functional conversion and checkpointing while preserving explicit overrides.
 - Cold FlexSN CUDA tracing uses deterministic gradient probes and isolates saved-tensor hooks, preserving checkpoint recomputation.
 - `FlexSN` builds Triton kernels for cores that call `Tensor.detach()` on Torch 2.14 and later instead of silently running without them.
-- Experimental FlexSN Triton execution preserves FP16/BF16 division results, supporting low-precision inference and training with both short and long sequences.
 
 #### spikingjelly.activation_based.nir_exchange
 
@@ -63,7 +62,6 @@ Changes since `2.0.0.dev0`. For older releases, see
 #### spikingjelly.activation_based.functional
 
 - CUDA IF, LIF and PLIF accelerate matching FP16/BF16 inputs and states with FP32 accumulation per call. Rounding can change spikes near threshold.
-
 - Explicit `SJ_*_CUDA_IMPLEMENTATION=torch` accepts profiles requiring Torch reference execution, including custom surrogates and non-FP32 states.
 - `kernel_dot_product` evaluates low-precision Gaussian distances in FP32 and retains FP32 outputs under autocast, preserving spike differences and finite similarities.
 - TET cross-entropy accepts class probability targets, including MixUp and spatial targets.
@@ -95,7 +93,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 - Few-spike tracing and incompatible optional Triton imports retain reference execution in automatic mode.
 
 - ST-BIF uses one-third less FP32 state memory and fewer inference allocations.
-- `FlexSN` Triton kernels take the batch size at runtime and use a runtime time loop above `SJ_TRITON_NEURON_KERNEL_STATIC_RANGE_MAX_T`, so long sequences no longer recompile per length or batch size and compile in seconds instead of minutes.
+- FlexSN Triton kernels use runtime sequence dimensions and limit time-loop unrolling to shorten compilation for long sequences.
 - Removed `STBIFNode.cur_output`; `functional.stbif_step` and
   `functional.stbif_multi_step` return `(out, q, acc_q)`. Consume returned spikes,
   update tuple unpacking, rebuild native extensions and regenerate compiled/exported graphs.
