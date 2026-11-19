@@ -212,6 +212,22 @@ def test_multi_input_output_and_state_counts(device, detach_first_output):
         torch.testing.assert_close(actual, reference)
 
 
+def test_triton_codegen_lowers_explicit_aten_alias_node():
+    """Covers aten.alias independently of how the installed torch traces detach()."""
+    from spikingjelly._ops.torch2triton.graph2triton import generate_triton_code_str
+
+    graph = torch.fx.Graph()
+    x = graph.placeholder("x")
+    alias = graph.call_function(torch.ops.aten.alias.default, (x,))
+    product = graph.call_function(torch.ops.aten.mul.Tensor, (alias, x))
+    graph.output((alias, product))
+
+    code, _ = generate_triton_code_str(graph, "alias_probe")
+    assert f"{alias.name} = x" in code
+    assert f"{product.name} = {alias.name} * x" in code
+    assert f"return {alias.name}, {product.name}" in code
+
+
 def test_constructor_rejects_invalid_or_captured_core_values():
     with pytest.raises(ValueError, match="num_states"):
         FlexSN(_lif_core, -1)

@@ -28,6 +28,7 @@ spikingjelly.activation_based.neuron
 - ``FlexSN`` keeps independent final states when storing HOP or Triton state sequences, allowing ``functional.detach_net`` to work.
 - ``FlexSN.functional_forward`` defaults to registered static inputs, enabling functional conversion and checkpointing while preserving explicit overrides.
 - Cold FlexSN CUDA tracing uses deterministic gradient probes and isolates saved-tensor hooks, preserving checkpoint recomputation.
+- ``FlexSN`` builds Triton kernels for cores that call ``Tensor.detach()`` on Torch 2.14 and later instead of silently running without them.
 
 spikingjelly.activation_based.nir_exchange
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
