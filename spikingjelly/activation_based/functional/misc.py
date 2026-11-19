@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from .. import neuron
-from .layer import _delay_padding
 
 __all__ = [
     "set_threshold_margin",
@@ -364,5 +363,8 @@ def delay(x_seq: torch.Tensor, delay_steps: int) -> torch.Tensor:
     if delay_steps == 0:
         return x_seq
     if delay_steps >= x_seq.shape[0]:
-        return _delay_padding(x_seq)
+        if torch.is_grad_enabled() and x_seq.requires_grad:
+            # Unlike multiplying by zero, overwriting ignores NaN and Inf.
+            return x_seq.clone().zero_()
+        return torch.zeros_like(x_seq)
     return torch.cat((torch.zeros_like(x_seq[:delay_steps]), x_seq[:-delay_steps]))

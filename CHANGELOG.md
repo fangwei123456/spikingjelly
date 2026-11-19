@@ -61,7 +61,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 #### spikingjelly.activation_based.functional
 
-- Sequence and step delays preserve zero input gradients when every output is padding, so training can backpropagate through a warm-up window.
+- Stateless `functional.delay` preserves a zero input gradient for an all-padding sequence. Stateful delays keep warm-up padding detached so later outputs can backpropagate through queued inputs.
 
 - Explicit `SJ_*_CUDA_IMPLEMENTATION=torch` accepts profiles requiring Torch reference execution, including custom surrogates and non-FP32 states.
 - `kernel_dot_product` evaluates low-precision Gaussian distances in FP32 and retains FP32 outputs under autocast, preserving spike differences and finite similarities.

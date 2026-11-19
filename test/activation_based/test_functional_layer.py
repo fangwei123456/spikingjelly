@@ -383,35 +383,37 @@ def test_drop_connect_eval_rejects_invalid_probability_with_zero_variance(p):
 
 
 @pytest.mark.parametrize("delay_steps", [3, 5])
-@pytest.mark.parametrize("surface", ["sequence", "steps", "module"])
-def test_delay_all_padding_has_zero_input_gradient(delay_steps, surface):
+def test_sequence_delay_all_padding_has_zero_input_gradient(delay_steps):
     x = torch.tensor([[float("nan"), float("inf")], [2.0, 3.0], [4.0, 5.0]])
     x.requires_grad_()
-    if surface == "sequence":
-        y = functional.delay(x, delay_steps)
-    elif surface == "steps":
-        queue = ()
-        outputs = []
-        for step in x:
-            output, queue = functional.delay_step(step, queue, delay_steps)
-            outputs.append(output)
-        y = torch.stack(outputs)
-    else:
-        y = layer.Delay(delay_steps=delay_steps, step_mode="m")(x)
-
+    y = functional.delay(x, delay_steps)
     torch.testing.assert_close(y, torch.zeros_like(x))
     y.sum().backward()
     torch.testing.assert_close(x.grad, torch.zeros_like(x))
 
 
-def test_delay_warmup_keeps_input_for_later_output():
-    module = layer.Delay(delay_steps=1)
-    first = torch.tensor(3.0, requires_grad=True)
-    second = torch.tensor(5.0, requires_grad=True)
-    warmup = module(first)
-    later = module(second)
-    torch.testing.assert_close(later, first)
-    # Only the later output uses first, even when warmup contributes to the loss.
-    (warmup + 2 * later).backward()
-    torch.testing.assert_close(first.grad, torch.tensor(2.0))
-    assert second.grad is None
+@pytest.mark.parametrize("surface", ["step", "module-s", "module-m"])
+def test_delay_warmup_backward_preserves_queued_input_graph(surface):
+    p = torch.tensor([3.0], requires_grad=True)
+    q = torch.tensor([5.0], requires_grad=True)
+    x = p.square()  # Its backward needs saved tensors.
+    if surface == "step":
+        warmup, queue = functional.delay_step(x, (), 1)
+    else:
+        module = layer.Delay(delay_steps=1, step_mode=surface[-1])
+        warmup = module(x)
+
+    torch.testing.assert_close(warmup, torch.zeros_like(x))
+    (warmup.sum() + q.square().sum()).backward()
+    torch.testing.assert_close(q.grad, torch.tensor([10.0]))
+    warmup_grad = p.grad
+
+    if surface == "step":
+        later, _ = functional.delay_step(q, queue, 1)
+    else:
+        later = module(q)
+    torch.testing.assert_close(later, x)
+    later.sum().backward()
+    torch.testing.assert_close(p.grad, torch.tensor([6.0]))
+    assert warmup_grad is None
+    assert not warmup.requires_grad
