@@ -140,32 +140,11 @@ Some Transformer Engine recipes serialize FP8 metadata as a pickle. Set
 ``NVTE_ALLOW_UNSAFE_PICKLE_EXTRA_STATE=1`` only when restoring a trusted
 checkpoint; do not enable it for unknown checkpoints.
 
-Input, state and computation precision
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Configuring neurons with PrecisionConfig
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Layer autocast controls operations within ordinary layers. Neurons also have
-an input dtype, temporal state storage dtype and forward/backward compute dtype.
-The table covers multi-step IFNode, LIFNode and ParametricLIFNode; consult the
-API for other neurons.
-
-.. list-table:: Neuron precision policies
-    :header-rows: 1
-    :widths: 40 60
-
-    * - Configuration
-      - Current behavior
-    * - Ordinary FP32 inputs/state
-      - Automatic device/execution-path selection
-    * - Ordinary FP16/BF16 inputs
-      - Membrane state follows inputs unless configured; existing FP32 state is also converted
-    * - FP16/BF16 state
-      - Ordinary calls use Torch reference recurrence, including fullgraph compilation
-    * - Explicit FP32 state with low-precision inputs
-      - Functional calls can supply FP32 state directly; modules require explicit storage configuration. Numerics differ from low-precision state
-    * - Explicit storage/forward/backward precision
-      - CUDA Triton feature requiring supported built-in surrogates and dtype combinations
-    * - FP8 state/computation
-      - Experimental, hardware/format/combination dependent; not universal neuron support
+With the default ``PrecisionConfig.neuron_storage=None``, modules use ordinary
+neuron execution. See :ref:`Precision and kernel selection for multi-step IF, LIF and PLIF <neuron-precision-dispatch-en>`.
 
 For BF16 layers with FP32 neuron state, move the model to its device, prepare
 precision, then create the optimizer. This CUDA training example uses random

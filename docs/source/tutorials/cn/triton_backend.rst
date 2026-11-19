@@ -65,11 +65,8 @@ FewSpikeNode、OutlierAwareThresholdNode 和 HGNode 对兼容的连续 FP32 推�
 CPU、外层 compile 和 tracing 使用 Torch；梯度、hook、子类和张量视图限制详见 API。
 原生构建使用安装指南中的 ``SJ_BUILD_NATIVE_CUDA=1`` 命令。
 
-普通融合路径接受 FP32/FP16/BF16 输入，要求状态为 FP32，替代梯度为受支持的内置
-类型。低精度状态和自定义替代梯度可使用 Torch 参考公式。未显式配置精度时，
-模块的膜电位跟随输入 dtype，已有 FP32 状态也会转换。因此普通 FP16/BF16
-模块调用使用参考递推。functional 接口可以直接传入低精度输入和 FP32 初态；
-模块存储精度的覆盖方式见 :doc:`./precision`。自定义 FlexSN core 见 :doc:`./flexsn`。
+多步神经元对输入和初态的 dtype 要求、显式精度设置的优先级见
+:ref:`多步 IF、LIF 和 PLIF 的精度与内核分发 <neuron-precision-dispatch-cn>`。自定义动力学见 :doc:`./flexsn`。
 
 张量布局
 ----------------------------
@@ -151,7 +148,7 @@ eager 前后向来初始化设备并预热，再重置状态并编译模型：
 
 查询会初始化并缓存对应路径的选择，保留模块状态且不执行神经元计算。返回字典中，
 ``implementation`` 是绑定实现，``unavailable`` 记录此前候选不可用的原因。
-低精度状态、自定义替代梯度和显式精度配置可能采用其他路径，查询结果不能
+不支持的 dtype 组合、自定义替代梯度和显式精度配置可能采用其他路径，查询结果不能
 代替对某次调用的 profiling。
 
 包日志默认禁用，首次选择后不重复记录。应用可以在入口启用 INFO；启用前的日志

@@ -12,6 +12,11 @@ def _lif_core(x, v, threshold):
     return spike, h * (1.0 - spike)
 
 
+def _division_core(x, v, scale):
+    h = (x + v) / 2.5
+    return torch.sigmoid(h / scale), h
+
+
 def _reference(x_seq, v, threshold):
     outputs, states = [], []
     for x in x_seq:
@@ -298,6 +303,91 @@ def test_triton_kernels_take_runtime_sequence_length_and_width(monkeypatch):
     assert launch._t_static(8) == 8
     assert launch._t_static(9) == 0
     assert launch._t_static(1000) == 0
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
+def test_division_codegen_preserves_fx_dtype_on_cpu(dtype):
+    from spikingjelly._ops.torch2triton.graph2triton import generate_triton_code_str
+    from spikingjelly.activation_based.neuron.flexsn_trace import _trace_core
+
+    examples = (torch.ones(1, dtype=dtype),) * 3
+    graphs = _trace_core(_division_core, examples, num_outputs=1, num_states=1)
+    for graph in graphs[:3]:
+        source, _ = generate_triton_code_str(graph, "division_core")
+        divisions = [
+            node for node in graph.nodes if node.target == torch.ops.aten.div.Tensor
+        ]
+        assert divisions
+        for node in divisions:
+            assert node.meta["val"].dtype == dtype
+            lhs = node.args[0].name
+            rhs = node.args[1]
+            rhs = rhs.name if isinstance(rhs, torch.fx.Node) else str(rhs)
+            expression = f"{lhs} / {rhs}"
+            if dtype != torch.float32:
+                tl_dtype = "float16" if dtype == torch.float16 else "bfloat16"
+                expression = f"({expression}).to(tl.{tl_dtype})"
+            assert f"    {node.name} = {expression}\n" in source
+        assert all(node.target != torch.ops.aten.detach.default for node in graph.nodes)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+@pytest.mark.parametrize("T", [5, 37])
+@pytest.mark.parametrize("training", [False, True])
+@pytest.mark.parametrize("store_state_seqs", [False, True])
+def test_cuda_low_precision_division_matches_torch(
+    monkeypatch, dtype, T, training, store_state_seqs
+):
+    pytest.importorskip("triton")
+    from spikingjelly import configure
+    from spikingjelly._ops.flexsn.launch import _t_static
+
+    if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
+        pytest.skip("BF16 required")
+    monkeypatch.setattr(configure, "triton_neuron_kernel_static_range_max_T", 16)
+    assert _t_static(T) == (T if T <= 16 else 0)
+    torch.manual_seed(0)
+    scale = torch.nn.Parameter(torch.tensor(1.25, device="cuda", dtype=dtype))
+    module = FlexSN(_division_core, 1, (scale,), store_state_seqs=store_state_seqs)
+    module.train(training)
+    x = torch.randn(T, 2, 65, device="cuda", dtype=dtype, requires_grad=training)
+    initial = torch.randn(2, 65, device="cuda", dtype=dtype, requires_grad=training)
+    module.states = (initial,)
+    tolerance = (
+        {"rtol": 1e-2, "atol": 2e-3}
+        if dtype == torch.float16
+        else {"rtol": 4e-2, "atol": 1e-2}
+    )
+
+    with torch.set_grad_enabled(training):
+        actual = module(x)
+        outputs, states = [], []
+        final = initial
+        for step in x:
+            output, final = _division_core(step, final, scale)
+            outputs.append(output)
+            states.append(final)
+        expected = torch.stack(outputs)
+        assert module._triton_handle is not None
+        assert module._triton_capability[x.device, dtype] is True
+        actual_values = (actual, module.states[0])
+        expected_values = (expected, final)
+        if store_state_seqs:
+            actual_values += (module.state_seqs[0],)
+            expected_values += (torch.stack(states),)
+        else:
+            assert module.state_seqs is None
+        for got, want in zip(actual_values, expected_values, strict=True):
+            assert got.dtype == want.dtype == dtype
+            torch.testing.assert_close(got, want, **tolerance)
+        if training:
+            inputs = (x, initial, scale)
+            got = torch.autograd.grad(sum(t.sum() for t in actual_values), inputs)
+            want = torch.autograd.grad(sum(t.sum() for t in expected_values), inputs)
+            for actual_grad, expected_grad in zip(got, want, strict=True):
+                assert actual_grad.dtype == expected_grad.dtype == dtype
+                torch.testing.assert_close(actual_grad, expected_grad, **tolerance)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

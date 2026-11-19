@@ -24,7 +24,7 @@
     <text x="147.5" y="320.5" font-size="16">Torch 参考递推</text>
     <rect x="350" y="255" width="420" height="95" rx="10" fill="#fff3d6" stroke="#94a3b8"/>
     <text x="560" y="296.5" font-size="19">Supported fused profile?</text>
-    <text x="560" y="320.5" font-size="15">输入、FP32 状态、surrogate 满足条件？</text>
+    <text x="560" y="320.5" font-size="15">输入、状态和替代梯度满足内核条件？</text>
     <rect x="350" y="410" width="420" height="70" rx="10" fill="#fff3d6" stroke="#94a3b8"/>
     <text x="560" y="451" font-size="19">Execution path / 执行路径</text>
     <rect x="310" y="555" width="310" height="105" rx="10" fill="#eaf2ff" stroke="#94a3b8"/>

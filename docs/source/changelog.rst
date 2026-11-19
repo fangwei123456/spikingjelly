@@ -28,6 +28,7 @@ spikingjelly.activation_based.neuron
 - ``FlexSN`` keeps independent final states when storing HOP or Triton state sequences, allowing ``functional.detach_net`` to work.
 - ``FlexSN.functional_forward`` defaults to registered static inputs, enabling functional conversion and checkpointing while preserving explicit overrides.
 - Cold FlexSN CUDA tracing uses deterministic gradient probes and isolates saved-tensor hooks, preserving checkpoint recomputation.
+- Experimental FlexSN Triton execution preserves FP16/BF16 division results, supporting low-precision inference and training with both short and long sequences.
 
 spikingjelly.activation_based.nir_exchange
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -74,6 +75,8 @@ spikingjelly.activation_based.encoding
 
 spikingjelly.activation_based.functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- CUDA IF, LIF and PLIF accelerate matching FP16/BF16 inputs and states with FP32 accumulation per call. Rounding can change spikes near threshold.
 
 - Explicit ``SJ_*_CUDA_IMPLEMENTATION=torch`` accepts profiles requiring Torch reference execution, including custom surrogates and non-FP32 states.
 - ``kernel_dot_product`` evaluates low-precision Gaussian distances in FP32 and retains FP32 outputs under autocast, preserving spike differences and finite similarities.

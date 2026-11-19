@@ -53,8 +53,15 @@ opaque calls.
 - Higher-order gradients run the reference equations.
 - Kernels accept the seven built-in surrogates when `spiking=True` and `alpha` is a
   Python scalar. In automatic mode, other surrogates use Torch reference.
-- Explicit `neuron_storage`, `neuron_fwd` or `neuron_bwd` precision requires CUDA
-  Triton for multi-step IF, LIF and PLIF, and never falls back.
+- With matching FP16 or BF16 inputs and initial voltage, the default CUDA
+  IF, LIF and PLIF kernels accumulate in FP32 within a call and return the final
+  voltage and optional trace in the initial dtype. Rounding at call boundaries
+  can affect threshold crossings when a sequence is split.
+- Setting `neuron_storage` for multi-step IF, LIF or PLIF selects the dedicated
+  CUDA Triton kernels before ordinary provider selection. Spikes follow the
+  input dtype, returned voltages use `neuron_storage`, and `neuron_fwd` and
+  `neuron_bwd` select the arithmetic (both default to FP32). An unsupported
+  explicit configuration raises an error.
 - CUDA providers require NVIDIA CUDA; selection raises on HIP builds.
 
 ## Native extensions
