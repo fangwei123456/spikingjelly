@@ -342,8 +342,10 @@ def test_cuda_runtime_time_loop_matches_reference(
         assert module._triton_capability[x.device, dtype] is True
         spikes, states = [], []
         final = initial
+        # Broadcast once so both backward passes sum across time before neurons.
+        scale_per_neuron = scale.expand_as(initial)
         for step in x:
-            spike, final = _division_core(step, final, scale)
+            spike, final = _division_core(step, final, scale_per_neuron)
             spikes.append(spike)
             states.append(final)
         got = (actual, module.states[0])
