@@ -61,6 +61,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 #### spikingjelly.activation_based.functional
 
+- CUDA IF, LIF and PLIF accelerate matching FP16/BF16 inputs and states with FP32 accumulation per call. Rounding can change spikes near threshold.
 - Explicit `SJ_*_CUDA_IMPLEMENTATION=torch` accepts profiles requiring Torch reference execution, including custom surrogates and non-FP32 states.
 - `kernel_dot_product` evaluates low-precision Gaussian distances in FP32 and retains FP32 outputs under autocast, preserving spike differences and finite similarities.
 - TET cross-entropy accepts class probability targets, including MixUp and spatial targets.

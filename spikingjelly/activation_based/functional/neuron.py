@@ -15,6 +15,26 @@ neuron module 管理。
 ``store_v_seq=True`` 的神经元还会返回可选的状态轨迹 ``v_seq``；它是调试或监控用的
 派生结果，不是需要传给下一次调用的持久化状态。算子根据输入张量的设备自动选择实现。
 
+.. _neuron-precision-dispatch-cn:
+
+.. rubric:: 多步 IF、LIF 和 PLIF 的精度与内核分发
+
+默认情况下，多步 IF、LIF、PLIF 模块以输入 dtype 初始化或转换膜电位。直接调用
+functional 函数时，调用者提供初态。例如 BF16 输入可以配 BF16 或 FP32 初态。
+
+* ``neuron_storage=None``：CPU 使用 Torch。CUDA 自动模式下，eager 依次选择原生
+  CUDA、Triton、Torch；Inductor 依次选择 Triton、原生 CUDA、Torch。默认加速内核
+  支持 FP32、FP16、BF16 输入配 FP32 初态，也支持输入和初态同为 FP16 或同为 BF16。
+  PLIF 的权重可以独立使用这三种 dtype 之一，须为同设备零维张量。自定义替代梯度或
+  其他受支持的浮点组合使用 Torch 参考递推。
+* 指定 ``neuron_storage``：直接使用专用 CUDA Triton 内核。返回电位使用指定的存储
+  dtype，前后向算术分别由 ``neuron_fwd`` 和 ``neuron_bwd`` 控制，均默认为 FP32。
+  不支持的显式配置或与之冲突的强制后端设置会报错。
+
+两类 CUDA 内核返回的脉冲与输入同 dtype。默认内核在一次调用内按 FP32 递推，返回的
+末态和可选轨迹与初态同 dtype。分段调用会在段间舍入低精度末态，可能改变阈值附近
+的发放时刻。
+
 Single-step functions explicitly receive the current input and state. They do not read
 or write ``MemoryModule`` memory. Their common contract is:
 
@@ -30,6 +50,47 @@ Multi-step functions consume time-major ``[T, ...]`` sequences and return the ou
 sequence and final state. Neurons that support ``store_v_seq=True`` additionally return
 the optional state trace ``v_seq``. This trace is derived monitoring data, not persistent
 state for the next call. Operators select implementations from the input tensor device.
+
+.. _neuron-precision-dispatch-en:
+
+.. rubric:: Precision and kernel selection for multi-step IF, LIF and PLIF
+
+By default, multi-step IF, LIF and PLIF modules initialize or convert their
+voltage to the input dtype. Functional calls accept an initial voltage from the
+caller. For example, a BF16 input can be paired with BF16 or FP32 voltage.
+
+* With ``neuron_storage=None``, CPU uses Torch. CUDA auto mode tries native
+  CUDA, Triton, then Torch in eager execution, and Triton, native CUDA, then
+  Torch under Inductor. Default accelerated kernels accept FP32, FP16 or BF16
+  inputs with FP32 voltage, or inputs and voltage both in FP16 or both in BF16.
+  PLIF weights may independently use any of those three dtypes and must be
+  scalar tensors on the same device. Custom surrogates and other supported
+  floating-point combinations use the Torch reference recurrence.
+* Setting ``neuron_storage`` selects the dedicated CUDA Triton kernels. Returned
+  voltages use the requested storage dtype. ``neuron_fwd`` and ``neuron_bwd``
+  control forward and backward arithmetic and both default to FP32.
+  Unsupported explicit settings or a conflicting forced provider raise an error.
+
+Both CUDA kernel paths return spikes in the input dtype. Default kernels carry
+FP32 voltage within each call and return the final voltage and optional trace
+in the initial voltage dtype. Splitting a sequence rounds low-precision
+voltage between calls and can change spike timing near threshold.
+
+.. rubric:: CUDA 示例 / CUDA example
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based.functional import lif_multi_step
+
+    x = torch.rand(8, 32, device="cuda", dtype=torch.bfloat16)
+    v = torch.zeros_like(x[0])
+    spikes, final, trace = lif_multi_step(x, v, store_v_seq=True)
+    assert spikes.dtype == final.dtype == trace.dtype == torch.bfloat16
+
+    spikes, final, _ = lif_multi_step(x, v, neuron_storage="fp32")
+    assert spikes.dtype == torch.bfloat16 and final.dtype == torch.float32
+
 """
 
 from __future__ import annotations
@@ -2262,6 +2323,21 @@ def stbif_step(
     return out_seq[0], q_next, acc_q_next
 
 
+def _supports_kernel_inputs(x_seq, v, selection):
+    if v.dtype == torch.float32:
+        return x_seq.dtype in _DTYPES
+    return (
+        x_seq.is_cuda
+        and torch.version.hip is None
+        and x_seq.dtype == v.dtype
+        and v.dtype in (torch.float16, torch.bfloat16)
+        and selection._requested != "torch"
+        and x_seq.ndim >= 2
+        and v.shape == x_seq.shape[1:]
+        and v.numel() > 0
+    )
+
+
 def lif_multi_step(
     x_seq: torch.Tensor,
     v: torch.Tensor,
@@ -2287,6 +2363,8 @@ def lif_multi_step(
     * **中文**
 
     对 ``[T, ...]`` 输入执行 LIF 序列状态转移，使用显式初态并返回脉冲、最终电位及可选电位序列。设备类型决定 CPU 或 CUDA 执行，CUDA 实现按设备和执行配置自动选择。兼容 Python surrogate 的参考实现由 Torch 自动微分。
+
+    见 :ref:`精度与内核分发 <neuron-precision-dispatch-cn>`。
 
     :param x_seq: 时间优先的输入序列，形状 ``[T, ...]``。
         compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
@@ -2325,6 +2403,8 @@ def lif_multi_step(
     * **English**
 
     Run the LIF sequence transition on a time-major ``[T, ...]`` input with an explicit initial state. Return spikes, final voltage, and an optional voltage trace. CPU/CUDA execution follows the tensor device; CUDA implementations are selected automatically by device and execution profile. The Torch reference supports Python surrogate callables and autograd.
+
+    See :ref:`precision and kernel selection <neuron-precision-dispatch-en>`.
 
     :param x_seq: Time-major input sequence shaped ``[T, ...]``.
         Native CUDA/Triton kernels directly access compact nonoverlapping layouts
@@ -2395,9 +2475,10 @@ def lif_multi_step(
             voltage if store_v_seq else None,
         )
 
-    if spec is None or x_seq.dtype not in _DTYPES or v.dtype != torch.float32:
+    from ..._ops.lif import _forward, _selection
+
+    if spec is None or not _supports_kernel_inputs(x_seq, v, _selection):
         from ..._ops.lif.reference import multi_step
-        from ..._ops.lif import _selection
         from ..._ops.selection import _require_automatic_torch
 
         _require_automatic_torch(
@@ -2420,12 +2501,10 @@ def lif_multi_step(
             store_v_seq,
         )
 
-    from ..._ops.lif import _forward
-
     surrogate_id, alpha = spec
     spikes, voltage, _ = _forward(
         x_seq,
-        v,
+        v.float(),
         tau,
         decay_input,
         v_threshold,
@@ -2435,6 +2514,7 @@ def lif_multi_step(
         store_v_seq,
         surrogate_id,
     )
+    voltage = voltage.to(v.dtype)
     return (
         (spikes, voltage[-1].clone(), voltage)
         if store_v_seq
@@ -2466,12 +2546,14 @@ def if_multi_step(
 
     执行显式状态序列转移，不修改输入或模块 memory。输入设备自动分发到支持的注册实现；不适用的 surrogate 或状态 dtype 使用 Torch 参考公式。具体输出状态与梯度遵循神经元动力学定义。
 
+    见 :ref:`精度与内核分发 <neuron-precision-dispatch-cn>`。
+
     :param x_seq: CPU/NVIDIA CUDA 浮点输入 [T, ...]，T >= 1；神经元维度非空。
         FP32/FP16/BF16 使用注册算子，其余支持的 dtype 使用 Torch 参考实现。
         compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
         无需布局拷贝；其他合法 strided view 允许转换。
     :type x_seq: torch.Tensor
-    :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
+    :param v: 同设备初始膜电位（默认内核支持 FP32 或与低精度 CUDA 输入一致的 dtype），形状为一个输入时间步；支持非连续存储。
     :type v: torch.Tensor
     :param v_threshold: 有限发放阈值；I-LIF 必须为正。 默认 ``1.0``.
     :type v_threshold: float
@@ -2481,7 +2563,7 @@ def if_multi_step(
     :type surrogate_function: Optional[SurrogateFunction]
     :param detach_reset: 默认 False；True 分离重置脉冲梯度。 默认 ``False``.
     :type detach_reset: bool
-    :param store_v_seq: 默认 False；True 返回完整 FP32 膜电位轨迹。 默认 ``False``.
+    :param store_v_seq: 默认 False；True 返回完整膜电位轨迹。 默认 ``False``.
     :type store_v_seq: bool
     :param neuron_storage: 可选神经元状态存储 dtype；仅 CUDA Triton 支持显式精度配置。
     :type neuron_storage: Optional[torch.dtype | str]
@@ -2504,12 +2586,14 @@ def if_multi_step(
 
     Run an explicit-state sequence transition without mutating inputs or module memory. The input device selects a supported registered implementation; unsupported surrogate or state-dtype profiles use the Torch reference formulas. Output states and gradients follow the neuron dynamics.
 
+    See :ref:`precision and kernel selection <neuron-precision-dispatch-en>`.
+
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1`` and nonempty neuron dimensions. Default accelerated profiles support FP32, FP16, or BF16.
         Native CUDA/Triton kernels directly access compact nonoverlapping layouts
         and their expand views without layout copies; other valid strided views
         may be converted.
     :type x_seq: torch.Tensor
-    :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
+    :param v: Initial voltage (FP32 or the matching low-precision CUDA input dtype) on the input device, shaped like one input step; noncontiguous storage is supported.
     :type v: torch.Tensor
     :param v_threshold: Finite firing threshold; positive for I-LIF. Default: ``1.0``.
     :type v_threshold: float
@@ -2519,7 +2603,7 @@ def if_multi_step(
     :type surrogate_function: Optional[SurrogateFunction]
     :param detach_reset: Default False; True detaches the reset spike.  Default: ``False``.
     :type detach_reset: bool
-    :param store_v_seq: Default False; True returns the complete FP32 voltage trace. Default: ``False``.
+    :param store_v_seq: Default False; True returns the complete voltage trace. Default: ``False``.
     :type store_v_seq: bool
     :param neuron_storage: Optional neuron-state storage dtype. Explicit
         precision settings require CUDA Triton.
@@ -2564,9 +2648,10 @@ def if_multi_step(
             surrogate_function=surrogate_function,
         )
         return spikes, voltage[-1].clone(), voltage if store_v_seq else None
-    if spec is None or x_seq.dtype not in _DTYPES or v.dtype != torch.float32:
+    from ..._ops.if_ import _forward, _selection
+
+    if spec is None or not _supports_kernel_inputs(x_seq, v, _selection):
         from ..._ops.if_.reference import multi_step
-        from ..._ops.if_ import _selection
         from ..._ops.selection import _require_automatic_torch
 
         _require_automatic_torch(
@@ -2586,12 +2671,18 @@ def if_multi_step(
             detach_reset,
             store_v_seq,
         )
-    from ..._ops.if_ import _forward
-
     surrogate_id, alpha = spec
     spikes, voltage, _ = _forward(
-        x_seq, v, v_threshold, v_reset, detach_reset, alpha, store_v_seq, surrogate_id
+        x_seq,
+        v.float(),
+        v_threshold,
+        v_reset,
+        detach_reset,
+        alpha,
+        store_v_seq,
+        surrogate_id,
     )
+    voltage = voltage.to(v.dtype)
     return (
         (spikes, voltage[-1].clone(), voltage)
         if store_v_seq
@@ -2625,11 +2716,13 @@ def plif_multi_step(
 
     执行显式状态序列转移，不修改输入或模块 memory。输入设备自动分发到支持的注册实现；不适用的 surrogate 或状态 dtype 使用 Torch 参考公式。具体输出状态与梯度遵循神经元动力学定义。
 
+    见 :ref:`精度与内核分发 <neuron-precision-dispatch-cn>`。
+
     :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
         compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
         无需布局拷贝；其他合法 strided view 允许转换。
     :type x_seq: torch.Tensor
-    :param v: 同设备 FP32 初始膜电位，形状为一个输入时间步；支持非连续存储。
+    :param v: 同设备初始膜电位（默认内核支持 FP32 或与低精度 CUDA 输入一致的 dtype），形状为一个输入时间步；支持非连续存储。
     :type v: torch.Tensor
     :param w: 同设备 FP32/FP16/BF16 可微单元素参数，q=sigmoid(w)，在 FP32 计算及归约后转换梯度。
     :type w: torch.Tensor
@@ -2643,7 +2736,7 @@ def plif_multi_step(
     :type surrogate_function: Optional[SurrogateFunction]
     :param detach_reset: 默认 False；True 分离重置脉冲梯度。 默认 ``False``.
     :type detach_reset: bool
-    :param store_v_seq: 默认 False；True 返回完整 FP32 膜电位轨迹。 默认 ``False``.
+    :param store_v_seq: 默认 False；True 返回完整膜电位轨迹。 默认 ``False``.
     :type store_v_seq: bool
     :param neuron_storage: 可选神经元状态存储 dtype；仅 CUDA Triton 支持显式精度配置。
     :type neuron_storage: Optional[torch.dtype | str]
@@ -2666,12 +2759,14 @@ def plif_multi_step(
 
     Run an explicit-state sequence transition without mutating inputs or module memory. The input device selects a supported registered implementation; unsupported surrogate or state-dtype profiles use the Torch reference formulas. Output states and gradients follow the neuron dynamics.
 
+    See :ref:`precision and kernel selection <neuron-precision-dispatch-en>`.
+
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1`` and nonempty neuron dimensions. Default accelerated profiles support FP32, FP16, or BF16.
         Native CUDA/Triton kernels directly access compact nonoverlapping layouts
         and their expand views without layout copies; other valid strided views
         may be converted.
     :type x_seq: torch.Tensor
-    :param v: FP32 initial voltage on the input device, shaped like one input step; noncontiguous storage is supported.
+    :param v: Initial voltage (FP32 or the matching low-precision CUDA input dtype) on the input device, shaped like one input step; noncontiguous storage is supported.
     :type v: torch.Tensor
     :param w: Differentiable FP32/FP16/BF16 single-element parameter on the input device, q=sigmoid(w); computation/reduction are FP32 before casting gradients.
     :type w: torch.Tensor
@@ -2685,7 +2780,7 @@ def plif_multi_step(
     :type surrogate_function: Optional[SurrogateFunction]
     :param detach_reset: Default False; True detaches the reset spike.  Default: ``False``.
     :type detach_reset: bool
-    :param store_v_seq: Default False; True returns the complete FP32 voltage trace. Default: ``False``.
+    :param store_v_seq: Default False; True returns the complete voltage trace. Default: ``False``.
     :type store_v_seq: bool
     :param neuron_storage: Optional neuron-state storage dtype. Explicit
         precision settings require CUDA Triton.
@@ -2732,15 +2827,16 @@ def plif_multi_step(
             surrogate_function=surrogate_function,
         )
         return spikes, voltage[-1].clone(), voltage if store_v_seq else None
+    from ..._ops.plif import _forward, _selection
+
     if (
         spec is None
-        or x_seq.dtype not in _DTYPES
-        or v.dtype != torch.float32
+        or not _supports_kernel_inputs(x_seq, v, _selection)
         or w.ndim != 0
         or w.dtype not in _DTYPES
+        or (v.dtype != torch.float32 and w.device != x_seq.device)
     ):
         from ..._ops.plif.reference import multi_step
-        from ..._ops.plif import _selection
         from ..._ops.selection import _require_automatic_torch
 
         _require_automatic_torch(
@@ -2762,12 +2858,10 @@ def plif_multi_step(
             detach_reset,
             store_v_seq,
         )
-    from ..._ops.plif import _forward
-
     surrogate_id, alpha = spec
     spikes, voltage, _ = _forward(
         x_seq,
-        v,
+        v.float(),
         w,
         decay_input,
         v_threshold,
@@ -2777,6 +2871,7 @@ def plif_multi_step(
         store_v_seq,
         surrogate_id,
     )
+    voltage = voltage.to(v.dtype)
     return (
         (spikes, voltage[-1].clone(), voltage)
         if store_v_seq

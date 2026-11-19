@@ -180,7 +180,7 @@ Installing an implementation does not mean every call uses it:
     * - Feature
       - Requirements
     * - Registered ordinary neurons
-      - Supported inputs, FP32 state and built-in surrogates can use fused execution. Ordinary module state follows input dtype; low-precision state or custom surrogates can use Torch reference equations.
+      - Eligibility varies by neuron. Multi-step IF/LIF/PLIF support FP32 initial voltage and matching FP16 or BF16 inputs and initial voltage. See :ref:`Precision and kernel selection for multi-step IF, LIF and PLIF <neuron-precision-dispatch-en>`.
     * - ComplementaryLIF (CLIF)
       - Matching CUDA FP32/FP16/BF16 tensors use optional Triton kernels, retaining the supplied spike function and state dtype. Auto mode can select Triton for training and inference, including ``torch.compile``; small batches may be slower. CPU, custom spike functions and other unsupported inputs use Torch formulas; an explicit Triton request rejects unsupported CUDA profiles. Select with ``SJ_CLIF_CUDA_IMPLEMENTATION=auto|triton|torch``; there is no native CUDA CLIF kernel.
     * - Explicit IF/LIF/PLIF precision
@@ -190,7 +190,7 @@ Installing an implementation does not mean every call uses it:
     * - Fused IF/LIF-Linear and packed/sparse projections
       - Compatible native extensions use the corresponding kernels; missing extensions use Torch reference execution. Triton does not provide these native fused projections' performance properties.
 
-See :doc:`./precision` for input, state and recurrence precision;
+See :doc:`./precision` for model precision configuration;
 :doc:`./triton_backend` for execution and compilation examples; and
 :doc:`./flexsn` for custom dynamics.
 
@@ -220,7 +220,7 @@ With an available NVIDIA GPU, query ordinary neuron bindings:
 
 A query initializes selection without computing neuron outputs or advancing
 state. ``implementation`` reports the binding; ``unavailable`` explains why
-earlier candidates were unavailable. Profiles such as low-precision state may
+earlier candidates were unavailable. Calls with custom surrogates may
 still use reference execution. Missing dependencies and known incompatibility
 allow checking the next candidate; unknown JIT, kernel, OOM and gradient errors
 are reported. Logging is silent by default; see :doc:`./triton_backend` for

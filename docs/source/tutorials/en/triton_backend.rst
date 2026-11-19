@@ -72,13 +72,8 @@ for unavailable providers or unsupported profiles. CPU, outer compile and tracin
 Torch; see the API for gradient, hook, subclass and tensor-view limits.
 Native builds use the installation guide's ``SJ_BUILD_NATIVE_CUDA=1`` command.
 
-Ordinary fused paths accept FP32/FP16/BF16 inputs with FP32 state and supported
-built-in surrogates. Low-precision state and custom surrogates can use Torch
-reference equations. Without explicit precision configuration, modules keep
-membrane state in the input dtype, including when an existing state is FP32.
-An ordinary FP16/BF16 module call therefore uses the reference recurrence.
-Functional calls can supply FP32 state with low-precision input directly;
-module storage overrides use :doc:`./precision`. See :doc:`./flexsn` for custom cores.
+For input and voltage dtype requirements and explicit precision overrides, see
+:ref:`Precision and kernel selection for multi-step IF, LIF and PLIF <neuron-precision-dispatch-en>`. See :doc:`./flexsn` for custom dynamics.
 
 Tensor layouts
 ----------------------------
@@ -170,7 +165,7 @@ Ordinary training needs no implementation query. To diagnose CUDA execution:
 A query initializes and caches the selected path without computing neuron
 outputs or changing module state. The result contains the bound
 ``implementation`` and ``unavailable`` reasons for earlier candidates.
-Low-precision state, custom surrogates and explicit precision policies can
+Unsupported dtype combinations, custom surrogates and explicit precision policies can
 follow other paths; profile the individual call when that distinction matters.
 
 Package logging is disabled by default; selections are logged once. Applications

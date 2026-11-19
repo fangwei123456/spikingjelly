@@ -162,7 +162,7 @@ sdist 的 ``--no-binary`` 等参数。可编辑安装中修改 ``.cu`` 或头文
     * - 功能
       - 启用条件
     * - 已注册的普通神经元
-      - 受支持的输入、FP32 状态及内置替代梯度可进入融合路径。普通模块状态跟随输入数据类型，低精度状态或自定义替代梯度可使用 Torch 参考公式。
+      - 融合条件因神经元而异。多步 IF/LIF/PLIF 支持 FP32 初态，也支持同为 FP16 或同为 BF16 的输入和初态，详见 :ref:`多步 IF、LIF 和 PLIF 的精度与内核分发 <neuron-precision-dispatch-cn>`。
     * - ComplementaryLIF（CLIF）
       - 同形状、同设备、同数据类型的 CUDA FP32/FP16/BF16 张量可使用可选 Triton 内核，保留所选放电函数和状态数据类型。自动模式在训练和推理中均可选择 Triton，也支持 ``torch.compile``；小批量可能更慢。CPU、自定义放电函数及其他不支持的输入使用 Torch 公式；显式请求 Triton 时，不支持的 CUDA 输入配置会报错。可设 ``SJ_CLIF_CUDA_IMPLEMENTATION=auto|triton|torch``；没有原生 CUDA CLIF 内核。
     * - IF/LIF/PLIF 显式精度配置
@@ -172,7 +172,7 @@ sdist 的 ``--no-binary`` 等参数。可编辑安装中修改 ``.cu`` 或头文
     * - 融合 IF/LIF-Linear、packed/sparse 投影
       - 原生扩展兼容时使用对应内核，缺失时使用 Torch 参考执行；Triton 不提供这些原生融合投影的性能特性。
 
-输入精度、状态精度和递推精度的区别见 :doc:`./precision`；执行与编译示例见
+模型级精度配置见 :doc:`./precision`；执行与编译示例见
 :doc:`./triton_backend`，自定义动力学见 :doc:`./flexsn`。
 
 确认安装与排查
@@ -200,7 +200,7 @@ sdist 的 ``--no-binary`` 等参数。可编辑安装中修改 ``.cu`` 或头文
     print(functional.neuron_implementation("lif", device, execution="compile"))
 
 查询初始化选择但不计算神经元输出、不推进状态。返回的 ``implementation`` 表示
-绑定，``unavailable`` 解释更高优先级候选不可用的原因；低精度状态等配置仍可能
+绑定，``unavailable`` 解释更高优先级候选不可用的原因；自定义替代梯度等配置仍可能
 使用参考公式。缺失依赖或已知不兼容可以检查下一候选，未预期的即时编译、内核、内存不足或
 梯度错误会直接报告。日志默认静默，启用方法与严格诊断环境变量见
 :doc:`./triton_backend`。改变依赖、扩展或配置后重启进程。

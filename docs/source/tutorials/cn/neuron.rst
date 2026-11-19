@@ -257,7 +257,8 @@ IFNode 的状态是膜电位 ``v``。可以打印出刚才新建的 IF 神经元
 模块调用会推进 ``node.v`` 等状态。独立样本或批次在反向和参数更新后调用
 ``functional.reset_net``；连续序列可以保留状态。截断时间反向传播（BPTT）时，用
 ``functional.detach_net`` 切断上一段的梯度，不将电位重置为初值。
-完整执行、编译与诊断见 :doc:`./triton_backend`，精度见 :doc:`./precision`。
+输入、初态和返回电位的 dtype 见 :ref:`多步 IF、LIF 和 PLIF 的精度与内核分发 <neuron-precision-dispatch-cn>`。
+执行诊断见 :doc:`./triton_backend`。
 
 显式初态、最终状态和轨迹
 ----------------------------

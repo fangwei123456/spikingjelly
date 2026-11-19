@@ -332,46 +332,61 @@ def test_cuda_fullgraph_compile_binds_provider_on_first_call():
 @pytest.mark.parametrize("family", ["if", "lif", "plif"])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-def test_low_precision_state_reference_fullgraph(family, dtype):
-    from spikingjelly.activation_based import functional, surrogate
+def test_low_precision_state_uses_registered_kernel(family, dtype, monkeypatch):
+    from spikingjelly.activation_based import functional
+    from spikingjelly.activation_based.surrogate import Sigmoid
 
     torch.compiler.reset()
     torch.manual_seed(11)
-    x = (torch.randn(4, 33, device="cuda", dtype=dtype) * 0.1).requires_grad_()
-    v = torch.zeros(33, device="cuda", dtype=dtype, requires_grad=True)
-    w = torch.zeros((), device="cuda", requires_grad=True)
-    sg = surrogate.ATan()
-    op = getattr(functional, f"{family}_multi_step")
-
-    def run(x, v, w):
-        if family == "if":
-            return op(x, v, surrogate_function=sg)[:2]
-        if family == "lif":
-            return op(x, v, 2.0, surrogate_function=sg)[:2]
-        return op(x, v, w, surrogate_function=sg)[:2]
-
-    reference = importlib.import_module(
-        f"spikingjelly._ops.{'if_' if family == 'if' else family}.reference"
-    ).multi_step
-
-    def run_reference(x, v, w):
-        if family == "if":
-            return reference(x, v, 1.0, 0.0, sg, False)[:2]
-        if family == "lif":
-            return reference(x, v, 2.0, True, 1.0, 0.0, sg, False)[:2]
-        return reference(x, v, w, True, 1.0, 0.0, sg, False)[:2]
-
-    # Compile the first call too: the fallback has no device-selection work to do.
-    actual = torch.compile(run, fullgraph=True)(x, v, w)
-    # Inductor fuses low-precision arithmetic; compare the same compiler policy.
-    expected = torch.compile(run_reference, fullgraph=True)(x, v, w)
+    x = torch.rand(7, 33, device="cuda", dtype=dtype, requires_grad=True)
+    v = torch.zeros_like(x[0], requires_grad=True)
+    w = torch.tensor(0.3, device="cuda", requires_grad=True)
     inputs = (x, v, w) if family == "plif" else (x, v)
-    torch.testing.assert_close(actual, expected)
-    torch.testing.assert_close(
-        torch.autograd.grad(sum(t.sum() for t in actual), inputs),
-        torch.autograd.grad(sum(t.sum() for t in expected), inputs),
+    op = getattr(functional, f"{family}_multi_step")
+    package = importlib.import_module(
+        f"spikingjelly._ops.{'if_' if family == 'if' else family}"
     )
-    assert actual[1].dtype == dtype
+    reference = package.reference.multi_step
+
+    def run(x, v, *args):
+        return op(x, v, *args, store_v_seq=True)
+
+    def unexpected_fallback(*args, **kwargs):
+        raise AssertionError("matching low-precision CUDA operands took the Torch loop")
+
+    monkeypatch.setattr(package.reference, "multi_step", unexpected_fallback)
+    # The registered kernels carry voltage in FP32 until the call returns.
+    args = (x.float(), v.float())
+    if family == "lif":
+        args += (2.0, True)
+    elif family == "plif":
+        args += (w, True)
+    expected = reference(*args, 1.0, 0.0, Sigmoid(), False, True)
+    expected = tuple(t.to(dtype) for t in expected)
+    want_grads = torch.autograd.grad(sum(t.sum() for t in expected), inputs)
+    for fn in (torch.compile(run, fullgraph=True), run):
+        actual = fn(*inputs)
+        torch.testing.assert_close(actual, expected)
+        got_grads = torch.autograd.grad(sum(t.sum() for t in actual), inputs)
+        torch.testing.assert_close(got_grads, want_grads, rtol=0.01, atol=0.002)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_low_precision_if_rounding_at_call_boundaries(monkeypatch):
+    from spikingjelly._ops.if_ import _selection
+    from spikingjelly.activation_based import neuron
+
+    node = neuron.IFNode(step_mode="m").cuda()
+    x = torch.full((10, 1), 0.1, device="cuda", dtype=torch.float16)
+    # In FP16 the ten additions reach threshold; the FP32 sum stays just below it.
+    with torch.no_grad():
+        spikes = node(x)
+        assert spikes.dtype == node.v.dtype == x.dtype
+        assert spikes.sum().item() == 0 and node.v.item() == 1
+        monkeypatch.setattr(_selection, "_requested", "torch")
+        node.reset()
+        spikes = node(x)
+        assert spikes[-1].item() == 1 and node.v.item() == 0
 
 
 @pytest.mark.parametrize("family", ["if", "lif", "plif"])

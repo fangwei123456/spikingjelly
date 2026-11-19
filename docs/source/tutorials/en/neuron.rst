@@ -267,8 +267,8 @@ to run forward/backward and check PLIF parameter updates:
 Module calls advance state such as ``node.v``. For independent samples/batches,
 call ``functional.reset_net`` after backward and parameter updates. Retain state
 for a continuous sequence; use ``functional.detach_net`` to truncate backpropagation through time (BPTT) without
-resetting voltage. See :doc:`./triton_backend` for execution/compilation/diagnostics
-and :doc:`./precision` for precision policies.
+resetting voltage. See :ref:`Precision and kernel selection for multi-step IF, LIF and PLIF <neuron-precision-dispatch-en>` for input, initial and
+returned voltage dtypes, and :doc:`./triton_backend` for execution diagnostics.
 
 Explicit initial state, final state and traces
 ----------------------------------------------
