@@ -2323,9 +2323,9 @@ def stbif_step(
     return out_seq[0], q_next, acc_q_next
 
 
-def _supports_kernel_state(x_seq, v, selection):
+def _supports_kernel_inputs(x_seq, v, selection):
     if v.dtype == torch.float32:
-        return True
+        return x_seq.dtype in _DTYPES
     return (
         x_seq.is_cuda
         and torch.version.hip is None
@@ -2364,8 +2364,7 @@ def lif_multi_step(
 
     对 ``[T, ...]`` 输入执行 LIF 序列状态转移，使用显式初态并返回脉冲、最终电位及可选电位序列。设备类型决定 CPU 或 CUDA 执行，CUDA 实现按设备和执行配置自动选择。兼容 Python surrogate 的参考实现由 Torch 自动微分。
 
-    默认 CUDA 内核在一次调用内以 FP32 递推，返回的电位使用初态 dtype。
-    当输入和初态均为 FP16 或均为 BF16 时，阈值附近的发放可能与逐步低精度计算不同。
+    见 :ref:`精度与内核分发 <neuron-precision-dispatch-cn>`。
 
     :param x_seq: 时间优先的输入序列，形状 ``[T, ...]``。
         compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
@@ -2405,9 +2404,7 @@ def lif_multi_step(
 
     Run the LIF sequence transition on a time-major ``[T, ...]`` input with an explicit initial state. Return spikes, final voltage, and an optional voltage trace. CPU/CUDA execution follows the tensor device; CUDA implementations are selected automatically by device and execution profile. The Torch reference supports Python surrogate callables and autograd.
 
-    Default CUDA kernels carry the voltage in FP32 within each call and return
-    voltages in the initial state dtype. For matching FP16 or BF16 inputs and
-    states, spikes near threshold can differ from stepwise low-precision arithmetic.
+    See :ref:`precision and kernel selection <neuron-precision-dispatch-en>`.
 
     :param x_seq: Time-major input sequence shaped ``[T, ...]``.
         Native CUDA/Triton kernels directly access compact nonoverlapping layouts
@@ -2480,11 +2477,7 @@ def lif_multi_step(
 
     from ..._ops.lif import _forward, _selection
 
-    if (
-        spec is None
-        or x_seq.dtype not in _DTYPES
-        or not _supports_kernel_state(x_seq, v, _selection)
-    ):
+    if spec is None or not _supports_kernel_inputs(x_seq, v, _selection):
         from ..._ops.lif.reference import multi_step
         from ..._ops.selection import _require_automatic_torch
 
@@ -2553,8 +2546,7 @@ def if_multi_step(
 
     执行显式状态序列转移，不修改输入或模块 memory。输入设备自动分发到支持的注册实现；不适用的 surrogate 或状态 dtype 使用 Torch 参考公式。具体输出状态与梯度遵循神经元动力学定义。
 
-    默认 CUDA 内核在一次调用内以 FP32 递推，返回的电位使用初态 dtype。
-    当输入和初态均为 FP16 或均为 BF16 时，阈值附近的发放可能与逐步低精度计算不同。
+    见 :ref:`精度与内核分发 <neuron-precision-dispatch-cn>`。
 
     :param x_seq: CPU/NVIDIA CUDA 浮点输入 [T, ...]，T >= 1；神经元维度非空。
         FP32/FP16/BF16 使用注册算子，其余支持的 dtype 使用 Torch 参考实现。
@@ -2594,9 +2586,7 @@ def if_multi_step(
 
     Run an explicit-state sequence transition without mutating inputs or module memory. The input device selects a supported registered implementation; unsupported surrogate or state-dtype profiles use the Torch reference formulas. Output states and gradients follow the neuron dynamics.
 
-    Default CUDA kernels carry the voltage in FP32 within each call and return
-    voltages in the initial state dtype. For matching FP16 or BF16 inputs and
-    states, spikes near threshold can differ from stepwise low-precision arithmetic.
+    See :ref:`precision and kernel selection <neuron-precision-dispatch-en>`.
 
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1`` and nonempty neuron dimensions. Default accelerated profiles support FP32, FP16, or BF16.
         Native CUDA/Triton kernels directly access compact nonoverlapping layouts
@@ -2660,11 +2650,7 @@ def if_multi_step(
         return spikes, voltage[-1].clone(), voltage if store_v_seq else None
     from ..._ops.if_ import _forward, _selection
 
-    if (
-        spec is None
-        or x_seq.dtype not in _DTYPES
-        or not _supports_kernel_state(x_seq, v, _selection)
-    ):
+    if spec is None or not _supports_kernel_inputs(x_seq, v, _selection):
         from ..._ops.if_.reference import multi_step
         from ..._ops.selection import _require_automatic_torch
 
@@ -2730,8 +2716,7 @@ def plif_multi_step(
 
     执行显式状态序列转移，不修改输入或模块 memory。输入设备自动分发到支持的注册实现；不适用的 surrogate 或状态 dtype 使用 Torch 参考公式。具体输出状态与梯度遵循神经元动力学定义。
 
-    默认 CUDA 内核在一次调用内以 FP32 递推，返回的电位使用初态 dtype。
-    当输入和初态均为 FP16 或均为 BF16 时，阈值附近的发放可能与逐步低精度计算不同。
+    见 :ref:`精度与内核分发 <neuron-precision-dispatch-cn>`。
 
     :param x_seq: CPU/NVIDIA CUDA FP32/FP16/BF16 输入 [T, ...]，T >= 1；神经元维度非空。
         compact 非重叠布局及其 expand 广播 view 在原生 CUDA/Triton kernel 中直接访问，
@@ -2774,9 +2759,7 @@ def plif_multi_step(
 
     Run an explicit-state sequence transition without mutating inputs or module memory. The input device selects a supported registered implementation; unsupported surrogate or state-dtype profiles use the Torch reference formulas. Output states and gradients follow the neuron dynamics.
 
-    Default CUDA kernels carry the voltage in FP32 within each call and return
-    voltages in the initial state dtype. For matching FP16 or BF16 inputs and
-    states, spikes near threshold can differ from stepwise low-precision arithmetic.
+    See :ref:`precision and kernel selection <neuron-precision-dispatch-en>`.
 
     :param x_seq: Floating-point CPU or NVIDIA CUDA input ``[T, ...]`` with ``T >= 1`` and nonempty neuron dimensions. Default accelerated profiles support FP32, FP16, or BF16.
         Native CUDA/Triton kernels directly access compact nonoverlapping layouts
@@ -2848,8 +2831,7 @@ def plif_multi_step(
 
     if (
         spec is None
-        or x_seq.dtype not in _DTYPES
-        or not _supports_kernel_state(x_seq, v, _selection)
+        or not _supports_kernel_inputs(x_seq, v, _selection)
         or w.ndim != 0
         or w.dtype not in _DTYPES
         or (v.dtype != torch.float32 and w.device != x_seq.device)
