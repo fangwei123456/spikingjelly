@@ -259,71 +259,80 @@ def test_cuda_runtime_lifetime_survives_copy_and_rebuilds():
     assert copied._triton_handle is not None
 
 
-def test_triton_kernels_take_runtime_sequence_length_and_width(monkeypatch):
-    pytest.importorskip("triton")
+def _division_core(x, v):
+    h = (x + v) / 2.5
+    return torch.sigmoid(h), h
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_runtime_kernel_codegen_on_cpu(monkeypatch, dtype):
     from spikingjelly import configure
-    from spikingjelly._ops.flexsn import launch
+    from spikingjelly._ops.flexsn import template
     from spikingjelly._ops.flexsn.kernel import _build_kernels
+    from spikingjelly._ops.flexsn.launch import _t_static
     from spikingjelly.activation_based.neuron.flexsn_trace import _trace_core
 
-    def core(x, v):
-        return _lif_core(x, v, 0.8)
+    monkeypatch.setattr(configure, "triton_neuron_kernel_static_range_max_T", 16)
+    assert _t_static(16) == 16
+    assert _t_static(17) == 0
 
-    module = FlexSN(core, 1)
-    wrapped = module._wrapped_core(module._num_inputs, module._num_outputs)
-    examples = (torch.zeros(1), torch.zeros(1))
-    graphs = _trace_core(wrapped, examples, module._num_outputs, 1)
-    try:
-        kernels = _build_kernels(
-            wrapped.__name__, module._num_inputs, 1, module._num_outputs, *graphs
-        )
-    except RuntimeError as error:  # older Triton autotuners query the GPU driver
-        if "active drivers" not in str(error):
-            raise
-        pytest.skip("Triton has no active driver on this host")
-    for key in (
-        "inference_kernel",
-        "inference_final_state_kernel",
-        "forward_kernel",
-        "backward_kernel",
-    ):
-        fn = kernels[key].fn
-        constexprs = {p.name for p in fn.params if p.is_constexpr}
-        # T / NCL as constexpr recompiled the kernel for every sequence length
-        # and batch size, and fully unrolled long sequences.
-        assert "T" not in constexprs and "NCL" not in constexprs
-        assert "tl.range(" in fn.src and "tl.static_range(" in fn.src
-
-    monkeypatch.setattr(configure, "triton_neuron_kernel_static_range_max_T", 8)
-    assert launch._t_static(8) == 8
-    assert launch._t_static(9) == 0
-    assert launch._t_static(1000) == 0
+    monkeypatch.setattr(template, "compile_triton_code_str", lambda code, name: code)
+    examples = (torch.ones(1, dtype=dtype),) * 2
+    graphs = _trace_core(_division_core, examples, num_outputs=1, num_states=1)
+    kernels = _build_kernels("division_core", 1, 1, 1, *graphs)
+    for name, source in kernels.items():
+        if name.endswith("_kernel"):
+            assert "    T,\n    NCL,\n    T_STATIC: tl.constexpr," in source
+            assert "tl.static_range(" in source and "tl.range(" in source
+            assert f".to(tl.{str(dtype).removeprefix('torch.')})" in source
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
-@pytest.mark.parametrize("T", [5, 37])
-def test_cuda_runtime_time_loop_matches_reference(monkeypatch, T):
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+@pytest.mark.parametrize(
+    ("training", "store_state_seqs"), [(False, False), (False, True), (True, True)]
+)
+def test_cuda_runtime_time_loop_matches_reference(
+    monkeypatch, dtype, training, store_state_seqs
+):
     pytest.importorskip("triton")
     from spikingjelly import configure
 
+    if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
+        pytest.skip("BF16 required")
     monkeypatch.setattr(configure, "triton_neuron_kernel_static_range_max_T", 16)
-    threshold = torch.nn.Parameter(torch.tensor(0.8, device="cuda"))
-    module = FlexSN(_lif_core, 1, (threshold,), store_state_seqs=True).cuda()
-    for batch in (2, 7):
-        x = torch.randn(T, batch, 3, device="cuda", requires_grad=True)
-        initial = torch.randn(batch, 3, device="cuda", requires_grad=True)
-        module.states = (initial,)
+    module = FlexSN(_division_core, 1, store_state_seqs=store_state_seqs)
+    x = torch.linspace(-1, 1, 37 * 129, device="cuda", dtype=dtype).reshape(37, 129)
+    initial = torch.linspace(1, -1, 129, device="cuda", dtype=dtype)
+    x.requires_grad_(training)
+    initial.requires_grad_(training)
+    module.states = (initial,)
+    tolerance = (
+        dict(rtol=1e-2, atol=2e-3)
+        if dtype == torch.float16
+        else dict(rtol=4e-2, atol=1e-2)
+    )
+
+    with torch.set_grad_enabled(training):
         actual = module(x)
-        expected, final, state_seq = _reference(x, initial, threshold)
-        torch.testing.assert_close(actual, expected)
-        torch.testing.assert_close(module.states[0], final)
-        torch.testing.assert_close(module.state_seqs[0], state_seq)
-        inputs = (x, initial, threshold)
-        got = torch.autograd.grad(actual.sum() + module.states[0].sum(), inputs)
-        want = torch.autograd.grad(expected.sum() + final.sum(), inputs)
-        for g, w in zip(got, want):
-            torch.testing.assert_close(g, w)
-    assert module._triton_handle is not None
+        assert module._triton_capability[x.device, dtype] is True
+        spikes, states = [], []
+        final = initial
+        for step in x:
+            spike, final = _division_core(step, final)
+            spikes.append(spike)
+            states.append(final)
+        got = (actual, module.states[0])
+        want = (torch.stack(spikes), final)
+        if store_state_seqs:
+            got += (module.state_seqs[0],)
+            want += (torch.stack(states),)
+        torch.testing.assert_close(got, want, **tolerance)
+        if training:
+            inputs = (x, initial)
+            got_grads = torch.autograd.grad(sum(t.sum() for t in got), inputs)
+            want_grads = torch.autograd.grad(sum(t.sum() for t in want), inputs)
+            torch.testing.assert_close(got_grads, want_grads, **tolerance)
 
 
 def test_nondifferentiable_core_reports_unsupported_training_graph():

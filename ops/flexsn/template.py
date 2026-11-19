@@ -4,6 +4,8 @@ FlexSN Triton Kernel Templates.
 Insert a single-step kernel into a multi-step kernel template.
 """
 
+from textwrap import indent
+
 from spikingjelly.logger import logger
 
 
@@ -75,9 +77,6 @@ def flexsn_{kernel_type}_kernel_{hash}(
     BLOCK_NCL: tl.constexpr,
     dtype: tl.constexpr,
 ):
-    # T and NCL are runtime values, so one binary serves every batch size and every
-    # long sequence. T_STATIC == T (> 0) fully unrolls short sequences; T_STATIC == 0
-    # uses a runtime loop (see configure.triton_neuron_kernel_static_range_max_T).
     pid_ncl = tl.program_id(0)
     indices = (pid_ncl * BLOCK_NCL + tl.arange(0, BLOCK_NCL))[None, :].to(tl.int64)
     mask = indices < NCL
@@ -104,27 +103,23 @@ loop_template = """
 """
 
 
-def _indent(code: str) -> str:
-    return "\n".join(
-        INDENTATION + line if line.strip() else line for line in code.split("\n")
-    )
-
-
-def _format_kernel(*, loads, computes, stores, loop_range, static_loop_range, **kwargs):
-    def loop(range_fn, loop_range):
-        return _indent(
+def _format_kernel(*, loads, computes, stores, reverse=False, **kwargs):
+    def loop(range_fn, length):
+        bounds = f"{length} - 1, -1, -1" if reverse else f"0, {length}, 1"
+        return indent(
             loop_template.format(
                 range_fn=range_fn,
-                loop_range=loop_range,
+                loop_range=bounds,
                 loads=loads,
                 computes=computes,
                 stores=stores,
-            )
+            ),
+            INDENTATION,
         ).strip("\n")
 
     return kernel_template.format(
-        static_loop=loop("tl.static_range", static_loop_range),
-        dynamic_loop=loop("tl.range", loop_range),
+        static_loop=loop("tl.static_range", "T_STATIC"),
+        dynamic_loop=loop("tl.range", "T"),
         **kwargs,
     )
 
@@ -178,8 +173,6 @@ def _get_inference_kernel(core_str: str, core_name: str, info: _FlexSNInfo):
         kernel_input_signature=kernel_input_signature,
         kernel_output_signature=kernel_output_signature,
         init_state_loads=init_state_loads,
-        loop_range="0, T, 1",
-        static_loop_range="0, T_STATIC, 1",
         loads=loads,
         computes=f"{lhs} = {core_name}({core_args})",
         stores=stores,
@@ -244,8 +237,6 @@ def _get_inference_final_state_kernel(core_str: str, core_name: str, info: _Flex
         kernel_input_signature=kernel_input_signature,
         kernel_output_signature=kernel_output_signature,
         init_state_loads=init_state_loads,
-        loop_range="0, T, 1",
-        static_loop_range="0, T_STATIC, 1",
         loads=loads,
         computes=f"{lhs} = {core_name}({core_args})",
         stores=stores,
@@ -308,8 +299,6 @@ def _get_forward_kernel(
         kernel_input_signature=kernel_input_signature,
         kernel_output_signature=kernel_output_signature,
         init_state_loads=init_state_loads,
-        loop_range="0, T, 1",
-        static_loop_range="0, T_STATIC, 1",
         loads=loads,
         computes=f"{lhs} = {core_name}({core_args})",
         stores=stores,
@@ -409,8 +398,7 @@ def _get_backward_kernel(
         kernel_input_signature=kernel_input_signature,
         kernel_output_signature=kernel_output_signature,
         init_state_loads=init_state_loads,
-        loop_range="T - 1, -1, -1",
-        static_loop_range="T_STATIC - 1, -1, -1",
+        reverse=True,
         loads=loads,
         computes=computes,
         stores=stores,

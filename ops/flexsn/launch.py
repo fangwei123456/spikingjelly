@@ -24,8 +24,6 @@ def _num_elements_per_step(x: torch.Tensor) -> int:
 
 
 def _t_static(T: int) -> int:
-    # > 0: fully unrolled loop specialised on T.
-    # 0: one runtime-loop binary for all long T.
     return T if use_static_range_for_triton_neuron_kernel(T) else 0
 
 
