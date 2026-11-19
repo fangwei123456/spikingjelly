@@ -380,3 +380,38 @@ def test_drop_connect_eval_rejects_invalid_probability_with_zero_variance(p):
     module = layer.DropConnectLinear(2, 1, bias=False, p=p).eval()
     with pytest.raises(ValueError, match="p must be between 0 and 1"):
         module(torch.zeros(1, 2))
+
+
+@pytest.mark.parametrize("delay_steps", [3, 5])
+@pytest.mark.parametrize("surface", ["sequence", "steps", "module"])
+def test_delay_all_padding_has_zero_input_gradient(delay_steps, surface):
+    x = torch.tensor([[float("nan"), float("inf")], [2.0, 3.0], [4.0, 5.0]])
+    x.requires_grad_()
+    if surface == "sequence":
+        y = functional.delay(x, delay_steps)
+    elif surface == "steps":
+        queue = ()
+        outputs = []
+        for step in x:
+            output, queue = functional.delay_step(step, queue, delay_steps)
+            outputs.append(output)
+        y = torch.stack(outputs)
+    else:
+        y = layer.Delay(delay_steps=delay_steps, step_mode="m")(x)
+
+    torch.testing.assert_close(y, torch.zeros_like(x))
+    y.sum().backward()
+    torch.testing.assert_close(x.grad, torch.zeros_like(x))
+
+
+def test_delay_warmup_keeps_input_for_later_output():
+    module = layer.Delay(delay_steps=1)
+    first = torch.tensor(3.0, requires_grad=True)
+    second = torch.tensor(5.0, requires_grad=True)
+    warmup = module(first)
+    later = module(second)
+    torch.testing.assert_close(later, first)
+    # Only the later output uses first, even when warmup contributes to the loss.
+    (warmup + 2 * later).backward()
+    torch.testing.assert_close(first.grad, torch.tensor(2.0))
+    assert second.grad is None

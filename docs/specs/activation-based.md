@@ -43,6 +43,9 @@ optimization through model builders.
 
 - **Step modes.** `'s'` processes one step, `[N, *]`; `'m'` processes a time-major
   sequence, `[T, N, *]`.
+- **Delay padding.** Before a delayed input can reach the output, the sequence and
+  step APIs return zeros with a zero input derivative, even for an all-padding loss.
+  Queued inputs still contribute normally when they reach the output.
 - **Memory.** `MemoryModule` registers state with reset values. `reset` restores those
   values, and `functional.reset_net` and `functional.detach_net` apply this across a
   network.

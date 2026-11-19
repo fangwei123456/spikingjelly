@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from .. import neuron
+from .layer import _delay_padding
 
 __all__ = [
     "set_threshold_margin",
@@ -276,8 +277,8 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
             nn.init.kaiming_normal_(m.weight, a=math.sqrt(5))
 
 
-def delay(x_seq: torch.Tensor, delay_steps: int):
-    """
+def delay(x_seq: torch.Tensor, delay_steps: int) -> torch.Tensor:
+    r"""
     **API Language** - :ref:`中文 <delay-cn>` | :ref:`English <delay-en>`
 
     ----
@@ -286,7 +287,7 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
 
     * **中文**
 
-    延迟函数，可以用来延迟输入，使得 ``y[t] = x[t - delay_steps]``。缺失的数据用0填充。
+    延迟函数，可以用来延迟输入，使得 ``y[t] = x[t - delay_steps]``。缺失的数据用0填充。若整个序列均为填充，输出相对于输入的梯度为零。
 
     :param x_seq: 输入的序列，``shape = [T, *]``
     :type x_seq: torch.Tensor
@@ -306,6 +307,7 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
     * **English**
 
     A delay function that can delay inputs and makes ``y[t] = x[t - delay_steps]``. The nonexistent data will be regarded as 0.
+    If the entire sequence is padding, the output has zero gradient with respect to the input.
 
     :param x_seq: the input sequence with ``shape = [T, *]``
     :type x_seq: torch.Tensor
@@ -362,5 +364,5 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
     if delay_steps == 0:
         return x_seq
     if delay_steps >= x_seq.shape[0]:
-        return torch.zeros_like(x_seq)
+        return _delay_padding(x_seq)
     return torch.cat((torch.zeros_like(x_seq[:delay_steps]), x_seq[:-delay_steps]))

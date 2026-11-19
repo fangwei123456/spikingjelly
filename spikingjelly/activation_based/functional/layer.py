@@ -73,6 +73,13 @@ def neunorm_step(
     return in_spikes - weight * state_next, state_next
 
 
+def _delay_padding(x: torch.Tensor) -> torch.Tensor:
+    if torch.is_grad_enabled() and x.requires_grad:
+        # Overwrite rather than multiply by zero: padding must ignore NaN/Inf.
+        return x.clone().zero_()
+    return torch.zeros_like(x)
+
+
 def delay_step(
     x: torch.Tensor,
     queue: tuple[torch.Tensor, ...],
@@ -90,7 +97,7 @@ def delay_step(
     执行 Delay 的单步显式状态转移。``queue`` 是按时间从旧到新排列的 tensor tuple。
     函数返回 ``(y, queue_next)``，不原地修改输入 ``queue``。当 ``delay_steps=0``
     且 ``queue`` 为空时，输出 ``y`` 与输入 ``x`` alias；当已有 queue 被消费时，输出
-    ``y`` 与被弹出的 queue 元素 alias。
+    ``y`` 与被弹出的 queue 元素 alias。队列未满时输出零；其相对于当前输入的梯度为零。
 
     :param x: 当前输入张量
     :type x: torch.Tensor
@@ -112,7 +119,8 @@ def delay_step(
     ordered from oldest to newest. The function returns ``(y, queue_next)`` and
     does not mutate the input ``queue`` in place. When ``delay_steps=0`` and
     ``queue`` is empty, output ``y`` aliases ``x``; when an existing queue item is
-    consumed, ``y`` aliases the popped queue item.
+    consumed, ``y`` aliases the popped queue item. While the queue fills, the zero
+    output has zero gradient with respect to the current input.
 
     :param x: Current input tensor
     :type x: torch.Tensor
@@ -138,7 +146,7 @@ def delay_step(
     queue_with_x = (*queue, x)
     if len(queue_with_x) > delay_steps:
         return queue_with_x[0], queue_with_x[1:]
-    return torch.zeros_like(x), queue_with_x
+    return _delay_padding(x), queue_with_x
 
 
 def synapse_filter_step(
