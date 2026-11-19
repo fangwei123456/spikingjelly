@@ -212,37 +212,6 @@ def test_multi_input_output_and_state_counts(device, detach_first_output):
         torch.testing.assert_close(actual, reference)
 
 
-def test_triton_codegen_accepts_detach_traced_as_alias():
-    """Torch >= 2.14 traces Tensor.detach() as aten.alias.default.
-
-    Codegen must lower it; no GPU is needed.
-    """
-    pytest.importorskip("triton")
-    from spikingjelly._ops.flexsn.kernel import _build_kernels
-    from spikingjelly.activation_based.neuron.flexsn_trace import _trace_core
-
-    def core(x, v):
-        h = v + (x - v) * 0.5
-        spike = torch.sigmoid(h - 1.0)
-        # detached reset, as in most surrogate-gradient neurons
-        return spike, h - spike.detach()
-
-    module = FlexSN(core, 1)
-    wrapped = module._wrapped_core(module._num_inputs, module._num_outputs)
-    graphs = _trace_core(
-        wrapped, (torch.zeros(1), torch.zeros(1)), module._num_outputs, 1
-    )
-    try:
-        kernels = _build_kernels(
-            wrapped.__name__, module._num_inputs, 1, module._num_outputs, *graphs
-        )
-    except RuntimeError as error:  # older Triton autotuners query the GPU driver
-        if "active drivers" not in str(error):
-            raise
-        pytest.skip("Triton has no active driver on this host")
-    assert kernels
-
-
 def test_triton_codegen_lowers_explicit_aten_alias_node():
     """Covers aten.alias independently of how the installed torch traces detach()."""
     from spikingjelly._ops.torch2triton.graph2triton import generate_triton_code_str
