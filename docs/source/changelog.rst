@@ -111,6 +111,7 @@ Changes
 - Few-spike tracing and incompatible optional Triton imports retain reference execution in automatic mode.
 
 - ST-BIF uses one-third less FP32 state memory and fewer inference allocations.
+- FlexSN Triton kernels use runtime sequence dimensions and limit time-loop unrolling to shorten compilation for long sequences.
 - Removed ``STBIFNode.cur_output``; ``functional.stbif_step`` and
   ``functional.stbif_multi_step`` return ``(out, q, acc_q)``. Consume returned spikes,
   update tuple unpacking, rebuild native extensions and regenerate compiled/exported graphs.
