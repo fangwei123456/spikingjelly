@@ -76,6 +76,7 @@ spikingjelly.activation_based.encoding
 spikingjelly.activation_based.functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+- Evaluation Conv–BatchNorm fusion preserves specialized subclasses such as ``WSConv2d``, avoiding changed inference outputs.
 - CUDA IF, LIF and PLIF accelerate matching FP16/BF16 inputs and states with FP32 accumulation per call. Rounding can change spikes near threshold.
 - Explicit ``SJ_*_CUDA_IMPLEMENTATION=torch`` accepts profiles requiring Torch reference execution, including custom surrogates and non-FP32 states.
 - ``kernel_dot_product`` evaluates low-precision Gaussian distances in FP32 and retains FP32 outputs under autocast, preserving spike differences and finite similarities.

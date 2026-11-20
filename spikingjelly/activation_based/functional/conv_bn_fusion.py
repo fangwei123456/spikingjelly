@@ -176,6 +176,8 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
     :class:`spikingjelly.activation_based.layer.BatchNorm2d`,
     :class:`spikingjelly.activation_based.layer.BatchNorm3d`.
 
+    仅融合上述具体类型；保留 ``WSConv2d`` 等子类及其 BatchNorm，以保持自定义计算。
+
     输入模型必须处于 ``eval()`` 模式; 返回值是融合后的 ``fx.GraphModule``.
 
     .. _fuse_conv_bn_eval_modules-en:
@@ -186,6 +188,9 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
     into a single convolution module. Both native ``torch.nn`` layers and
     SpikingJelly activation-based ``layer.Conv*`` / ``layer.BatchNorm*`` wrappers
     are supported.
+
+    Only these concrete types are fused. Subclasses such as ``WSConv2d`` and
+    their BatchNorm remain intact to preserve their custom computations.
 
     The input model must be in ``eval()`` mode. The returned value is a fused
     ``fx.GraphModule``.
@@ -209,6 +214,13 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
     for (conv_target, bn_target), matched_nodes in matches.items():
         conv = modules[conv_target]
         bn = modules[bn_target]
+        # Subclasses can change the effective weight or forward computation,
+        # e.g. WSConv2d normalizes its weight on every call. Folding raw
+        # parameters and deleting BN is only valid for the known plain layers.
+        if not any(type(conv) is conv_type for conv_type, _ in _CONV_BN_PATTERNS):
+            continue
+        if not any(type(bn) is bn_type for _, bn_type in _CONV_BN_PATTERNS):
+            continue
         if (
             getattr(bn, "track_running_stats", True) is False
             or bn.running_mean is None

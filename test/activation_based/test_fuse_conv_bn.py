@@ -364,3 +364,47 @@ def test_pack_conv_bn_train_modules_skips_partial_conv_bn_callsites():
 
     torch.testing.assert_close(x_packed.grad, x.grad, atol=1e-5, rtol=1e-4)
     assert not any(isinstance(m, _TrainConvBnWrapper) for m in packed.modules())
+
+
+@pytest.mark.parametrize(
+    "step_mode, native_bn", [("s", False), ("m", False), ("s", True)]
+)
+def test_eval_fusion_preserves_weight_standardized_conv(step_mode, native_bn):
+    torch.manual_seed(0)
+    conv = layer.WSConv2d(2, 3, 3, padding=1, step_mode=step_mode)
+    bn = nn.BatchNorm2d(3) if native_bn else layer.BatchNorm2d(3, step_mode=step_mode)
+    with torch.no_grad():
+        bn.weight.copy_(torch.tensor([0.5, 2.0, 3.0]))
+        bn.bias.copy_(torch.tensor([-1.0, 0.5, 1.0]))
+        bn.running_mean.copy_(torch.tensor([0.25, -0.5, 1.0]))
+        bn.running_var.copy_(torch.tensor([0.5, 1.5, 2.0]))
+    model = nn.Sequential(conv, bn).eval()
+    fused = fuse_conv_bn_eval_modules(copy.deepcopy(model))
+    shape = (2, 2, 8, 8) if step_mode == "s" else (4, 2, 2, 8, 8)
+    x = torch.randn(shape)
+    torch.testing.assert_close(fused(x), model(x))
+    assert any(isinstance(m, type(bn)) for m in fused.modules())
+
+
+class _ShiftedBatchNorm(layer.BatchNorm2d):
+    def forward(self, x):
+        return super().forward(x) + 2.0
+
+
+def test_eval_fusion_preserves_custom_batchnorm_forward():
+    model = nn.Sequential(layer.Conv2d(2, 3, 3), _ShiftedBatchNorm(3)).eval()
+    x = torch.randn(2, 2, 8, 8)
+    fused = fuse_conv_bn_eval_modules(copy.deepcopy(model))
+    torch.testing.assert_close(fused(x), model(x))
+
+
+@pytest.mark.parametrize("dimension", [1, 2, 3])
+@pytest.mark.parametrize("native_conv", [False, True])
+def test_eval_fusion_keeps_mixed_plain_layers_supported(dimension, native_conv):
+    conv_cls = getattr(nn if native_conv else layer, f"Conv{dimension}d")
+    bn_cls = getattr(layer if native_conv else nn, f"BatchNorm{dimension}d")
+    model = nn.Sequential(conv_cls(2, 3, 3), bn_cls(3)).eval()
+    x = torch.randn(2, 2, *([5] * dimension))
+    fused = fuse_conv_bn_eval_modules(copy.deepcopy(model))
+    torch.testing.assert_close(fused(x), model(x))
+    assert not any(isinstance(m, bn_cls) for m in fused.modules())
