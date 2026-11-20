@@ -44,12 +44,24 @@ class ReplaceforGrad(torch.autograd.Function):
 
 
 def _trace_forward(module: nn.Module, trace: Tensor) -> Tensor:
-    # Trace computation must not commit a second set of running statistics.
-    # Bufferless weight layers keep their direct forward path.
-    buffers = {name: buffer.clone() for name, buffer in module.named_buffers()}
-    if not buffers:
+    # Use batch statistics for the auxiliary training pass without committing
+    # running statistics again. Leave unrelated buffers and lazy branches alone.
+    batchnorms = [
+        bn
+        for bn in module.modules()
+        if isinstance(bn, nn.modules.batchnorm._BatchNorm)
+        and bn.training
+        and bn.track_running_stats
+        and not isinstance(bn.running_mean, nn.parameter.UninitializedBuffer)
+        and not isinstance(bn.running_var, nn.parameter.UninitializedBuffer)
+    ]
+    try:
+        for bn in batchnorms:
+            bn.track_running_stats = False
         return module(trace)
-    return torch.func.functional_call(module, buffers, (trace,))
+    finally:
+        for bn in batchnorms:
+            bn.track_running_stats = True
 
 
 def _grad_with_trace(module: nn.Module, x):
@@ -112,8 +124,9 @@ class GradwithTrace(nn.Module):
 
         * **中文**
 
-        仅脉冲前向更新包装模块的注册 buffer（例如 BatchNorm 运行统计量）；
-        trace 前向使用 buffer 副本，不提交其更新。未注册的 Python 状态不被隔离。
+        对于已初始化的 BatchNorm，只有脉冲前向更新运行统计量；trace 训练前向
+        仍使用 batch 统计量，但暂时停止跟踪运行统计量。其他 buffer 和 Python 状态
+        保留原有副作用，不被隔离。
 
         :param x: ``[spike, trace]``，其中 ``spike`` 用于前向值，``trace`` 用于梯度路径
         :type x: torch.Tensor
@@ -126,9 +139,10 @@ class GradwithTrace(nn.Module):
 
         * **English**
 
-        Only the spike forward updates the wrapped module's registered buffers,
-        such as BatchNorm running statistics. The trace forward uses buffer
-        copies and discards their updates. Unregistered Python state is not isolated.
+        For initialized BatchNorm modules, only the spike forward updates running
+        statistics. The trace training forward still uses batch statistics, with
+        running-statistic tracking temporarily disabled. Other buffers and Python
+        state retain their original side effects and are not isolated.
 
         :param x: ``[spike, trace]`` where ``spike`` provides forward values and ``trace`` provides gradient paths
         :type x: torch.Tensor
@@ -180,8 +194,9 @@ class SpikeTraceOp(nn.Module):
 
         * **中文**
 
-        仅脉冲前向更新注册 buffer；trace 前向使用 buffer 副本，不提交其更新。
-        未注册的 Python 状态不被隔离。
+        对于已初始化的 BatchNorm，只有脉冲前向更新运行统计量；trace 训练前向
+        仍使用 batch 统计量，但暂时停止跟踪运行统计量。其他 buffer 和 Python 状态
+        保留原有副作用，不被隔离。
 
         :param x: ``[spike, trace]`` 输入对
         :type x: torch.Tensor
@@ -194,8 +209,10 @@ class SpikeTraceOp(nn.Module):
 
         * **English**
 
-        Only the spike forward updates registered buffers. The trace forward uses
-        buffer copies and discards their updates. Unregistered Python state is not isolated.
+        For initialized BatchNorm modules, only the spike forward updates running
+        statistics. The trace training forward still uses batch statistics, with
+        running-statistic tracking temporarily disabled. Other buffers and Python
+        state retain their original side effects and are not isolated.
 
         :param x: ``[spike, trace]`` input pair
         :type x: torch.Tensor

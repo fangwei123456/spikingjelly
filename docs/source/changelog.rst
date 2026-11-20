@@ -18,7 +18,7 @@ Fixes
 spikingjelly.activation_based.layer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- OTTT trace passes no longer update BatchNorm running statistics a second time; only the spike pass commits registered buffer updates.
+- OTTT trace passes no longer update initialized BatchNorm running statistics a second time; batch statistics still determine trace-pass normalization.
 - ``DropConnectLinear`` inference handles zero-variance outputs, including silent spikes and zero drop probability.
 
 spikingjelly.activation_based.neuron

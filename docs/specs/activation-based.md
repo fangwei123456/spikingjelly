@@ -58,10 +58,11 @@ optimization through model builders.
   Non-leaf buffer commits rebind shared module aliases without modifying autograd
   sources; leaf buffers retain their objects and are updated in-place.
   FlexSN tracing isolates compiler probes from the caller's saved-tensor hooks.
-- **OTTT buffers.** `GradwithTrace` and `SpikeTraceOp`, including their use in
-  `OTTTSequential`, commit registered buffer updates from the spike pass only.
-  The trace pass uses cloned buffers while preserving its gradient path.
-  Unregistered Python state and `MemoryModule` memories are not isolated by this rule.
+- **OTTT BatchNorm statistics.** `GradwithTrace` and `SpikeTraceOp`, including
+  their use in `OTTTSequential`, update initialized BatchNorm running statistics
+  from the spike pass only. The trace training pass uses batch statistics with
+  running-statistic tracking temporarily disabled. Other buffers and Python state
+  retain their original side effects; this is not general state isolation.
 - **Step-mode leaves.** Built-in `StepModule` implementations are atomic leaves whose
   children are normally not `StepModule`s. Networks, blocks and attention stay plain
   `nn.Module`s. Explicit scheduling containers and modules that own independent

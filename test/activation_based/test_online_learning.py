@@ -393,3 +393,70 @@ def test_ottt_batchnorm_tracks_one_spike_batch_per_step(affine, training):
     torch.testing.assert_close(actual, expected)
     for name, buffer in model[1].named_buffers():
         torch.testing.assert_close(buffer, dict(reference[1].named_buffers())[name])
+
+
+class _AliasedTraceBuffers(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.weight = nn.Parameter(torch.tensor(2.0))
+        self.register_buffer("base", torch.tensor([1.0, 2.0]))
+        self.register_buffer("view", self.base[:1])
+
+    def forward(self, x):
+        self.base.add_(1.0)
+        return self.weight * x * self.view
+
+
+def test_grad_with_trace_preserves_other_buffer_view_semantics():
+    module = _AliasedTraceBuffers()
+    spike = torch.tensor([1.0], requires_grad=True)
+    trace = torch.tensor([5.0], requires_grad=True)
+    output = GradwithTrace(module)([spike, trace])
+    torch.testing.assert_close(output, torch.tensor([4.0]))
+    output.sum().backward()
+    # First forward sees view=2; the original direct trace forward sees view=3.
+    torch.testing.assert_close(module.weight.grad, torch.tensor(15.0))
+    torch.testing.assert_close(spike.grad, torch.tensor([6.0]))
+    torch.testing.assert_close(trace.grad, torch.tensor([6.0]))
+
+
+class _InactiveLazyTraceBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(2, 1, bias=False)
+        self.unused = nn.LazyBatchNorm1d()
+
+    def forward(self, x):
+        return self.linear(x)
+
+
+def test_grad_with_trace_does_not_materialize_unused_lazy_buffers():
+    module = _InactiveLazyTraceBlock()
+    module.linear.weight.data.copy_(torch.tensor([[2.0, -1.0]]))
+    spike = torch.tensor([[1.0, 0.0]], requires_grad=True)
+    trace = torch.tensor([[0.25, 0.75]], requires_grad=True)
+    output = GradwithTrace(module)([spike, trace])
+    torch.testing.assert_close(output, torch.tensor([[2.0]]))
+    output.sum().backward()
+    torch.testing.assert_close(module.linear.weight.grad, trace.detach())
+    assert module.unused.has_uninitialized_params()
+
+
+class _TraceFailureBatchNorm(nn.BatchNorm1d):
+    def __init__(self):
+        super().__init__(3)
+        self.calls = 0
+
+    def forward(self, x):
+        self.calls += 1
+        if self.calls == 2:
+            raise RuntimeError("trace forward failed")
+        return super().forward(x)
+
+
+def test_grad_with_trace_restores_batchnorm_tracking_after_failure():
+    bn = _TraceFailureBatchNorm()
+    with pytest.raises(RuntimeError, match="trace forward failed"):
+        GradwithTrace(bn)([torch.randn(8, 3), torch.randn(8, 3)])
+    assert bn.track_running_stats
+    assert bn.num_batches_tracked.item() == 1
