@@ -1370,15 +1370,7 @@ class WSConv2d(Conv2d):
         return weight
 
     def _forward(self, x: Tensor):
-        return F.conv2d(
-            x,
-            self.get_weight(),
-            self.bias,
-            self.stride,
-            self.padding,
-            self.dilation,
-            self.groups,
-        )
+        return self._conv_forward(x, self.get_weight(), self.bias)
 
     def forward(self, x: Tensor):
         if self.step_mode == "s":

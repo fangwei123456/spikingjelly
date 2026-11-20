@@ -11,6 +11,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 #### spikingjelly.activation_based.layer
 
 - `DropConnectLinear` inference handles zero-variance outputs, including silent spikes and zero drop probability.
+- `WSConv2d` honors `padding_mode` (`reflect`, `circular`, `replicate`) instead of always zero-padding.
 
 #### spikingjelly.activation_based.neuron
 
