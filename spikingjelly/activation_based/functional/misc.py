@@ -276,7 +276,7 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
             nn.init.kaiming_normal_(m.weight, a=math.sqrt(5))
 
 
-def delay(x_seq: torch.Tensor, delay_steps: int):
+def delay(x_seq: torch.Tensor, delay_steps: int) -> torch.Tensor:
     """
     **API Language** - :ref:`中文 <delay-cn>` | :ref:`English <delay-en>`
 
@@ -362,5 +362,8 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
     if delay_steps == 0:
         return x_seq
     if delay_steps >= x_seq.shape[0]:
+        if torch.is_grad_enabled() and x_seq.requires_grad:
+            # Unlike multiplying by zero, overwriting ignores NaN and Inf.
+            return x_seq.clone().zero_()
         return torch.zeros_like(x_seq)
     return torch.cat((torch.zeros_like(x_seq[:delay_steps]), x_seq[:-delay_steps]))

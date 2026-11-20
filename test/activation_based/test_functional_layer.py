@@ -380,3 +380,40 @@ def test_drop_connect_eval_rejects_invalid_probability_with_zero_variance(p):
     module = layer.DropConnectLinear(2, 1, bias=False, p=p).eval()
     with pytest.raises(ValueError, match="p must be between 0 and 1"):
         module(torch.zeros(1, 2))
+
+
+@pytest.mark.parametrize("delay_steps", [3, 5])
+def test_sequence_delay_all_padding_has_zero_input_gradient(delay_steps):
+    x = torch.tensor([[float("nan"), float("inf")], [2.0, 3.0], [4.0, 5.0]])
+    x.requires_grad_()
+    y = functional.delay(x, delay_steps)
+    torch.testing.assert_close(y, torch.zeros_like(x))
+    y.sum().backward()
+    torch.testing.assert_close(x.grad, torch.zeros_like(x))
+
+
+@pytest.mark.parametrize("surface", ["step", "module-s", "module-m"])
+def test_delay_warmup_backward_preserves_queued_input_graph(surface):
+    p = torch.tensor([3.0], requires_grad=True)
+    q = torch.tensor([5.0], requires_grad=True)
+    x = p.square()  # Its backward needs saved tensors.
+    if surface == "step":
+        warmup, queue = functional.delay_step(x, (), 1)
+    else:
+        module = layer.Delay(delay_steps=1, step_mode=surface[-1])
+        warmup = module(x)
+
+    torch.testing.assert_close(warmup, torch.zeros_like(x))
+    (warmup.sum() + q.square().sum()).backward()
+    torch.testing.assert_close(q.grad, torch.tensor([10.0]))
+    warmup_grad = p.grad
+
+    if surface == "step":
+        later, _ = functional.delay_step(q, queue, 1)
+    else:
+        later = module(q)
+    torch.testing.assert_close(later, x)
+    later.sum().backward()
+    torch.testing.assert_close(p.grad, torch.tensor([6.0]))
+    assert warmup_grad is None
+    assert not warmup.requires_grad

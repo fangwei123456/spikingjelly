@@ -138,6 +138,7 @@ def delay_step(
     queue_with_x = (*queue, x)
     if len(queue_with_x) > delay_steps:
         return queue_with_x[0], queue_with_x[1:]
+    # Keep warm-up padding detached so backward cannot consume a queued input's graph.
     return torch.zeros_like(x), queue_with_x
 
 
