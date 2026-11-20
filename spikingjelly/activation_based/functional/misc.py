@@ -277,7 +277,7 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
 
 
 def delay(x_seq: torch.Tensor, delay_steps: int) -> torch.Tensor:
-    r"""
+    """
     **API Language** - :ref:`中文 <delay-cn>` | :ref:`English <delay-en>`
 
     ----
@@ -286,7 +286,7 @@ def delay(x_seq: torch.Tensor, delay_steps: int) -> torch.Tensor:
 
     * **中文**
 
-    延迟函数，可以用来延迟输入，使得 ``y[t] = x[t - delay_steps]``。缺失的数据用0填充。若整个序列均为填充，输出相对于输入的梯度为零。
+    延迟函数，可以用来延迟输入，使得 ``y[t] = x[t - delay_steps]``。缺失的数据用0填充。
 
     :param x_seq: 输入的序列，``shape = [T, *]``
     :type x_seq: torch.Tensor
@@ -306,7 +306,6 @@ def delay(x_seq: torch.Tensor, delay_steps: int) -> torch.Tensor:
     * **English**
 
     A delay function that can delay inputs and makes ``y[t] = x[t - delay_steps]``. The nonexistent data will be regarded as 0.
-    If the entire sequence is padding, the output has zero gradient with respect to the input.
 
     :param x_seq: the input sequence with ``shape = [T, *]``
     :type x_seq: torch.Tensor

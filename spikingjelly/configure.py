@@ -90,12 +90,26 @@ triton_neuron_kernel_static_range_max_T = _get_integer(
     "SJ_TRITON_NEURON_KERNEL_STATIC_RANGE_MAX_T", 64
 )
 r"""
-Triton 多步神经元 kernel 使用 ``tl.static_range`` 的最大序列长度，由
+**API Language** - :ref:`中文 <configure-triton-unroll-cn>` | :ref:`English <configure-triton-unroll-en>`
+
+----
+
+.. _configure-triton-unroll-cn:
+
+* **中文**
+
+Triton 多步神经元 kernel（包括 ``FlexSN``）使用 ``tl.static_range`` 的最大序列长度，由
 ``SJ_TRITON_NEURON_KERNEL_STATIC_RANGE_MAX_T`` 配置，默认值为 ``64``。超过该值时
 使用 ``tl.range``，以降低长序列的编译开销。
 
-Maximum sequence length for which Triton multi-step neuron kernels use
-``tl.static_range``, configured by
+----
+
+.. _configure-triton-unroll-en:
+
+* **English**
+
+Maximum sequence length for which Triton multi-step neuron kernels, including
+``FlexSN``, use ``tl.static_range``, configured by
 ``SJ_TRITON_NEURON_KERNEL_STATIC_RANGE_MAX_T``. The default is ``64``. Larger
 sequences use ``tl.range`` to reduce compilation overhead.
 """

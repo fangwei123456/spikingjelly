@@ -296,9 +296,7 @@ class Delay(base.MemoryModule):
 
         * **中文**
 
-        延迟层，可以用来延迟输入，使得 ``y[t] = x[t - delay_steps]``。
-        单步和多步模式的预热填充均为与计算图断开的零；仅含填充的损失没有梯度路径。
-        排队中的输入保留原计算图，可在后续调用输出该输入时反向传播。
+        延迟层，可以用来延迟输入，使得 ``y[t] = x[t - delay_steps]``。缺失的数据用0填充。
 
         :param delay_steps: 延迟的时间步数
         :type delay_steps: int
@@ -314,10 +312,7 @@ class Delay(base.MemoryModule):
 
         * **English**
 
-        A delay layer with ``y[t] = x[t - delay_steps]``. In both step modes,
-        warm-up padding is detached: a padding-only loss has no gradient path.
-        A queued input keeps its original graph for backward when a later call
-        emits it.
+        A delay layer that can delay inputs and makes ``y[t] = x[t - delay_steps]``. The nonexistent data will be regarded as 0.
 
         :param delay_steps: the number of delayed time-steps
         :type delay_steps: int

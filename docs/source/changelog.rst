@@ -76,8 +76,8 @@ spikingjelly.activation_based.encoding
 spikingjelly.activation_based.functional
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+- CUDA IF, LIF and PLIF accelerate matching FP16/BF16 inputs and states with FP32 accumulation per call. Rounding can change spikes near threshold.
 - Stateless ``functional.delay`` preserves a zero input gradient for an all-padding sequence. Stateful delays keep warm-up padding detached so later outputs can backpropagate through queued inputs.
-
 - Explicit ``SJ_*_CUDA_IMPLEMENTATION=torch`` accepts profiles requiring Torch reference execution, including custom surrogates and non-FP32 states.
 - ``kernel_dot_product`` evaluates low-precision Gaussian distances in FP32 and retains FP32 outputs under autocast, preserving spike differences and finite similarities.
 - TET cross-entropy accepts class probability targets, including MixUp and spatial targets.
@@ -113,6 +113,7 @@ Changes
 - Few-spike tracing and incompatible optional Triton imports retain reference execution in automatic mode.
 
 - ST-BIF uses one-third less FP32 state memory and fewer inference allocations.
+- FlexSN Triton kernels use runtime sequence dimensions and limit time-loop unrolling to shorten compilation for long sequences.
 - Removed ``STBIFNode.cur_output``; ``functional.stbif_step`` and
   ``functional.stbif_multi_step`` return ``(out, q, acc_q)``. Consume returned spikes,
   update tuple unpacking, rebuild native extensions and regenerate compiled/exported graphs.

@@ -90,8 +90,7 @@ def delay_step(
     执行 Delay 的单步显式状态转移。``queue`` 是按时间从旧到新排列的 tensor tuple。
     函数返回 ``(y, queue_next)``，不原地修改输入 ``queue``。当 ``delay_steps=0``
     且 ``queue`` 为空时，输出 ``y`` 与输入 ``x`` alias；当已有 queue 被消费时，输出
-    ``y`` 与被弹出的 queue 元素 alias。队列未满时返回与输入计算图断开的零；仅含填充的损失没有梯度路径。
-    输入出队后，仍可通过其原计算图反向传播。
+    ``y`` 与被弹出的 queue 元素 alias。
 
     :param x: 当前输入张量
     :type x: torch.Tensor
@@ -113,9 +112,7 @@ def delay_step(
     ordered from oldest to newest. The function returns ``(y, queue_next)`` and
     does not mutate the input ``queue`` in place. When ``delay_steps=0`` and
     ``queue`` is empty, output ``y`` aliases ``x``; when an existing queue item is
-    consumed, ``y`` aliases the popped queue item. While the queue fills, padding is detached: a
-    padding-only loss has no gradient path. An input keeps its original graph
-    for backward when it leaves the queue.
+    consumed, ``y`` aliases the popped queue item.
 
     :param x: Current input tensor
     :type x: torch.Tensor
@@ -141,6 +138,7 @@ def delay_step(
     queue_with_x = (*queue, x)
     if len(queue_with_x) > delay_steps:
         return queue_with_x[0], queue_with_x[1:]
+    # Keep warm-up padding detached so backward cannot consume a queued input's graph.
     return torch.zeros_like(x), queue_with_x
 
 

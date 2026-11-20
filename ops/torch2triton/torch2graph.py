@@ -27,15 +27,6 @@ class _GraphCollector:
         return make_boxed_func(module)
 
 
-class GraphOptimizer(fx.Transformer):
-    def call_function(self, target, args, kwargs):
-        if target.__name__ == "detach.default":
-            # Remove `.detach()` operation.
-            # We can safely remove it since the bwd graph has already been generated!
-            return args[0]
-        return super().call_function(target, args, kwargs)
-
-
 def generate_forward_and_backward_graph(
     fn: Callable,
     example_inputs: tuple,
@@ -145,8 +136,15 @@ def generate_forward_and_backward_graph(
         raise ValueError(
             f"Failed to capture both forward and backward graphs for {fn}."
         )
-    collector.bwd_module.graph.lint()
-    return (
-        GraphOptimizer(collector.fwd_module).transform().graph,
-        GraphOptimizer(collector.bwd_module).transform().graph,
-    )
+    graphs = (collector.fwd_module.graph, collector.bwd_module.graph)
+    # Backward is already captured; remove detaches in place to retain FX metadata.
+    for graph in graphs:
+        for node in list(graph.nodes):
+            if (
+                node.op == "call_function"
+                and node.target == torch.ops.aten.detach.default
+            ):
+                node.replace_all_uses_with(node.args[0])
+                graph.erase_node(node)
+        graph.lint()
+    return graphs

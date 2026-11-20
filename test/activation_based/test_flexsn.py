@@ -275,6 +275,94 @@ def test_cuda_runtime_lifetime_survives_copy_and_rebuilds():
     assert copied._triton_handle is not None
 
 
+def _division_core(x, v, scale):
+    h = (x + v) / 2.5
+    return torch.sigmoid(h / scale), h
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
+def test_runtime_kernel_codegen_on_cpu(monkeypatch, dtype):
+    from spikingjelly import configure
+    from spikingjelly._ops.flexsn import template
+    from spikingjelly._ops.flexsn.kernel import _build_kernels
+    from spikingjelly._ops.flexsn.launch import _t_static
+    from spikingjelly.activation_based.neuron.flexsn_trace import _trace_core
+
+    monkeypatch.setattr(configure, "triton_neuron_kernel_static_range_max_T", 16)
+    assert _t_static(16) == 16
+    assert _t_static(17) == 0
+
+    monkeypatch.setattr(template, "compile_triton_code_str", lambda code, name: code)
+    scale = torch.ones(1, dtype=dtype)
+    core = FlexSN(_division_core, 1, (scale,))._wrapped_core(1, 1)
+    graphs = _trace_core(core, (scale,) * 3, num_outputs=1, num_states=2)
+    kernels = _build_kernels("division_core", 1, 2, 1, *graphs)
+    for name, source in kernels.items():
+        if name.endswith("_kernel"):
+            assert "    T,\n    NCL,\n    T_STATIC: tl.constexpr," in source
+            assert "tl.static_range(" in source and "tl.range(" in source
+            divisions = [line for line in source.splitlines() if " / " in line]
+            assert divisions
+            if dtype == torch.float32:
+                assert all(".to(" not in line for line in divisions)
+            else:
+                cast = f").to(tl.{str(dtype).removeprefix('torch.')})"
+                assert all(line.endswith(cast) for line in divisions)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+@pytest.mark.parametrize("T", [5, 37])
+@pytest.mark.parametrize("training", [False, True])
+@pytest.mark.parametrize("store_state_seqs", [False, True])
+def test_cuda_runtime_time_loop_matches_reference(
+    monkeypatch, dtype, T, training, store_state_seqs
+):
+    pytest.importorskip("triton")
+    from spikingjelly import configure
+
+    if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
+        pytest.skip("BF16 required")
+    monkeypatch.setattr(configure, "triton_neuron_kernel_static_range_max_T", 16)
+    scale = torch.nn.Parameter(torch.tensor(1.25, device="cuda", dtype=dtype))
+    module = FlexSN(_division_core, 1, (scale,), store_state_seqs=store_state_seqs)
+    x = torch.linspace(-1, 1, T * 129, device="cuda", dtype=dtype).reshape(T, 129)
+    initial = torch.linspace(1, -1, 129, device="cuda", dtype=dtype)
+    x.requires_grad_(training)
+    initial.requires_grad_(training)
+    module.states = (initial,)
+    tolerance = (
+        dict(rtol=1e-2, atol=2e-3)
+        if dtype == torch.float16
+        else dict(rtol=4e-2, atol=1e-2)
+    )
+
+    with torch.set_grad_enabled(training):
+        actual = module(x)
+        assert module._triton_capability[x.device, dtype] is True
+        spikes, states = [], []
+        final = initial
+        # Broadcast once so both backward passes sum across time before neurons.
+        scale_per_neuron = scale.expand_as(initial)
+        for step in x:
+            spike, final = _division_core(step, final, scale_per_neuron)
+            spikes.append(spike)
+            states.append(final)
+        got = (actual, module.states[0])
+        want = (torch.stack(spikes), final)
+        if store_state_seqs:
+            got += (module.state_seqs[0],)
+            want += (torch.stack(states),)
+        else:
+            assert module.state_seqs is None
+        torch.testing.assert_close(got, want, **tolerance)
+        if training:
+            inputs = (x, initial, scale)
+            got_grads = torch.autograd.grad(sum(t.sum() for t in got), inputs)
+            want_grads = torch.autograd.grad(sum(t.sum() for t in want), inputs)
+            torch.testing.assert_close(got_grads, want_grads, **tolerance)
+
+
 def test_nondifferentiable_core_reports_unsupported_training_graph():
     from spikingjelly.activation_based.neuron.flexsn_trace import _trace_core
 

@@ -308,6 +308,12 @@ def generate_triton_code_str(
             )  # e.g. mul.Tensor, spike_fn.default, rsub.Scalar, ...
             if op_name in FX_TO_TRITON:  # apply the transpile rule
                 rhs = FX_TO_TRITON[op_name](node.args, node.kwargs)
+                if op_name in ("div", "div.Tensor", "div.Scalar"):
+                    dtype = getattr(node.meta.get("val"), "dtype", None)
+                    if dtype in (torch.float16, torch.bfloat16):
+                        # Triton promotes division to FP32, unlike the FX result.
+                        tl_dtype = "float16" if dtype == torch.float16 else "bfloat16"
+                        rhs = f"({rhs}).to(tl.{tl_dtype})"
                 triton_code_lines.append(f"{node.name} = {rhs}")
             else:
                 raise NotImplementedError(
