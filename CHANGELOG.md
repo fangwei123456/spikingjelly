@@ -10,6 +10,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 #### spikingjelly.activation_based.layer
 
+- OTTT trace passes no longer update BatchNorm running statistics a second time; only the spike pass commits registered buffer updates.
 - `DropConnectLinear` inference handles zero-variance outputs, including silent spikes and zero drop probability.
 
 #### spikingjelly.activation_based.neuron

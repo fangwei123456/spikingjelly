@@ -343,3 +343,53 @@ def test_fptt_preserves_frozen_parameter_and_running_average():
     torch.testing.assert_close(averages[1], reference_averages[0], rtol=0, atol=0)
     assert model[0].weight.grad is None
     assert not torch.equal(model[1].weight, trainable_snapshot)
+
+
+@pytest.mark.parametrize("training", [True, False])
+def test_grad_with_trace_updates_batchnorm_statistics_from_spikes_only(training):
+    torch.manual_seed(827)
+    bn = nn.BatchNorm1d(3).train(training)
+    reference = copy.deepcopy(bn)
+    spike = torch.randn(8, 3, requires_grad=True)
+    trace = (3.0 + torch.randn(8, 3)).requires_grad_()
+    with torch.no_grad():
+        expected = reference(spike)
+    grad_reference = copy.deepcopy(reference)
+    reference_trace = trace.detach().clone().requires_grad_()
+    upstream = torch.randn(8, 3)
+
+    actual = GradwithTrace(bn)([spike, trace])
+    torch.testing.assert_close(actual, expected)
+    for name, buffer in bn.named_buffers():
+        torch.testing.assert_close(buffer, dict(reference.named_buffers())[name])
+
+    (actual * upstream).sum().backward()
+    (grad_reference(reference_trace) * upstream).sum().backward()
+    torch.testing.assert_close(spike.grad, reference_trace.grad)
+    torch.testing.assert_close(trace.grad, reference_trace.grad)
+    for actual_param, expected_param in zip(
+        bn.parameters(), grad_reference.parameters()
+    ):
+        torch.testing.assert_close(actual_param.grad, expected_param.grad)
+
+
+@pytest.mark.parametrize("affine", [True, False])
+@pytest.mark.parametrize("training", [True, False])
+def test_ottt_batchnorm_tracks_one_spike_batch_per_step(affine, training):
+    torch.manual_seed(828)
+    model = OTTTSequential(OTTTLIFNode(), nn.BatchNorm1d(3, affine=affine)).train(
+        training
+    )
+    reference = copy.deepcopy(model)
+    x = torch.rand(8, 3) * 5
+    reference_output = reference[0](x)
+    spikes = (
+        reference_output[0] if isinstance(reference_output, list) else reference_output
+    )
+    expected = reference[1](spikes)
+    actual = model(x)
+    if isinstance(actual, list):
+        actual = actual[0]
+    torch.testing.assert_close(actual, expected)
+    for name, buffer in model[1].named_buffers():
+        torch.testing.assert_close(buffer, dict(reference[1].named_buffers())[name])

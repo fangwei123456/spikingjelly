@@ -43,11 +43,20 @@ class ReplaceforGrad(torch.autograd.Function):
         return (grad, grad)
 
 
+def _trace_forward(module: nn.Module, trace: Tensor) -> Tensor:
+    # Trace computation must not commit a second set of running statistics.
+    # Bufferless weight layers keep their direct forward path.
+    buffers = {name: buffer.clone() for name, buffer in module.named_buffers()}
+    if not buffers:
+        return module(trace)
+    return torch.func.functional_call(module, buffers, (trace,))
+
+
 def _grad_with_trace(module: nn.Module, x):
     spike, trace = x
     with torch.no_grad():
         out = module(spike)
-    out_for_grad = module(ReplaceforGrad.apply(spike, trace))
+    out_for_grad = _trace_forward(module, ReplaceforGrad.apply(spike, trace))
     return ReplaceforGrad.apply(out_for_grad, out)
 
 
@@ -55,7 +64,7 @@ def _apply_to_spike_and_trace(module: nn.Module, x):
     spike, trace = x
     spike = module(spike)
     with torch.no_grad():
-        trace = module(trace)
+        trace = _trace_forward(module, trace)
     return [spike, trace]
 
 
@@ -103,6 +112,9 @@ class GradwithTrace(nn.Module):
 
         * **中文**
 
+        仅脉冲前向更新包装模块的注册 buffer（例如 BatchNorm 运行统计量）；
+        trace 前向使用 buffer 副本，不提交其更新。未注册的 Python 状态不被隔离。
+
         :param x: ``[spike, trace]``，其中 ``spike`` 用于前向值，``trace`` 用于梯度路径
         :type x: torch.Tensor
         :return: 包装模块的输出，前向值来自 ``spike``，反向梯度来自 ``trace``
@@ -113,6 +125,10 @@ class GradwithTrace(nn.Module):
         .. _GradwithTrace.forward-en:
 
         * **English**
+
+        Only the spike forward updates the wrapped module's registered buffers,
+        such as BatchNorm running statistics. The trace forward uses buffer
+        copies and discards their updates. Unregistered Python state is not isolated.
 
         :param x: ``[spike, trace]`` where ``spike`` provides forward values and ``trace`` provides gradient paths
         :type x: torch.Tensor
@@ -164,6 +180,9 @@ class SpikeTraceOp(nn.Module):
 
         * **中文**
 
+        仅脉冲前向更新注册 buffer；trace 前向使用 buffer 副本，不提交其更新。
+        未注册的 Python 状态不被隔离。
+
         :param x: ``[spike, trace]`` 输入对
         :type x: torch.Tensor
         :return: 对 ``spike`` 与 ``trace`` 施加相同算子后的结果 ``[spike, trace]``
@@ -174,6 +193,9 @@ class SpikeTraceOp(nn.Module):
         .. _SpikeTraceOp.forward-en:
 
         * **English**
+
+        Only the spike forward updates registered buffers. The trace forward uses
+        buffer copies and discards their updates. Unregistered Python state is not isolated.
 
         :param x: ``[spike, trace]`` input pair
         :type x: torch.Tensor
