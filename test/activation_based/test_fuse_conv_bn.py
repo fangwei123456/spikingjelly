@@ -408,3 +408,38 @@ def test_eval_fusion_keeps_mixed_plain_layers_supported(dimension, native_conv):
     fused = fuse_conv_bn_eval_modules(copy.deepcopy(model))
     torch.testing.assert_close(fused(x), model(x))
     assert not any(isinstance(m, bn_cls) for m in fused.modules())
+
+
+class _NativeShiftedBatchNorm(nn.BatchNorm2d):
+    def forward(self, x):
+        return super().forward(x) + 2.0
+
+
+class _NativeScaledConv(nn.Conv2d):
+    def forward(self, x):
+        return 2.0 * super().forward(x)
+
+
+@pytest.mark.parametrize(
+    "conv_cls, bn_cls",
+    [(nn.Conv2d, _NativeShiftedBatchNorm), (_NativeScaledConv, nn.BatchNorm2d)],
+)
+def test_eval_fusion_keeps_native_subclasses_as_modules(conv_cls, bn_cls):
+    model = nn.Sequential(conv_cls(2, 3, 3), bn_cls(3)).eval()
+    x = torch.randn(2, 2, 8, 8)
+    fused = fuse_conv_bn_eval_modules(copy.deepcopy(model))
+    torch.testing.assert_close(fused(x), model(x))
+    assert any(type(m) is conv_cls for m in fused.modules())
+    assert any(type(m) is bn_cls for m in fused.modules())
+
+
+@pytest.mark.parametrize("include_plain_pair", [False, True])
+def test_eval_fusion_log_counts_actual_fusions(loguru_records, include_plain_pair):
+    modules = [layer.WSConv2d(2, 3, 3), layer.BatchNorm2d(3)]
+    if include_plain_pair:
+        modules.extend([layer.Conv2d(3, 4, 1), layer.BatchNorm2d(4)])
+    fuse_conv_bn_eval_modules(nn.Sequential(*modules).eval())
+    assert loguru_records[-1]["message"] == (
+        f"Transform completed: mode=eval_fuse matched_pairs={1 + include_plain_pair} "
+        f"transformed_pairs={int(include_plain_pair)}"
+    )

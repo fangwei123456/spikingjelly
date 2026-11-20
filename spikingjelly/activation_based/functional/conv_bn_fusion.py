@@ -99,6 +99,8 @@ def _collect_conv_bn_matches(fx_model: fx.GraphModule, modules, patterns):
 
 class _EvalFusionTracer(fx.Tracer):
     def is_leaf_module(self, m: nn.Module, module_qualified_name: str) -> bool:
+        if any(isinstance(m, pattern) for pattern in _CONV_BN_PATTERNS):
+            return True
         if isinstance(
             m,
             (
@@ -211,6 +213,7 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
     modules = dict(fx_model.named_modules())
 
     matches = _collect_conv_bn_matches(fx_model, modules, _CONV_BN_PATTERNS)
+    transformed_pairs = 0
     for (conv_target, bn_target), matched_nodes in matches.items():
         conv = modules[conv_target]
         bn = modules[bn_target]
@@ -236,6 +239,7 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
         for node in matched_nodes:
             node.replace_all_uses_with(node.args[0])
             fx_model.graph.erase_node(node)
+        transformed_pairs += 1
 
     fx_model.graph.lint()
     fx_model.delete_all_unused_submodules()
@@ -244,7 +248,7 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
         "Transform completed: mode={} matched_pairs={} transformed_pairs={}",
         "eval_fuse",
         len(matches),
-        len(matches),
+        transformed_pairs,
     )
     return fx_model
 
