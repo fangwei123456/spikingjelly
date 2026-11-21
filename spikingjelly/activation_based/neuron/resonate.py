@@ -205,3 +205,27 @@ class RAFNode(BaseNode):
             self.detach_reset,
         )
         return (spike,), (v, u)
+
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        v, u = states
+        y, u, v, trace = functional.raf_multi_step(
+            inputs[0],
+            u,
+            v,
+            self.b,
+            self.omega,
+            self.dt,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+            store_v_seq,
+        )
+        return (
+            (y,),
+            (
+                v,
+                u,
+            ),
+            trace,
+        )

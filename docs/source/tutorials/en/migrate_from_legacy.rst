@@ -98,3 +98,12 @@ Migration is manual. Whole-module pickles or checkpoints saved by an older versi
 Package rename
 -------------------------------------------
 The old ``clock_driven`` package maps to ``activation_based``, and ``event_driven`` maps to ``timing_based``. This rename shipped in 0.0.0.0.14; see the `0.0.0.0.14 documentation <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en>`_ for migration examples.
+
+Custom neuron subclasses
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use ``SimpleIFNode`` or ``SimpleLIFNode`` when a charge, fire or reset override
+should apply at every time step. With production ``IFNode`` and ``LIFNode``,
+a single-step override applies only to single-step calls. To customize sequence
+execution, supply its transition as described in :doc:`neuron`. Code that used
+``store_v_seq=True`` to trigger single-step execution needs this migration too.

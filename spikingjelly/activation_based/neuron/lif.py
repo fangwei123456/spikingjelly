@@ -242,64 +242,29 @@ class LIFNode(BaseNode):
         )
         return (spike,), (v, *states[1:])
 
-    def multi_step_functional_forward(
-        self,
-        inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        spike_seq, v, _ = functional.lif_multi_step(
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        (v,) = states
+        spikes, v, trace = functional.lif_multi_step(
             inputs[0],
-            states[0],
+            v,
             self.tau,
             self.decay_input,
             self.v_threshold,
             self.v_reset,
             self.surrogate_function,
             self.detach_reset,
-            False,
-            neuron_storage=(
-                None if self._neuron_precision is None else self._neuron_precision[0]
-            ),
-            neuron_fwd=(
-                "fp32" if self._neuron_precision is None else self._neuron_precision[1]
-            ),
-            neuron_bwd=(
-                "fp32" if self._neuron_precision is None else self._neuron_precision[2]
-            ),
+            store_v_seq,
+            neuron_storage=None
+            if self._neuron_precision is None
+            else self._neuron_precision[0],
+            neuron_fwd="fp32"
+            if self._neuron_precision is None
+            else self._neuron_precision[1],
+            neuron_bwd="fp32"
+            if self._neuron_precision is None
+            else self._neuron_precision[2],
         )
-        return (spike_seq,), (v,)
-
-    def multi_step_forward(
-        self, x_seq: torch.Tensor, *args: torch.Tensor, **kwargs: object
-    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
-        if (
-            type(self).single_step_functional_forward
-            is not LIFNode.single_step_functional_forward
-            or type(self).multi_step_functional_forward
-            is not LIFNode.multi_step_functional_forward
-        ):
-            return super().multi_step_forward(x_seq, *args, **kwargs)
-        inputs = (x_seq, *args)
-        states = self.materialize_states(inputs, tuple(self._memories.values()), "m")
-        precision = self._neuron_precision
-        spikes, v, v_seq = functional.lif_multi_step(
-            x_seq,
-            states[0],
-            self.tau,
-            self.decay_input,
-            self.v_threshold,
-            self.v_reset,
-            self.surrogate_function,
-            self.detach_reset,
-            self.store_v_seq,
-            neuron_storage=None if precision is None else precision[0],
-            neuron_fwd="fp32" if precision is None else precision[1],
-            neuron_bwd="fp32" if precision is None else precision[2],
-        )
-        self._memories["v"] = v
-        self.v_seq = v_seq
-        return spikes
+        return (spikes,), (v,), trace
 
 
 class NonSpikingLIFNode(NonSpikingBaseNode):

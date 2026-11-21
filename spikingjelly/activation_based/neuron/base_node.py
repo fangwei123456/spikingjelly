@@ -268,11 +268,10 @@ class BaseNode(base.MemoryModule):
 
         * **中文**
 
-        生产级可微分 SNN 神经元的基类。常规前向由显式状态的 functional
-        状态转移支持；子类应实现 ``single_step_functional_forward``，并仅在存在
-        独立序列实现或专用 kernel 时重写 ``multi_step_functional_forward``。
-        若需要通过 ``neuronal_charge`` 修改 Python 神经元方程，请继承
-        :class:`SimpleBaseNode`。
+        生产级可微分神经元独立实现单步和多步动力学。覆写单步方法仅影响单步。
+        常规多步入口共用 ``_multi_step(inputs, states, store_v_seq, **kwargs)``，
+        返回输出元组、全部末态元组及可选电压轨迹；基类负责 managed 状态提交。
+        需要多步逐次调用单步时请继承 :class:`SimpleBaseNode`。
 
         已物化的张量状态必须与单步输入形状相同。改变批量或特征形状前调用
         ``functional.reset_net(node)``；显式状态调用须传入形状匹配的状态。
@@ -306,12 +305,12 @@ class BaseNode(base.MemoryModule):
 
         * **English**
 
-        Base class for production differentiable spiking neurons. Regular forward
-        is backed by an explicit-state functional transition. Subclasses should
-        implement ``single_step_functional_forward`` and override
-        ``multi_step_functional_forward`` only for an independent sequence
-        implementation or specialized kernel. Inherit :class:`SimpleBaseNode`
-        instead to modify Python neuron equations through ``neuronal_charge``.
+        Production neurons implement single-step and multi-step dynamics independently.
+        Overriding single-step affects only that mode. The default sequence entry points
+        share ``_multi_step(inputs, states, store_v_seq, **kwargs)``, which returns
+        output and final-state tuples and an optional voltage trace. The base class
+        commits managed state. Use :class:`SimpleBaseNode` for single-step customization
+        that applies across time.
 
         Materialized tensor states must match the single-step input shape. Call
         ``functional.reset_net(node)`` before changing batch or feature shape;
@@ -548,27 +547,74 @@ class BaseNode(base.MemoryModule):
         else:
             self.v_seq = torch.cat((v_seq, v_step))
 
-    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
-        if not self.store_v_seq:
-            return super().multi_step_forward(x_seq, *args, **kwargs)
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        # Both sequence entry points use the same transition. Only managed calls record voltage.
+        raise NotImplementedError(
+            f"{self._get_name()} has no multi-step implementation."
+        )
 
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        r"""
+        **API Language** - :ref:`中文 <BaseNode-multi-functional-cn>` | :ref:`English <BaseNode-multi-functional-en>`
+
+        ----
+
+        .. _BaseNode-multi-functional-cn:
+
+        * **中文**
+
+        执行本型号的序列转移。模块 memory、监控轨迹和输入状态均保持不变。
+
+        :param inputs: 时间优先的张量元组，形状为 ``[T, N, ...]``。
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: 按注册顺序排列的已物化初态。
+        :type states: tuple[object, ...]
+        :param kwargs: 传给序列实现的关键字参数。
+        :type kwargs: object
+        :return: 输出序列元组和末态元组。
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
+        :raises NotImplementedError: 本型号未实现序列转移。
+
+        ----
+
+        .. _BaseNode-multi-functional-en:
+
+        * **English**
+
+        Run the model's sequence transition, leaving module memory, monitoring
+        traces and input states untouched.
+
+        :param inputs: Tuple of time-major tensors of shape ``[T, N, ...]``.
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: Materialized initial states in registration order.
+        :type states: tuple[object, ...]
+        :param kwargs: Keyword arguments passed to the sequence implementation.
+        :type kwargs: object
+        :return: Tuple of output sequences and tuple of final states.
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
+        :raises NotImplementedError: The model has no sequence implementation.
+        """
+        outputs, states, _ = self._multi_step(inputs, states, False, **kwargs)
+        return outputs, states
+
+    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
         inputs = (x_seq, *args)
         states = self.materialize_states(inputs, tuple(self._memories.values()), "m")
-        output_steps = []
-        v_steps = []
-        for t in range(x_seq.shape[0]):
-            outputs, states = self.single_step_functional_forward(
-                tuple(x[t] for x in inputs), states, **kwargs
+        outputs, states, trace = self._multi_step(
+            inputs, states, self.store_v_seq, **kwargs
+        )
+        if len(states) != len(self._memories):
+            raise ValueError(
+                f"{self._get_name()} returned an incorrect number of states."
             )
-            output_steps.append(outputs)
-            v_steps.append(states[0])
-
         for name, value in zip(self._memories, states, strict=True):
             self._memories[name] = value
-        self.v_seq = torch.stack(v_steps)
-        outputs = tuple(
-            torch.stack(output_seq) for output_seq in zip(*output_steps, strict=True)
-        )
+        self.v_seq = trace
         return outputs[0] if len(outputs) == 1 else outputs
 
     def materialize_states(

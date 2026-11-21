@@ -117,19 +117,26 @@ __all__ = [
     "lava_cuba_lif_step",
     "if_step",
     "ternary_if_step",
+    "ternary_if_multi_step",
     "ternary_lif_step",
+    "ternary_lif_multi_step",
     "qif_step",
     "eif_step",
     "lif_charge",
     "lif_step",
     "liaf_step",
+    "liaf_multi_step",
     "ilif_step",
     "plif_step",
     "izhikevich_step",
     "raf_step",
+    "raf_multi_step",
     "klif_step",
+    "klif_multi_step",
     "cuba_lif_step",
+    "cuba_lif_multi_step",
     "clif_step",
+    "clif_multi_step",
     "sliding_psn_step",
     "masked_psn_step",
     "gated_lif_step",
@@ -3701,3 +3708,681 @@ def stbif_multi_step(
     from ..._ops.stbif import _forward
 
     return _forward(x_seq, q, acc_q, q_threshold, pos_max, neg_min)
+
+
+def liaf_multi_step(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    tau: float,
+    decay_input: bool,
+    v_threshold: float,
+    v_reset: Optional[float],
+    act: Callable[[torch.Tensor], torch.Tensor],
+    threshold_related: bool,
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <liaf_multi_step-cn>` | :ref:`English <liaf_multi_step-en>`
+
+    ----
+
+    .. _liaf_multi_step-cn:
+
+    * **中文**
+
+    以显式初态沿时间维执行 :func:`liaf_step` 并保留最终状态。
+
+    :param x_seq: 非空时间优先输入，形状为 ``[T, N, ...]``。
+    :type x_seq: torch.Tensor
+    :param v: 已物化的当前膜电位，shape、dtype 和 device 与 ``x_seq[0]`` 兼容
+    :type v: torch.Tensor
+    :param tau: 膜电位时间常数
+    :type tau: float
+    :param decay_input: 输入是否参与衰减
+    :type decay_input: bool
+    :param v_threshold: 放电阈值
+    :type v_threshold: float
+    :param v_reset: 重置电位；``None`` 表示 soft reset
+    :type v_reset: Optional[float]
+    :param act: 生成模拟输出的激活函数
+    :type act: Callable[[torch.Tensor], torch.Tensor]
+    :param threshold_related: 为 ``True`` 时将 ``act`` 作用于充电电位减阈值，
+        否则直接作用于充电电位
+    :type threshold_related: bool
+    :param surrogate_function: 计算 reset 所需脉冲的替代函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否在 reset 分支中分离脉冲的计算图
+    :type detach_reset: bool
+    :param store_v_seq: 为 True 时记录每步更新后的状态轨迹。
+    :type store_v_seq: bool
+    :return: ``(y_seq, v, v_seq)``；未请求的轨迹为 ``None``。
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    ----
+
+    .. _liaf_multi_step-en:
+
+    * **English**
+
+    Apply :func:`liaf_step` along time with explicit initial states.
+
+    :param x_seq: Nonempty time-major input of shape ``[T, N, ...]``.
+    :type x_seq: torch.Tensor
+    :param v: Materialized membrane voltage with shape, dtype, and device
+        compatible with ``x_seq[0]``
+    :type v: torch.Tensor
+    :param tau: Membrane-voltage time constant
+    :type tau: float
+    :param decay_input: Whether the input participates in decay
+    :type decay_input: bool
+    :param v_threshold: Firing threshold
+    :type v_threshold: float
+    :param v_reset: Reset voltage; ``None`` selects soft reset
+    :type v_reset: Optional[float]
+    :param act: Activation function that produces the analog output
+    :type act: Callable[[torch.Tensor], torch.Tensor]
+    :param threshold_related: Apply ``act`` to charged voltage minus the threshold
+        when ``True``; otherwise apply it directly to charged voltage
+    :type threshold_related: bool
+    :param surrogate_function: Surrogate function used to obtain the spike for reset
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach the spike in the reset branch
+    :type detach_reset: bool
+    :param store_v_seq: Record the updated state at each step when True.
+    :type store_v_seq: bool
+    :return: ``(y_seq, v, v_seq)``, with ``None`` for unrequested traces.
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    """
+    outputs = []
+    voltages = []
+    for x in x_seq:
+        y, v = liaf_step(
+            x,
+            v,
+            tau,
+            decay_input,
+            v_threshold,
+            v_reset,
+            act,
+            threshold_related,
+            surrogate_function,
+            detach_reset,
+        )
+        outputs.append(y)
+        if store_v_seq:
+            voltages.append(v)
+    return torch.stack(outputs), v, torch.stack(voltages) if store_v_seq else None
+
+
+def klif_multi_step(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    k: torch.Tensor,
+    tau: float,
+    decay_input: bool,
+    scale_reset: bool,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <klif_multi_step-cn>` | :ref:`English <klif_multi_step-en>`
+
+    ----
+
+    .. _klif_multi_step-cn:
+
+    * **中文**
+
+    以显式初态沿时间维执行 :func:`klif_step` 并保留最终状态。
+
+    :param x_seq: 非空时间优先输入，形状为 ``[T, N, ...]``。
+    :type x_seq: torch.Tensor
+    :param v: 当前膜电位
+    :type v: torch.Tensor
+    :param k: 可学习缩放参数
+    :type k: torch.Tensor
+    :param tau: 膜电位时间常数
+    :type tau: float
+    :param decay_input: 输入是否参与衰减
+    :type decay_input: bool
+    :param scale_reset: reset 是否在除以 ``k`` 后的电位域执行
+    :type scale_reset: bool
+    :param v_threshold: 放电阈值
+    :type v_threshold: float
+    :param v_reset: 重置电位；``None`` 表示 soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: 替代梯度函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否分离 reset 分支中的 spike
+    :type detach_reset: bool
+    :param store_v_seq: 为 True 时记录每步更新后的状态轨迹。
+    :type store_v_seq: bool
+    :return: ``(y_seq, v, v_seq)``；未请求的轨迹为 ``None``。
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    ----
+
+    .. _klif_multi_step-en:
+
+    * **English**
+
+    Apply :func:`klif_step` along time with explicit initial states.
+
+    :param x_seq: Nonempty time-major input of shape ``[T, N, ...]``.
+    :type x_seq: torch.Tensor
+    :param v: Current membrane voltage
+    :type v: torch.Tensor
+    :param k: Learnable scaling parameter
+    :type k: torch.Tensor
+    :param tau: Membrane time constant
+    :type tau: float
+    :param decay_input: Whether the input participates in decay
+    :type decay_input: bool
+    :param scale_reset: Whether reset operates after dividing voltage by ``k``
+    :type scale_reset: bool
+    :param v_threshold: Firing threshold
+    :type v_threshold: float
+    :param v_reset: Reset voltage; ``None`` means soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: Surrogate-gradient function
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach spike in the reset branch
+    :type detach_reset: bool
+    :param store_v_seq: Record the updated state at each step when True.
+    :type store_v_seq: bool
+    :return: ``(y_seq, v, v_seq)``, with ``None`` for unrequested traces.
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    """
+    outputs = []
+    voltages = []
+    for x in x_seq:
+        y, v = klif_step(
+            x,
+            v,
+            k,
+            tau,
+            decay_input,
+            scale_reset,
+            v_threshold,
+            v_reset,
+            surrogate_function,
+            detach_reset,
+        )
+        outputs.append(y)
+        if store_v_seq:
+            voltages.append(v)
+    return torch.stack(outputs), v, torch.stack(voltages) if store_v_seq else None
+
+
+def cuba_lif_multi_step(
+    x_seq: torch.Tensor,
+    current: torch.Tensor,
+    v: torch.Tensor,
+    current_decay: float,
+    voltage_decay: float,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <cuba_lif_multi_step-cn>` | :ref:`English <cuba_lif_multi_step-en>`
+
+    ----
+
+    .. _cuba_lif_multi_step-cn:
+
+    * **中文**
+
+    以显式初态沿时间维执行 :func:`cuba_lif_step` 并保留最终状态。
+
+    :param x_seq: 非空时间优先输入，形状为 ``[T, N, ...]``。
+    :type x_seq: torch.Tensor
+    :param current: 当前突触电流
+    :type current: torch.Tensor
+    :param v: 当前膜电位
+    :type v: torch.Tensor
+    :param current_decay: 突触电流衰减系数
+    :type current_decay: float
+    :param voltage_decay: 膜电位衰减系数
+    :type voltage_decay: float
+    :param v_threshold: 放电阈值
+    :type v_threshold: float
+    :param v_reset: 重置电位；``None`` 表示 soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: 替代梯度函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否分离 reset 分支中的 spike
+    :type detach_reset: bool
+    :param store_v_seq: 为 True 时记录每步更新后的状态轨迹。
+    :type store_v_seq: bool
+    :return: ``(y_seq, current, v, v_seq)``；未请求的轨迹为 ``None``。
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    ----
+
+    .. _cuba_lif_multi_step-en:
+
+    * **English**
+
+    Apply :func:`cuba_lif_step` along time with explicit initial states.
+
+    :param x_seq: Nonempty time-major input of shape ``[T, N, ...]``.
+    :type x_seq: torch.Tensor
+    :param current: Current synaptic current
+    :type current: torch.Tensor
+    :param v: Current membrane voltage
+    :type v: torch.Tensor
+    :param current_decay: Synaptic-current decay
+    :type current_decay: float
+    :param voltage_decay: Membrane-voltage decay
+    :type voltage_decay: float
+    :param v_threshold: Firing threshold
+    :type v_threshold: float
+    :param v_reset: Reset voltage; ``None`` means soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: Surrogate-gradient function
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach spike in the reset branch
+    :type detach_reset: bool
+    :param store_v_seq: Record the updated state at each step when True.
+    :type store_v_seq: bool
+    :return: ``(y_seq, current, v, v_seq)``, with ``None`` for unrequested traces.
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    """
+    outputs = []
+    voltages = []
+    for x in x_seq:
+        y, current, v = cuba_lif_step(
+            x,
+            current,
+            v,
+            current_decay,
+            voltage_decay,
+            v_threshold,
+            v_reset,
+            surrogate_function,
+            detach_reset,
+        )
+        outputs.append(y)
+        if store_v_seq:
+            voltages.append(v)
+    return (
+        torch.stack(outputs),
+        current,
+        v,
+        torch.stack(voltages) if store_v_seq else None,
+    )
+
+
+def raf_multi_step(
+    x_seq: torch.Tensor,
+    u: torch.Tensor,
+    v: torch.Tensor,
+    b: float,
+    omega: float,
+    dt: float,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <raf_multi_step-cn>` | :ref:`English <raf_multi_step-en>`
+
+    ----
+
+    .. _raf_multi_step-cn:
+
+    * **中文**
+
+    以显式初态沿时间维执行 :func:`raf_step` 并保留最终状态。
+
+    :param x_seq: 非空时间优先输入，形状为 ``[T, N, ...]``。
+    :type x_seq: torch.Tensor
+    :param u: 当前实部状态（接收输入的分量），shape、dtype 和 device 与 ``x_seq[0]`` 兼容
+    :type u: torch.Tensor
+    :param v: 当前虚部状态（放电分量），shape、dtype 和 device 与 ``x_seq[0]`` 兼容
+    :type v: torch.Tensor
+    :param b: 衰减率，须为负数
+    :type b: float
+    :param omega: 固有角频率，须为正数
+    :type omega: float
+    :param dt: 积分步长，须为正数
+    :type dt: float
+    :param v_threshold: 放电阈值
+    :type v_threshold: float
+    :param v_reset: 重置电位；``None`` 表示 soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: 替代梯度函数
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否在重置分支中分离脉冲梯度
+    :type detach_reset: bool
+    :param store_v_seq: 为 True 时记录每步更新后的状态轨迹。
+    :type store_v_seq: bool
+    :return: ``(y_seq, u, v, v_seq)``；未请求的轨迹为 ``None``。
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    ----
+
+    .. _raf_multi_step-en:
+
+    * **English**
+
+    Apply :func:`raf_step` along time with explicit initial states.
+
+    :param x_seq: Nonempty time-major input of shape ``[T, N, ...]``.
+    :type x_seq: torch.Tensor
+    :param u: Current real-part state (receives the input), shape, dtype and
+        device compatible with ``x_seq[0]``
+    :type u: torch.Tensor
+    :param v: Current imaginary-part state (the firing component), shape, dtype
+        and device compatible with ``x_seq[0]``
+    :type v: torch.Tensor
+    :param b: Decay rate, must be negative
+    :type b: float
+    :param omega: Intrinsic angular frequency, must be positive
+    :type omega: float
+    :param dt: Integration step size, must be positive
+    :type dt: float
+    :param v_threshold: Firing threshold
+    :type v_threshold: float
+    :param v_reset: Reset voltage; ``None`` means soft reset
+    :type v_reset: Optional[float]
+    :param surrogate_function: Surrogate-gradient function
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach spike in the voltage-reset branch
+    :type detach_reset: bool
+    :param store_v_seq: Record the updated state at each step when True.
+    :type store_v_seq: bool
+    :return: ``(y_seq, u, v, v_seq)``, with ``None`` for unrequested traces.
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    """
+    outputs = []
+    voltages = []
+    for x in x_seq:
+        y, u, v = raf_step(
+            x,
+            u,
+            v,
+            b,
+            omega,
+            dt,
+            v_threshold,
+            v_reset,
+            surrogate_function,
+            detach_reset,
+        )
+        outputs.append(y)
+        if store_v_seq:
+            voltages.append(v)
+    return torch.stack(outputs), u, v, torch.stack(voltages) if store_v_seq else None
+
+
+def ternary_if_multi_step(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <ternary_if_multi_step-cn>` | :ref:`English <ternary_if_multi_step-en>`
+
+    ----
+
+    .. _ternary_if_multi_step-cn:
+
+    * **中文**
+
+    以显式初态沿时间维执行 :func:`ternary_if_step` 并保留最终状态。
+
+    :param x_seq: 非空时间优先输入，形状为 ``[T, N, ...]``。
+    :type x_seq: torch.Tensor
+    :param v: 当前电位张量，形状、dtype 和 device 与 ``x_seq[0]`` 相同。
+    :type v: torch.Tensor
+    :param v_threshold: 对称阈值的正幅值，必须为有限正浮点数。
+    :type v_threshold: float
+    :param v_reset: 两侧共用的有限硬重置电位，必须严格位于阈值之间；
+        ``None`` 使用有符号软重置。
+    :type v_reset: Optional[float]
+    :param surrogate_function: 两侧共用的替代函数。离散前向必须为二值
+        Heaviside，且 :math:`\Theta(0)=1`；连续模式使用其原函数。
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否仅分离重置分支的事件梯度，默认 ``False``。
+    :type detach_reset: bool
+    :param store_v_seq: 为 True 时记录每步更新后的状态轨迹。
+    :type store_v_seq: bool
+    :return: ``(y_seq, v, v_seq)``；未请求的轨迹为 ``None``。
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    ----
+
+    .. _ternary_if_multi_step-en:
+
+    * **English**
+
+    Apply :func:`ternary_if_step` along time with explicit initial states.
+
+    :param x_seq: Nonempty time-major input of shape ``[T, N, ...]``.
+    :type x_seq: torch.Tensor
+    :param v: Current voltage tensor matching ``x_seq[0]`` in shape, dtype and device.
+    :type v: torch.Tensor
+    :param v_threshold: Positive symmetric threshold magnitude; a finite positive float.
+    :type v_threshold: float
+    :param v_reset: Common finite hard-reset voltage strictly between the thresholds;
+        ``None`` selects signed soft reset.
+    :type v_reset: Optional[float]
+    :param surrogate_function: Shared surrogate. Discrete forward must be binary
+        Heaviside with :math:`\Theta(0)=1`; continuous mode uses its primitive.
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach event gradients only in reset;
+        defaults to ``False``.
+    :type detach_reset: bool
+    :param store_v_seq: Record the updated state at each step when True.
+    :type store_v_seq: bool
+    :return: ``(y_seq, v, v_seq)``, with ``None`` for unrequested traces.
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    """
+    outputs = []
+    voltages = []
+    for x in x_seq:
+        y, v = ternary_if_step(
+            x, v, v_threshold, v_reset, surrogate_function, detach_reset
+        )
+        outputs.append(y)
+        if store_v_seq:
+            voltages.append(v)
+    return torch.stack(outputs), v, torch.stack(voltages) if store_v_seq else None
+
+
+def ternary_lif_multi_step(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    tau: float,
+    decay_input: bool,
+    v_threshold: float,
+    v_reset: Optional[float],
+    surrogate_function: SurrogateFunction,
+    detach_reset: bool = False,
+    store_v_seq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    r"""
+    **API Language** - :ref:`中文 <ternary_lif_multi_step-cn>` | :ref:`English <ternary_lif_multi_step-en>`
+
+    ----
+
+    .. _ternary_lif_multi_step-cn:
+
+    * **中文**
+
+    以显式初态沿时间维执行 :func:`ternary_lif_step` 并保留最终状态。
+
+    :param x_seq: 非空时间优先输入，形状为 ``[T, N, ...]``。
+    :type x_seq: torch.Tensor
+    :param v: 当前电位张量，形状、dtype 和 device 与 ``x_seq[0]`` 相同。
+    :type v: torch.Tensor
+    :param tau: 以时间步为单位的时间常数，必须为大于 ``1.0`` 的有限浮点数。
+    :type tau: float
+    :param decay_input: 是否将输入也乘以 ``1/tau``。
+    :type decay_input: bool
+    :param v_threshold: 对称阈值的正幅值，必须为有限正浮点数。
+    :type v_threshold: float
+    :param v_reset: 两侧共用的有限硬重置电位，必须严格位于阈值之间；
+        ``None`` 使用有符号软重置。
+    :type v_reset: Optional[float]
+    :param surrogate_function: 两侧共用的替代函数。离散前向必须为二值
+        Heaviside，且 :math:`\Theta(0)=1`；连续模式使用其原函数。
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: 是否仅分离重置分支的事件梯度，默认 ``False``。
+    :type detach_reset: bool
+    :param store_v_seq: 为 True 时记录每步更新后的状态轨迹。
+    :type store_v_seq: bool
+    :return: ``(y_seq, v, v_seq)``；未请求的轨迹为 ``None``。
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+
+    ----
+
+    .. _ternary_lif_multi_step-en:
+
+    * **English**
+
+    Apply :func:`ternary_lif_step` along time with explicit initial states.
+
+    :param x_seq: Nonempty time-major input of shape ``[T, N, ...]``.
+    :type x_seq: torch.Tensor
+    :param v: Current voltage tensor matching ``x_seq[0]`` in shape, dtype and device.
+    :type v: torch.Tensor
+    :param tau: Time constant in time steps; a finite float greater than ``1.0``.
+    :type tau: float
+    :param decay_input: Whether input is also scaled by ``1/tau``.
+    :type decay_input: bool
+    :param v_threshold: Positive symmetric threshold magnitude; a finite positive float.
+    :type v_threshold: float
+    :param v_reset: Common finite hard-reset voltage strictly between the thresholds;
+        ``None`` selects signed soft reset.
+    :type v_reset: Optional[float]
+    :param surrogate_function: Shared surrogate. Discrete forward must be binary
+        Heaviside with :math:`\Theta(0)=1`; continuous mode uses its primitive.
+    :type surrogate_function: Callable[[torch.Tensor], torch.Tensor]
+    :param detach_reset: Whether to detach event gradients only in reset;
+        defaults to ``False``.
+    :type detach_reset: bool
+    :param store_v_seq: Record the updated state at each step when True.
+    :type store_v_seq: bool
+    :return: ``(y_seq, v, v_seq)``, with ``None`` for unrequested traces.
+    :rtype: tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]
+    """
+    outputs = []
+    voltages = []
+    for x in x_seq:
+        y, v = ternary_lif_step(
+            x,
+            v,
+            tau,
+            decay_input,
+            v_threshold,
+            v_reset,
+            surrogate_function,
+            detach_reset,
+        )
+        outputs.append(y)
+        if store_v_seq:
+            voltages.append(v)
+    return torch.stack(outputs), v, torch.stack(voltages) if store_v_seq else None
+
+
+def clif_multi_step(
+    x_seq: torch.Tensor,
+    v: torch.Tensor,
+    m: torch.Tensor,
+    tau: float,
+    v_threshold: float,
+    spike_function: SurrogateFunction,
+    store_state_seqs: bool = False,
+) -> tuple[
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    Optional[torch.Tensor],
+    Optional[torch.Tensor],
+]:
+    r"""
+    **API Language** - :ref:`中文 <clif_multi_step-cn>` | :ref:`English <clif_multi_step-en>`
+
+    ----
+
+    .. _clif_multi_step-cn:
+
+    * **中文**
+
+    以显式初态沿时间维执行 :func:`clif_step` 并保留最终状态。
+
+    :param x_seq: 非空时间优先输入，形状为 ``[T, N, ...]``。
+    :type x_seq: torch.Tensor
+    :param v: 当前膜电位，与 ``x_seq[0]`` 形状、dtype 和 device 相同。
+    :type v: torch.Tensor
+    :param m: 当前互补电位，与 ``x_seq[0]`` 形状、dtype 和 device 相同。
+    :type m: torch.Tensor
+    :param tau: 膜电位时间常数，大于 ``1``。
+    :type tau: float
+    :param v_threshold: 放电阈值。
+    :type v_threshold: float
+    :param spike_function: 已选定路径的放电函数；可携带替代梯度。融合路径要求标准替代函数的 alpha 为有限正数。
+    :type spike_function: Callable[[torch.Tensor], torch.Tensor]
+    :param store_state_seqs: 为 True 时记录每步更新后的状态轨迹。
+    :type store_state_seqs: bool
+    :return: ``(y_seq, v, m, v_seq, m_seq)``；未请求的轨迹为 ``None``。
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]
+
+    ----
+
+    .. _clif_multi_step-en:
+
+    * **English**
+
+    Apply :func:`clif_step` along time with explicit initial states.
+
+    :param x_seq: Nonempty time-major input of shape ``[T, N, ...]``.
+    :type x_seq: torch.Tensor
+    :param v: Current membrane voltage with the shape, dtype, and device of ``x_seq[0]``.
+    :type v: torch.Tensor
+    :param m: Current complementary voltage with the shape, dtype, and device of ``x_seq[0]``.
+    :type m: torch.Tensor
+    :param tau: Membrane time constant greater than ``1``.
+    :type tau: float
+    :param v_threshold: Firing threshold.
+    :type v_threshold: float
+    :param spike_function: Firing function for the selected path, possibly with
+        a surrogate gradient. Fused standard surrogates require finite positive alpha.
+    :type spike_function: Callable[[torch.Tensor], torch.Tensor]
+    :param store_state_seqs: Record the updated state at each step when True.
+    :type store_state_seqs: bool
+    :return: ``(y_seq, v, m, v_seq, m_seq)``, with ``None`` for unrequested traces.
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]
+    """
+    outputs = []
+    voltages = []
+    complementary = []
+    for x in x_seq:
+        y, v, m = clif_step(x, v, m, tau, v_threshold, spike_function)
+        outputs.append(y)
+        if store_state_seqs:
+            voltages.append(v)
+            complementary.append(m)
+    return (
+        torch.stack(outputs),
+        v,
+        m,
+        torch.stack(voltages) if store_state_seqs else None,
+        torch.stack(complementary) if store_state_seqs else None,
+    )

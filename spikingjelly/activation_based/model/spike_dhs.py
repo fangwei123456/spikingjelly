@@ -217,21 +217,27 @@ class save_v_LIFNode(LIFNode):
         self.v = v
         return spike
 
-    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
-        states = self.materialize_states((x_seq,), tuple(self._memories.values()), "m")
-        v = states[0]
-        spikes = []
-        observations = []
+    def _observed_sequence(self, x_seq, v, record):
+        spikes, observations = [], []
         for x in x_seq:
             spike, v, observation = self._step_with_observation(x, v)
             spikes.append(spike)
-            observations.append(observation)
+            if record:
+                observations.append(observation)
+        trace = torch.stack(observations) if record else None
+        return torch.stack(spikes), v, observation, trace
 
-        self.v = v
-        self.v_before_spike = observations[-1]
-        if self.store_v_seq:
-            self.v_seq = torch.stack(observations)
-        return torch.stack(spikes)
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        (v,) = states
+        spikes, v, _, trace = self._observed_sequence(inputs[0], v, store_v_seq)
+        return (spikes,), (v,), trace
+
+    def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        (v,) = self.materialize_states((x_seq,), (self.v,), "m")
+        spikes, self.v, self.v_before_spike, self.v_seq = self._observed_sequence(
+            x_seq, v, self.store_v_seq
+        )
+        return spikes
 
 
 def getSpikingNode(v_threshold=0.5):
