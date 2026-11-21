@@ -1,4 +1,5 @@
 from functools import partial
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -13,6 +14,8 @@ from spikingjelly.activation_based.model.parametric_lif_net import CIFAR10Net
 from spikingjelly.activation_based.model.qkformer import QKFormer
 from spikingjelly.activation_based.model.sew_resnet import BasicBlock as SEWBlock
 from spikingjelly.activation_based.model.sew_resnet import SEWResNet
+from spikingjelly.activation_based.model.snas_net import SNASNet
+from spikingjelly.activation_based.model.spike_dhs import SpikeDHS
 from spikingjelly.activation_based.model.spike_driven_transformer import (
     SpikeDrivenTransformer,
 )
@@ -48,8 +51,31 @@ def _spiking_vgg_bn():
     return _multi_step(net)
 
 
-# One small configuration per file of ``spikingjelly.activation_based.model``,
-# except the NAS models (``snas_net``, ``spike_dhs``), which need search outputs.
+def _snas_net(celltype):
+    args = SimpleNamespace(
+        dataset="cifar10",
+        timestep=T,
+        second_avgpooling=2,
+        celltype=celltype,
+        threshold=1.0,
+        tau=2.0,
+    )
+    # A searched cell that uses every candidate operation: 0 zero, 1 identity,
+    # 2 conv 1x1, 3 conv 3x3 and 4 average pooling.
+    con_mat = torch.tensor([[0, 3, 2, 4], [0, 0, 1, 3], [0, 0, 0, 0], [0, 0, 0, 0]])
+    return SNASNet(args, con_mat)
+
+
+def _spike_dhs():
+    # Feature-network settings of the CIFAR SpikeDHS architecture (576 channels
+    # before the classifier, which SpikeDHS hard-codes).
+    args = SimpleNamespace(
+        fea_step=3, fea_num_layers=8, fea_block_multiplier=3, fea_filter_multiplier=48
+    )
+    return _multi_step(SpikeDHS(init_channels=3, args=args))
+
+
+# One small configuration per file of ``spikingjelly.activation_based.model``.
 FAMILIES = {
     "spiking_resnet": (
         lambda: _multi_step(
@@ -151,6 +177,9 @@ FAMILIES = {
         ),
         (1, 3, 32, 32),
     ),
+    "snas_net_forward_cell": (partial(_snas_net, "forward"), (1, 3, 32, 32)),
+    "snas_net_backward_cell": (partial(_snas_net, "backward"), (1, 3, 32, 32)),
+    "spike_dhs": (_spike_dhs, (1, 3, 32, 32)),
     "spikformer": (
         partial(
             Spikformer,
@@ -183,12 +212,50 @@ def test_model_families_are_covered_in_strict_mode(family, counter_cls, train):
 
     with op_counter.DispatchCounterMode([counter], strict=True):
         if train:
-            net(x).sum().backward()
+            out = net(x)
+            # SpikeDHS also returns the auxiliary-head logits (None here).
+            out = out[0] if isinstance(out, tuple) else out
+            out.sum().backward()
         else:
             with torch.no_grad():
                 net(x)
 
     assert counter.get_total() > 0
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
+@pytest.mark.parametrize(
+    "counter_cls", [op_counter.FlopCounter, op_counter.MemoryAccessCounter]
+)
+def test_cuda_batch_norm_and_dropout_count_like_cpu(counter_cls):
+    # On CUDA, batch norm dispatches cudnn_batch_norm(_backward) and dropout
+    # native_dropout(_backward); their counts must match the CPU ops.
+    aten = torch.ops.aten
+
+    def count(make_module, device):
+        torch.manual_seed(0)
+        module = make_module().to(device).train()
+        x = torch.randn(2, 3, 4, 4, device=device, requires_grad=True)
+        counter = counter_cls()
+        with op_counter.DispatchCounterMode([counter], strict=True):
+            module(x).sum().backward()
+        return counter.records["Global"]
+
+    cuda = count(partial(nn.BatchNorm2d, 3), "cuda")
+    cpu = count(partial(nn.BatchNorm2d, 3), "cpu")
+    assert aten.cudnn_batch_norm.default in cuda
+    assert cuda[aten.cudnn_batch_norm.default] == cpu[aten.native_batch_norm.default]
+    assert (
+        cuda[aten.cudnn_batch_norm_backward.default]
+        == cpu[aten.native_batch_norm_backward.default]
+    )
+    if counter_cls is op_counter.FlopCounter:
+        # The fused CUDA dropout keeps a boolean mask instead of the CPU's
+        # float one, so only the FLOP counts are comparable.
+        cuda = count(partial(nn.Dropout, 0.5), "cuda")
+        cpu = count(partial(nn.Dropout, 0.5), "cpu")
+        assert aten.native_dropout.default in cuda
+        assert sum(cuda.values()) == sum(cpu.values())
 
 
 def _count(counter_cls, fn, *args):

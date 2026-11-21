@@ -284,6 +284,26 @@ def _memory_native_batch_norm_backward(args, kwargs, out):
     return m
 
 
+def _memory_cudnn_batch_norm_backward(args, kwargs, out):
+    # See _flop_cudnn_batch_norm_backward for the argument reordering.
+    x, grad_output, weight, running_mean, running_var, save_mean, save_var, eps = args[
+        :8
+    ]
+    native_args = (
+        grad_output,
+        x,
+        weight,
+        running_mean,
+        running_var,
+        save_mean,
+        save_var,
+        True,
+        eps,
+        [True, True, True],
+    )
+    return _memory_native_batch_norm_backward(native_args, kwargs, out)
+
+
 class MemoryAccessCounter(BaseCounter):
     def __init__(
         self,
@@ -389,6 +409,10 @@ class MemoryAccessCounter(BaseCounter):
             aten.convolution_backward.default: _memory_convolution_backward,
             aten.native_batch_norm.default: _memory_native_batch_norm,
             aten.native_batch_norm_backward.default: _memory_native_batch_norm_backward,
+            aten.cudnn_batch_norm.default: _memory_native_batch_norm,
+            aten.cudnn_batch_norm_backward.default: _memory_cudnn_batch_norm_backward,
+            aten.native_dropout.default: _memory_read_write_tuple,
+            aten.native_dropout_backward.default: _memory_element_wise_binary,
             aten.max_pool2d_with_indices.default: _memory_max_pool2d_with_indices,
             aten.max_pool2d_with_indices_backward.default: _memory_max_pool2d_with_indices_backward,
             aten.avg_pool2d.default: _memory_read_write,
@@ -402,6 +426,7 @@ class MemoryAccessCounter(BaseCounter):
             aten.sum.default: _memory_read_write,
             aten.sum.dim_IntList: _memory_read_write,
             aten.mean.dim: _memory_read_write,
+            aten.mean.default: _memory_read_write,
             aten.var.correction: _memory_read_write,
             aten.max.dim: _memory_read_write_tuple,
             aten.add.Tensor: _memory_element_wise_binary,
@@ -419,6 +444,13 @@ class MemoryAccessCounter(BaseCounter):
             aten.abs.default: _memory_read_write,
             aten.relu.default: _memory_read_write,
             aten.pow.Tensor_Scalar: _memory_read_write,
+            aten.pow_.Scalar: _memory_read_write,
+            aten.reciprocal.default: _memory_read_write,
+            aten.cosh_.default: _memory_read_write,
+            aten.masked_fill_.Scalar: _memory_element_wise_binary,
+            aten.upsample_nearest2d.default: _memory_read_write,
+            aten.upsample_nearest2d_backward.default: _memory_read_write,
+            aten._local_scalar_dense.default: _memory_null,  # Tensor.item()
             aten.threshold_backward.default: _memory_element_wise_binary,
             aten.sigmoid_backward.default: _memory_element_wise_binary,
             aten.mul.Tensor: _memory_element_wise_binary,
