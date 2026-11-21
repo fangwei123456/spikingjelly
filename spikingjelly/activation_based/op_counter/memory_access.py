@@ -184,9 +184,27 @@ def _memory_max_pool2d_with_indices_backward(args, kwargs, out):
     return _bytes(grad_output) + _bytes(indices) + _bytes(grad_x)
 
 
+def _memory_adaptive_max_pool_backward(args, kwargs, out):
+    grad_output, indices = args[0], args[2]
+    return _bytes(grad_output) + _bytes(indices) + _bytes(out)
+
+
 def _memory_read_write(args, kwargs, out):
     x = args[0]
     return _bytes(x) + _bytes(out)
+
+
+def _memory_read_write_tuple(args, kwargs, out):
+    return _bytes(args[0]) + sum(_bytes(y) for y in out)
+
+
+def _memory_copy_(args, kwargs, out):
+    return _bytes(args[1]) + _bytes(out)  # read src, write self
+
+
+def _memory_scatter_src(args, kwargs, out):
+    x, _dim, index, src = args[:4]
+    return _bytes(x) + _bytes(index) + _bytes(src) + _bytes(out)
 
 
 def _memory_element_wise_binary(args, kwargs, out):
@@ -374,9 +392,18 @@ class MemoryAccessCounter(BaseCounter):
             aten.max_pool2d_with_indices.default: _memory_max_pool2d_with_indices,
             aten.max_pool2d_with_indices_backward.default: _memory_max_pool2d_with_indices_backward,
             aten.avg_pool2d.default: _memory_read_write,
+            aten.avg_pool2d_backward.default: _memory_read_write,
+            aten._adaptive_avg_pool2d.default: _memory_read_write,
+            aten._adaptive_avg_pool2d_backward.default: _memory_read_write,
+            aten.adaptive_max_pool2d.default: _memory_read_write_tuple,
+            aten.adaptive_max_pool2d_backward.default: _memory_adaptive_max_pool_backward,
+            aten.adaptive_max_pool3d.default: _memory_read_write_tuple,
+            aten.adaptive_max_pool3d_backward.default: _memory_adaptive_max_pool_backward,
             aten.sum.default: _memory_read_write,
             aten.sum.dim_IntList: _memory_read_write,
             aten.mean.dim: _memory_read_write,
+            aten.var.correction: _memory_read_write,
+            aten.max.dim: _memory_read_write_tuple,
             aten.add.Tensor: _memory_element_wise_binary,
             aten.add_.Tensor: _memory_element_wise_binary,
             aten.add.Scalar: _memory_element_wise_binary,
@@ -389,6 +416,11 @@ class MemoryAccessCounter(BaseCounter):
             aten.rsub.Scalar: _memory_element_wise_binary,
             aten.neg.default: _memory_read_write,
             aten.neg_.default: _memory_read_write,
+            aten.abs.default: _memory_read_write,
+            aten.relu.default: _memory_read_write,
+            aten.pow.Tensor_Scalar: _memory_read_write,
+            aten.threshold_backward.default: _memory_element_wise_binary,
+            aten.sigmoid_backward.default: _memory_element_wise_binary,
             aten.mul.Tensor: _memory_element_wise_binary,
             aten.mul_.Tensor: _memory_element_wise_binary,
             aten.mul.Scalar: _memory_element_wise_binary,
@@ -416,11 +448,27 @@ class MemoryAccessCounter(BaseCounter):
             aten.sigmoid.default: _memory_read_write,
             aten.sigmoid_.default: _memory_read_write,
             aten.stack.default: _memory_stack,
+            aten.cat.default: _memory_stack,
+            aten.repeat.default: _memory_read_write,
+            aten.copy_.default: _memory_copy_,
+            aten.scatter.src: _memory_scatter_src,
             aten.clone.default: _memory_read_write,
             aten._to_copy.default: _memory_read_write,
             aten.full_like.default: _memory_full_like,
             aten.ones_like.default: _memory_full_like,
+            aten.zeros_like.default: _memory_full_like,
+            aten.zeros.default: _memory_full_like,
+            aten.new_zeros.default: _memory_full_like,
+            aten.bernoulli_.float: _memory_full_like,  # in-place random fill
+            aten.empty_like.default: _memory_null,
+            aten.new_empty_strided.default: _memory_null,
             aten.view.default: _memory_null,
+            aten._unsafe_view.default: _memory_null,
+            aten.as_strided.default: _memory_null,
+            aten.transpose.int: _memory_null,
+            aten.permute.default: _memory_null,
+            aten.split.Tensor: _memory_null,
+            aten.slice.Tensor: _memory_null,
             aten.unsqueeze.default: _memory_null,
             aten.squeeze.dim: _memory_null,
             aten.unbind.int: _memory_null,
