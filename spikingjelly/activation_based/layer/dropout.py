@@ -221,6 +221,8 @@ class DropConnectLinear(base.MemoryModule):
             被调用，线性层恢复为完全连接的状态。完全连接的线性层，调用 ``reset()`` 函数后的第一次前向传播时被重新按概率断开。 若为
             ``False``，在每一次前向传播时线性层都会被重新完全连接再按概率断开。 阅读 :ref:`layer.Dropout <Dropout.__init__-cn>` 以
             获得更多关于此参数的信息。默认为 ``False``
+            缓存状态为布尔 ``weight_mask`` 和可选的 ``bias_mask``，每次前向使用当前参数。
+            旧版本保存的浮点丢弃参数状态需要重新初始化。
         :type invariant: bool
 
         :param activation: 在线性层后的激活层
@@ -268,6 +270,9 @@ class DropConnectLinear(base.MemoryModule):
             status. Then the connections will be re-dropped at the first time of forward after ``reset()``. If set to
             ``False``, the connections will be re-dropped at every forward. See :ref:`layer.Dropout <Dropout.__init__-en>`
             for more information to understand this parameter. Default: ``False``
+            Cached states are boolean ``weight_mask`` and optional ``bias_mask``;
+            current parameters are used on every forward. Reinitialize explicit
+            functional states saved as dropped parameter values by older versions.
         :type invariant: bool
 
         :param activation: the activation layer after the linear layer
@@ -289,9 +294,9 @@ class DropConnectLinear(base.MemoryModule):
         self.reset_parameters()
 
         self.p = p  # 置0的概率
-        self.register_memory("dropped_w", None)
+        self.register_memory("weight_mask", None)
         if self.bias is not None:
-            self.register_memory("dropped_b", None)
+            self.register_memory("bias_mask", None)
 
         self.samples_num = samples_num
         self.invariant = invariant
@@ -351,14 +356,13 @@ class DropConnectLinear(base.MemoryModule):
         if hasattr(self.activation, "reset"):
             self.activation.reset()
 
-    def drop(self, batch_size: int) -> tuple[Tensor, Optional[Tensor]]:
+    def _sample_masks(self, batch_size: int) -> tuple[Tensor, Optional[Tensor]]:
         mask_w = (
             torch.rand_like(
                 self.weight.unsqueeze(0).expand(batch_size, *self.weight.shape)
             )
             >= self.p
         )
-        dropped_w = self.weight * mask_w
 
         if self.bias is not None:
             mask_b = (
@@ -367,10 +371,47 @@ class DropConnectLinear(base.MemoryModule):
                 )
                 >= self.p
             )
-            dropped_b = self.bias * mask_b
         else:
-            dropped_b = None
-        return dropped_w, dropped_b
+            mask_b = None
+        return mask_w, mask_b
+
+    def drop(self, batch_size: int) -> tuple[Tensor, Optional[Tensor]]:
+        r"""
+        **API Language** - :ref:`中文 <DropConnectLinear.drop-cn>` | :ref:`English <DropConnectLinear.drop-en>`
+
+        ----
+
+        .. _DropConnectLinear.drop-cn:
+
+        * **中文**
+
+        用新采样的连接掩码乘以当前参数，不修改缓存状态。
+
+        :param batch_size: 独立连接掩码的数量。
+        :type batch_size: int
+        :return: 形状为 ``[batch_size, out_features, in_features]`` 的权重和
+            形状为 ``[batch_size, out_features]`` 的偏置；无偏置时第二项为 ``None``。
+        :rtype: tuple[torch.Tensor, Optional[torch.Tensor]]
+
+        ----
+
+        .. _DropConnectLinear.drop-en:
+
+        * **English**
+
+        Multiply current parameters by fresh connection masks without changing cached states.
+
+        :param batch_size: Number of independent connection masks.
+        :type batch_size: int
+        :return: Weights of shape ``[batch_size, out_features, in_features]`` and
+            biases of shape ``[batch_size, out_features]``, or ``None`` without bias.
+        :rtype: tuple[torch.Tensor, Optional[torch.Tensor]]
+        """
+        weight_mask, bias_mask = self._sample_masks(batch_size)
+        return (
+            self.weight * weight_mask,
+            None if self.bias is None else self.bias * bias_mask,
+        )
 
     def single_step_functional_forward(
         self,
@@ -378,18 +419,70 @@ class DropConnectLinear(base.MemoryModule):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[Tensor, ...], tuple[object, ...]]:
+        r"""
+        **API Language** - :ref:`中文 <DropConnectLinear.single_step_functional_forward-cn>` | :ref:`English <DropConnectLinear.single_step_functional_forward-en>`
+
+        ----
+
+        .. _DropConnectLinear.single_step_functional_forward-cn:
+
+        * **中文**
+
+        训练时用当前参数和连接掩码计算输出；``invariant=True`` 时保留掩码，
+        否则重新采样。评估时使用高斯采样近似并保留传入状态。
+
+        :param inputs: 单元素元组，输入形状为 ``[B, in_features]``。
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: ``(weight_mask,)`` 或 ``(weight_mask, bias_mask)``；掩码为
+            ``None`` 或布尔张量，形状分别为 ``[B, out_features, in_features]`` 和 ``[B, out_features]``。
+        :type states: tuple[object, ...]
+        :param kwargs: 预留的额外关键字参数，当前不使用。
+        :type kwargs: object
+        :return: ``((output,), new_states)``，输出形状为 ``[B, out_features]``。
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
+        :raises ValueError: 训练时复用的状态不是布尔掩码，或评估时 ``p`` 超出 ``[0, 1]``。
+
+        ----
+
+        .. _DropConnectLinear.single_step_functional_forward-en:
+
+        * **English**
+
+        Training uses current parameters and connection masks, retaining masks
+        when ``invariant=True`` and resampling otherwise. Evaluation uses the
+        Gaussian sampling approximation and preserves the supplied states.
+
+        :param inputs: Single-element tuple with input shape ``[B, in_features]``.
+        :type inputs: tuple[torch.Tensor, ...]
+        :param states: ``(weight_mask,)`` or ``(weight_mask, bias_mask)``; masks are
+            ``None`` or boolean tensors of shapes ``[B, out_features, in_features]`` and ``[B, out_features]``.
+        :type states: tuple[object, ...]
+        :param kwargs: Reserved extra keyword arguments, currently unused.
+        :type kwargs: object
+        :return: ``((output,), new_states)`` with output shape ``[B, out_features]``.
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
+        :raises ValueError: Reused training states are not boolean masks, or evaluation ``p`` is outside ``[0, 1]``.
+        """
         input = inputs[0]
-        dropped_w = states[0]
-        dropped_b = states[1] if self.bias is not None else None
+        weight_mask = states[0]
+        bias_mask = states[1] if self.bias is not None else None
         if self.training:
-            if not self.invariant or dropped_w is None:
-                dropped_w, dropped_b = self.drop(input.shape[0])
+            if not self.invariant or weight_mask is None:
+                weight_mask, bias_mask = self._sample_masks(input.shape[0])
+            if weight_mask.dtype != torch.bool or (
+                bias_mask is not None and bias_mask.dtype != torch.bool
+            ):
+                raise ValueError(
+                    "DropConnectLinear states must be boolean connection masks; "
+                    "reset the module or initialize fresh functional states."
+                )
+            dropped_w = self.weight * weight_mask
             ret = torch.bmm(dropped_w, input.unsqueeze(-1)).squeeze(-1)
             if self.bias is not None:
-                ret = ret + dropped_b
+                ret = ret + self.bias * bias_mask
             output = ret if self.activation is None else self.activation(ret)
             updated_states = (
-                (dropped_w, dropped_b) if self.bias is not None else (dropped_w,)
+                (weight_mask, bias_mask) if self.bias is not None else (weight_mask,)
             )
             return (output,), updated_states
 

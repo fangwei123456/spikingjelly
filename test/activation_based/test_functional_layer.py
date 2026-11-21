@@ -380,3 +380,35 @@ def test_drop_connect_eval_rejects_invalid_probability_with_zero_variance(p):
     module = layer.DropConnectLinear(2, 1, bias=False, p=p).eval()
     with pytest.raises(ValueError, match="p must be between 0 and 1"):
         module(torch.zeros(1, 2))
+
+
+def test_dropconnect_public_drop_uses_fresh_masks_without_caching(monkeypatch):
+    monkeypatch.setattr(torch, "rand_like", torch.ones_like)
+    module = layer.DropConnectLinear(3, 2, p=0.5, invariant=True, activation=None)
+    weights, biases = module.drop(4)
+    torch.testing.assert_close(weights, module.weight.expand(4, 2, 3))
+    torch.testing.assert_close(biases, module.bias.expand(4, 2))
+    assert module.weight_mask is None
+    assert module.bias_mask is None
+
+
+def test_dropconnect_rejects_legacy_cached_parameter_products():
+    module = layer.DropConnectLinear(3, 2, invariant=True, activation=None)
+    with pytest.raises(ValueError, match="boolean connection masks"):
+        module.single_step_functional_forward(
+            (torch.randn(4, 3),),
+            (module.weight.expand(4, 2, 3), module.bias.expand(4, 2)),
+        )
+
+
+def test_dropconnect_cached_masks_survive_parameter_dtype_conversion(monkeypatch):
+    monkeypatch.setattr(torch, "rand_like", torch.ones_like)
+    module = layer.DropConnectLinear(3, 2, p=0.5, invariant=True, activation=None)
+    x = torch.randn(4, 3)
+    module(x)
+    module.double()
+    actual = module(x.double())
+    expected = F.linear(x.double(), module.weight, module.bias)
+    torch.testing.assert_close(actual, expected)
+    actual.square().sum().backward()
+    assert module.weight.grad is not None
