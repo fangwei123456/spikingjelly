@@ -64,11 +64,11 @@ optimization through model builders.
   temporal state may be exceptions, and must document why. The rule does not restrict
   user modules.
 
-- **DropConnect state.** `DropConnectLinear` caches boolean `weight_mask` and
-  optional `bias_mask` states, not masked parameter products. With `invariant=True`
-  the sampled connections persist until reset while weights and their gradients
-  remain current on every step. Reinitialize explicit states from older versions;
-  floating-point cached parameter products are rejected during training.
+- **DropConnect state.** With `invariant=True`, `DropConnectLinear` caches boolean
+  connection masks until reset and applies them to the current parameters each
+  step. Reinitialize old explicit invariant states. Subclasses customize mask
+  sampling with `_sample_masks(batch_size)`. Non-invariant training calls
+  `drop(batch_size)` each step and keeps the mask slots empty.
 
 ## Other modules
 

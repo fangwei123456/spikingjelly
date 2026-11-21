@@ -392,6 +392,53 @@ def test_dropconnect_public_drop_uses_fresh_masks_without_caching(monkeypatch):
     assert module.bias_mask is None
 
 
+def test_dropconnect_non_invariant_forward_uses_overridden_drop():
+    class KeepConnections(layer.DropConnectLinear):
+        def drop(self, batch_size):
+            return self.weight.expand(batch_size, -1, -1), None
+
+    module = KeepConnections(3, 2, bias=False, p=1, activation=None, step_mode="m")
+    x = torch.ones(2, 4, 3)
+    with torch.no_grad():
+        module.weight.fill_(1)
+
+    torch.testing.assert_close(module(x), F.linear(x, module.weight))
+    assert module.weight_mask is None
+
+    module.step_mode = "s"
+    module.invariant = True
+    with pytest.raises(ValueError, match="_sample_masks"):
+        module(x[0])
+
+
+def test_dropconnect_invariant_subclass_reuses_custom_mask_views():
+    class KeepConnections(layer.DropConnectLinear):
+        def _sample_masks(self, batch_size):
+            return (
+                self.weight.new_ones((1, 2, 3), dtype=torch.bool).expand(
+                    batch_size, -1, -1
+                ),
+                self.bias.new_ones((1, 2), dtype=torch.bool).expand(batch_size, -1),
+            )
+
+    module = KeepConnections(3, 2, p=1, invariant=True, activation=None)
+    x = torch.ones(4, 3)
+    torch.testing.assert_close(module(x), F.linear(x, module.weight, module.bias))
+    functional.detach_net(module)
+
+    with torch.no_grad():
+        module.weight.add_(1)
+    outputs, states = module.single_step_functional_forward(
+        (x,), (module.weight_mask, module.bias_mask)
+    )
+    torch.testing.assert_close(outputs[0], F.linear(x, module.weight, module.bias))
+    assert states[0] is module.weight_mask
+    assert states[1] is module.bias_mask
+    outputs[0].sum().backward()
+    torch.testing.assert_close(module.weight.grad, torch.full_like(module.weight, 4))
+    torch.testing.assert_close(module.bias.grad, torch.full_like(module.bias, 4))
+
+
 def test_dropconnect_rejects_legacy_cached_parameter_products():
     module = layer.DropConnectLinear(3, 2, invariant=True, activation=None)
     with pytest.raises(ValueError, match="boolean connection masks"):

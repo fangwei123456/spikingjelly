@@ -18,7 +18,7 @@ Fixes
 spikingjelly.activation_based.layer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- ``DropConnectLinear`` caches connection masks instead of parameter products, preserving gradients and current weights during invariant online training; reinitialize old explicit functional states.
+- ``DropConnectLinear`` preserves parameter gradients during invariant online training. Reinitialize old explicit invariant states and use ``_sample_masks`` to customize invariant mask sampling in subclasses.
 - ``DropConnectLinear`` inference handles zero-variance outputs, including silent spikes and zero drop probability.
 
 spikingjelly.activation_based.neuron

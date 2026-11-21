@@ -221,8 +221,7 @@ class DropConnectLinear(base.MemoryModule):
             被调用，线性层恢复为完全连接的状态。完全连接的线性层，调用 ``reset()`` 函数后的第一次前向传播时被重新按概率断开。 若为
             ``False``，在每一次前向传播时线性层都会被重新完全连接再按概率断开。 阅读 :ref:`layer.Dropout <Dropout.__init__-cn>` 以
             获得更多关于此参数的信息。默认为 ``False``
-            缓存状态为布尔 ``weight_mask`` 和可选的 ``bias_mask``，每次前向使用当前参数。
-            旧版本保存的浮点丢弃参数状态需要重新初始化。
+            固定连接模式缓存布尔掩码，每次前向使用当前参数。旧版本的显式固定连接状态需要重新初始化。
         :type invariant: bool
 
         :param activation: 在线性层后的激活层
@@ -270,9 +269,8 @@ class DropConnectLinear(base.MemoryModule):
             status. Then the connections will be re-dropped at the first time of forward after ``reset()``. If set to
             ``False``, the connections will be re-dropped at every forward. See :ref:`layer.Dropout <Dropout.__init__-en>`
             for more information to understand this parameter. Default: ``False``
-            Cached states are boolean ``weight_mask`` and optional ``bias_mask``;
-            current parameters are used on every forward. Reinitialize explicit
-            functional states saved as dropped parameter values by older versions.
+            Invariant mode caches boolean masks and uses current parameters on each
+            forward. Reinitialize explicit invariant states from older versions.
         :type invariant: bool
 
         :param activation: the activation layer after the linear layer
@@ -371,6 +369,7 @@ class DropConnectLinear(base.MemoryModule):
             self.activation.reset()
 
     def _sample_masks(self, batch_size: int) -> tuple[Tensor, Optional[Tensor]]:
+        # Subclass hook for sampling boolean connection masks before applying parameters.
         mask_w = (
             torch.rand_like(
                 self.weight.unsqueeze(0).expand(batch_size, *self.weight.shape)
@@ -399,7 +398,8 @@ class DropConnectLinear(base.MemoryModule):
 
         * **中文**
 
-        用新采样的连接掩码乘以当前参数，不修改缓存状态。
+        用新采样的连接掩码乘以当前参数，不修改缓存状态。非固定连接训练每步调用本方法。
+        子类通过重写 ``_sample_masks(batch_size)`` 定制固定连接模式，返回同形状的布尔掩码。
 
         :param batch_size: 独立连接掩码的数量。
         :type batch_size: int
@@ -414,6 +414,8 @@ class DropConnectLinear(base.MemoryModule):
         * **English**
 
         Multiply current parameters by fresh connection masks without changing cached states.
+        Non-invariant training calls this method on each step. To customize invariant
+        training, override ``_sample_masks(batch_size)`` to return boolean masks of the same shapes.
 
         :param batch_size: Number of independent connection masks.
         :type batch_size: int
@@ -442,8 +444,8 @@ class DropConnectLinear(base.MemoryModule):
 
         * **中文**
 
-        训练时用当前参数和连接掩码计算输出；``invariant=True`` 时保留掩码，
-        否则重新采样。评估时使用高斯采样近似并保留传入状态。
+        ``invariant=True`` 时用保留的掩码和当前参数计算输出，否则每步调用
+        :meth:`drop` 并清空掩码状态。评估时使用高斯采样近似并保留传入状态。
 
         :param inputs: 单元素元组，输入形状为 ``[B, in_features]``。
         :type inputs: tuple[torch.Tensor, ...]
@@ -454,7 +456,8 @@ class DropConnectLinear(base.MemoryModule):
         :type kwargs: object
         :return: ``((output,), new_states)``，输出形状为 ``[B, out_features]``。
         :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
-        :raises ValueError: 训练时复用的状态不是布尔掩码，或评估时 ``p`` 超出 ``[0, 1]``。
+        :raises ValueError: 固定连接训练的掩码类型或形状无效、子类只重写了 ``drop``，
+            或评估时 ``p`` 超出 ``[0, 1]``。
 
         ----
 
@@ -462,8 +465,8 @@ class DropConnectLinear(base.MemoryModule):
 
         * **English**
 
-        Training uses current parameters and connection masks, retaining masks
-        when ``invariant=True`` and resampling otherwise. Evaluation uses the
+        Training with ``invariant=True`` uses retained masks and current parameters.
+        Otherwise, training calls :meth:`drop` per step and clears mask states. Evaluation uses the
         Gaussian sampling approximation and preserves the supplied states.
 
         :param inputs: Single-element tuple with input shape ``[B, in_features]``.
@@ -475,29 +478,64 @@ class DropConnectLinear(base.MemoryModule):
         :type kwargs: object
         :return: ``((output,), new_states)`` with output shape ``[B, out_features]``.
         :rtype: tuple[tuple[torch.Tensor, ...], tuple[object, ...]]
-        :raises ValueError: Reused training states are not boolean masks, or evaluation ``p`` is outside ``[0, 1]``.
+        :raises ValueError: Invariant training masks have an invalid dtype or shape, a
+            subclass overrides only ``drop`` in invariant training, or evaluation ``p`` is outside ``[0, 1]``.
         """
         input = inputs[0]
-        weight_mask = states[0]
-        bias_mask = states[1] if self.bias is not None else None
         if self.training:
-            if not self.invariant or weight_mask is None:
-                weight_mask, bias_mask = self._sample_masks(input.shape[0])
-            if weight_mask.dtype != torch.bool or (
-                bias_mask is not None and bias_mask.dtype != torch.bool
-            ):
-                raise ValueError(
-                    "DropConnectLinear states must be boolean connection masks; "
-                    "reset the module or initialize fresh functional states."
+            batch_size = input.shape[0]
+            if self.invariant:
+                weight_mask = states[0]
+                bias_mask = states[1] if self.bias is not None else None
+                sample_masks = weight_mask is None
+                if sample_masks:
+                    if (
+                        type(self).drop is not DropConnectLinear.drop
+                        and type(self)._sample_masks is DropConnectLinear._sample_masks
+                    ):
+                        raise ValueError(
+                            "Override _sample_masks to customize invariant "
+                            "DropConnectLinear training."
+                        )
+                    weight_mask, bias_mask = self._sample_masks(batch_size)
+                if (
+                    not isinstance(weight_mask, Tensor)
+                    or weight_mask.dtype != torch.bool
+                    or weight_mask.shape != (batch_size, *self.weight.shape)
+                    or (
+                        self.bias is not None
+                        and (
+                            not isinstance(bias_mask, Tensor)
+                            or bias_mask.dtype != torch.bool
+                            or bias_mask.shape != (batch_size, *self.bias.shape)
+                        )
+                    )
+                ):
+                    raise ValueError(
+                        "DropConnectLinear states must be boolean connection masks "
+                        "matching the input batch and parameter shapes; reset the "
+                        "module or initialize fresh functional states."
+                    )
+                if sample_masks:
+                    # Mask views must support MemoryModule.detach's in-place detach.
+                    weight_mask = weight_mask.detach()
+                    if bias_mask is not None:
+                        bias_mask = bias_mask.detach()
+                dropped_w = self.weight * weight_mask
+                dropped_b = self.bias * bias_mask if self.bias is not None else None
+                updated_states = (
+                    (weight_mask, bias_mask)
+                    if self.bias is not None
+                    else (weight_mask,)
                 )
-            dropped_w = self.weight * weight_mask
+            else:
+                dropped_w, dropped_b = self.drop(batch_size)
+                updated_states = (None, None) if self.bias is not None else (None,)
+
             ret = torch.bmm(dropped_w, input.unsqueeze(-1)).squeeze(-1)
             if self.bias is not None:
-                ret = ret + self.bias * bias_mask
+                ret = ret + dropped_b
             output = ret if self.activation is None else self.activation(ret)
-            updated_states = (
-                (weight_mask, bias_mask) if self.bias is not None else (weight_mask,)
-            )
             return (output,), updated_states
 
         if not 0 <= self.p <= 1:
