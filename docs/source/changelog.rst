@@ -46,6 +46,12 @@ spikingjelly.activation_based.precision
 
 - BF16 capability detection queries non-CUDA accelerator backends instead of rejecting them unconditionally.
 
+spikingjelly.activation_based.op_counter
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``FlopCounter`` counts batch-norm backward without affine parameters and ``MemoryAccessCounter`` counts ``logical_not`` as a unary op, instead of raising even with ``strict=False``.
+- ``ACCounter`` counts out-of-place ``sigmoid`` like ``sigmoid_`` instead of as zero.
+
 spikingjelly.datasets
 ^^^^^^^^^^^^^^^^^^^^^
 

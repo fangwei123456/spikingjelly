@@ -117,3 +117,15 @@ def test_ac_preserves_large_transposed_convolution_reduction():
         model(x)
 
     assert counter.get_total() == 64 * (3 * size - 2) ** 2 - 9
+
+
+def test_ac_counts_out_of_place_and_in_place_sigmoid_alike():
+    x = torch.rand(10)
+    totals = []
+    for fn in (torch.sigmoid, lambda t: t.sigmoid_()):
+        y = x.clone()
+        counter = op_counter.ACCounter()
+        with op_counter.DispatchCounterMode([counter]):
+            fn(y)
+        totals.append(counter.get_total())
+    assert totals == [x.numel(), x.numel()]

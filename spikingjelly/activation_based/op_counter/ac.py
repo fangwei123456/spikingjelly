@@ -312,6 +312,7 @@ class ACCounter(BaseCounter):
             aten.sub_.Scalar: _ac_element_wise,
             aten.rsub.Tensor: _ac_element_wise,
             aten.rsub.Scalar: _ac_element_wise,
+            aten.sigmoid.default: _ac_sigmoid,
             aten.sigmoid_.default: _ac_sigmoid,
             # other aten ops do not involve AC operations
         }

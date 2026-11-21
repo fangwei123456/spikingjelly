@@ -412,7 +412,7 @@ class MemoryAccessCounter(BaseCounter):
             aten.logical_and.default: _memory_element_wise_binary,
             aten.logical_or.default: _memory_element_wise_binary,
             aten.logical_xor.default: _memory_element_wise_binary,
-            aten.logical_not.default: _memory_element_wise_binary,
+            aten.logical_not.default: _memory_read_write,
             aten.sigmoid.default: _memory_read_write,
             aten.sigmoid_.default: _memory_read_write,
             aten.stack.default: _memory_stack,
