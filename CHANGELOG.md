@@ -35,6 +35,10 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 - BF16 capability detection queries non-CUDA accelerator backends instead of rejecting them unconditionally.
 
+#### spikingjelly.activation_based.op_counter
+
+- `FlopCounter` and `MemoryAccessCounter` count adaptive pooling, `var`, `max.dim`, `abs`, `relu`, `pow` and their backward ops instead of silently skipping them, and cover the view, allocation and copy ops emitted by the model zoo (including `_unsafe_view` on recent Torch) and the CUDA batch-norm and dropout kernels, so `strict=True` passes on every model family on CPU. Totals increase for models using these ops.
+
 #### spikingjelly.datasets
 
 - Dataset file links fall back to copies when Windows denies symlink privileges, using additional disk space.
