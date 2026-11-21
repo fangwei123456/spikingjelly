@@ -27,21 +27,35 @@ from spikingjelly.activation_based import base, neuron
     ],
 )
 @pytest.mark.parametrize("record", [False, True])
-def test_sequence_dynamics_are_independent_of_single_step(node_type, kwargs, record):
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA required"
+            ),
+        ),
+    ],
+)
+def test_sequence_dynamics_are_independent_of_single_step(
+    node_type, kwargs, record, device
+):
     class SingleStepOverride(node_type):
         def single_step_functional_forward(self, *args, **kwargs):
             raise AssertionError("sequence called overridable single-step transition")
 
-    node = SingleStepOverride(**kwargs)
+    node = SingleStepOverride(**kwargs).to(device)
     node.step_mode = "m"
     if isinstance(node, neuron.ComplementaryLIFNode):
         node.store_state_seqs = record
     else:
         node.store_v_seq = record
-    reference = node_type(**kwargs)
+    reference = node_type(**kwargs).to(device)
     reference.load_state_dict(node.state_dict())
     reference.step_mode = "s"
-    x = torch.linspace(-0.4, 1.3, 24).reshape(3, 2, 4).requires_grad_()
+    x = torch.linspace(-0.4, 1.3, 24, device=device).reshape(3, 2, 4).requires_grad_()
     xs = x.detach().clone().requires_grad_()
     outputs, voltages = [], []
     for xt in xs:
