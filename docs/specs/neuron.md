@@ -34,6 +34,9 @@ Every explicit-state transition has the form
 - Multi-step transitions take `[T, ...]` and return the output sequence and final
   state, plus optional `v_seq`. `v_seq` is derived monitoring data, and the next call
   does not take it as state.
+- A subclass that overrides only the single-step transition of `LIFNode`, `IFNode`
+  or `ParametricLIFNode` steps through that override in multi-step mode, in both
+  managed and explicit-state calls. The fused kernels cover only the base dynamics.
 
 ## Neuron families
 
