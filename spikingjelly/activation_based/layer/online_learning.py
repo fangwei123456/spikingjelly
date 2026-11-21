@@ -126,7 +126,8 @@ class GradwithTrace(nn.Module):
 
         对于已初始化的 BatchNorm，只有脉冲前向更新运行统计量；trace 训练前向
         仍使用 batch 统计量，但暂时停止跟踪运行统计量。其他 buffer 和 Python 状态
-        保留原有副作用，不被隔离。
+        保留原有副作用，不被隔离。此保护仅覆盖前向调用；包装模块内部的
+        activation checkpoint 必须自行为反向重计算提供统计量保护。
 
         :param x: ``[spike, trace]``，其中 ``spike`` 用于前向值，``trace`` 用于梯度路径
         :type x: torch.Tensor
@@ -142,7 +143,9 @@ class GradwithTrace(nn.Module):
         For initialized BatchNorm modules, only the spike forward updates running
         statistics. The trace training forward still uses batch statistics, with
         running-statistic tracking temporarily disabled. Other buffers and Python
-        state retain their original side effects and are not isolated.
+        state retain their original side effects and are not isolated. This guard
+        covers the forward call only; activation checkpoints inside the wrapped
+        module must provide their own running-statistic guard for recomputation.
 
         :param x: ``[spike, trace]`` where ``spike`` provides forward values and ``trace`` provides gradient paths
         :type x: torch.Tensor
@@ -196,7 +199,8 @@ class SpikeTraceOp(nn.Module):
 
         对于已初始化的 BatchNorm，只有脉冲前向更新运行统计量；trace 训练前向
         仍使用 batch 统计量，但暂时停止跟踪运行统计量。其他 buffer 和 Python 状态
-        保留原有副作用，不被隔离。
+        保留原有副作用，不被隔离。此保护仅覆盖前向调用；包装模块内部的
+        activation checkpoint 必须自行为反向重计算提供统计量保护。
 
         :param x: ``[spike, trace]`` 输入对
         :type x: torch.Tensor
@@ -212,7 +216,9 @@ class SpikeTraceOp(nn.Module):
         For initialized BatchNorm modules, only the spike forward updates running
         statistics. The trace training forward still uses batch statistics, with
         running-statistic tracking temporarily disabled. Other buffers and Python
-        state retain their original side effects and are not isolated.
+        state retain their original side effects and are not isolated. This guard
+        covers the forward call only; activation checkpoints inside the wrapped
+        module must provide their own running-statistic guard for recomputation.
 
         :param x: ``[spike, trace]`` input pair
         :type x: torch.Tensor

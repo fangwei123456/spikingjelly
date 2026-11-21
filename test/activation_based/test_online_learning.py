@@ -1,4 +1,5 @@
 import copy
+from contextlib import contextmanager, nullcontext
 import importlib.util
 
 import pytest
@@ -460,3 +461,61 @@ def test_grad_with_trace_restores_batchnorm_tracking_after_failure():
         GradwithTrace(bn)([torch.randn(8, 3), torch.randn(8, 3)])
     assert bn.track_running_stats
     assert bn.num_batches_tracked.item() == 1
+
+
+@contextmanager
+def _batchnorm_tracking_state(module, tracking):
+    previous = module.track_running_stats
+    module.track_running_stats = tracking
+    try:
+        yield
+    finally:
+        module.track_running_stats = previous
+
+
+class _CheckpointedTraceBatchNorm(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.bn = nn.BatchNorm1d(3)
+
+    def forward(self, x):
+        from torch.utils.checkpoint import checkpoint
+
+        # Capture the trace-pass state now, before the outer guard restores it.
+        tracking = self.bn.track_running_stats
+        return checkpoint(
+            self.bn,
+            x,
+            use_reentrant=False,
+            context_fn=lambda: (
+                nullcontext(),
+                _batchnorm_tracking_state(self.bn, tracking),
+            ),
+        )
+
+
+def test_grad_with_trace_checkpoint_context_preserves_statistics_during_backward():
+    torch.manual_seed(829)
+    module = _CheckpointedTraceBatchNorm()
+    reference = copy.deepcopy(module.bn)
+    spike = torch.randn(8, 3, requires_grad=True)
+    trace = (3 + torch.randn(8, 3)).requires_grad_()
+    reference_trace = trace.detach().clone().requires_grad_()
+    with torch.no_grad():
+        expected = reference(spike)
+    grad_reference = copy.deepcopy(reference)
+    upstream = torch.randn(8, 3)
+
+    output = GradwithTrace(module)([spike, trace])
+    torch.testing.assert_close(output, expected)
+    (output * upstream).sum().backward()
+    (grad_reference(reference_trace) * upstream).sum().backward()
+    for name, buffer in module.bn.named_buffers():
+        torch.testing.assert_close(buffer, dict(reference.named_buffers())[name])
+    torch.testing.assert_close(spike.grad, reference_trace.grad)
+    torch.testing.assert_close(trace.grad, reference_trace.grad)
+    for actual, expected_parameter in zip(
+        module.bn.parameters(), grad_reference.parameters()
+    ):
+        torch.testing.assert_close(actual.grad, expected_parameter.grad)
+    assert module.bn.track_running_stats

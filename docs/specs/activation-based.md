@@ -63,6 +63,11 @@ optimization through model builders.
   from the spike pass only. The trace training pass uses batch statistics with
   running-statistic tracking temporarily disabled. Other buffers and Python state
   retain their original side effects; this is not general state isolation.
+  This guard ends when forward returns. Activation checkpoints inside the
+  wrapped module must separately preserve the trace-pass tracking state during
+  backward recomputation, for example through a non-reentrant checkpoint's
+  `context_fn`. Unguarded reentrant and non-reentrant checkpoints can update
+  running statistics during backward; they are not covered by this guarantee.
 - **Step-mode leaves.** Built-in `StepModule` implementations are atomic leaves whose
   children are normally not `StepModule`s. Networks, blocks and attention stay plain
   `nn.Module`s. Explicit scheduling containers and modules that own independent
