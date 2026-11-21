@@ -107,3 +107,8 @@ should apply at every time step. With production ``IFNode`` and ``LIFNode``,
 a single-step override applies only to single-step calls. To customize sequence
 execution, supply its transition as described in :doc:`neuron`. Code that used
 ``store_v_seq=True`` to trigger single-step execution needs this migration too.
+
+If a subclass previously overrode only ``multi_step_functional_forward``, move its
+sequence calculation into ``_multi_step`` to use it in both managed and explicit
+calls, including voltage recording. Subclasses with custom observation protocols
+can implement both sequence entry points directly.

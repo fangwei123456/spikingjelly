@@ -103,3 +103,7 @@ IF/LIF/PLIF 序列 functional 接口显式接收初态，返回脉冲、最终�
 ``SimpleLIFNode``。生产级 ``IFNode`` 和 ``LIFNode`` 的单步覆写仅影响单步。
 需要定制序列计算时，请按 :doc:`neuron` 提供多步实现。此前依赖
 ``store_v_seq=True`` 触发单步执行的代码也需要迁移。
+
+此前仅覆写 ``multi_step_functional_forward`` 的子类，可将序列计算移入
+``_multi_step``，供 managed 和 explicit 入口共用，并按需记录电压。具有自定义
+观测语义的子类可直接实现两个多步入口。
