@@ -281,7 +281,9 @@ def _flop_native_batch_norm(args, kwargs, out):
 def _flop_native_batch_norm_backward(args, kwargs, out):
     grad_output, gamma, train, output_mask = args[0], args[2], args[-3], args[-1]
     n = grad_output.numel()
-    c = gamma.numel()
+    # Without affine parameters gamma is None; the rule only needs the channel
+    # count, which is dimension 1 of the input for every BatchNorm*d.
+    c = gamma.numel() if gamma is not None else grad_output.shape[1]
 
     flops = 0
     if train:

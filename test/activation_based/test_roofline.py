@@ -309,3 +309,53 @@ def test_module_counter_mode_cleans_partial_enter(monkeypatch):
     with pytest.raises(RuntimeError, match="register failed"):
         mode.__enter__()
     assert not mode._handles
+
+
+@pytest.mark.parametrize("train", [True, False])
+def test_batch_norm_backward_without_affine_parameters(train):
+    def count(affine):
+        torch.manual_seed(0)
+        bn = nn.BatchNorm2d(3, affine=affine).train(train)
+        x = torch.randn(2, 3, 4, 4, requires_grad=True)
+        loss = bn(x).sum()
+        flop_counter = op_counter.FlopCounter()
+        memory_counter = op_counter.MemoryAccessCounter()
+        # Count the backward pass only: the forward differs with affine=True.
+        with op_counter.DispatchCounterMode([flop_counter, memory_counter]):
+            loss.backward()
+        return flop_counter.get_total(), memory_counter.get_total()
+
+    flops, memory = count(affine=False)
+    assert flops > 0 and memory > 0
+    if train:
+        # The training-mode rule for grad_input depends on gamma only through
+        # its size.
+        assert flops == count(affine=True)[0]
+
+
+def test_memory_access_counter_counts_logical_not_as_unary():
+    x = torch.rand(4) > 0.5
+    counter = op_counter.MemoryAccessCounter()
+    with op_counter.DispatchCounterMode([counter], strict=True):
+        out = torch.logical_not(x)
+    assert counter.get_total() == (
+        x.numel() * x.element_size() + out.numel() * out.element_size()
+    )
+
+
+def test_max_pool2d_backward_memory_reads_indices():
+    x = torch.randn(2, 3, 4, 4, requires_grad=True)
+    y, indices = F.max_pool2d(x, 2, return_indices=True)
+    loss = y.sum()
+    counter = op_counter.MemoryAccessCounter()
+    with op_counter.DispatchCounterMode([counter]):
+        loss.backward()
+    records = counter.records["Global"]
+    rule = records[torch.ops.aten.max_pool2d_with_indices_backward.default]
+    # grad_output and int64 indices are read, grad_input is written.
+    grad_output_bytes = y.numel() * y.element_size()
+    assert rule == (
+        grad_output_bytes
+        + indices.numel() * indices.element_size()
+        + x.numel() * x.element_size()
+    )
