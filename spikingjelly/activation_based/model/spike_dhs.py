@@ -228,9 +228,9 @@ class save_v_LIFNode(LIFNode):
         return torch.stack(spikes), v, observation, trace
 
     def _multi_step(self, inputs, states, store_v_seq, **kwargs):
-        (v,) = states
+        v = states[0]
         spikes, v, _, trace = self._observed_sequence(inputs[0], v, store_v_seq)
-        return (spikes,), (v,), trace
+        return (spikes,), (v, *states[1:]), trace
 
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
         (v,) = self.materialize_states((x_seq,), (self.v,), "m")

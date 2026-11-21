@@ -239,7 +239,7 @@ class TernaryIFNode(BaseNode):
         return (spike,), (v, *states[1:])
 
     def _multi_step(self, inputs, states, store_v_seq, **kwargs):
-        (v,) = states
+        v = states[0]
         y, v, trace = functional.ternary_if_multi_step(
             inputs[0],
             v,
@@ -249,7 +249,7 @@ class TernaryIFNode(BaseNode):
             self.detach_reset,
             store_v_seq,
         )
-        return (y,), (v,), trace
+        return (y,), (v, *states[1:]), trace
 
 
 class TernaryLIFNode(BaseNode):
@@ -542,7 +542,7 @@ class TernaryLIFNode(BaseNode):
         return (spike,), (v, *states[1:])
 
     def _multi_step(self, inputs, states, store_v_seq, **kwargs):
-        (v,) = states
+        v = states[0]
         y, v, trace = functional.ternary_lif_multi_step(
             inputs[0],
             v,
@@ -554,4 +554,4 @@ class TernaryLIFNode(BaseNode):
             self.detach_reset,
             store_v_seq,
         )
-        return (y,), (v,), trace
+        return (y,), (v, *states[1:]), trace

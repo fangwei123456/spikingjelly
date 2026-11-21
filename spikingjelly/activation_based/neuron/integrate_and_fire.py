@@ -217,7 +217,7 @@ class IFNode(BaseNode):
         return (spike,), (v, *states[1:])
 
     def _multi_step(self, inputs, states, store_v_seq, **kwargs):
-        (v,) = states
+        v = states[0]
         spikes, v, trace = functional.if_multi_step(
             inputs[0],
             v,
@@ -236,7 +236,7 @@ class IFNode(BaseNode):
             if self._neuron_precision is None
             else self._neuron_precision[2],
         )
-        return (spikes,), (v,), trace
+        return (spikes,), (v, *states[1:]), trace
 
 
 class HalfThresholdIFNode(BaseNode):
@@ -400,7 +400,7 @@ class HalfThresholdIFNode(BaseNode):
         return (spike,), (v, *states[1:])
 
     def _multi_step(self, inputs, states, store_v_seq, **kwargs):
-        (v,) = states
+        v = states[0]
         outputs = []
         voltages = []
         for x in inputs[0]:
@@ -412,7 +412,7 @@ class HalfThresholdIFNode(BaseNode):
                 voltages.append(v)
         return (
             (torch.stack(outputs),),
-            (v,),
+            (v, *states[1:]),
             torch.stack(voltages) if store_v_seq else None,
         )
 
@@ -914,7 +914,8 @@ class ActivationAwareIFNode(base.MemoryModule):
         states = self.materialize_states(
             (x_seq, *args), tuple(self._memories.values()), "m"
         )
-        spikes, self.v, self.v_seq = self._sequence(x_seq, states[0], self.store_v_seq)
+        spikes, self.v, trace = self._sequence(x_seq, states[0], self.store_v_seq)
+        self.v_seq = trace if self.store_v_seq else None
         return spikes
 
     def extra_repr(self):

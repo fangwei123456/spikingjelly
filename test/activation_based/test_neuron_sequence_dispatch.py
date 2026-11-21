@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from spikingjelly.activation_based import base, neuron
+from spikingjelly.activation_based.model.spike_dhs import save_v_LIFNode
 
 
 @pytest.mark.parametrize(
@@ -135,3 +136,59 @@ def test_custom_sequence_transition_drives_both_entry_points():
     torch.testing.assert_close(node(x), y)
     torch.testing.assert_close(node.v, v)
     torch.testing.assert_close(node.v_seq, expected)
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        neuron.IFNode,
+        neuron.HalfThresholdIFNode,
+        neuron.LIFNode,
+        neuron.ParametricLIFNode,
+        neuron.ILIFNode,
+        neuron.QIFNode,
+        neuron.EIFNode,
+        neuron.KLIFNode,
+        neuron.TernaryIFNode,
+        neuron.TernaryLIFNode,
+        lambda: neuron.LIAFNode(torch.relu, False),
+        save_v_LIFNode,
+    ],
+)
+@pytest.mark.parametrize("record", [False, True])
+def test_inherited_sequence_preserves_trailing_memories(factory, record):
+    node = factory()
+    node.register_memory("aux", torch.tensor(3.0))
+    node.step_mode = "m"
+    node.store_v_seq = record
+    x = torch.full((3, 2), 0.25)
+    explicit_aux = torch.tensor(7.0)
+    (expected,), (v, returned_aux) = node.functional_forward(
+        (x,), (node.v, explicit_aux)
+    )
+    assert returned_aux is explicit_aux
+    managed_aux = node.aux
+    torch.testing.assert_close(node(x), expected)
+    torch.testing.assert_close(node.v, v)
+    assert node.aux is managed_aux
+
+
+@pytest.mark.parametrize("enable", [False, True])
+@pytest.mark.parametrize(
+    "node_type,flag,trace",
+    [
+        (neuron.ActivationAwareIFNode, "store_v_seq", "v_seq"),
+        (neuron.ComplementaryLIFNode, "store_state_seqs", "state_seqs"),
+    ],
+)
+def test_recording_toggle_during_sequence(node_type, flag, trace, enable):
+    node = node_type(step_mode="m")
+    setattr(node, flag, not enable)
+
+    def toggle(*_):
+        setattr(node, flag, enable)
+
+    with node.surrogate_function.register_forward_hook(toggle):
+        node(torch.full((3, 2), 0.25, requires_grad=True))
+    assert getattr(node, flag) == enable
+    assert getattr(node, trace) is None

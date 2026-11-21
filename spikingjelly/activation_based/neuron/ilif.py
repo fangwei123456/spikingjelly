@@ -336,7 +336,7 @@ class ILIFNode(LIFNode):
         return (spike,), (v, *states[1:])
 
     def _multi_step(self, inputs, states, store_v_seq, **kwargs):
-        (v,) = states
+        v = states[0]
         spikes, v, trace = functional.ilif_multi_step(
             inputs[0],
             v,
@@ -346,4 +346,4 @@ class ILIFNode(LIFNode):
             self.detach_reset,
             store_v_seq,
         )
-        return (spikes,), (v,), trace
+        return (spikes,), (v, *states[1:]), trace

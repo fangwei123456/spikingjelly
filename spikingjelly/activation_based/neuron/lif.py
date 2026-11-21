@@ -243,7 +243,7 @@ class LIFNode(BaseNode):
         return (spike,), (v, *states[1:])
 
     def _multi_step(self, inputs, states, store_v_seq, **kwargs):
-        (v,) = states
+        v = states[0]
         spikes, v, trace = functional.lif_multi_step(
             inputs[0],
             v,
@@ -264,7 +264,7 @@ class LIFNode(BaseNode):
             if self._neuron_precision is None
             else self._neuron_precision[2],
         )
-        return (spikes,), (v,), trace
+        return (spikes,), (v, *states[1:]), trace
 
 
 class NonSpikingLIFNode(NonSpikingBaseNode):

@@ -1211,8 +1211,8 @@ def liaf_step(
 
     .. note::
 
-       本函数没有独立多步形式；多步执行由调用者逐步循环。
-       This function has no independent multi-step form; callers iterate it.
+       :func:`liaf_multi_step` 沿时间维依次执行相同的单步转移。
+       :func:`liaf_multi_step` applies the same transition at each time step.
     """
     v_charged = lif_charge(x, v, tau, decay_input, v_reset)
     output = act(v_charged - v_threshold if threshold_related else v_charged)
@@ -1712,8 +1712,8 @@ def klif_step(
 
     .. note::
 
-       本函数没有独立多步形式；多步执行由调用者逐步循环。
-       This function has no independent multi-step form; callers iterate it.
+       :func:`klif_multi_step` 沿时间维依次执行相同的单步转移。
+       :func:`klif_multi_step` applies the same transition at each time step.
     """
     v_reset_value = 0.0 if v_reset is None else v_reset
     if decay_input:
@@ -1807,8 +1807,8 @@ def cuba_lif_step(
 
     .. note::
 
-       本函数没有独立多步形式；多步执行由调用者逐步循环。
-       This function has no independent multi-step form; callers iterate it.
+       :func:`cuba_lif_multi_step` 沿时间维依次执行相同的单步转移。
+       :func:`cuba_lif_multi_step` applies the same transition at each time step.
     """
     current_next = current * current_decay + x
     v_charged = v * voltage_decay + current_next

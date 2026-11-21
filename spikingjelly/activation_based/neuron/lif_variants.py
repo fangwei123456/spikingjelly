@@ -478,7 +478,7 @@ class KLIFNode(BaseNode):
         return (spike,), (v, *states[1:])
 
     def _multi_step(self, inputs, states, store_v_seq, **kwargs):
-        (v,) = states
+        v = states[0]
         y, v, trace = functional.klif_multi_step(
             inputs[0],
             v,
@@ -492,7 +492,7 @@ class KLIFNode(BaseNode):
             self.detach_reset,
             store_v_seq,
         )
-        return (y,), (v,), trace
+        return (y,), (v, *states[1:]), trace
 
 
 class ComplementaryLIFNode(BaseNode):
@@ -732,7 +732,7 @@ class ComplementaryLIFNode(BaseNode):
         spikes, self.v, self.m, v_seq, m_seq = self._sequence(
             (x_seq,), states, self.store_state_seqs
         )
-        if self.store_state_seqs:
+        if self.store_state_seqs and v_seq is not None:
             self.state_seqs = [v_seq, m_seq]
         return spikes
 
@@ -931,7 +931,7 @@ class LIAFNode(LIFNode):
         return (y,), (v, *states[1:])
 
     def _multi_step(self, inputs, states, store_v_seq, **kwargs):
-        (v,) = states
+        v = states[0]
         y, v, trace = functional.liaf_multi_step(
             inputs[0],
             v,
@@ -945,4 +945,4 @@ class LIAFNode(LIFNode):
             self.detach_reset,
             store_v_seq,
         )
-        return (y,), (v,), trace
+        return (y,), (v, *states[1:]), trace
