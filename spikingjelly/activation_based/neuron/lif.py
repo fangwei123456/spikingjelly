@@ -248,6 +248,13 @@ class LIFNode(BaseNode):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        if (
+            type(self).single_step_functional_forward
+            is not LIFNode.single_step_functional_forward
+        ):
+            # The fused kernel only implements the base dynamics; a subclass
+            # that overrides the single-step transition must be stepped.
+            return super().multi_step_functional_forward(inputs, states, **kwargs)
         spike_seq, v, _ = functional.lif_multi_step(
             inputs[0],
             states[0],

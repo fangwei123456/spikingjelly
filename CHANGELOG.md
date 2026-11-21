@@ -14,6 +14,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 #### spikingjelly.activation_based.neuron
 
+- Multi-step `LIFNode`, `IFNode` and `ParametricLIFNode` subclasses that override `single_step_functional_forward`, such as `LIAFNode`, `OTTTLIFNode` and `SLTTLIFNode`, now run that override instead of the base kernel.
 - `GatedLIFNode` preserves feature and one-dimensional sequence layouts instead of adding spatial axes or misaligning channel parameters.
 - `BaseNode` subclasses reject mismatched state shapes instead of silently reinitializing them. Call `functional.reset_net` before changing input shape, or supply matching explicit states.
 - `FlexSN` keeps independent final states when storing HOP or Triton state sequences, allowing `functional.detach_net` to work.
