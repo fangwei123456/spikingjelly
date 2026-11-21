@@ -330,16 +330,12 @@ class IzhikevichNode(AdaptBaseNode):
         )
         return (spike,), (v, w)
 
-    def multi_step_functional_forward(
-        self,
-        inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        spike_seq, v, w, _, _ = functional.izhikevich_multi_step(
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        v, w = states
+        spikes, v, w, trace, _ = functional.izhikevich_multi_step(
             inputs[0],
-            states[0],
-            states[-1],
+            v,
+            w,
             self.tau,
             self.v_threshold,
             self.v_reset,
@@ -351,32 +347,6 @@ class IzhikevichNode(AdaptBaseNode):
             self.a0,
             self.detach_reset,
             self.surrogate_function,
-            False,
+            store_v_seq,
         )
-        return (spike_seq,), (v, w)
-
-    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
-        if not self.store_v_seq:
-            return super().multi_step_forward(x_seq, *args, **kwargs)
-
-        states = self.materialize_states(
-            (x_seq, *args), tuple(self._memories.values()), "m"
-        )
-        spike_seq, self.v, self.w, self.v_seq, _ = functional.izhikevich_multi_step(
-            x_seq,
-            states[0],
-            states[-1],
-            self.tau,
-            self.v_threshold,
-            self.v_reset,
-            self.v_rest,
-            self.a,
-            self.b,
-            self.tau_w,
-            self.v_c,
-            self.a0,
-            self.detach_reset,
-            self.surrogate_function,
-            self.store_v_seq,
-        )
-        return spike_seq
+        return (spikes,), (v, w), trace

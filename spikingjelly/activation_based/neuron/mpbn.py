@@ -304,15 +304,22 @@ class MPBNLIFNode(MPBNBaseNode):
                 self.bn_momentum = stats["bn_momentum"]
         return output
 
-    def multi_step_functional_forward(
-        self,
-        inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        if "_mpbn_stats" not in kwargs:
-            kwargs["_mpbn_stats"] = self._normalization_state()
-        return super().multi_step_functional_forward(inputs, states, **kwargs)
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        stats = kwargs.get("_mpbn_stats")
+        if stats is None:
+            stats = self._normalization_state()
+        v = states[0]
+        outputs, voltages = [], []
+        for x in inputs[0]:
+            spike, v = self._mpbn_step(x, v, stats)
+            outputs.append(spike)
+            if store_v_seq:
+                voltages.append(v)
+        return (
+            (torch.stack(outputs),),
+            (v, *states[1:]),
+            torch.stack(voltages) if store_v_seq else None,
+        )
 
     def single_step_functional_forward(
         self,
@@ -320,11 +327,13 @@ class MPBNLIFNode(MPBNBaseNode):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        x = inputs[0]
-        v = states[0]
         stats = kwargs.get("_mpbn_stats")
         if stats is None:
             stats = self._normalization_state()
+        spike, v = self._mpbn_step(inputs[0], states[0], stats)
+        return (spike,), (v, *states[1:])
+
+    def _mpbn_step(self, x, v, stats):
         v = functional.lif_charge(x, v, self.tau, self.decay_input, self.v_reset)
 
         if not isinstance(self.vbn, nn.Identity):
@@ -405,4 +414,4 @@ class MPBNLIFNode(MPBNBaseNode):
         v = functional.voltage_reset(
             v, spike, self.v_threshold, self.v_reset, self.detach_reset
         )
-        return (spike,), (v, *states[1:])
+        return spike, v

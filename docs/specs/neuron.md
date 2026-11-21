@@ -37,14 +37,25 @@ Every explicit-state transition has the form
 
 ## Neuron families
 
-- **`BaseNode`** uses the transition contract and can reach accelerated providers.
+- **`BaseNode`** has independent single-step and sequence implementations.
+  Overriding the single-step method affects single-step execution only. A subclass
+  of a concrete neuron inherits its sequence dynamics until it supplies its own.
+  Managed and explicit sequence calls use the same equations. Managed calls commit
+  all final states and can record trajectories; explicit calls return final states.
+  Recording must not change the output, gradient rule or final states. A sequence
+  may call a kernel or loop over a fixed functional transition. A direct subclass
+  without a sequence implementation raises on multi-step execution.
 - **`SimpleBaseNode`** exposes mutable `neuronal_charge`, `neuronal_fire` and
-  `neuronal_reset` hooks. It is pure PyTorch and exists for readable customization.
+  `neuronal_reset` hooks. Multi-step execution calls its single-step method at each time step.
 - **`FlexSN`** is for custom dynamics. A user writes a core, and FlexSN picks Torch,
   Triton or a higher-order-operator path itself. It does not use `ops` selection or its
   environment overrides. Its Triton kernels take the number of time steps and the
   number of elements per step at runtime. They unroll the time loop up to
   `SJ_TRITON_NEURON_KERNEL_STATIC_RANGE_MAX_T`.
+
+Sequence-native models retain their sequence semantics (for example, MaskedPSN
+does not advance its streaming queue in sequence mode). OTTT and SLTT support
+only single-step execution.
 
 A new built-in neuron needs reference equations in `ops`, a transition in `functional`,
 and a module here. Custom neurons use explicit-state transitions or FlexSN.

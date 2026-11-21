@@ -216,60 +216,27 @@ class IFNode(BaseNode):
         )
         return (spike,), (v, *states[1:])
 
-    def multi_step_functional_forward(
-        self,
-        inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        spikes, v, _ = functional.if_multi_step(
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        v = states[0]
+        spikes, v, trace = functional.if_multi_step(
             inputs[0],
-            states[0],
+            v,
             self.v_threshold,
             self.v_reset,
             self.surrogate_function,
             self.detach_reset,
-            False,
-            neuron_storage=(
-                None if self._neuron_precision is None else self._neuron_precision[0]
-            ),
-            neuron_fwd=(
-                "fp32" if self._neuron_precision is None else self._neuron_precision[1]
-            ),
-            neuron_bwd=(
-                "fp32" if self._neuron_precision is None else self._neuron_precision[2]
-            ),
+            store_v_seq,
+            neuron_storage=None
+            if self._neuron_precision is None
+            else self._neuron_precision[0],
+            neuron_fwd="fp32"
+            if self._neuron_precision is None
+            else self._neuron_precision[1],
+            neuron_bwd="fp32"
+            if self._neuron_precision is None
+            else self._neuron_precision[2],
         )
-        return (spikes,), (v,)
-
-    def multi_step_forward(
-        self, x_seq: torch.Tensor, *args: torch.Tensor, **kwargs: object
-    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
-        if (
-            type(self).single_step_functional_forward
-            is not IFNode.single_step_functional_forward
-            or type(self).multi_step_functional_forward
-            is not IFNode.multi_step_functional_forward
-        ):
-            return super().multi_step_forward(x_seq, *args, **kwargs)
-        inputs = (x_seq, *args)
-        states = self.materialize_states(inputs, tuple(self._memories.values()), "m")
-        precision = self._neuron_precision
-        spikes, v, v_seq = functional.if_multi_step(
-            x_seq,
-            states[0],
-            self.v_threshold,
-            self.v_reset,
-            self.surrogate_function,
-            self.detach_reset,
-            self.store_v_seq,
-            neuron_storage=None if precision is None else precision[0],
-            neuron_fwd="fp32" if precision is None else precision[1],
-            neuron_bwd="fp32" if precision is None else precision[2],
-        )
-        self._memories["v"] = v
-        self.v_seq = v_seq
-        return spikes
+        return (spikes,), (v, *states[1:]), trace
 
 
 class HalfThresholdIFNode(BaseNode):
@@ -431,6 +398,23 @@ class HalfThresholdIFNode(BaseNode):
             self.detach_reset,
         )
         return (spike,), (v, *states[1:])
+
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        v = states[0]
+        outputs = []
+        voltages = []
+        for x in inputs[0]:
+            spike, v = functional.if_step(
+                x, v, self.v_threshold, None, self.surrogate_function, self.detach_reset
+            )
+            outputs.append(spike)
+            if store_v_seq:
+                voltages.append(v)
+        return (
+            (torch.stack(outputs),),
+            (v, *states[1:]),
+            torch.stack(voltages) if store_v_seq else None,
+        )
 
 
 class ActivationAwareIFNode(base.MemoryModule):
@@ -902,42 +886,37 @@ class ActivationAwareIFNode(base.MemoryModule):
         :raises ValueError: If the input shape, T, or channel-wise parameter
             length is invalid.
         """
-        x_seq, v = inputs[0], states[0]
+        spikes, v, _ = self._sequence(inputs[0], states[0], False)
+        return (spikes,), (v, *states[1:])
+
+    def _sequence(self, x_seq, v, store_v_seq):
         if self._can_use_registered_multi_step(x_seq, v):
-            spike_seq, v, _ = self._registered_multi_step_functional_forward(
-                x_seq, v, False
-            )
-            return (spike_seq,), (v,)
-        outputs = []
+            return self._registered_multi_step_functional_forward(x_seq, v, store_v_seq)
+        threshold = self._broadcast_parameter(self.v_threshold, x_seq[0], "v_threshold")
+        offset = self._broadcast_parameter(self.v_offset, x_seq[0], "v_offset")
+        spikes, voltages = [], []
         for x in x_seq:
-            step_outputs, states = self.single_step_functional_forward((x,), states)
-            outputs.append(step_outputs[0])
-        return (torch.stack(outputs),), states
+            spike, v = functional.activation_aware_if_step(
+                x,
+                v,
+                threshold,
+                offset,
+                self.v_reset,
+                self.surrogate_function,
+                self.detach_reset,
+            )
+            spikes.append(spike)
+            if store_v_seq:
+                voltages.append(v)
+        return torch.stack(spikes), v, torch.stack(voltages) if store_v_seq else None
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
         states = self.materialize_states(
             (x_seq, *args), tuple(self._memories.values()), "m"
         )
-        if self._can_use_registered_multi_step(x_seq, states[0]):
-            spike_seq, v, v_seq = self._registered_multi_step_functional_forward(
-                x_seq, states[0], self.store_v_seq
-            )
-        else:
-            spike_steps = []
-            voltage_steps = []
-            for t in range(x_seq.shape[0]):
-                outputs, states = self.single_step_functional_forward(
-                    (x_seq[t],), states, **kwargs
-                )
-                spike_steps.append(outputs[0])
-                if self.store_v_seq:
-                    voltage_steps.append(states[0])
-            spike_seq = torch.stack(spike_steps)
-            v = states[0]
-            v_seq = torch.stack(voltage_steps) if self.store_v_seq else None
-        self.v = v
-        self.v_seq = v_seq if self.store_v_seq else None
-        return spike_seq
+        spikes, self.v, trace = self._sequence(x_seq, states[0], self.store_v_seq)
+        self.v_seq = trace if self.store_v_seq else None
+        return spikes
 
     def extra_repr(self):
         return (

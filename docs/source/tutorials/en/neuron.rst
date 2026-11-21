@@ -401,14 +401,18 @@ Example output (random values will vary):
             [0.],
             [0.]])
 
-To implement a production neuron that uses explicit functional state transitions,
-inherit from ``BaseNode`` and implement
-``single_step_functional_forward``. Its interface is
-``(self, inputs, states, **kwargs) -> (outputs, updated_states)``, where inputs,
-outputs and states are tuples. The method must
-not mutate registered module memories or the supplied ``states``. Override
-``multi_step_functional_forward`` only when an independent sequence implementation
-or specialized kernel exists.
+Production ``BaseNode`` neurons implement the two step modes independently.
+Overriding ``single_step_functional_forward`` affects single-step calls only.
+Subclasses of a concrete neuron inherit its sequence dynamics. To customize both
+managed and explicit sequence calls, implement ``multi_step_forward`` and
+``multi_step_functional_forward`` with the same sequence function. For ordinary
+voltage recording, the base class lets you implement both through
+``_multi_step(inputs, states, store_v_seq, **kwargs)``. Return an output tuple,
+a tuple of all final states, and an optional voltage trace. Keep input states and
+module memory unmodified. The recording flag controls only the trace.
+A direct subclass without a sequence implementation raises on multi-step calls.
+Choose the Simple family when a single-step override should also change multi-step
+execution, or FlexSN for a compilable custom core.
 
 .. note::
 

@@ -16,6 +16,9 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 #### spikingjelly.activation_based.neuron
 
+- Production neurons implement single-step and sequence dynamics independently, including when recording voltage. Use the Simple family to apply single-step overrides across time.
+- LIAF returns its continuous activation in sequence mode, and OTTT/SLTT consistently reject multi-step execution.
+
 - `GatedLIFNode` preserves feature and one-dimensional sequence layouts instead of adding spatial axes or misaligning channel parameters.
 - `BaseNode` subclasses reject mismatched state shapes instead of silently reinitializing them. Call `functional.reset_net` before changing input shape, or supply matching explicit states.
 - `FlexSN` keeps independent final states when storing HOP or Triton state sequences, allowing `functional.detach_net` to work.

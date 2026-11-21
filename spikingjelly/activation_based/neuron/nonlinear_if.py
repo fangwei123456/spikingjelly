@@ -174,15 +174,11 @@ class QIFNode(BaseNode):
         )
         return (spike,), (v, *states[1:])
 
-    def multi_step_functional_forward(
-        self,
-        inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        spike_seq, v, _ = functional.qif_multi_step(
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        v = states[0]
+        spikes, v, trace = functional.qif_multi_step(
             inputs[0],
-            states[0],
+            v,
             self.tau,
             self.v_threshold,
             self.v_reset,
@@ -191,28 +187,9 @@ class QIFNode(BaseNode):
             self.a0,
             self.detach_reset,
             self.surrogate_function,
-            False,
+            store_v_seq,
         )
-        return (spike_seq,), (v,)
-
-    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
-        states = self.materialize_states(
-            (x_seq, *args), tuple(self._memories.values()), "m"
-        )
-        spike_seq, self.v, self.v_seq = functional.qif_multi_step(
-            x_seq,
-            states[0],
-            self.tau,
-            self.v_threshold,
-            self.v_reset,
-            self.v_rest,
-            self.v_c,
-            self.a0,
-            self.detach_reset,
-            self.surrogate_function,
-            self.store_v_seq,
-        )
-        return spike_seq
+        return (spikes,), (v, *states[1:]), trace
 
 
 class EIFNode(BaseNode):
@@ -382,15 +359,11 @@ class EIFNode(BaseNode):
         )
         return (spike,), (v, *states[1:])
 
-    def multi_step_functional_forward(
-        self,
-        inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        spike_seq, v, _ = functional.eif_multi_step(
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        v = states[0]
+        spikes, v, trace = functional.eif_multi_step(
             inputs[0],
-            states[0],
+            v,
             self.tau,
             self.v_threshold,
             self.v_reset,
@@ -399,25 +372,6 @@ class EIFNode(BaseNode):
             self.delta_T,
             self.detach_reset,
             self.surrogate_function,
-            False,
+            store_v_seq,
         )
-        return (spike_seq,), (v,)
-
-    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
-        states = self.materialize_states(
-            (x_seq, *args), tuple(self._memories.values()), "m"
-        )
-        spike_seq, self.v, self.v_seq = functional.eif_multi_step(
-            x_seq,
-            states[0],
-            self.tau,
-            self.v_threshold,
-            self.v_reset,
-            self.v_rest,
-            self.theta_rh,
-            self.delta_T,
-            self.detach_reset,
-            self.surrogate_function,
-            self.store_v_seq,
-        )
-        return spike_seq
+        return (spikes,), (v, *states[1:]), trace
