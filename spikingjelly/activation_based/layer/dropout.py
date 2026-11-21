@@ -1,5 +1,5 @@
 import math
-from typing import Optional
+from typing import Callable, Optional
 
 import torch
 import torch.nn as nn
@@ -301,6 +301,20 @@ class DropConnectLinear(base.MemoryModule):
         self.samples_num = samples_num
         self.invariant = invariant
         self.activation = activation
+
+    def _apply(self, fn: Callable[[Tensor], Tensor]) -> "DropConnectLinear":
+        # Module.type casts even boolean memories; connection masks must keep
+        # their boolean dtype while following the requested device conversion.
+        mask_names = [
+            name
+            for name in ("weight_mask", "bias_mask")
+            if isinstance(self._memories.get(name), Tensor)
+            and self._memories[name].dtype == torch.bool
+        ]
+        super()._apply(fn)
+        for name in mask_names:
+            self._memories[name] = self._memories[name].bool()
+        return self
 
     def reset_parameters(self) -> None:
         r"""

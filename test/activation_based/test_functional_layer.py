@@ -401,12 +401,18 @@ def test_dropconnect_rejects_legacy_cached_parameter_products():
         )
 
 
-def test_dropconnect_cached_masks_survive_parameter_dtype_conversion(monkeypatch):
+@pytest.mark.parametrize("conversion", ["double", "type"])
+def test_dropconnect_cached_masks_survive_parameter_dtype_conversion(
+    monkeypatch, conversion
+):
     monkeypatch.setattr(torch, "rand_like", torch.ones_like)
     module = layer.DropConnectLinear(3, 2, p=0.5, invariant=True, activation=None)
     x = torch.randn(4, 3)
     module(x)
-    module.double()
+    if conversion == "type":
+        module.type(torch.DoubleTensor)
+    else:
+        module.double()
     actual = module(x.double())
     expected = F.linear(x.double(), module.weight, module.bias)
     torch.testing.assert_close(actual, expected)
