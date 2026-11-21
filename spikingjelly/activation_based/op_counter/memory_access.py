@@ -179,7 +179,9 @@ def _memory_max_pool2d_with_indices(args, kwargs, out):
 
 
 def _memory_max_pool2d_with_indices_backward(args, kwargs, out):
-    grad_output, indices = args[0], args[1]
+    # aten signature: (grad_output, self, kernel_size, stride, padding, dilation,
+    # ceil_mode, indices); self is only needed for its shape.
+    grad_output, indices = args[0], args[7]
     grad_x = out
     return _bytes(grad_output) + _bytes(indices) + _bytes(grad_x)
 

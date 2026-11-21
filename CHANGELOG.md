@@ -38,6 +38,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 - `FlopCounter` counts batch-norm backward without affine parameters and `MemoryAccessCounter` counts `logical_not` as a unary op, instead of raising even with `strict=False`.
 - `ACCounter` counts out-of-place `sigmoid` like `sigmoid_` instead of as zero.
+- `MemoryAccessCounter` reads the indices in max-pooling backward instead of the pooled input, so backward totals with `MaxPool2d` change.
 
 #### spikingjelly.datasets
 
