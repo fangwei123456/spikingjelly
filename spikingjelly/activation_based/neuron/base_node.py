@@ -604,16 +604,16 @@ class BaseNode(base.MemoryModule):
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
         inputs = (x_seq, *args)
-        states = self.materialize_states(inputs, tuple(self._memories.values()), "m")
+        memories = self._memories
+        states = self.materialize_states(inputs, tuple(memories.values()), "m")
         outputs, states, trace = self._multi_step(
             inputs, states, self.store_v_seq, **kwargs
         )
-        if len(states) != len(self._memories):
+        if len(states) != len(memories):
             raise ValueError(
                 f"{self._get_name()} returned an incorrect number of states."
             )
-        for name, value in zip(self._memories, states, strict=True):
-            self._memories[name] = value
+        memories.update(zip(memories, states))
         self.v_seq = trace
         return outputs[0] if len(outputs) == 1 else outputs
 
