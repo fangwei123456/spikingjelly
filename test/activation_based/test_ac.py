@@ -1,3 +1,4 @@
+import pytest
 import torch
 import torch.nn as nn
 
@@ -117,3 +118,12 @@ def test_ac_preserves_large_transposed_convolution_reduction():
         model(x)
 
     assert counter.get_total() == 64 * (3 * size - 2) ** 2 - 9
+
+
+@pytest.mark.parametrize("sigmoid", [torch.sigmoid, torch.Tensor.sigmoid_])
+def test_ac_counts_sigmoid(sigmoid):
+    x = torch.rand(10)
+    counter = op_counter.ACCounter()
+    with op_counter.DispatchCounterMode([counter]):
+        sigmoid(x)
+    assert counter.get_total() == x.numel()

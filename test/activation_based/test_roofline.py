@@ -309,3 +309,43 @@ def test_module_counter_mode_cleans_partial_enter(monkeypatch):
     with pytest.raises(RuntimeError, match="register failed"):
         mode.__enter__()
     assert not mode._handles
+
+
+@pytest.mark.parametrize(("train", "expected_flops"), [(True, 960), (False, 192)])
+def test_batch_norm_backward_without_affine_parameters(train, expected_flops):
+    bn = nn.BatchNorm2d(3, affine=False).train(train)
+    x = torch.randn(2, 3, 4, 4, requires_grad=True)
+    loss = bn(x).sum()
+    counter = op_counter.FlopCounter()
+    with op_counter.DispatchCounterMode([counter]):
+        loss.backward()
+    backward = torch.ops.aten.native_batch_norm_backward.default
+    assert counter.records["Global"][backward] == expected_flops
+
+
+def test_memory_access_counter_counts_logical_not_as_unary():
+    x = torch.rand(4) > 0.5
+    counter = op_counter.MemoryAccessCounter()
+    with op_counter.DispatchCounterMode([counter], strict=True):
+        out = torch.logical_not(x)
+    assert counter.get_total() == (
+        x.numel() * x.element_size() + out.numel() * out.element_size()
+    )
+
+
+def test_max_pool2d_backward_memory_reads_indices():
+    x = torch.randn(2, 3, 4, 4, requires_grad=True)
+    y, indices = F.max_pool2d(x, 2, return_indices=True)
+    loss = y.sum()
+    counter = op_counter.MemoryAccessCounter()
+    with op_counter.DispatchCounterMode([counter]):
+        loss.backward()
+    records = counter.records["Global"]
+    rule = records[torch.ops.aten.max_pool2d_with_indices_backward.default]
+    # grad_output and int64 indices are read, grad_input is written.
+    grad_output_bytes = y.numel() * y.element_size()
+    assert rule == (
+        grad_output_bytes
+        + indices.numel() * indices.element_size()
+        + x.numel() * x.element_size()
+    )
