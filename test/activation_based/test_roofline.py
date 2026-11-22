@@ -311,26 +311,16 @@ def test_module_counter_mode_cleans_partial_enter(monkeypatch):
     assert not mode._handles
 
 
-@pytest.mark.parametrize("train", [True, False])
-def test_batch_norm_backward_without_affine_parameters(train):
-    def count(affine):
-        torch.manual_seed(0)
-        bn = nn.BatchNorm2d(3, affine=affine).train(train)
-        x = torch.randn(2, 3, 4, 4, requires_grad=True)
-        loss = bn(x).sum()
-        flop_counter = op_counter.FlopCounter()
-        memory_counter = op_counter.MemoryAccessCounter()
-        # Count the backward pass only: the forward differs with affine=True.
-        with op_counter.DispatchCounterMode([flop_counter, memory_counter]):
-            loss.backward()
-        return flop_counter.get_total(), memory_counter.get_total()
-
-    flops, memory = count(affine=False)
-    assert flops > 0 and memory > 0
-    if train:
-        # The training-mode rule for grad_input depends on gamma only through
-        # its size.
-        assert flops == count(affine=True)[0]
+@pytest.mark.parametrize(("train", "expected_flops"), [(True, 960), (False, 192)])
+def test_batch_norm_backward_without_affine_parameters(train, expected_flops):
+    bn = nn.BatchNorm2d(3, affine=False).train(train)
+    x = torch.randn(2, 3, 4, 4, requires_grad=True)
+    loss = bn(x).sum()
+    counter = op_counter.FlopCounter()
+    with op_counter.DispatchCounterMode([counter]):
+        loss.backward()
+    backward = torch.ops.aten.native_batch_norm_backward.default
+    assert counter.records["Global"][backward] == expected_flops
 
 
 def test_memory_access_counter_counts_logical_not_as_unary():
