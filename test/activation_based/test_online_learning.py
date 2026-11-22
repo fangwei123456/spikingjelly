@@ -343,3 +343,58 @@ def test_fptt_preserves_frozen_parameter_and_running_average():
     torch.testing.assert_close(averages[1], reference_averages[0], rtol=0, atol=0)
     assert model[0].weight.grad is None
     assert not torch.equal(model[1].weight, trainable_snapshot)
+
+
+@pytest.mark.parametrize("bias", [False, True])
+def test_online_dropconnect_reuses_mask_with_current_parameters(monkeypatch, bias):
+    weight_mask = torch.tensor([[True, False, True], [False, True, False]])
+    bias_mask = torch.tensor([False, True])
+    draws = []
+
+    def fixed_draw(tensor):
+        draws.append(tensor.shape)
+        mask = weight_mask if tensor.ndim == 3 else bias_mask
+        return mask.to(tensor).expand_as(tensor) * 0.75
+
+    monkeypatch.setattr(torch, "rand_like", fixed_draw)
+    torch.manual_seed(830)
+    model = layer.DropConnectLinear(
+        3, 2, bias=bias, p=0.5, invariant=True, activation=None
+    )
+    with torch.no_grad():
+        model.weight[0, 0] = 0
+        if bias:
+            model.bias[1] = 0
+    reference = copy.deepcopy(model)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.05)
+    reference_optimizer = torch.optim.SGD(reference.parameters(), lr=0.05)
+    x = torch.randn(4, 3, 3)
+    targets = torch.randn(4, 3, 2)
+    expected_loss = 0
+    expected_outputs = []
+    for t in range(3):
+        reference_optimizer.zero_grad()
+        output = nn.functional.linear(
+            x[:, t],
+            reference.weight * weight_mask,
+            reference.bias * bias_mask if bias else None,
+        )
+        loss = nn.functional.mse_loss(output, targets[:, t])
+        loss.backward()
+        reference_optimizer.step()
+        expected_loss = expected_loss + loss.detach()
+        expected_outputs.append(output.detach())
+
+    actual_loss, actual_outputs = ottt_online_training(
+        model, optimizer, x, targets, nn.functional.mse_loss, online=True
+    )
+    torch.testing.assert_close(actual_loss, expected_loss)
+    torch.testing.assert_close(actual_outputs, torch.stack(expected_outputs, dim=1))
+    torch.testing.assert_close(model.weight, reference.weight)
+    if bias:
+        torch.testing.assert_close(model.bias, reference.bias)
+    assert model.weight[0, 0] != 0
+    assert len(draws) == (2 if bias else 1)
+    reset_net(model)
+    model(x[:, 0])
+    assert len(draws) == (4 if bias else 2)

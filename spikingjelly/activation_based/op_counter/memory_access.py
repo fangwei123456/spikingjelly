@@ -179,7 +179,9 @@ def _memory_max_pool2d_with_indices(args, kwargs, out):
 
 
 def _memory_max_pool2d_with_indices_backward(args, kwargs, out):
-    grad_output, indices = args[0], args[1]
+    # aten signature: (grad_output, self, kernel_size, stride, padding, dilation,
+    # ceil_mode, indices); self is only needed for its shape.
+    grad_output, indices = args[0], args[7]
     grad_x = out
     return _bytes(grad_output) + _bytes(indices) + _bytes(grad_x)
 
@@ -412,7 +414,7 @@ class MemoryAccessCounter(BaseCounter):
             aten.logical_and.default: _memory_element_wise_binary,
             aten.logical_or.default: _memory_element_wise_binary,
             aten.logical_xor.default: _memory_element_wise_binary,
-            aten.logical_not.default: _memory_element_wise_binary,
+            aten.logical_not.default: _memory_read_write,
             aten.sigmoid.default: _memory_read_write,
             aten.sigmoid_.default: _memory_read_write,
             aten.stack.default: _memory_stack,

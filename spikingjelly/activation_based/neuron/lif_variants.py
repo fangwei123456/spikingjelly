@@ -477,6 +477,23 @@ class KLIFNode(BaseNode):
         )
         return (spike,), (v, *states[1:])
 
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        v = states[0]
+        y, v, trace = functional.klif_multi_step(
+            inputs[0],
+            v,
+            self.k,
+            self.tau,
+            self.decay_input,
+            self.scale_reset,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+            store_v_seq,
+        )
+        return (y,), (v, *states[1:]), trace
+
 
 class ComplementaryLIFNode(BaseNode):
     def __init__(
@@ -691,23 +708,33 @@ class ComplementaryLIFNode(BaseNode):
         # must not populate v_seq even if a caller flips store_v_seq to True.
         return None
 
+    def _sequence(self, inputs, states, record):
+        spike_function = (
+            self.surrogate_function
+            if self.training or not self.surrogate_function.spiking
+            else surrogate.heaviside
+        )
+        return functional.clif_multi_step(
+            inputs[0], *states, self.tau, self.v_threshold, spike_function, record
+        )
+
+    def multi_step_functional_forward(
+        self,
+        inputs: tuple[torch.Tensor, ...],
+        states: tuple[object, ...],
+        **kwargs: object,
+    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
+        spikes, v, m, _, _ = self._sequence(inputs, states, False)
+        return (spikes,), (v, m)
+
     def multi_step_forward(self, x_seq: torch.Tensor) -> torch.Tensor:
-        if not self.store_state_seqs:
-            return base.MemoryModule.multi_step_forward(self, x_seq)
-
-        states = self.materialize_states((x_seq,), tuple(self._memories.values()), "m")
-        spike_steps = []
-        v_steps = []
-        m_steps = []
-        for x in x_seq:
-            (spike,), states = self.single_step_functional_forward((x,), states)
-            spike_steps.append(spike)
-            v_steps.append(states[0])
-            m_steps.append(states[1])
-
-        self.v, self.m = states
-        self.state_seqs = [torch.stack(v_steps), torch.stack(m_steps)]
-        return torch.stack(spike_steps)
+        states = self.materialize_states((x_seq,), (self.v, self.m), "m")
+        spikes, self.v, self.m, v_seq, m_seq = self._sequence(
+            (x_seq,), states, self.store_state_seqs
+        )
+        if self.store_state_seqs and v_seq is not None:
+            self.state_seqs = [v_seq, m_seq]
+        return spikes
 
     def extra_repr(self) -> str:
         return super().extra_repr() + f", tau={self.tau}"
@@ -795,6 +822,29 @@ class CUBALIFNode(BaseNode):
         )
         return (spike,), (v, c)
 
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        v, current = states
+        y, current, v, trace = functional.cuba_lif_multi_step(
+            inputs[0],
+            current,
+            v,
+            self.c_decay,
+            self.v_decay,
+            self.v_threshold,
+            self.v_reset,
+            self.surrogate_function,
+            self.detach_reset,
+            store_v_seq,
+        )
+        return (
+            (y,),
+            (
+                v,
+                current,
+            ),
+            trace,
+        )
+
 
 class LIAFNode(LIFNode):
     def __init__(self, act: Callable, threshold_related: bool, *args, **kwargs):
@@ -879,3 +929,20 @@ class LIAFNode(LIFNode):
             self.detach_reset,
         )
         return (y,), (v, *states[1:])
+
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        v = states[0]
+        y, v, trace = functional.liaf_multi_step(
+            inputs[0],
+            v,
+            self.tau,
+            self.decay_input,
+            self.v_threshold,
+            self.v_reset,
+            self.act,
+            self.threshold_related,
+            self.surrogate_function,
+            self.detach_reset,
+            store_v_seq,
+        )
+        return (y,), (v, *states[1:]), trace

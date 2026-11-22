@@ -319,6 +319,24 @@ def test_linear_recurrent_container_rejects_batch_change_until_reset():
     assert module(torch.zeros(2, 3)).shape == (2, 3)
 
 
+@pytest.mark.parametrize("padding_mode", ["zeros", "reflect", "circular", "replicate"])
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+def test_ws_conv2d_honors_padding_mode(padding_mode, step_mode):
+    torch.manual_seed(0)
+    conv = layer.WSConv2d(
+        2, 3, 3, padding=1, padding_mode=padding_mode, step_mode=step_mode
+    )
+    x = torch.randn(2, 2, 2, 5, 5) if step_mode == "m" else torch.randn(2, 2, 5, 5)
+    pad_mode = "constant" if padding_mode == "zeros" else padding_mode
+    x_flat = x.flatten(0, 1) if step_mode == "m" else x
+    expected = F.conv2d(
+        F.pad(x_flat, (1, 1, 1, 1), mode=pad_mode), conv.get_weight(), conv.bias
+    )
+    expected = expected.view(*x.shape[:-3], *expected.shape[1:])
+
+    torch.testing.assert_close(conv(x), expected)
+
+
 @pytest.mark.parametrize("gain", [True, False])
 @pytest.mark.parametrize("step_mode", ["s", "m"])
 def test_ws_linear_matches_standardized_weight_values_and_gradients(gain, step_mode):
@@ -380,6 +398,91 @@ def test_drop_connect_eval_rejects_invalid_probability_with_zero_variance(p):
     module = layer.DropConnectLinear(2, 1, bias=False, p=p).eval()
     with pytest.raises(ValueError, match="p must be between 0 and 1"):
         module(torch.zeros(1, 2))
+
+
+def test_dropconnect_public_drop_uses_fresh_masks_without_caching(monkeypatch):
+    monkeypatch.setattr(torch, "rand_like", torch.ones_like)
+    module = layer.DropConnectLinear(3, 2, p=0.5, invariant=True, activation=None)
+    weights, biases = module.drop(4)
+    torch.testing.assert_close(weights, module.weight.expand(4, 2, 3))
+    torch.testing.assert_close(biases, module.bias.expand(4, 2))
+    assert module.weight_mask is None
+    assert module.bias_mask is None
+
+
+def test_dropconnect_non_invariant_forward_uses_overridden_drop():
+    class KeepConnections(layer.DropConnectLinear):
+        def drop(self, batch_size):
+            return self.weight.expand(batch_size, -1, -1), None
+
+    module = KeepConnections(3, 2, bias=False, p=1, activation=None, step_mode="m")
+    x = torch.ones(2, 4, 3)
+    with torch.no_grad():
+        module.weight.fill_(1)
+
+    torch.testing.assert_close(module(x), F.linear(x, module.weight))
+    assert module.weight_mask is None
+
+    module.step_mode = "s"
+    module.invariant = True
+    with pytest.raises(ValueError, match="_sample_masks"):
+        module(x[0])
+
+
+def test_dropconnect_invariant_subclass_reuses_custom_mask_views():
+    class KeepConnections(layer.DropConnectLinear):
+        def _sample_masks(self, batch_size):
+            return (
+                self.weight.new_ones((1, 2, 3), dtype=torch.bool).expand(
+                    batch_size, -1, -1
+                ),
+                self.bias.new_ones((1, 2), dtype=torch.bool).expand(batch_size, -1),
+            )
+
+    module = KeepConnections(3, 2, p=1, invariant=True, activation=None)
+    x = torch.ones(4, 3)
+    torch.testing.assert_close(module(x), F.linear(x, module.weight, module.bias))
+    functional.detach_net(module)
+
+    with torch.no_grad():
+        module.weight.add_(1)
+    outputs, states = module.single_step_functional_forward(
+        (x,), (module.weight_mask, module.bias_mask)
+    )
+    torch.testing.assert_close(outputs[0], F.linear(x, module.weight, module.bias))
+    assert states[0] is module.weight_mask
+    assert states[1] is module.bias_mask
+    outputs[0].sum().backward()
+    torch.testing.assert_close(module.weight.grad, torch.full_like(module.weight, 4))
+    torch.testing.assert_close(module.bias.grad, torch.full_like(module.bias, 4))
+
+
+def test_dropconnect_rejects_legacy_cached_parameter_products():
+    module = layer.DropConnectLinear(3, 2, invariant=True, activation=None)
+    with pytest.raises(ValueError, match="boolean connection masks"):
+        module.single_step_functional_forward(
+            (torch.randn(4, 3),),
+            (module.weight.expand(4, 2, 3), module.bias.expand(4, 2)),
+        )
+
+
+@pytest.mark.parametrize("conversion", ["double", "type"])
+def test_dropconnect_cached_masks_survive_parameter_dtype_conversion(
+    monkeypatch, conversion
+):
+    monkeypatch.setattr(torch, "rand_like", torch.ones_like)
+    module = layer.DropConnectLinear(3, 2, p=0.5, invariant=True, activation=None)
+    x = torch.randn(4, 3)
+    module(x)
+    if conversion == "type":
+        module.type(torch.DoubleTensor)
+    else:
+        module.double()
+    actual = module(x.double())
+    expected = F.linear(x.double(), module.weight, module.bias)
+    torch.testing.assert_close(actual, expected)
+    actual.square().sum().backward()
+    assert module.weight.grad is not None
 
 
 @pytest.mark.parametrize("delay_steps", [3, 5])

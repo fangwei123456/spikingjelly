@@ -18,10 +18,15 @@ Fixes
 spikingjelly.activation_based.layer
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+- ``DropConnectLinear`` preserves parameter gradients during invariant online training. Reinitialize old explicit invariant states and use ``_sample_masks`` to customize invariant mask sampling in subclasses.
 - ``DropConnectLinear`` inference handles zero-variance outputs, including silent spikes and zero drop probability.
+- ``WSConv2d`` honors ``padding_mode`` (``reflect``, ``circular``, ``replicate``) instead of always zero-padding.
 
 spikingjelly.activation_based.neuron
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- Production neurons implement single-step and sequence dynamics independently, including when recording voltage. Use the Simple family to apply single-step overrides across time.
+- LIAF returns its continuous activation in sequence mode, and OTTT/SLTT consistently reject multi-step execution.
 
 - ``GatedLIFNode`` preserves feature and one-dimensional sequence layouts instead of adding spatial axes or misaligning channel parameters.
 - ``BaseNode`` subclasses reject mismatched state shapes instead of silently reinitializing them. Call ``functional.reset_net`` before changing input shape, or supply matching explicit states.
@@ -45,6 +50,13 @@ spikingjelly.activation_based.precision
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 - BF16 capability detection queries non-CUDA accelerator backends instead of rejecting them unconditionally.
+
+spikingjelly.activation_based.op_counter
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- ``FlopCounter`` counts batch-norm backward without affine parameters and ``MemoryAccessCounter`` counts ``logical_not`` as a unary op, instead of raising even with ``strict=False``.
+- ``ACCounter`` counts out-of-place ``sigmoid`` like ``sigmoid_`` instead of as zero.
+- ``MemoryAccessCounter`` reads the indices in max-pooling backward instead of the pooled input, so backward totals with ``MaxPool2d`` change.
 
 spikingjelly.datasets
 ^^^^^^^^^^^^^^^^^^^^^

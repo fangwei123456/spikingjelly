@@ -1,6 +1,7 @@
 --find-links https://download.pytorch.org/whl/torch_stable.html
 torch>=2.7.0,<2.8.0
 torchvision
+torchaudio>=2.7.0,<2.8.0
 matplotlib
 packaging
 requests
@@ -9,3 +10,7 @@ tensorboard
 tqdm
 pydata-sphinx-theme>=0.16.1
 sphinx>=8.0.0,<9
+# SpikingJelly itself, editable like in CI: autodoc needs its runtime dependencies and
+# the ops/ -> spikingjelly._ops mapping. The path is relative to the working directory,
+# so install this file from the repository root.
+-e .

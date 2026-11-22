@@ -129,7 +129,7 @@ We welcome improvements to [documentation and tutorials](https://spikingjelly.re
 
 You may want to build the docs locally to preview your changes. Follow these steps:
 
-1. Prepare a Python virtual environment (through conda, uv, etc.). Install the required dependencies listed in `docs/requirements.txt`.
+1. Prepare a Python virtual environment (through conda, uv, etc.). From the repository root, install the dependencies listed in `docs/requirements.txt` (this also installs SpikingJelly itself in editable mode).
 2. Go into the `docs` directory, and build the docs:
 
     ```bash

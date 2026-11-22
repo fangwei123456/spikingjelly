@@ -279,9 +279,8 @@ def _flop_native_batch_norm(args, kwargs, out):
 
 
 def _flop_native_batch_norm_backward(args, kwargs, out):
-    grad_output, gamma, train, output_mask = args[0], args[2], args[-3], args[-1]
-    n = grad_output.numel()
-    c = gamma.numel()
+    grad_output, train, output_mask = args[0], args[-3], args[-1]
+    n, c = grad_output.numel(), grad_output.shape[1]
 
     flops = 0
     if train:
