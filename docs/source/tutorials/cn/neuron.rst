@@ -384,11 +384,14 @@ IFNode 的状态是膜电位 ``v``。可以打印出刚才新建的 IF 神经元
             [0.],
             [0.]])
 
-若要实现使用显式 functional 状态转移的生产级神经元，应继承 ``BaseNode`` 并实现
-``single_step_functional_forward``。该方法的接口为
-``(self, inputs, states, **kwargs) -> (outputs, updated_states)``，其中输入、输出和状态
-均为元组；不得修改模块中注册的状态或传入的 ``states``。只有存在独立序列实现或专用内核时，才需要重写
-``multi_step_functional_forward``。
+生产级 ``BaseNode`` 的单步和多步独立。覆写
+``single_step_functional_forward`` 仅影响单步；具体型号的子类继承父类的序列计算。
+需要改变多步动力学时，使用同一序列函数实现 ``multi_step_forward`` 和
+``multi_step_functional_forward``。常规电压轨迹可通过基类的
+``_multi_step(inputs, states, store_v_seq, **kwargs)`` 一次实现两个入口：
+返回输出元组、全部末态元组和可选电压轨迹。不得修改输入状态或模块 memory。
+``store_v_seq`` 只控制轨迹记录。直接继承基类且未实现序列计算时，多步调用报错。
+若希望修改单步后自动改变多步，请继承 Simple 系列；定制可编译核心可使用 FlexSN。
 
 .. note::
 

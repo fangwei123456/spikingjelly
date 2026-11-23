@@ -95,3 +95,15 @@ IF/LIF/PLIF 序列 functional 接口显式接收初态，返回脉冲、最终�
 子包重命名
 -------------------------------------------
 旧 ``clock_driven`` 对应当前的 ``activation_based``，旧 ``event_driven`` 对应当前的 ``timing_based``。这次重命名随 0.0.0.0.14 发布，迁移示例见 `0.0.0.0.14 版本文档 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`_。
+
+自定义神经元子类
+~~~~~~~~~~~~~~~~
+
+希望修改充电、放电或重置后自动影响每个时间步时，可继承 ``SimpleIFNode`` 或
+``SimpleLIFNode``。生产级 ``IFNode`` 和 ``LIFNode`` 的单步覆写仅影响单步。
+需要定制序列计算时，请按 :doc:`neuron` 提供多步实现。此前依赖
+``store_v_seq=True`` 触发单步执行的代码也需要迁移。
+
+此前仅覆写 ``multi_step_functional_forward`` 的子类，可将序列计算移入
+``_multi_step``，供 managed 和 explicit 入口共用，并按需记录电压。具有自定义
+观测语义的子类可直接实现两个多步入口。

@@ -571,8 +571,10 @@ class CubaLIFNode(neuron.BaseNode):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        x = inputs[0]
-        current_state, voltage_state = states[-2:]
+        spike, current, voltage = self._cuba_step(inputs[0], *states[-2:])
+        return (spike,), (*states[:-2], current, voltage)
+
+    def _cuba_step(self, x, current_state, voltage_state):
         current_decay = (
             self.current_decay.clamp(min=0.0, max=self.p_scale)
             if self.requires_grad
@@ -597,7 +599,7 @@ class CubaLIFNode(neuron.BaseNode):
                 self.surrogate_function,
                 self.detach_reset,
             )
-            return (spike,), (*states[:-2], current_state, voltage_state)
+            return spike, current_state, voltage_state
 
         current_state = LeakyIntegratorStep.apply(
             x,
@@ -622,7 +624,7 @@ class CubaLIFNode(neuron.BaseNode):
             self.v_reset,
             self.detach_reset,
         )
-        return (spike,), (*states[:-2], current_state, voltage_state)
+        return spike, current_state, voltage_state
 
     def multi_step_functional_forward(
         self,
@@ -630,7 +632,25 @@ class CubaLIFNode(neuron.BaseNode):
         states: tuple[object, ...],
         **kwargs: object,
     ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        return super().multi_step_functional_forward(inputs, states, **kwargs)
+        outputs, states, _, _ = self._cuba_sequence(inputs[0], states, False, False)
+        return (outputs,), states
+
+    def _cuba_sequence(self, x_seq, states, store_v_seq, store_i_seq):
+        current, voltage = states[-2:]
+        spikes, voltages, currents = [], [], []
+        for x in x_seq:
+            spike, current, voltage = self._cuba_step(x, current, voltage)
+            spikes.append(spike)
+            if store_v_seq:
+                voltages.append(voltage)
+            if store_i_seq:
+                currents.append(current)
+        return (
+            torch.stack(spikes),
+            (*states[:-2], current, voltage),
+            torch.stack(voltages) if store_v_seq else None,
+            torch.stack(currents) if store_i_seq else None,
+        )
 
     def _v_seq_source(self):
         # CubaLIFNode never materializes the inherited ``v`` memory (it stays the
@@ -639,28 +659,15 @@ class CubaLIFNode(neuron.BaseNode):
         return self.voltage_state
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
-        inputs = (x_seq, *args)
-        states = self.materialize_states(inputs, tuple(self._memories.values()), "m")
-        output_steps = []
-        voltage_steps = []
-        current_steps = []
-        for t in range(x_seq.shape[0]):
-            outputs, states = self.single_step_functional_forward(
-                tuple(x[t] for x in inputs), states, **kwargs
-            )
-            output_steps.append(outputs[0])
-            if self.store_v_seq:
-                voltage_steps.append(states[-1])
-            if self.store_i_seq:
-                current_steps.append(states[-2])
-
+        states = self.materialize_states(
+            (x_seq, *args), tuple(self._memories.values()), "m"
+        )
+        spikes, states, self.v_seq, self.i_seq = self._cuba_sequence(
+            x_seq, states, self.store_v_seq, self.store_i_seq
+        )
         for name, value in zip(self._memories, states, strict=True):
             self._memories[name] = value
-        if self.store_v_seq:
-            self.v_seq = torch.stack(voltage_steps)
-        if self.store_i_seq:
-            self.i_seq = torch.stack(current_steps)
-        return torch.stack(output_steps)
+        return spikes
 
 
 try:

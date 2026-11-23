@@ -64,6 +64,12 @@ optimization through model builders.
   temporal state may be exceptions, and must document why. The rule does not restrict
   user modules.
 
+- **DropConnect state.** With `invariant=True`, `DropConnectLinear` caches boolean
+  connection masks until reset and applies them to the current parameters each
+  step. Reinitialize old explicit invariant states. Subclasses customize mask
+  sampling with `_sample_masks(batch_size)`. Non-invariant training calls
+  `drop(batch_size)` each step and keeps the mask slots empty.
+
 ## Other modules
 
 - **`learning`** holds local plasticity learners and gradient-based online training

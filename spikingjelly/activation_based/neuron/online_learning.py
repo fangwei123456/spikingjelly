@@ -9,6 +9,13 @@ __all__ = ["OTTTLIFNode", "SLTTLIFNode"]
 
 
 class _OnlineLIFNode(LIFNode):
+    def supported_step_mode(self) -> tuple[str, ...]:
+        r"""仅支持单步模式 / Only single-step mode is supported."""
+        return ("s",)
+
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
+        raise ValueError(f"{self._get_name()} only supports single-step execution.")
+
     def single_step_functional_forward(
         self,
         inputs: tuple[torch.Tensor, ...],
@@ -151,9 +158,6 @@ class OTTTLIFNode(_OnlineLIFNode):
             detach_reset,
             step_mode,
             store_v_seq,
-        )
-        assert step_mode == "s", (
-            "Please use single-step mode to enable memory-efficient training."
         )
         self.register_memory("trace", None)
 
@@ -316,7 +320,4 @@ class SLTTLIFNode(_OnlineLIFNode):
             detach_reset,
             step_mode,
             store_v_seq,
-        )
-        assert step_mode == "s", (
-            "Please use single-step mode to enable memory-efficient training."
         )

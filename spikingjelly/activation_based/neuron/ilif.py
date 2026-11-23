@@ -335,39 +335,15 @@ class ILIFNode(LIFNode):
         )
         return (spike,), (v, *states[1:])
 
-    def multi_step_functional_forward(
-        self,
-        inputs: tuple[torch.Tensor, ...],
-        states: tuple[object, ...],
-        **kwargs: object,
-    ) -> tuple[tuple[torch.Tensor, ...], tuple[object, ...]]:
-        x_seq = inputs[0]
+    def _multi_step(self, inputs, states, store_v_seq, **kwargs):
         v = states[0]
-
-        spike_seq, v, _ = functional.ilif_multi_step(
-            x_seq,
+        spikes, v, trace = functional.ilif_multi_step(
+            inputs[0],
             v,
             self.tau,
             self.v_threshold,
             self.surrogate_function,
             self.detach_reset,
-            False,
+            store_v_seq,
         )
-        return (spike_seq,), (v,)
-
-    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
-        states = self.materialize_states(
-            (x_seq, *args), tuple(self._memories.values()), "m"
-        )
-        spike_seq, v, v_seq = functional.ilif_multi_step(
-            x_seq,
-            states[0],
-            self.tau,
-            self.v_threshold,
-            self.surrogate_function,
-            self.detach_reset,
-            store_v_seq=self.store_v_seq,
-        )
-        self.v = v
-        self.v_seq = v_seq
-        return spike_seq
+        return (spikes,), (v, *states[1:]), trace
