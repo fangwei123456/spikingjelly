@@ -223,41 +223,6 @@ def test_model_families_are_covered_in_strict_mode(family, counter_cls, train):
     assert counter.get_total() > 0
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
-@pytest.mark.parametrize(
-    "counter_cls", [op_counter.FlopCounter, op_counter.MemoryAccessCounter]
-)
-def test_cuda_batch_norm_and_dropout_count_like_cpu(counter_cls):
-    # On CUDA, batch norm dispatches cudnn_batch_norm(_backward) and dropout
-    # native_dropout(_backward); their counts must match the CPU ops.
-    aten = torch.ops.aten
-
-    def count(make_module, device):
-        torch.manual_seed(0)
-        module = make_module().to(device).train()
-        x = torch.randn(2, 3, 4, 4, device=device, requires_grad=True)
-        counter = counter_cls()
-        with op_counter.DispatchCounterMode([counter], strict=True):
-            module(x).sum().backward()
-        return counter.records["Global"]
-
-    cuda = count(partial(nn.BatchNorm2d, 3), "cuda")
-    cpu = count(partial(nn.BatchNorm2d, 3), "cpu")
-    assert aten.cudnn_batch_norm.default in cuda
-    assert cuda[aten.cudnn_batch_norm.default] == cpu[aten.native_batch_norm.default]
-    assert (
-        cuda[aten.cudnn_batch_norm_backward.default]
-        == cpu[aten.native_batch_norm_backward.default]
-    )
-    if counter_cls is op_counter.FlopCounter:
-        # The fused CUDA dropout keeps a boolean mask instead of the CPU's
-        # float one, so only the FLOP counts are comparable.
-        cuda = count(partial(nn.Dropout, 0.5), "cuda")
-        cpu = count(partial(nn.Dropout, 0.5), "cpu")
-        assert aten.native_dropout.default in cuda
-        assert sum(cuda.values()) == sum(cpu.values())
-
-
 def _count(counter_cls, fn, *args):
     counter = counter_cls()
     with op_counter.DispatchCounterMode([counter], strict=True):
@@ -265,8 +230,170 @@ def _count(counter_cls, fn, *args):
     return counter.get_total(), out
 
 
+def _count_flops_and_memory(fn, *args):
+    flops = op_counter.FlopCounter()
+    memory = op_counter.MemoryAccessCounter()
+    with op_counter.DispatchCounterMode([flops, memory], strict=True):
+        out = fn(*args)
+    return flops.get_total(), memory.get_total(), out
+
+
 def _bytes(*tensors):
     return sum(t.numel() * t.element_size() for t in tensors)
+
+
+DEVICES = [
+    "cpu",
+    pytest.param(
+        "cuda",
+        marks=pytest.mark.skipif(
+            not torch.cuda.is_available(), reason="CUDA is unavailable"
+        ),
+    ),
+]
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("train,p", [(False, 0.5), (None, 0.5), (True, 1.0)])
+def test_native_dropout_forward_counts(device, train, p):
+    x = torch.ones(4, device=device)
+    dropout = torch.ops.aten.native_dropout.default
+    zero_fill = device == "cuda" and p == 1
+    flops, memory, out = _count_flops_and_memory(dropout, x, p, train)
+    assert flops == (0 if train is False or zero_fill else 8)
+    assert memory == _bytes(*out) + (0 if zero_fill else _bytes(x))
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_native_dropout_backward_counts(device):
+    grad = torch.ones(4, device=device)
+    mask = torch.tensor([True, False, True, False], device=device)
+    backward = torch.ops.aten.native_dropout_backward.default
+    flops, memory, out = _count_flops_and_memory(backward, grad, mask, 2.0)
+    assert flops == 8
+    assert memory == _bytes(grad, mask, out)
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("inplace", [False, True])
+@pytest.mark.parametrize(
+    "train,p,expected_flops",
+    [
+        (False, 0.5, 0),
+        (True, 0.0, 0),
+        (True, 0.5, 8),
+        (True, 1.0, 4),
+    ],
+)
+def test_dropout_in_inference_mode(device, inplace, train, p, expected_flops):
+    x = torch.ones(4, device=device)
+    dropout = nn.Dropout(p, inplace=inplace).train(train)
+    expected_bytes = {
+        0: 0,
+        4: 40,  # input and output plus the zero scalar write and read
+        8: 36 if device == "cuda" and not inplace else 96,
+    }
+    with torch.inference_mode():
+        flops, memory, _ = _count_flops_and_memory(dropout, x)
+    assert flops == expected_flops
+    assert memory == expected_bytes[expected_flops]
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize(
+    "output_size,scales,cpu_flops,cuda_flops",
+    [
+        ((2, 2), (), 4, 4),
+        ((2, 8), (), 16, 16),
+        ((4, 4), (), 16, 0),
+        ((8, 8), (0.5, None), 64, 16),
+    ],
+)
+def test_nearest_upsample_backward_flops(
+    device, output_size, scales, cpu_flops, cuda_flops
+):
+    grad = torch.ones(1, 1, *output_size, device=device)
+    flops, _ = _count(
+        op_counter.FlopCounter,
+        torch.ops.aten.upsample_nearest2d_backward.default,
+        grad,
+        output_size,
+        (1, 1, 4, 4),
+        *scales,
+    )
+    assert flops == (cuda_flops if device == "cuda" else cpu_flops)
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("ndim", [2, 3])
+def test_adaptive_max_pool_backward_flops(device, ndim):
+    x = torch.zeros(1, 1, *([3] * ndim), device=device)
+    x[(0, 0) + (1,) * ndim] = 1
+    op = getattr(torch.ops.aten, f"adaptive_max_pool{ndim}d")
+    y, indices = op(x, (2,) * ndim)
+    grad = torch.ones_like(y)
+    backward = getattr(torch.ops.aten, f"adaptive_max_pool{ndim}d_backward")
+    flops, grad_input = _count(op_counter.FlopCounter, backward, grad, x, indices)
+    assert grad_input[(0, 0) + (1,) * ndim].item() == 2**ndim
+    assert flops == 2**ndim
+
+
+@pytest.mark.parametrize("affine", [False, True])
+def test_native_batch_norm_backward_memory(affine):
+    aten = torch.ops.aten
+    x = torch.randn(2, 3, 4, 4)
+    weight = torch.ones(3) if affine else None
+    grad = torch.ones_like(x)
+    _, mean, invstd = aten.native_batch_norm(
+        x, weight, None, None, None, True, 0.1, 1e-5
+    )
+    memory, gradients = _count(
+        op_counter.MemoryAccessCounter,
+        aten.native_batch_norm_backward.default,
+        grad,
+        x,
+        weight,
+        None,
+        None,
+        mean,
+        invstd,
+        True,
+        1e-5,
+        (True, affine, affine),
+    )
+    assert memory == (1212 if affine else 1176)
+    assert _bytes(*(t for t in gradients if t is not None)) == (408 if affine else 384)
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available() or not torch.backends.cudnn.is_available(),
+    reason="CUDA with cuDNN is unavailable",
+)
+def test_cudnn_batch_norm_counts():
+    aten = torch.ops.aten
+    x = torch.randn(2, 3, 4, 4, device="cuda")
+    grad = torch.ones_like(x)
+    weight = torch.ones(3, device="cuda")
+    bias, mean, var = (
+        torch.zeros_like(weight),
+        torch.zeros_like(weight),
+        torch.ones_like(weight),
+    )
+    forward_args = (x, weight, bias, mean, var, True, 0.1, 1e-5)
+    flops, memory, (_, saved_mean, invstd, reserve) = _count_flops_and_memory(
+        aten.cudnn_batch_norm.default,
+        *forward_args,
+    )
+    assert flops == 702
+    assert memory == 840 + _bytes(reserve)
+
+    backward_args = (x, grad, weight, mean, var, saved_mean, invstd, 1e-5, reserve)
+    flops, memory, _ = _count_flops_and_memory(
+        aten.cudnn_batch_norm_backward.default,
+        *backward_args,
+    )
+    assert flops == 960
+    assert memory == 1212 + _bytes(reserve)
 
 
 def test_adaptive_avg_pool2d_matches_avg_pool2d_on_divisible_input():
@@ -275,6 +402,29 @@ def test_adaptive_avg_pool2d_matches_avg_pool2d_on_divisible_input():
         adaptive, _ = _count(counter_cls, F.adaptive_avg_pool2d, x, (4, 4))
         fixed, _ = _count(counter_cls, F.avg_pool2d, x, 2)
         assert adaptive == fixed
+
+    grad = torch.ones(2, 3, 2, 2)
+    x = torch.randn(2, 3, 4, 4)
+    aten = torch.ops.aten
+    fixed, _ = _count(
+        op_counter.FlopCounter,
+        aten.avg_pool2d_backward.default,
+        grad,
+        x,
+        (2, 2),
+        (2, 2),
+        (0, 0),
+        False,
+        True,
+        None,
+    )
+    adaptive, _ = _count(
+        op_counter.FlopCounter,
+        aten._adaptive_avg_pool2d_backward.default,
+        grad,
+        x,
+    )
+    assert adaptive == fixed == 120
 
 
 def test_adaptive_pool2d_flops_count_overlapping_windows():

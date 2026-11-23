@@ -262,7 +262,7 @@ def _memory_native_batch_norm_backward(args, kwargs, out):
     saved_mean, saved_invstd = args[5:7]
     train, output_mask = args[-3], args[-1]
 
-    m = 0
+    m = sum(_bytes(grad) for grad in out)
     if train:
         if output_mask[0]:  # grad_input
             m += _bytes(grad_output)
@@ -286,24 +286,39 @@ def _memory_native_batch_norm_backward(args, kwargs, out):
     return m
 
 
+def _memory_cudnn_batch_norm(args, kwargs, out):
+    return _memory_native_batch_norm(args, kwargs, out) + _bytes(out[3])
+
+
 def _memory_cudnn_batch_norm_backward(args, kwargs, out):
-    # See _flop_cudnn_batch_norm_backward for the argument reordering.
-    x, grad_output, weight, running_mean, running_var, save_mean, save_var, eps = args[
-        :8
-    ]
-    native_args = (
-        grad_output,
-        x,
-        weight,
-        running_mean,
-        running_var,
-        save_mean,
-        save_var,
-        True,
-        eps,
-        [True, True, True],
+    x, grad_output, weight = args[:3]
+    saved_mean, saved_invstd, _, reserve = args[5:]
+    return sum(
+        _bytes(t)
+        for t in (x, grad_output, weight, saved_mean, saved_invstd, reserve, *out)
     )
-    return _memory_native_batch_norm_backward(native_args, kwargs, out)
+
+
+def _memory_native_dropout(args, kwargs, out):
+    x, p, train = args
+    if x.is_cuda and p == 1 and train is not False:
+        return sum(_bytes(t) for t in out)
+    return _memory_read_write_tuple(args, kwargs, out)
+
+
+def _memory_dropout(args, kwargs, out, *, inplace=False):
+    x, p, train = args
+    n = x.numel()
+    if not train or p == 0 or n == 0:
+        return 0
+    element_bytes = x.element_size()
+    data_bytes = n * element_bytes
+    if p == 1:
+        return 2 * (data_bytes + element_bytes)  # write and read zero
+    if x.is_cuda and not inplace:
+        return 2 * data_bytes + n  # fused bool mask
+    # Fill the mask, read and scale it, then read it again to multiply x.
+    return 6 * data_bytes
 
 
 class MemoryAccessCounter(BaseCounter):
@@ -411,9 +426,11 @@ class MemoryAccessCounter(BaseCounter):
             aten.convolution_backward.default: _memory_convolution_backward,
             aten.native_batch_norm.default: _memory_native_batch_norm,
             aten.native_batch_norm_backward.default: _memory_native_batch_norm_backward,
-            aten.cudnn_batch_norm.default: _memory_native_batch_norm,
+            aten.cudnn_batch_norm.default: _memory_cudnn_batch_norm,
             aten.cudnn_batch_norm_backward.default: _memory_cudnn_batch_norm_backward,
-            aten.native_dropout.default: _memory_read_write_tuple,
+            aten.dropout.default: _memory_dropout,
+            aten.dropout_.default: partial(_memory_dropout, inplace=True),
+            aten.native_dropout.default: _memory_native_dropout,
             aten.native_dropout_backward.default: _memory_element_wise_binary,
             aten.max_pool2d_with_indices.default: _memory_max_pool2d_with_indices,
             aten.max_pool2d_with_indices_backward.default: _memory_max_pool2d_with_indices_backward,
@@ -497,6 +514,7 @@ class MemoryAccessCounter(BaseCounter):
             aten.empty_like.default: _memory_null,
             aten.new_empty_strided.default: _memory_null,
             aten.view.default: _memory_null,
+            aten.view_as.default: _memory_null,
             aten._unsafe_view.default: _memory_null,
             aten.as_strided.default: _memory_null,
             aten.transpose.int: _memory_null,

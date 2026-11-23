@@ -1,6 +1,7 @@
 from collections import defaultdict
+from ctypes import c_float
 from functools import partial
-from math import prod
+from math import ceil, gcd, prod
 from typing import Any, Callable
 
 import torch
@@ -214,39 +215,34 @@ def _flop_avg_pool2d(args, kwargs, out):
 
 def _flop_avg_pool2d_backward(args, kwargs, out):
     grad_output, kernel_size = args[0], args[2]
-    return grad_output.numel() * prod(kernel_size)  # same count as the forward
+    # One scale per output gradient and one add per window element.
+    return grad_output.numel() * (1 + prod(kernel_size))
 
 
-def _adaptive_pool_windows(x: torch.Tensor, y: torch.Tensor, ndim: int):
-    """Return ``(window_elements, outputs)`` of an adaptive pooling from ``x`` to
-    ``y`` over the last ``ndim`` axes: the total number of input positions read by
-    all pooling windows, and the number of output positions.
-
-    Windows follow PyTorch: output index ``i`` of an axis of length ``n`` pooled to
-    ``m`` reads ``[floor(i * n / m), ceil((i + 1) * n / m))``; windows overlap when
-    ``n`` is not a multiple of ``m``.
-    """
-    leading = prod(x.shape[:-ndim])
-    window_elements = leading
-    for n, m in zip(x.shape[-ndim:], y.shape[-ndim:]):
-        window_elements *= sum(-(-(i + 1) * n // m) - i * n // m for i in range(m))
-    return window_elements, leading * prod(y.shape[-ndim:])
+def _adaptive_pool_window_elements(x: torch.Tensor, y: torch.Tensor, ndim: int):
+    # Each non-integral boundary adds one shared element. Of the m - 1
+    # interior boundaries i * n / m, gcd(n, m) - 1 are integral.
+    return prod(x.shape[:-ndim]) * prod(
+        n + m - gcd(n, m) for n, m in zip(x.shape[-ndim:], y.shape[-ndim:])
+    )
 
 
 def _flop_adaptive_avg_pool(args, kwargs, out, *, ndim):
-    window_elements, _ = _adaptive_pool_windows(args[0], out, ndim)
-    return window_elements  # K-1 * add, 1 * div per window
+    return _adaptive_pool_window_elements(args[0], out, ndim)
 
 
 def _flop_adaptive_avg_pool_backward(args, kwargs, out, *, ndim):
     grad_output, x = args[:2]
-    window_elements, _ = _adaptive_pool_windows(x, grad_output, ndim)
-    return window_elements  # same count as the forward
+    return grad_output.numel() + _adaptive_pool_window_elements(x, grad_output, ndim)
 
 
 def _flop_adaptive_max_pool(args, kwargs, out, *, ndim):
-    window_elements, outputs = _adaptive_pool_windows(args[0], out[0], ndim)
-    return window_elements - outputs  # K-1 * max per window
+    y = out[0]
+    return _adaptive_pool_window_elements(args[0], y, ndim) - y.numel()
+
+
+def _flop_adaptive_max_pool_backward(args, kwargs, out):
+    return args[0].numel()  # one indexed add per output gradient
 
 
 def _flop_sum(args, kwargs, out):
@@ -330,7 +326,10 @@ def _flop_native_batch_norm(args, kwargs, out):
 
 
 def _flop_native_batch_norm_backward(args, kwargs, out):
-    grad_output, train, output_mask = args[0], args[-3], args[-1]
+    return _flop_batch_norm_backward(args[0], args[-3], args[-1])
+
+
+def _flop_batch_norm_backward(grad_output, train, output_mask):
     n, c = grad_output.numel(), grad_output.shape[1]
 
     flops = 0
@@ -361,35 +360,43 @@ def _flop_native_batch_norm_backward(args, kwargs, out):
 
 
 def _flop_cudnn_batch_norm_backward(args, kwargs, out):
-    # cuDNN runs this op for training-mode batch norm only and always returns the
-    # three gradients; reorder its arguments into the native_batch_norm_backward
-    # layout and reuse that rule.
-    x, grad_output, weight, running_mean, running_var, save_mean, save_var, eps = args[
-        :8
-    ]
-    native_args = (
-        grad_output,
-        x,
-        weight,
-        running_mean,
-        running_var,
-        save_mean,
-        save_var,
-        True,
-        eps,
-        [True, True, True],
-    )
-    return _flop_native_batch_norm_backward(native_args, kwargs, out)
+    # cuDNN computes all three gradients for training batch norm.
+    return _flop_batch_norm_backward(args[1], True, (True, True, True))
 
 
 def _flop_native_dropout(args, kwargs, out):
-    # Same count as the CPU decomposition: scale the mask, then multiply.
+    x, p, train = args
+    if train is False or (x.is_cuda and p == 1):
+        return 0
     return 2 * out[0].numel()
 
 
+def _flop_native_dropout_backward(args, kwargs, out):
+    return 2 * out.numel()  # grad * mask * scale
+
+
+def _flop_dropout(args, kwargs, out):
+    _, p, train = args
+    if not train or p == 0:
+        return 0
+    return out.numel() if p == 1 else 2 * out.numel()
+
+
 def _flop_upsample_nearest_backward(args, kwargs, out):
-    # Each input gradient accumulates the gradients of the outputs copied from it.
-    return args[0].numel() - out.numel()
+    grad_output = args[0]
+    if not grad_output.is_cuda:
+        return grad_output.numel()
+    if grad_output.shape == out.shape:
+        return 0  # CUDA copies the gradient for equal sizes.
+
+    # CUDA gathers from adjacent ranges. Their total span is the final
+    # boundary on each axis, including when explicit scales disagree with sizes.
+    scales = tuple(args[3:]) + (None,) * (5 - len(args))
+    additions = out.shape[0] * out.shape[1]
+    for n, m, scale in zip(out.shape[-2:], grad_output.shape[-2:], scales):
+        scale = c_float(scale if scale is not None and scale > 0 else m / n).value
+        additions *= ceil(min(m, c_float(c_float(n).value * scale).value))
+    return additions
 
 
 class FlopCounter(BaseCounter):
@@ -505,8 +512,10 @@ class FlopCounter(BaseCounter):
             aten.native_batch_norm_backward.default: _flop_native_batch_norm_backward,
             aten.cudnn_batch_norm.default: _flop_native_batch_norm,
             aten.cudnn_batch_norm_backward.default: _flop_cudnn_batch_norm_backward,
+            aten.dropout.default: _flop_dropout,
+            aten.dropout_.default: _flop_dropout,
             aten.native_dropout.default: _flop_native_dropout,
-            aten.native_dropout_backward.default: _flop_element_wise,
+            aten.native_dropout_backward.default: _flop_native_dropout_backward,
             aten.max_pool2d_with_indices.default: _flop_max_pool2d_with_indices,
             aten.max_pool2d_with_indices_backward.default: _flop_null,
             aten.avg_pool2d.default: _flop_avg_pool2d,
@@ -516,9 +525,9 @@ class FlopCounter(BaseCounter):
                 _flop_adaptive_avg_pool_backward, ndim=2
             ),
             aten.adaptive_max_pool2d.default: partial(_flop_adaptive_max_pool, ndim=2),
-            aten.adaptive_max_pool2d_backward.default: _flop_null,
+            aten.adaptive_max_pool2d_backward.default: _flop_adaptive_max_pool_backward,
             aten.adaptive_max_pool3d.default: partial(_flop_adaptive_max_pool, ndim=3),
-            aten.adaptive_max_pool3d_backward.default: _flop_null,
+            aten.adaptive_max_pool3d_backward.default: _flop_adaptive_max_pool_backward,
             aten.sum.default: _flop_sum,
             aten.sum.dim_IntList: _flop_sum,
             aten.mean.dim: _flop_mean,
@@ -591,6 +600,7 @@ class FlopCounter(BaseCounter):
             aten.new_empty_strided.default: _flop_null,
             aten.bernoulli_.float: _flop_null,
             aten.view.default: _flop_null,
+            aten.view_as.default: _flop_null,
             aten._unsafe_view.default: _flop_null,
             aten.as_strided.default: _flop_null,
             aten.transpose.int: _flop_null,
