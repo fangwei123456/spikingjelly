@@ -1,5 +1,7 @@
 from collections import defaultdict
-from math import prod
+from ctypes import c_float
+from functools import partial
+from math import ceil, gcd, prod
 from typing import Any, Callable
 
 import torch
@@ -211,15 +213,56 @@ def _flop_avg_pool2d(args, kwargs, out):
     return out.numel() * prod(kernel_size)  # K-1 * add, 1 * div
 
 
+def _flop_avg_pool2d_backward(args, kwargs, out):
+    grad_output, kernel_size = args[0], args[2]
+    # One scale per output gradient and one add per window element.
+    return grad_output.numel() * (1 + prod(kernel_size))
+
+
+def _adaptive_pool_window_elements(x: torch.Tensor, y: torch.Tensor, ndim: int):
+    # Each non-integral boundary adds one shared element. Of the m - 1
+    # interior boundaries i * n / m, gcd(n, m) - 1 are integral.
+    return prod(x.shape[:-ndim]) * prod(
+        n + m - gcd(n, m) for n, m in zip(x.shape[-ndim:], y.shape[-ndim:])
+    )
+
+
+def _flop_adaptive_avg_pool(args, kwargs, out, *, ndim):
+    return _adaptive_pool_window_elements(args[0], out, ndim)
+
+
+def _flop_adaptive_avg_pool_backward(args, kwargs, out, *, ndim):
+    grad_output, x = args[:2]
+    return grad_output.numel() + _adaptive_pool_window_elements(x, grad_output, ndim)
+
+
+def _flop_adaptive_max_pool(args, kwargs, out, *, ndim):
+    y = out[0]
+    return _adaptive_pool_window_elements(args[0], y, ndim) - y.numel()
+
+
+def _flop_adaptive_max_pool_backward(args, kwargs, out):
+    return args[0].numel()  # one indexed add per output gradient
+
+
 def _flop_sum(args, kwargs, out):
     x = args[0]
     y = out
     return x.numel() - y.numel()
 
 
+def _flop_max_dim(args, kwargs, out):
+    return args[0].numel() - out[0].numel()  # comparisons, as for sum
+
+
 def _flop_mean(args, kwargs, out):
     x = args[0]
     return x.numel()
+
+
+def _flop_var(args, kwargs, out):
+    # mean (counted as in _flop_mean), then x - mean, square, sum and divide
+    return 4 * args[0].numel()
 
 
 def _flop_add(args, kwargs, out):
@@ -237,6 +280,10 @@ def _flop_element_wise(args, kwargs, out):
 
 def _flop_sigmoid(args, kwargs, out):
     return 4 * out.numel()
+
+
+def _flop_sigmoid_backward(args, kwargs, out):
+    return 3 * out.numel()  # grad * y * (1 - y)
 
 
 def _flop_sdpa(args, kwargs, out):
@@ -279,7 +326,10 @@ def _flop_native_batch_norm(args, kwargs, out):
 
 
 def _flop_native_batch_norm_backward(args, kwargs, out):
-    grad_output, train, output_mask = args[0], args[-3], args[-1]
+    return _flop_batch_norm_backward(args[0], args[-3], args[-1])
+
+
+def _flop_batch_norm_backward(grad_output, train, output_mask):
     n, c = grad_output.numel(), grad_output.shape[1]
 
     flops = 0
@@ -307,6 +357,46 @@ def _flop_native_batch_norm_backward(args, kwargs, out):
         if output_mask[2]:  # grad_beta
             flops += n - c
     return flops
+
+
+def _flop_cudnn_batch_norm_backward(args, kwargs, out):
+    # cuDNN computes all three gradients for training batch norm.
+    return _flop_batch_norm_backward(args[1], True, (True, True, True))
+
+
+def _flop_native_dropout(args, kwargs, out):
+    x, p, train = args
+    if train is False or (x.is_cuda and p == 1):
+        return 0
+    return 2 * out[0].numel()
+
+
+def _flop_native_dropout_backward(args, kwargs, out):
+    return 2 * out.numel()  # grad * mask * scale
+
+
+def _flop_dropout(args, kwargs, out):
+    _, p, train = args
+    if not train or p == 0:
+        return 0
+    return out.numel() if p == 1 else 2 * out.numel()
+
+
+def _flop_upsample_nearest_backward(args, kwargs, out):
+    grad_output = args[0]
+    if not grad_output.is_cuda:
+        return grad_output.numel()
+    if grad_output.shape == out.shape:
+        return 0  # CUDA copies the gradient for equal sizes.
+
+    # CUDA gathers from adjacent ranges. Their total span is the final
+    # boundary on each axis, including when explicit scales disagree with sizes.
+    scales = tuple(args[3:]) + (None,) * (5 - len(args))
+    additions = out.shape[0] * out.shape[1]
+    for n, m, scale in zip(out.shape[-2:], grad_output.shape[-2:], scales):
+        scale = c_float(scale if scale is not None and scale > 0 else m / n).value
+        additions *= ceil(min(m, c_float(c_float(n).value * scale).value))
+    return additions
 
 
 class FlopCounter(BaseCounter):
@@ -420,12 +510,30 @@ class FlopCounter(BaseCounter):
             aten.convolution_backward.default: _flop_convolution_backward,
             aten.native_batch_norm.default: _flop_native_batch_norm,
             aten.native_batch_norm_backward.default: _flop_native_batch_norm_backward,
+            aten.cudnn_batch_norm.default: _flop_native_batch_norm,
+            aten.cudnn_batch_norm_backward.default: _flop_cudnn_batch_norm_backward,
+            aten.dropout.default: _flop_dropout,
+            aten.dropout_.default: _flop_dropout,
+            aten.native_dropout.default: _flop_native_dropout,
+            aten.native_dropout_backward.default: _flop_native_dropout_backward,
             aten.max_pool2d_with_indices.default: _flop_max_pool2d_with_indices,
             aten.max_pool2d_with_indices_backward.default: _flop_null,
             aten.avg_pool2d.default: _flop_avg_pool2d,
+            aten.avg_pool2d_backward.default: _flop_avg_pool2d_backward,
+            aten._adaptive_avg_pool2d.default: partial(_flop_adaptive_avg_pool, ndim=2),
+            aten._adaptive_avg_pool2d_backward.default: partial(
+                _flop_adaptive_avg_pool_backward, ndim=2
+            ),
+            aten.adaptive_max_pool2d.default: partial(_flop_adaptive_max_pool, ndim=2),
+            aten.adaptive_max_pool2d_backward.default: _flop_adaptive_max_pool_backward,
+            aten.adaptive_max_pool3d.default: partial(_flop_adaptive_max_pool, ndim=3),
+            aten.adaptive_max_pool3d_backward.default: _flop_adaptive_max_pool_backward,
             aten.sum.default: _flop_sum,
             aten.sum.dim_IntList: _flop_sum,
             aten.mean.dim: _flop_mean,
+            aten.mean.default: _flop_mean,
+            aten.var.correction: _flop_var,
+            aten.max.dim: _flop_max_dim,
             aten.add.Tensor: _flop_add,
             aten.add_.Tensor: _flop_add,
             aten.add.Scalar: _flop_add,
@@ -464,12 +572,41 @@ class FlopCounter(BaseCounter):
             aten.logical_not.default: _flop_element_wise,
             aten.sigmoid.default: _flop_sigmoid,
             aten.sigmoid_.default: _flop_sigmoid,
+            aten.sigmoid_backward.default: _flop_sigmoid_backward,
+            aten.abs.default: _flop_element_wise,
+            aten.relu.default: _flop_element_wise,
+            aten.threshold_backward.default: _flop_element_wise,
+            aten.pow.Tensor_Scalar: _flop_element_wise,
+            aten.pow_.Scalar: _flop_element_wise,
+            aten.reciprocal.default: _flop_element_wise,
+            aten.cosh_.default: _flop_element_wise,
+            aten.masked_fill_.Scalar: _flop_null,  # selection, no arithmetic
+            aten.upsample_nearest2d.default: _flop_null,
+            aten.upsample_nearest2d_backward.default: _flop_upsample_nearest_backward,
+            aten._local_scalar_dense.default: _flop_null,  # Tensor.item()
             aten.stack.default: _flop_null,
+            aten.cat.default: _flop_null,
+            aten.repeat.default: _flop_null,
+            aten.copy_.default: _flop_null,
+            aten.scatter.src: _flop_null,
             aten.clone.default: _flop_null,
             aten._to_copy.default: _flop_null,
             aten.full_like.default: _flop_null,
             aten.ones_like.default: _flop_null,
+            aten.zeros_like.default: _flop_null,
+            aten.empty_like.default: _flop_null,
+            aten.zeros.default: _flop_null,
+            aten.new_zeros.default: _flop_null,
+            aten.new_empty_strided.default: _flop_null,
+            aten.bernoulli_.float: _flop_null,
             aten.view.default: _flop_null,
+            aten.view_as.default: _flop_null,
+            aten._unsafe_view.default: _flop_null,
+            aten.as_strided.default: _flop_null,
+            aten.transpose.int: _flop_null,
+            aten.permute.default: _flop_null,
+            aten.split.Tensor: _flop_null,
+            aten.slice.Tensor: _flop_null,
             aten.unsqueeze.default: _flop_null,
             aten.squeeze.dim: _flop_null,
             aten.unbind.int: _flop_null,

@@ -186,9 +186,27 @@ def _memory_max_pool2d_with_indices_backward(args, kwargs, out):
     return _bytes(grad_output) + _bytes(indices) + _bytes(grad_x)
 
 
+def _memory_adaptive_max_pool_backward(args, kwargs, out):
+    grad_output, indices = args[0], args[2]
+    return _bytes(grad_output) + _bytes(indices) + _bytes(out)
+
+
 def _memory_read_write(args, kwargs, out):
     x = args[0]
     return _bytes(x) + _bytes(out)
+
+
+def _memory_read_write_tuple(args, kwargs, out):
+    return _bytes(args[0]) + sum(_bytes(y) for y in out)
+
+
+def _memory_copy_(args, kwargs, out):
+    return _bytes(args[1]) + _bytes(out)  # read src, write self
+
+
+def _memory_scatter_src(args, kwargs, out):
+    x, _dim, index, src = args[:4]
+    return _bytes(x) + _bytes(index) + _bytes(src) + _bytes(out)
 
 
 def _memory_element_wise_binary(args, kwargs, out):
@@ -244,7 +262,7 @@ def _memory_native_batch_norm_backward(args, kwargs, out):
     saved_mean, saved_invstd = args[5:7]
     train, output_mask = args[-3], args[-1]
 
-    m = 0
+    m = sum(_bytes(grad) for grad in out)
     if train:
         if output_mask[0]:  # grad_input
             m += _bytes(grad_output)
@@ -266,6 +284,41 @@ def _memory_native_batch_norm_backward(args, kwargs, out):
         if output_mask[2] and not output_mask[0] and not output_mask[1]:
             m += _bytes(grad_output)
     return m
+
+
+def _memory_cudnn_batch_norm(args, kwargs, out):
+    return _memory_native_batch_norm(args, kwargs, out) + _bytes(out[3])
+
+
+def _memory_cudnn_batch_norm_backward(args, kwargs, out):
+    x, grad_output, weight = args[:3]
+    saved_mean, saved_invstd, _, reserve = args[5:]
+    return sum(
+        _bytes(t)
+        for t in (x, grad_output, weight, saved_mean, saved_invstd, reserve, *out)
+    )
+
+
+def _memory_native_dropout(args, kwargs, out):
+    x, p, train = args
+    if x.is_cuda and p == 1 and train is not False:
+        return sum(_bytes(t) for t in out)
+    return _memory_read_write_tuple(args, kwargs, out)
+
+
+def _memory_dropout(args, kwargs, out, *, inplace=False):
+    x, p, train = args
+    n = x.numel()
+    if not train or p == 0 or n == 0:
+        return 0
+    element_bytes = x.element_size()
+    data_bytes = n * element_bytes
+    if p == 1:
+        return 2 * (data_bytes + element_bytes)  # write and read zero
+    if x.is_cuda and not inplace:
+        return 2 * data_bytes + n  # fused bool mask
+    # Fill the mask, read and scale it, then read it again to multiply x.
+    return 6 * data_bytes
 
 
 class MemoryAccessCounter(BaseCounter):
@@ -373,12 +426,28 @@ class MemoryAccessCounter(BaseCounter):
             aten.convolution_backward.default: _memory_convolution_backward,
             aten.native_batch_norm.default: _memory_native_batch_norm,
             aten.native_batch_norm_backward.default: _memory_native_batch_norm_backward,
+            aten.cudnn_batch_norm.default: _memory_cudnn_batch_norm,
+            aten.cudnn_batch_norm_backward.default: _memory_cudnn_batch_norm_backward,
+            aten.dropout.default: _memory_dropout,
+            aten.dropout_.default: partial(_memory_dropout, inplace=True),
+            aten.native_dropout.default: _memory_native_dropout,
+            aten.native_dropout_backward.default: _memory_element_wise_binary,
             aten.max_pool2d_with_indices.default: _memory_max_pool2d_with_indices,
             aten.max_pool2d_with_indices_backward.default: _memory_max_pool2d_with_indices_backward,
             aten.avg_pool2d.default: _memory_read_write,
+            aten.avg_pool2d_backward.default: _memory_read_write,
+            aten._adaptive_avg_pool2d.default: _memory_read_write,
+            aten._adaptive_avg_pool2d_backward.default: _memory_read_write,
+            aten.adaptive_max_pool2d.default: _memory_read_write_tuple,
+            aten.adaptive_max_pool2d_backward.default: _memory_adaptive_max_pool_backward,
+            aten.adaptive_max_pool3d.default: _memory_read_write_tuple,
+            aten.adaptive_max_pool3d_backward.default: _memory_adaptive_max_pool_backward,
             aten.sum.default: _memory_read_write,
             aten.sum.dim_IntList: _memory_read_write,
             aten.mean.dim: _memory_read_write,
+            aten.mean.default: _memory_read_write,
+            aten.var.correction: _memory_read_write,
+            aten.max.dim: _memory_read_write_tuple,
             aten.add.Tensor: _memory_element_wise_binary,
             aten.add_.Tensor: _memory_element_wise_binary,
             aten.add.Scalar: _memory_element_wise_binary,
@@ -391,6 +460,18 @@ class MemoryAccessCounter(BaseCounter):
             aten.rsub.Scalar: _memory_element_wise_binary,
             aten.neg.default: _memory_read_write,
             aten.neg_.default: _memory_read_write,
+            aten.abs.default: _memory_read_write,
+            aten.relu.default: _memory_read_write,
+            aten.pow.Tensor_Scalar: _memory_read_write,
+            aten.pow_.Scalar: _memory_read_write,
+            aten.reciprocal.default: _memory_read_write,
+            aten.cosh_.default: _memory_read_write,
+            aten.masked_fill_.Scalar: _memory_element_wise_binary,
+            aten.upsample_nearest2d.default: _memory_read_write,
+            aten.upsample_nearest2d_backward.default: _memory_read_write,
+            aten._local_scalar_dense.default: _memory_null,  # Tensor.item()
+            aten.threshold_backward.default: _memory_element_wise_binary,
+            aten.sigmoid_backward.default: _memory_element_wise_binary,
             aten.mul.Tensor: _memory_element_wise_binary,
             aten.mul_.Tensor: _memory_element_wise_binary,
             aten.mul.Scalar: _memory_element_wise_binary,
@@ -418,11 +499,28 @@ class MemoryAccessCounter(BaseCounter):
             aten.sigmoid.default: _memory_read_write,
             aten.sigmoid_.default: _memory_read_write,
             aten.stack.default: _memory_stack,
+            aten.cat.default: _memory_stack,
+            aten.repeat.default: _memory_read_write,
+            aten.copy_.default: _memory_copy_,
+            aten.scatter.src: _memory_scatter_src,
             aten.clone.default: _memory_read_write,
             aten._to_copy.default: _memory_read_write,
             aten.full_like.default: _memory_full_like,
             aten.ones_like.default: _memory_full_like,
+            aten.zeros_like.default: _memory_full_like,
+            aten.zeros.default: _memory_full_like,
+            aten.new_zeros.default: _memory_full_like,
+            aten.bernoulli_.float: _memory_full_like,  # in-place random fill
+            aten.empty_like.default: _memory_null,
+            aten.new_empty_strided.default: _memory_null,
             aten.view.default: _memory_null,
+            aten.view_as.default: _memory_null,
+            aten._unsafe_view.default: _memory_null,
+            aten.as_strided.default: _memory_null,
+            aten.transpose.int: _memory_null,
+            aten.permute.default: _memory_null,
+            aten.split.Tensor: _memory_null,
+            aten.slice.Tensor: _memory_null,
             aten.unsqueeze.default: _memory_null,
             aten.squeeze.dim: _memory_null,
             aten.unbind.int: _memory_null,
