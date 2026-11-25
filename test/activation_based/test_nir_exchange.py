@@ -220,6 +220,31 @@ def test_reports_unsupported_module(module: nn.Module, step_mode: str):
         nir_exchange.export_to_nir(net.eval(), torch.rand(shape))
 
 
+@pytest.mark.parametrize(
+    "net",
+    [
+        nn.BatchNorm2d(2),
+        nn.ReLU(),
+        nn.Identity(),
+        layer.BatchNorm2d(2),
+        layer.MaxPool2d(2),
+        layer.TLastSeqToANNContainer(nn.ReLU()),
+        neuron.QIFNode(),
+        neuron.NonSpikingIFNode(),
+        neuron.LIAFNode(act=nn.ReLU(), threshold_related=False),
+    ],
+    ids=lambda net: f"{type(net).__module__}.{type(net).__name__}",
+)
+def test_reports_unsupported_root_module(net: nn.Module):
+    cls = type(net)
+    expected = f"'{cls.__name__}' ({cls.__module__}.{cls.__qualname__})"
+    children = dict(net.named_children())
+
+    with pytest.raises(NotImplementedError, match=re.escape(expected)):
+        nir_exchange.export_to_nir(net.eval(), torch.rand(1, 2, 8, 8))
+    assert dict(net.named_children()) == children
+
+
 def test_reports_all_unsupported_modules_once():
     class Net(nn.Module):
         def __init__(self):

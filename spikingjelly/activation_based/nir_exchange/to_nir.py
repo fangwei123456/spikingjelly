@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import operator
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
@@ -47,6 +48,10 @@ class _ExportTracer(NIRTorchTracer):
         self.cause: Optional[Exception] = None
 
     def trace(self, root: nn.Module, *args: Any, **kwargs: Any) -> fx.Graph:
+        if type(root) not in self.module_types and self._is_atomic(root, ""):
+            # fx does not dispatch the root to call_module: check it as a child.
+            wrapper = nn.Sequential(OrderedDict([(type(root).__name__, root)]))
+            _ExportTracer(self.module_types).trace(wrapper)
         try:
             graph = super().trace(root, *args, **kwargs)
         except Exception as error:
@@ -71,7 +76,7 @@ class _ExportTracer(NIRTorchTracer):
         if self.is_leaf_module(m, name):
             self._record_unsupported(name, m)
             return super().call_module(m, forward, args, kwargs)
-        if not isinstance(m, base.StepModule):
+        if not self._is_atomic(m, name):
             return super().call_module(m, forward, args, kwargs)
 
         # Step modules are atomic. Tracing into one without a mapping is only
@@ -80,7 +85,8 @@ class _ExportTracer(NIRTorchTracer):
         module_stack = self.module_stack.copy()
         try:
             output = super().call_module(m, forward, args, kwargs)
-        except Exception as error:
+        except (fx.proxy.TraceError, TypeError, ValueError) as error:
+            # Raised by proxies in control flow and in calls that need values.
             self.cause = self.cause or error
             # fx does not unwind its module stack when a forward raises.
             self.module_stack = module_stack
@@ -94,6 +100,9 @@ class _ExportTracer(NIRTorchTracer):
         self._record_unsupported(name, m)
         # Stand in for the module so that the rest of the network is checked too.
         return self.create_proxy("call_module", name, args, kwargs)
+
+    def _is_atomic(self, module: nn.Module, name: str) -> bool:
+        return isinstance(module, base.StepModule) or self.is_leaf_module(module, name)
 
     def _record_unsupported(self, name: str, module: nn.Module) -> None:
         cls = type(module)
