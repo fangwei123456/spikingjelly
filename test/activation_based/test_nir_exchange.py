@@ -245,6 +245,35 @@ def test_reports_unsupported_root_module(net: nn.Module):
     assert dict(net.named_children()) == children
 
 
+@pytest.mark.parametrize(
+    "error", [RuntimeError, TypeError, ValueError], ids=lambda error: error.__name__
+)
+def test_unsupported_step_module_chains_its_error(error: type[Exception]):
+    class Failing(nn.Module, base.StepModule):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            raise error("invalid configuration")
+
+    with pytest.raises(NotImplementedError, match="'1' .*Failing") as caught:
+        nir_exchange.export_to_nir(
+            nn.Sequential(layer.Linear(2, 2), Failing()), torch.rand(1, 2)
+        )
+    assert type(caught.value.__cause__) is error
+
+    with pytest.raises(error, match="invalid configuration"):
+        nir_exchange.export_to_nir(Failing(), torch.rand(1, 2))
+
+
+def test_reports_step_module_that_needs_a_concrete_length():
+    class Scale(nn.Module, base.StepModule):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return x / len(x)
+
+    with pytest.raises(NotImplementedError, match="'1' .*Scale"):
+        nir_exchange.export_to_nir(
+            nn.Sequential(layer.Linear(2, 2), Scale()), torch.rand(1, 2)
+        )
+
+
 def test_reports_all_unsupported_modules_once():
     class Net(nn.Module):
         def __init__(self):
