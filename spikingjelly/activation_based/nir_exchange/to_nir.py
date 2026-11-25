@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import copy
+import operator
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import torch
@@ -17,8 +18,10 @@ from ...logger import logger
 try:
     import nir
     import nirtorch
+    from nirtorch.torch_tracer import NIRTorchTracer
 except ImportError as error:
     nir = nirtorch = None
+    NIRTorchTracer = fx.Tracer
     logger.info("NIR exchange dependencies unavailable: {}", error)
 
 
@@ -27,6 +30,82 @@ __all__ = ["export_to_nir"]
 
 def _to_numpy(x: torch.Tensor) -> np.ndarray:
     return x.detach().cpu().numpy()
+
+
+class _ExportTracer(NIRTorchTracer):
+    """Trace a network and report called modules that NIR exchange cannot convert.
+
+    Modules are checked when they are called, not when they are registered: an
+    unused module, or one that adds no operation such as Dropout in evaluation
+    mode, does not prevent the export.
+    """
+
+    def __init__(self, module_types: tuple[type[nn.Module], ...]):
+        super().__init__(module_types)
+        self.module_types = module_types
+        self.unsupported: dict[str, str] = {}
+        self.cause: Optional[Exception] = None
+
+    def trace(self, root: nn.Module, *args: Any, **kwargs: Any) -> fx.Graph:
+        try:
+            graph = super().trace(root, *args, **kwargs)
+        except Exception as error:
+            if not self.unsupported:
+                raise
+            # An unsupported module can also make the rest of the trace fail.
+            self._raise_unsupported(self.cause or error)
+        if self.unsupported:
+            self._raise_unsupported(self.cause)
+        return graph
+
+    def call_module(
+        self,
+        m: nn.Module,
+        forward: Callable[..., Any],
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> Any:
+        if type(m) in self.module_types:
+            return super().call_module(m, forward, args, kwargs)
+        name = self.path_of_module(m)
+        if self.is_leaf_module(m, name):
+            self._record_unsupported(name, m)
+            return super().call_module(m, forward, args, kwargs)
+        if not isinstance(m, base.StepModule):
+            return super().call_module(m, forward, args, kwargs)
+
+        # Step modules are atomic. Tracing into one without a mapping is only
+        # valid if it leaves no operation of its own, so that it can be skipped.
+        num_nodes = len(self.graph.nodes)
+        module_stack = self.module_stack.copy()
+        try:
+            output = super().call_module(m, forward, args, kwargs)
+        except Exception as error:
+            self.cause = self.cause or error
+            # fx does not unwind its module stack when a forward raises.
+            self.module_stack = module_stack
+        else:
+            if not any(
+                (node.op == "call_function" and node.target is not operator.add)
+                or (node.op == "call_method" and node.target != "add")
+                for node in list(self.graph.nodes)[num_nodes:]
+            ):
+                return output
+        self._record_unsupported(name, m)
+        # Stand in for the module so that the rest of the network is checked too.
+        return self.create_proxy("call_module", name, args, kwargs)
+
+    def _record_unsupported(self, name: str, module: nn.Module) -> None:
+        cls = type(module)
+        self.unsupported[name] = f"{cls.__module__}.{cls.__qualname__}"
+
+    def _raise_unsupported(self, cause: Optional[Exception]) -> None:
+        modules = ", ".join(
+            f"'{name}' ({cls})" for name, cls in self.unsupported.items()
+        )
+        raise NotImplementedError(
+            f"NIR exchange does not support these modules: {modules}."
+        ) from cause
 
 
 class _ModuleMapper:
@@ -52,7 +131,7 @@ class _ModuleMapper:
             base.extract_memories(self.net),
         )
         try:
-            tracer = nirtorch.torch_tracer.NIRTorchTracer(self.map_dict.keys())
+            tracer = _ExportTracer(tuple(self.map_dict))
             graph = tracer.trace(self.net)
             gm = fx.GraphModule(tracer.root, graph)
             with torch.no_grad():
@@ -285,7 +364,8 @@ def export_to_nir(
     :rtype: nir.NIRGraph
     :raises ImportError: 缺少可选依赖；使用 ``uv pip install 'spikingjelly[nir]'`` 安装
     :raises ValueError: ``dt`` 非正，或 CUBALIF 衰减参数超出可转换范围
-    :raises NotImplementedError: 模型使用 soft reset、grouped convolution 或 NIR 无法表示的层配置
+    :raises NotImplementedError: 模型使用 soft reset、grouped convolution 或 NIR 无法表示的层配置，
+        或者调用了不支持转换的模块，此时错误信息会列出这些模块的名称和类型
 
     ----
 
@@ -324,7 +404,8 @@ def export_to_nir(
     :raises ValueError: If ``dt`` is not positive or CUBALIF decay parameters
         cannot be represented
     :raises NotImplementedError: If the model uses soft reset, grouped convolution,
-        or another layer configuration that NIR cannot represent
+        or another layer configuration that NIR cannot represent, or if it calls
+        modules that cannot be converted; the message lists their names and types
     """
     if nir is None or nirtorch is None:
         raise ImportError(

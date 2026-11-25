@@ -1,3 +1,4 @@
+import copy
 import re
 from pathlib import Path
 
@@ -188,6 +189,83 @@ def test_rejects_unrepresentable_models():
             nn.Sequential(layer.AvgPool2d(2, padding=1, count_include_pad=False)),
             torch.rand(1, 2, 5, 5),
         )
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        nn.BatchNorm2d(2),
+        nn.MaxPool2d(2),
+        nn.ReLU(),
+        nn.Identity(),
+        layer.BatchNorm2d(2),
+        layer.MaxPool2d(2),
+        layer.AdaptiveAvgPool2d(1),
+        neuron.QIFNode(),
+        neuron.LIAFNode(act=nn.ReLU(), threshold_related=False),
+    ],
+    ids=lambda module: f"{type(module).__module__}.{type(module).__name__}",
+)
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+def test_reports_unsupported_module(module: nn.Module, step_mode: str):
+    module = copy.deepcopy(module)
+    net = nn.Sequential()
+    net.add_module("conv", layer.Conv2d(2, 2, 3, padding=1))
+    net.add_module("unsupported", module)
+    functional.set_step_mode(net, step_mode)
+    shape = (1, 2, 8, 8) if step_mode == "s" else (3, 1, 2, 8, 8)
+    expected = f"'unsupported' ({type(module).__module__}.{type(module).__qualname__})"
+
+    with pytest.raises(NotImplementedError, match=re.escape(expected)):
+        nir_exchange.export_to_nir(net.eval(), torch.rand(shape))
+
+
+def test_reports_all_unsupported_modules_once():
+    class Net(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.block = nn.Sequential(layer.Conv2d(2, 2, 1), layer.BatchNorm2d(2))
+            self.pool = layer.MaxPool2d(1)
+            self.act = nn.ReLU()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.act(self.act(self.pool(self.block(x))))
+
+    with pytest.raises(NotImplementedError) as error:
+        nir_exchange.export_to_nir(Net().eval(), torch.rand(1, 2, 4, 4))
+    message = str(error.value)
+    assert all(message.count(name) == 1 for name in ("'block.1'", "'pool'", "'act'"))
+    assert "'block.0'" not in message
+
+
+def test_exports_unmapped_modules_that_add_no_operation():
+    class Net(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = layer.Conv2d(2, 2, 3)
+            self.dropout = layer.Dropout(0.5)
+            self.unused = nn.BatchNorm2d(2)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.dropout(self.conv(x))
+
+    graph = nir_exchange.export_to_nir(Net().eval(), torch.rand(1, 2, 5, 5))
+    assert sum(isinstance(node, nir.Conv2d) for node in graph.nodes.values()) == 1
+    assert len(graph.nodes) == 3
+
+
+def test_reports_unsupported_module_when_tracing_fails_later():
+    class Net(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.norm = layer.BatchNorm2d(2)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            x = self.norm(x)
+            return x if x.sum() > 0 else -x
+
+    with pytest.raises(NotImplementedError, match="'norm'"):
+        nir_exchange.export_to_nir(Net().eval(), torch.rand(1, 2, 4, 4))
 
 
 def test_rejects_invalid_if_parameters():
