@@ -156,7 +156,8 @@ def test_export_preserves_memories():
     )
 
 
-def test_export_restores_memories_when_tracing_fails():
+@pytest.mark.parametrize("nested", [False, True])
+def test_export_restores_memories_when_tracing_fails(nested: bool):
     class FailingNet(base.MemoryModule):
         def __init__(self):
             super().__init__()
@@ -167,9 +168,69 @@ def test_export_restores_memories_when_tracing_fails():
             raise RuntimeError("trace failed")
 
     net = FailingNet()
+    model = nn.Sequential(nn.ReLU(), net) if nested else net
     with pytest.raises(RuntimeError, match="trace failed"):
-        nir_exchange.export_to_nir(net, torch.rand(1, 2))
+        nir_exchange.export_to_nir(model, torch.rand(1, 2))
     assert torch.equal(net.trace_count, torch.tensor(0))
+
+
+def test_exports_linear_subclass_with_mapped_child():
+    class Net(nn.Linear):
+        def __init__(self):
+            super().__init__(2, 2)
+            self.proj = nn.Linear(2, 2)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.proj(x)
+
+    net = Net()
+    x = torch.rand(1, 2)
+    graph = nir_exchange.export_to_nir(net, x)
+    restored = nir_exchange.import_from_nir(graph)
+    actual, _ = restored(x)
+    torch.testing.assert_close(actual, net(x))
+
+
+@pytest.mark.parametrize("container", ["root", "block", "step_mode", "recurrent"])
+def test_preserves_trace_error_after_discarded_relu(container: str):
+    class Block(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.relu = nn.ReLU()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            self.relu(x)
+            return x if x.sum() > 0 else -x
+
+    net = Block()
+    if container == "block":
+        net = nn.Sequential(net)
+    elif container == "step_mode":
+        net = nn.Sequential(layer.StepModeContainer(False, "s", net))
+    elif container == "recurrent":
+        net = layer.ElementWiseRecurrentContainer(net, lambda y, x: x)
+
+    with pytest.raises(torch.fx.proxy.TraceError, match="control flow"):
+        nir_exchange.export_to_nir(net, torch.rand(1, 2))
+
+
+def test_preserves_traced_step_module_tuple_output():
+    class Pair(nn.Module, base.StepModule):
+        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+            return x.sin(), x
+
+    class Net(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.pair = Pair()
+            self.relu = nn.ReLU()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            y = self.pair(x)
+            return self.relu(y[1]) if isinstance(y, tuple) else x
+
+    with pytest.raises(NotImplementedError, match="'relu' .*ReLU"):
+        nir_exchange.export_to_nir(Net(), torch.rand(1, 2))
 
 
 def test_rejects_unrepresentable_models():
@@ -224,11 +285,11 @@ def test_reports_unsupported_module(module: nn.Module, step_mode: str):
     "net",
     [
         nn.BatchNorm2d(2),
+        nn.MaxPool2d(2),
         nn.ReLU(),
         nn.Identity(),
         layer.BatchNorm2d(2),
         layer.MaxPool2d(2),
-        layer.TLastSeqToANNContainer(nn.ReLU()),
         neuron.QIFNode(),
         neuron.NonSpikingIFNode(),
         neuron.LIAFNode(act=nn.ReLU(), threshold_related=False),
@@ -248,37 +309,44 @@ def test_reports_unsupported_root_module(net: nn.Module):
 @pytest.mark.parametrize(
     "error", [RuntimeError, TypeError, ValueError], ids=lambda error: error.__name__
 )
-def test_unsupported_step_module_chains_its_error(error: type[Exception]):
+def test_preserves_custom_step_module_error(error: type[Exception]):
     class Failing(nn.Module, base.StepModule):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             raise error("invalid configuration")
 
-    with pytest.raises(NotImplementedError, match="'1' .*Failing") as caught:
+    with pytest.raises(error, match="invalid configuration"):
         nir_exchange.export_to_nir(
-            nn.Sequential(layer.Linear(2, 2), Failing()), torch.rand(1, 2)
+            nn.Sequential(nn.ReLU(), Failing()), torch.rand(1, 2)
         )
-    assert type(caught.value.__cause__) is error
 
     with pytest.raises(error, match="invalid configuration"):
         nir_exchange.export_to_nir(Failing(), torch.rand(1, 2))
 
 
-def test_reports_step_module_that_needs_a_concrete_length():
+def test_preserves_custom_step_module_length_error():
     class Scale(nn.Module, base.StepModule):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return x / len(x)
 
-    with pytest.raises(NotImplementedError, match="'1' .*Scale"):
+    with pytest.raises(RuntimeError, match="'len' is not supported"):
         nir_exchange.export_to_nir(
             nn.Sequential(layer.Linear(2, 2), Scale()), torch.rand(1, 2)
         )
 
 
-def test_reports_all_unsupported_modules_once():
+def test_preserves_container_tracing_error():
+    with pytest.raises(ValueError, match="We cannot vmap over non-Tensor arguments"):
+        nir_exchange.export_to_nir(
+            layer.TLastSeqToANNContainer(nn.ReLU()), torch.rand(1, 2, 4, 4)
+        )
+
+
+@pytest.mark.parametrize("norm", [nn.BatchNorm2d, layer.BatchNorm2d])
+def test_reports_unsupported_modules_until_tracing_fails(norm: type[nn.Module]):
     class Net(nn.Module):
         def __init__(self):
             super().__init__()
-            self.block = nn.Sequential(layer.Conv2d(2, 2, 1), layer.BatchNorm2d(2))
+            self.block = nn.Sequential(layer.Conv2d(2, 2, 1), norm(2))
             self.pool = layer.MaxPool2d(1)
             self.act = nn.ReLU()
 
@@ -288,15 +356,20 @@ def test_reports_all_unsupported_modules_once():
     with pytest.raises(NotImplementedError) as error:
         nir_exchange.export_to_nir(Net().eval(), torch.rand(1, 2, 4, 4))
     message = str(error.value)
-    assert all(message.count(name) == 1 for name in ("'block.1'", "'pool'", "'act'"))
+    assert message.count("'block.1'") == 1
+    for name in ("'pool'", "'act'"):
+        assert message.count(name) == (1 if norm is nn.BatchNorm2d else 0)
     assert "'block.0'" not in message
 
 
-def test_exports_unmapped_modules_that_add_no_operation():
+@pytest.mark.parametrize("step_container", [False, True])
+def test_exports_unmapped_modules_that_add_no_operation(step_container: bool):
     class Net(nn.Module):
         def __init__(self):
             super().__init__()
             self.conv = layer.Conv2d(2, 2, 3)
+            if step_container:
+                self.conv = layer.StepModeContainer(False, "s", self.conv)
             self.dropout = layer.Dropout(0.5)
             self.unused = nn.BatchNorm2d(2)
 

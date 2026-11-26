@@ -39,7 +39,7 @@ spikingjelly.activation_based.nir_exchange
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 - NIR exchange imports without its optional dependencies and reports an installation command when import/export is called without them.
-- ``export_to_nir`` raises ``NotImplementedError`` listing the names and types of unsupported modules, such as batch normalization or max pooling, instead of unrelated tracing errors.
+- ``export_to_nir`` names called unsupported leaves and built-in atomic step layers, preserving model and container tracing errors; untraceable built-in layers fail immediately.
 
 spikingjelly.activation_based.memopt
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

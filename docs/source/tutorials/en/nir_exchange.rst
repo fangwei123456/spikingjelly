@@ -79,6 +79,8 @@ The meanings of the parameters of :func:`export_to_nir <spikingjelly.activation_
 * ``save_path``: the path to the HDF5 file used to save the NIR graph (if ``None``, the graph is not saved);
 * ``dt``: the NIR simulation time step in seconds. It must be positive and defaults to ``1e-4``. Use the same value when importing.
 
+Unsupported-layer diagnostics name called unmapped FX leaves and built-in SpikingJelly atomic step layers, including batch normalization and max pooling. Known built-in layers that cannot be traced fail immediately; other layer diagnostics are reported after a successful trace. Model, custom-module, and container tracing errors propagate unchanged. Unused modules and evaluation-mode ``layer.Dropout`` sublayers do not prevent export. These diagnostics do not validate arbitrary FX operations.
+
 After execution, a file named ``example.nir`` will appear in the current directory, containing the HDF5-encoded NIR graph. The output printed in the terminal is roughly as follows:
 
 .. code:: text
