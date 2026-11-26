@@ -8,6 +8,32 @@ from spikingjelly.activation_based.model.spike_dhs import save_v_LIFNode
 @pytest.mark.parametrize(
     "node_type,kwargs",
     [
+        (neuron.SimpleIFNode, {}),
+        (neuron.SimpleLIFNode, {"tau": 2.0, "decay_input": True}),
+    ],
+)
+def test_simple_sequence_reuses_single_step_override(node_type, kwargs):
+    class ScaledOutput(node_type):
+        def single_step_forward(self, x):
+            return 2 * super().single_step_forward(x)
+
+    node = ScaledOutput(step_mode="m", **kwargs)
+    reference = ScaledOutput(step_mode="s", **kwargs)
+    x = torch.tensor([[0.4, 1.2], [1.2, 0.4], [0.5, 0.5]], requires_grad=True)
+    xs = x.detach().clone().requires_grad_()
+    actual = node(x)
+    expected = torch.stack([reference(step) for step in xs])
+    torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(node.v, reference.v)
+    torch.testing.assert_close(
+        torch.autograd.grad(actual.sum(), x),
+        torch.autograd.grad(expected.sum(), xs),
+    )
+
+
+@pytest.mark.parametrize(
+    "node_type,kwargs",
+    [
         (neuron.IFNode, {}),
         (neuron.LIFNode, {}),
         (neuron.ParametricLIFNode, {}),

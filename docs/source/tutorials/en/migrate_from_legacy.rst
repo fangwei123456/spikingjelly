@@ -1,11 +1,53 @@
-Upgrade to SpikingJelly 2.0
+Upgrade to SpikingJelly 2
 =======================================
 
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 中文版： :doc:`../cn/migrate_from_legacy`
 
-If your project still uses legacy interfaces, find each old item in the table, then check the current arguments, return values, and checkpoint keys against the linked APIs.
+Check the section for your installed version before upgrading. Minor versions may
+require migration; pin ``spikingjelly>=2.0,<2.1`` to retain the 2.0 interfaces.
+
+2.0.0 to 2.1.0: neuron interfaces
+-------------------------------------------
+
+Production neurons now implement single-step and multi-step dynamics independently.
+A single-step override no longer changes sequence execution, including when
+``store_v_seq=True``. Use the Simple family when a single-step override should run
+at every time step. Its customization interfaces are ``single_step_forward`` and
+the charge, fire and reset methods, rather than explicit-state transitions.
+
+For production subclasses, implement ``_multi_step(inputs, states, store_v_seq,
+**kwargs)`` for both managed and explicit sequence calls, or implement both sequence
+entry points directly. Move any sequence calculation previously defined only in
+``multi_step_functional_forward`` into that shared transition. Return all final
+states in registration order, leaving input states and module memory untouched;
+the base class commits managed state. A direct ``BaseNode`` subclass without a
+sequence implementation raises on multi-step calls. Recording controls only the
+voltage trace, not dynamics. See :doc:`neuron` for the complete contract.
+
+The functional API adds ``liaf_multi_step``, ``raf_multi_step``, ``klif_multi_step``,
+``cuba_lif_multi_step``, ``clif_multi_step``, ``ternary_if_multi_step`` and
+``ternary_lif_multi_step``. Check each function's state and trajectory returns.
+
+Other required migrations from 2.0.0:
+
+* ST-BIF functions return ``(out, q, acc_q)`` instead of four values; explicit
+  module state is ``(q, acc_q)``. Replace ``cur_output`` access with returned
+  outputs, which are scaled by ``q_threshold``. Rebuild native extensions and
+  regenerate compiled/exported graphs.
+* Delete ``invalidate_reset_cache`` imports and calls. ``reset_net`` traverses the
+  current model; recollect any caller-owned reset snapshot after structural changes.
+* Reinitialize old DropConnect explicit states: ``(None, None)`` with bias, or
+  ``(None,)`` without it. Invariant states now store boolean masks; customize their
+  sampling through ``_sample_masks``. Parameter ``state_dict`` keys are unchanged.
+* Reset neurons before changing input shape, or supply matching explicit states.
+  Materialized state shape mismatches now raise instead of silently resetting.
+* Replace non-spiking decoder spellings ``last_mem`` and ``last-me`` with
+  ``last-mem``; unsupported values now raise at construction.
+
+For older interfaces, use the table below and check arguments, returns and
+checkpoint keys against the linked APIs.
 
 2.0: automatic execution and interface migration
 ------------------------------------------------
@@ -98,17 +140,3 @@ Migration is manual. Whole-module pickles or checkpoints saved by an older versi
 Package rename
 -------------------------------------------
 The old ``clock_driven`` package maps to ``activation_based``, and ``event_driven`` maps to ``timing_based``. This rename shipped in 0.0.0.0.14; see the `0.0.0.0.14 documentation <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en>`_ for migration examples.
-
-Custom neuron subclasses
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Use ``SimpleIFNode`` or ``SimpleLIFNode`` when a charge, fire or reset override
-should apply at every time step. With production ``IFNode`` and ``LIFNode``,
-a single-step override applies only to single-step calls. To customize sequence
-execution, supply its transition as described in :doc:`neuron`. Code that used
-``store_v_seq=True`` to trigger single-step execution needs this migration too.
-
-If a subclass previously overrode only ``multi_step_functional_forward``, move its
-sequence calculation into ``_multi_step`` to use it in both managed and explicit
-calls, including voltage recording. Subclasses with custom observation protocols
-can implement both sequence entry points directly.

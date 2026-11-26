@@ -2,6 +2,11 @@ name: Publish to PyPI
 
 on:
   workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Full commit SHA approved for publication
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -12,7 +17,9 @@ concurrency:
 
 jobs:
   build:
-    if: github.repository == 'fangwei123456/spikingjelly' && github.ref == 'refs/heads/master'
+    if: >-
+      github.repository == 'fangwei123456/spikingjelly' &&
+      (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/release/2.1.0')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -20,15 +27,23 @@ jobs:
       actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.sha }}
       - name: Require successful CI for this exact commit
         env:
           GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
         run: |
           set -euo pipefail
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$CANDIDATE_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           for workflow in ci.yml changelog.yml; do
             gh run list --repo "$GITHUB_REPOSITORY" --commit "$GITHUB_SHA" \
-              --workflow "$workflow" --event push --json conclusion \
-              --jq 'map(select(.conclusion == "success")) | length' | grep -Eq '^[1-9][0-9]*$'
+              --branch "$GITHUB_REF_NAME" --workflow "$workflow" --event push \
+              --limit 1 --json status,conclusion \
+              --jq '.[0] | .status == "completed" and .conclusion == "success"' \
+              | grep -qx true
           done
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
@@ -40,12 +55,16 @@ jobs:
         run: |
           uv run --no-project python - <<'PYTHON'
           import datetime
+          import os
           import pathlib
           import re
           import tomllib
 
           version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
           assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version), "Expected a final release version"
+          branch = os.environ["GITHUB_REF_NAME"]
+          if branch.startswith("release/"):
+              assert branch == f"release/{version}", "Release branch and version differ"
           heading = next(line for line in pathlib.Path("CHANGELOG.md").read_text().splitlines() if line.startswith("## "))
           prefix = f"## {version} - "
           assert heading.startswith(prefix), "Changelog must start with this release"

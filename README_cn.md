@@ -149,9 +149,11 @@ SpikingJelly 内置以下事件数据和神经形态数据集：
 
 **开发 / 发布策略：**
 
-从 SpikingJelly V2 起，发布版本采用兼容 PEP 440 的语义化风格
-`MAJOR.MINOR.PATCH` 版本号。`MAJOR` 表示兼容性世代，`MINOR`
-表示向后兼容的功能更新，`PATCH` 表示缺陷修复。V2 开发版和先行版使用
+从 SpikingJelly V2 起，发布版本采用兼容 PEP 440 的
+`MAJOR.MINOR.PATCH` 版本号。`MAJOR` 表示兼容性世代；`MINOR`
+可能包含需要迁移的接口变化，不保证向后兼容；`PATCH` 提供向后兼容的缺陷修复。
+升级次版本前请查阅变更日志；保留 2.0 接口时可固定 `spikingjelly>=2.0,<2.1`。
+V2 开发版和先行版使用
 Python 包版本写法，例如 `2.0.0.dev0`、`2.0.0a1`、`2.0.0b1` 和
 `2.0.0rc1`。
 

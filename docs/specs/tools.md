@@ -16,6 +16,9 @@ task and performance runners.
 
 - Release entry points never publish, tag or push. Publishing is the manually
   triggered `publish-pypi.yml` workflow.
+- Publishing accepts master and `release/2.1.0`, checks the operator-approved
+  full SHA, and requires the latest push CI and Changelog runs on that branch and
+  exact commit to succeed. A release branch must match the package version.
 - Examples in `activation_based/examples` demonstrate use. `benchmark/` measures
   against tasks, and only cases selected for a release are mandatory.
 - `CHANGELOG.md` is edited by hand, and `docs/source/changelog.rst` is generated.
@@ -32,6 +35,11 @@ task and performance runners.
   are separate.
 - Release quality detects drift against that baseline. Matching a paper's accuracy is
   not an acceptance requirement.
+- The 2.1.0 profile selects affected GPU suites and NIR explicitly, with fixed-weight
+  MaxFormer/CLIF quality and performance comparisons. Qwen and FP8 task campaigns
+  are outside this release's acceptance scope. Necessary FlexSN state-copy and
+  invariant DropConnect gradient-repair costs are reported separately from the
+  equivalent-path efficiency gate.
 
 ## Verification layers
 

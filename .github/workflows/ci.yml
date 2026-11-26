@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
   push:
-    branches: [master]
+    branches: [master, release/2.1.0]
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}

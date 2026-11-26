@@ -150,10 +150,12 @@ Export SpikingJelly models to neuromorphic hardware or other frameworks:
 
 **Development / release policy:**
 
-Starting from SpikingJelly V2, release versions follow PEP 440 compatible,
-SemVer-style `MAJOR.MINOR.PATCH` semantics. `MAJOR` marks compatibility
-generations, `MINOR` adds backward-compatible functionality, and `PATCH` fixes
-bugs. Python package pre-release spelling is used for V2 development releases,
+Starting from SpikingJelly V2, release versions use PEP 440 compatible
+`MAJOR.MINOR.PATCH` numbers. `MAJOR` marks compatibility generations; `MINOR`
+may include interface changes that require migration, and `PATCH` provides
+backward-compatible bug fixes. Check the changelog before upgrading a minor
+version; pin `spikingjelly>=2.0,<2.1` to retain the 2.0 interfaces.
+Python package pre-release spelling is used for V2 development releases,
 for example `2.0.0.dev0`, `2.0.0a1`, `2.0.0b1`, and `2.0.0rc1`.
 
 See [CHANGELOG.md](./CHANGELOG.md) for the V2 release changelog.

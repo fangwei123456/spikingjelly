@@ -9,8 +9,24 @@ Changes since ``2.0.0.dev0``. For older releases, see
 `bugs.md <https://github.com/fangwei123456/spikingjelly/blob/master/bugs.md>`__ and the
 `legacy documentation <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`__.
 
-Unreleased
-----------
+2.1.0 - 2026-11-26
+------------------
+
+Neuron interfaces
+~~~~~~~~~~~~~~~~~
+
+spikingjelly.activation_based.neuron
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- Production neurons implement single-step and multi-step dynamics independently; the Simple family applies single-step overrides at every time step.
+- Voltage recording no longer changes sequence dispatch; custom production subclasses must implement their sequence transition independently.
+
+spikingjelly.activation_based.functional
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- Added explicit-state multi-step functions for LIAF, RAF, KLIF, CUBA-LIF, CLIF, and ternary IF/LIF neurons.
+
+Minor releases may require migration; see the `upgrade guide <https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/en/migrate_from_legacy.html>`__ before upgrading from 2.0.0.
 
 Fixes
 ~~~~~
@@ -25,9 +41,7 @@ spikingjelly.activation_based.layer
 spikingjelly.activation_based.neuron
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- Production neurons implement single-step and sequence dynamics independently, including when recording voltage. Use the Simple family to apply single-step overrides across time.
 - LIAF returns its continuous activation in sequence mode, and OTTT/SLTT consistently reject multi-step execution.
-
 - ``GatedLIFNode`` preserves feature and one-dimensional sequence layouts instead of adding spatial axes or misaligning channel parameters.
 - ``BaseNode`` subclasses reject mismatched state shapes instead of silently reinitializing them. Call ``functional.reset_net`` before changing input shape, or supply matching explicit states.
 - ``FlexSN`` keeps independent final states when storing HOP or Triton state sequences, allowing ``functional.detach_net`` to work.

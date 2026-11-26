@@ -1,0 +1,81 @@
+[policy]
+max_seconds = 86400
+max_cost_usd = 5.0
+performance_tolerance = 0.02
+performance_pairs = 3
+performance_metric = "throughput"
+required_groups = ["package", "cpu-minimum", "cpu", "cuda", "native", "quality", "performance", "docs", "links", "nir"]
+
+[cases.cpu]
+kind = "pytest"
+group = "cpu"
+args = ["test/", "-v", "-o", "faulthandler_timeout=60", "-m", "not fp8_hardware", "--ignore-glob=test/activation_based/test_distributed_*.py"]
+allow_skip_reasons = ["*CUDA*", "*cuda*", "*Triton*", "*triton*"]
+
+[cases.cpu-minimum]
+kind = "pytest"
+group = "cpu-minimum"
+python_prefix = "3.11."
+torch_prefix = "2.6."
+args = ["test/", "-v", "-o", "faulthandler_timeout=60", "-m", "not fp8_hardware", "--ignore-glob=test/activation_based/test_distributed_*.py"]
+allow_skip_reasons = ["*CUDA*", "*cuda*", "*Triton*", "*triton*"]
+
+[cases.cuda]
+kind = "pytest"
+group = "cuda"
+args = [
+  "test/activation_based/test_neuron_sequence_dispatch.py",
+  "test/activation_based/test_neuron_dispatch.py",
+  "test/activation_based/test_neuron_layout.py",
+  "test/activation_based/test_registered_neuron_kernels.py",
+  "test/activation_based/test_few_spike_neuron.py",
+  "test/activation_based/test_functional_neuron.py",
+  "test/activation_based/test_flexsn.py",
+  "test/activation_based/test_checkpointing.py",
+  "test/activation_based/test_ann2snn_transformer.py",
+  "test/activation_based/test_similarity_loss_dtype.py",
+  "test/activation_based/test_op_counter_aten_coverage.py",
+  "-v", "-o", "faulthandler_timeout=60",
+]
+# This provider-specific cache test is supplemented by forced-provider validation.
+allow_skip_reasons = ["requires the family's compiled implementation to be triton"]
+
+[cases.package]
+kind = "package"
+group = "package"
+
+[cases.native]
+kind = "native"
+group = "native"
+
+[cases.nir]
+kind = "pytest"
+group = "nir"
+args = ["test/activation_based/test_nir_exchange.py", "-v"]
+allow_skip_reasons = []
+
+[cases.docs]
+kind = "commands"
+group = "docs"
+commands = [
+  ["uv", "format", "--check", "--version", "0.15.22"],
+  ["uvx", "ruff==0.15.22", "check", "."],
+  ["{python}", "tools/generate_changelog_rst.py", "--check"],
+  ["{python}", "tools/check_logging_policy.py"],
+  ["{python}", "-m", "sphinx", "-M", "html", "docs/source", "{case_dir}/sphinx", "-W", "--keep-going"],
+]
+
+[cases.links]
+kind = "commands"
+group = "links"
+commands = [["{python}", "tools/release/evidence.py", "links", "--repo", "{repo}"]]
+
+[cases.maxformer-quality]
+kind = "vision-quality"
+group = "quality"
+task = "maxformer-cifar100"
+
+[cases.clif-quality]
+kind = "vision-quality"
+group = "quality"
+task = "clif-tinyimagenet"

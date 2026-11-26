@@ -11,12 +11,7 @@ on:
   push:
     branches:
       - master
-    paths:
-      - CHANGELOG.md
-      - docs/source/changelog.rst
-      - docs/source/index.rst
-      - tools/generate_changelog_rst.py
-      - .github/workflows/changelog.yml
+      - release/2.1.0
 
 jobs:
   check:

@@ -1,11 +1,47 @@
-升级到 SpikingJelly 2.0
+升级到 SpikingJelly 2
 =======================================
 
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 English version: :doc:`../en/migrate_from_legacy`
 
-如果你的项目仍使用旧版接口，请先在下表中找到对应项，再按当前示例核对参数、返回值和 checkpoint 键。
+升级前请查阅所用版本对应的章节。次版本可能需要迁移；保留 2.0 接口时可固定
+``spikingjelly>=2.0,<2.1``。
+
+2.0.0 到 2.1.0：神经元接口
+-------------------------------------------
+
+生产级神经元现在独立实现单步和多步动力学。单步覆盖不再改变序列执行，
+``store_v_seq=True`` 时也一样。若希望每个时间步复用单步覆盖，请使用 Simple 系列。
+它的定制接口是 ``single_step_forward`` 以及充电、放电和重置方法，而不是显式状态转移。
+
+生产级子类可实现 ``_multi_step(inputs, states, store_v_seq, **kwargs)``，供 managed
+和 explicit 两种序列调用共用；也可直接实现两个序列入口。若之前只覆盖了
+``multi_step_functional_forward``，请将序列计算移入该共享转移。按注册顺序返回全部
+末态，不修改输入状态或模块 memory；基类负责提交 managed 状态。直接继承
+``BaseNode`` 而没有序列实现时，多步调用会报错。记录开关只控制电压轨迹，不改变
+动力学。完整契约见 :doc:`neuron`。
+
+functional API 新增 ``liaf_multi_step``、``raf_multi_step``、``klif_multi_step``、
+``cuba_lif_multi_step``、``clif_multi_step``、``ternary_if_multi_step`` 和
+``ternary_lif_multi_step``；请分别核对状态和轨迹返回值。
+
+从 2.0.0 升级还需注意：
+
+* ST-BIF 函数从四项返回值改为 ``(out, q, acc_q)``，模块显式状态改为 ``(q, acc_q)``。
+  用返回输出代替 ``cur_output`` 访问；返回输出已乘以 ``q_threshold``。
+  重建 native 扩展并重新生成编译或导出图。
+* 删除 ``invalidate_reset_cache`` 的导入和调用。``reset_net`` 遍历当前模型；
+  调用方持有的 reset 快照须在结构变化后重新收集。
+* 重新初始化旧 DropConnect 显式状态：有 bias 时使用 ``(None, None)``，否则使用
+  ``(None,)``。固定连接状态现为布尔掩码，定制采样请覆盖 ``_sample_masks``；
+  参数 ``state_dict`` 的键不变。
+* 改变输入形状前重置神经元，或提供匹配的显式状态。已物化状态形状不匹配时会报错，
+  不再静默重置。
+* 非脉冲 decoder 的 ``last_mem`` 和 ``last-me`` 改为 ``last-mem``；
+  不支持的值现在会在构造时抛出异常。
+
+更早的接口请参照下表，并按链接的 API 核对参数、返回值和 checkpoint 键。
 
 2.0：自动执行与接口迁移
 -------------------------------------------
@@ -95,15 +131,3 @@ IF/LIF/PLIF 序列 functional 接口显式接收初态，返回脉冲、最终�
 子包重命名
 -------------------------------------------
 旧 ``clock_driven`` 对应当前的 ``activation_based``，旧 ``event_driven`` 对应当前的 ``timing_based``。这次重命名随 0.0.0.0.14 发布，迁移示例见 `0.0.0.0.14 版本文档 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`_。
-
-自定义神经元子类
-~~~~~~~~~~~~~~~~
-
-希望修改充电、放电或重置后自动影响每个时间步时，可继承 ``SimpleIFNode`` 或
-``SimpleLIFNode``。生产级 ``IFNode`` 和 ``LIFNode`` 的单步覆写仅影响单步。
-需要定制序列计算时，请按 :doc:`neuron` 提供多步实现。此前依赖
-``store_v_seq=True`` 触发单步执行的代码也需要迁移。
-
-此前仅覆写 ``multi_step_functional_forward`` 的子类，可将序列计算移入
-``_multi_step``，供 managed 和 explicit 入口共用，并按需记录电压。具有自定义
-观测语义的子类可直接实现两个多步入口。

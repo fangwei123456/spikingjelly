@@ -55,8 +55,9 @@ training, inference and deployment.
   critical-path performance, which outranks low complexity.
 - **Public APIs are bilingual.** Each public API has semantically equivalent Chinese
   and English documentation.
-- **Versions state compatibility.** From V2, releases follow SemVer-style
-  `MAJOR.MINOR.PATCH` with PEP 440 pre-release spelling.
+- **Versions identify migration boundaries.** From V2, releases use
+  `MAJOR.MINOR.PATCH` with PEP 440 pre-release spelling. Minor releases may require
+  interface migration; patch releases preserve compatibility.
 
 ## Non-goals
 
