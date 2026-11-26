@@ -1,3 +1,4 @@
+import copy
 import re
 from pathlib import Path
 
@@ -155,7 +156,8 @@ def test_export_preserves_memories():
     )
 
 
-def test_export_restores_memories_when_tracing_fails():
+@pytest.mark.parametrize("nested", [False, True])
+def test_export_restores_memories_when_tracing_fails(nested: bool):
     class FailingNet(base.MemoryModule):
         def __init__(self):
             super().__init__()
@@ -166,9 +168,69 @@ def test_export_restores_memories_when_tracing_fails():
             raise RuntimeError("trace failed")
 
     net = FailingNet()
+    model = nn.Sequential(nn.ReLU(), net) if nested else net
     with pytest.raises(RuntimeError, match="trace failed"):
-        nir_exchange.export_to_nir(net, torch.rand(1, 2))
+        nir_exchange.export_to_nir(model, torch.rand(1, 2))
     assert torch.equal(net.trace_count, torch.tensor(0))
+
+
+def test_exports_linear_subclass_with_mapped_child():
+    class Net(nn.Linear):
+        def __init__(self):
+            super().__init__(2, 2)
+            self.proj = nn.Linear(2, 2)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.proj(x)
+
+    net = Net()
+    x = torch.rand(1, 2)
+    graph = nir_exchange.export_to_nir(net, x)
+    restored = nir_exchange.import_from_nir(graph)
+    actual, _ = restored(x)
+    torch.testing.assert_close(actual, net(x))
+
+
+@pytest.mark.parametrize("container", ["root", "block", "step_mode", "recurrent"])
+def test_preserves_trace_error_after_discarded_relu(container: str):
+    class Block(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.relu = nn.ReLU()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            self.relu(x)
+            return x if x.sum() > 0 else -x
+
+    net = Block()
+    if container == "block":
+        net = nn.Sequential(net)
+    elif container == "step_mode":
+        net = nn.Sequential(layer.StepModeContainer(False, "s", net))
+    elif container == "recurrent":
+        net = layer.ElementWiseRecurrentContainer(net, lambda y, x: x)
+
+    with pytest.raises(torch.fx.proxy.TraceError, match="control flow"):
+        nir_exchange.export_to_nir(net, torch.rand(1, 2))
+
+
+def test_preserves_traced_step_module_tuple_output():
+    class Pair(nn.Module, base.StepModule):
+        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+            return x.sin(), x
+
+    class Net(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.pair = Pair()
+            self.relu = nn.ReLU()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            y = self.pair(x)
+            return self.relu(y[1]) if isinstance(y, tuple) else x
+
+    with pytest.raises(NotImplementedError, match="'relu' .*ReLU"):
+        nir_exchange.export_to_nir(Net(), torch.rand(1, 2))
 
 
 def test_rejects_unrepresentable_models():
@@ -188,6 +250,149 @@ def test_rejects_unrepresentable_models():
             nn.Sequential(layer.AvgPool2d(2, padding=1, count_include_pad=False)),
             torch.rand(1, 2, 5, 5),
         )
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        nn.BatchNorm2d(2),
+        nn.MaxPool2d(2),
+        nn.ReLU(),
+        nn.Identity(),
+        layer.BatchNorm2d(2),
+        layer.MaxPool2d(2),
+        layer.AdaptiveAvgPool2d(1),
+        neuron.QIFNode(),
+        neuron.LIAFNode(act=nn.ReLU(), threshold_related=False),
+    ],
+    ids=lambda module: f"{type(module).__module__}.{type(module).__name__}",
+)
+@pytest.mark.parametrize("step_mode", ["s", "m"])
+def test_reports_unsupported_module(module: nn.Module, step_mode: str):
+    module = copy.deepcopy(module)
+    net = nn.Sequential()
+    net.add_module("conv", layer.Conv2d(2, 2, 3, padding=1))
+    net.add_module("unsupported", module)
+    functional.set_step_mode(net, step_mode)
+    shape = (1, 2, 8, 8) if step_mode == "s" else (3, 1, 2, 8, 8)
+    expected = f"'unsupported' ({type(module).__module__}.{type(module).__qualname__})"
+
+    with pytest.raises(NotImplementedError, match=re.escape(expected)):
+        nir_exchange.export_to_nir(net.eval(), torch.rand(shape))
+
+
+@pytest.mark.parametrize(
+    "net",
+    [
+        nn.BatchNorm2d(2),
+        nn.MaxPool2d(2),
+        nn.ReLU(),
+        nn.Identity(),
+        layer.BatchNorm2d(2),
+        layer.MaxPool2d(2),
+        neuron.QIFNode(),
+        neuron.NonSpikingIFNode(),
+        neuron.LIAFNode(act=nn.ReLU(), threshold_related=False),
+    ],
+    ids=lambda net: f"{type(net).__module__}.{type(net).__name__}",
+)
+def test_reports_unsupported_root_module(net: nn.Module):
+    cls = type(net)
+    expected = f"'{cls.__name__}' ({cls.__module__}.{cls.__qualname__})"
+    children = dict(net.named_children())
+
+    with pytest.raises(NotImplementedError, match=re.escape(expected)):
+        nir_exchange.export_to_nir(net.eval(), torch.rand(1, 2, 8, 8))
+    assert dict(net.named_children()) == children
+
+
+@pytest.mark.parametrize(
+    "error", [RuntimeError, TypeError, ValueError], ids=lambda error: error.__name__
+)
+def test_preserves_custom_step_module_error(error: type[Exception]):
+    class Failing(nn.Module, base.StepModule):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            raise error("invalid configuration")
+
+    with pytest.raises(error, match="invalid configuration"):
+        nir_exchange.export_to_nir(
+            nn.Sequential(nn.ReLU(), Failing()), torch.rand(1, 2)
+        )
+
+    with pytest.raises(error, match="invalid configuration"):
+        nir_exchange.export_to_nir(Failing(), torch.rand(1, 2))
+
+
+def test_preserves_custom_step_module_length_error():
+    class Scale(nn.Module, base.StepModule):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return x / len(x)
+
+    with pytest.raises(RuntimeError, match="'len' is not supported"):
+        nir_exchange.export_to_nir(
+            nn.Sequential(layer.Linear(2, 2), Scale()), torch.rand(1, 2)
+        )
+
+
+def test_preserves_container_tracing_error():
+    with pytest.raises(ValueError, match="We cannot vmap over non-Tensor arguments"):
+        nir_exchange.export_to_nir(
+            layer.TLastSeqToANNContainer(nn.ReLU()), torch.rand(1, 2, 4, 4)
+        )
+
+
+@pytest.mark.parametrize("norm", [nn.BatchNorm2d, layer.BatchNorm2d])
+def test_reports_unsupported_modules_until_tracing_fails(norm: type[nn.Module]):
+    class Net(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.block = nn.Sequential(layer.Conv2d(2, 2, 1), norm(2))
+            self.pool = layer.MaxPool2d(1)
+            self.act = nn.ReLU()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.act(self.act(self.pool(self.block(x))))
+
+    with pytest.raises(NotImplementedError) as error:
+        nir_exchange.export_to_nir(Net().eval(), torch.rand(1, 2, 4, 4))
+    message = str(error.value)
+    assert message.count("'block.1'") == 1
+    for name in ("'pool'", "'act'"):
+        assert message.count(name) == (1 if norm is nn.BatchNorm2d else 0)
+    assert "'block.0'" not in message
+
+
+@pytest.mark.parametrize("step_container", [False, True])
+def test_exports_unmapped_modules_that_add_no_operation(step_container: bool):
+    class Net(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = layer.Conv2d(2, 2, 3)
+            if step_container:
+                self.conv = layer.StepModeContainer(False, "s", self.conv)
+            self.dropout = layer.Dropout(0.5)
+            self.unused = nn.BatchNorm2d(2)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.dropout(self.conv(x))
+
+    graph = nir_exchange.export_to_nir(Net().eval(), torch.rand(1, 2, 5, 5))
+    assert sum(isinstance(node, nir.Conv2d) for node in graph.nodes.values()) == 1
+    assert len(graph.nodes) == 3
+
+
+def test_reports_unsupported_module_when_tracing_fails_later():
+    class Net(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.norm = layer.BatchNorm2d(2)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            x = self.norm(x)
+            return x if x.sum() > 0 else -x
+
+    with pytest.raises(NotImplementedError, match="'norm'"):
+        nir_exchange.export_to_nir(Net().eval(), torch.rand(1, 2, 4, 4))
 
 
 def test_rejects_invalid_if_parameters():

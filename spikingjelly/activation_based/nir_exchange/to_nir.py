@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import copy
+import operator
+from collections import OrderedDict
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import torch
@@ -17,16 +19,96 @@ from ...logger import logger
 try:
     import nir
     import nirtorch
+    from nirtorch.torch_tracer import NIRTorchTracer
 except ImportError as error:
     nir = nirtorch = None
+    NIRTorchTracer = fx.Tracer
     logger.info("NIR exchange dependencies unavailable: {}", error)
 
 
 __all__ = ["export_to_nir"]
 
+_LIBRARY = base.__name__.rpartition(".")[0]
+
 
 def _to_numpy(x: torch.Tensor) -> np.ndarray:
     return x.detach().cpu().numpy()
+
+
+class _ExportTracer(NIRTorchTracer):
+    """Diagnose called unmapped leaves and built-in atomic step layers.
+
+    Untraceable built-in layers fail immediately; other diagnostics are reported
+    after a successful trace so that model and container errors propagate.
+    """
+
+    def __init__(self, module_types: tuple[type[nn.Module], ...]):
+        super().__init__(module_types)
+        self.module_types = module_types
+        self.unsupported: dict[str, str] = {}
+
+    def trace(self, root: nn.Module, *args: Any, **kwargs: Any) -> fx.Graph:
+        # fx does not dispatch the root to call_module: check a library module as a
+        # child. A user-defined root is a network, so its own errors propagate.
+        if (
+            type(root) not in self.module_types
+            and type(root).__module__.startswith(("torch.nn.", f"{_LIBRARY}."))
+            and (self.is_leaf_module(root, "") or isinstance(root, base.StepModule))
+        ):
+            wrapper = nn.Sequential(OrderedDict([(type(root).__name__, root)]))
+            _ExportTracer(self.module_types).trace(wrapper)
+        graph = super().trace(root, *args, **kwargs)
+        if self.unsupported:
+            self._raise_unsupported(None)
+        return graph
+
+    def call_module(
+        self,
+        m: nn.Module,
+        forward: Callable[..., Any],
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> Any:
+        if type(m) in self.module_types:
+            return super().call_module(m, forward, args, kwargs)
+        name = self.path_of_module(m)
+        if self.is_leaf_module(m, name):
+            self._record_unsupported(name, m)
+            return super().call_module(m, forward, args, kwargs)
+        if (
+            not isinstance(m, base.StepModule)
+            or isinstance(m, nn.Sequential)
+            or type(m).__module__ == layer.StepModeContainer.__module__
+            or not type(m).__module__.startswith(f"{_LIBRARY}.")
+        ):
+            return super().call_module(m, forward, args, kwargs)
+
+        # Only diagnose built-in atomic step layers; composition errors propagate.
+        num_nodes = len(self.graph.nodes)
+        try:
+            output = super().call_module(m, forward, args, kwargs)
+        except (fx.proxy.TraceError, TypeError) as error:
+            self._record_unsupported(name, m)
+            self._raise_unsupported(error)
+        if any(
+            (node.op == "call_function" and node.target is not operator.add)
+            or (node.op == "call_method" and node.target != "add")
+            for node in list(self.graph.nodes)[num_nodes:]
+        ):
+            self._record_unsupported(name, m)
+        return output
+
+    def _record_unsupported(self, name: str, module: nn.Module) -> None:
+        cls = type(module)
+        self.unsupported[name] = f"{cls.__module__}.{cls.__qualname__}"
+
+    def _raise_unsupported(self, cause: Optional[Exception]) -> None:
+        modules = ", ".join(
+            f"'{name}' ({cls})" for name, cls in self.unsupported.items()
+        )
+        raise NotImplementedError(
+            f"NIR exchange does not support these modules: {modules}."
+        ) from cause
 
 
 class _ModuleMapper:
@@ -52,7 +134,7 @@ class _ModuleMapper:
             base.extract_memories(self.net),
         )
         try:
-            tracer = nirtorch.torch_tracer.NIRTorchTracer(self.map_dict.keys())
+            tracer = _ExportTracer(tuple(self.map_dict))
             graph = tracer.trace(self.net)
             gm = fx.GraphModule(tracer.root, graph)
             with torch.no_grad():
@@ -253,7 +335,7 @@ def export_to_nir(
     save_path: Optional[Union[str, Path]] = None,
     dt: float = 1e-4,
 ) -> nir.NIRGraph:
-    """
+    r"""
     **API Language** - :ref:`中文 <export_to_nir-cn>` | :ref:`English <export_to_nir-en>`
 
     ----
@@ -265,6 +347,10 @@ def export_to_nir(
     将 SpikingJelly 的模型转换为 `NIR（Neuromorphic Intermediate Representation） <https://neuroir.org/docs/index.html>`_ 图，
     以供后续转换到其它框架或部署到神经形态芯片上。本函数会自动通过示例输入 ``example_input``
     推导每个模块的输入输出形状，将 SpikingJelly 或 PyTorch 模块转换为对应的 NIR 节点。
+
+    不支持层的名称与类型诊断覆盖实际调用的未映射 FX 叶模块，以及内置 SpikingJelly 原子步进层。
+    已知内置层无法追踪时立即报错；其他层诊断在追踪成功后报告。模型、自定义模块及组合容器的
+    追踪异常原样传播。未调用的模块不会阻止导出；此诊断不检查任意 FX 运算的支持情况。
 
     :param net: 需要转换的 SpikingJelly / PyTorch 模型
     :type net: torch.nn.Module
@@ -285,7 +371,8 @@ def export_to_nir(
     :rtype: nir.NIRGraph
     :raises ImportError: 缺少可选依赖；使用 ``uv pip install 'spikingjelly[nir]'`` 安装
     :raises ValueError: ``dt`` 非正，或 CUBALIF 衰减参数超出可转换范围
-    :raises NotImplementedError: 模型使用 soft reset、grouped convolution 或 NIR 无法表示的层配置
+    :raises NotImplementedError: 模型使用 soft reset、grouped convolution 或 NIR 无法表示的层配置，
+        或在上述诊断范围内调用了不支持的层，此时错误信息包含层的名称和类型
 
     ----
 
@@ -298,6 +385,13 @@ def export_to_nir(
     This function automatically infers the input and output shapes of each submodule
     using ``example_input``, and converts SpikingJelly or PyTorch modules to the
     corresponding NIR nodes.
+
+    Name-and-type diagnostics cover called unmapped FX leaf modules and built-in
+    SpikingJelly atomic step layers. Untraceable known built-in layers fail
+    immediately; other layer diagnostics are reported after a successful trace.
+    Tracing errors from models, custom modules, and composition containers
+    propagate unchanged. Unused modules do not prevent export; these diagnostics
+    do not validate support for arbitrary FX operations.
 
     :param net: the SpikingJelly / PyTorch model to convert
     :type net: torch.nn.Module
@@ -324,7 +418,9 @@ def export_to_nir(
     :raises ValueError: If ``dt`` is not positive or CUBALIF decay parameters
         cannot be represented
     :raises NotImplementedError: If the model uses soft reset, grouped convolution,
-        or another layer configuration that NIR cannot represent
+        or another layer configuration that NIR cannot represent, or calls
+        unsupported layers within the diagnostic scope above; the message
+        includes their names and types
     """
     if nir is None or nirtorch is None:
         raise ImportError(

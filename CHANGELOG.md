@@ -29,6 +29,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 #### spikingjelly.activation_based.nir_exchange
 
 - NIR exchange imports without its optional dependencies and reports an installation command when import/export is called without them.
+- `export_to_nir` names called unsupported leaves and built-in atomic step layers, preserving model and container tracing errors; untraceable built-in layers fail immediately.
 
 #### spikingjelly.activation_based.memopt
 
