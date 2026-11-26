@@ -85,6 +85,7 @@ Minor releases may require migration; see the [upgrade guide](https://spikingjel
 
 #### spikingjelly.activation_based.functional
 
+- CLIF Triton Sigmoid gradients match Torch's stable tail calculation, preserving representable low-precision gradients.
 - `reset_net` traverses the current network on every call, fixing resets after module changes; reuse `collect_reset_modules` snapshots with `reset_collected_modules` for fixed structures.
 - Removed `invalidate_reset_cache`. Delete its imports and calls; after model changes, rebuild explicit snapshots with `collect_reset_modules`.
 - CUDA IF, LIF and PLIF accelerate matching FP16/BF16 inputs and states with FP32 accumulation per call. Rounding can change spikes near threshold.

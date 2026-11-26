@@ -63,6 +63,12 @@ opaque calls.
   `neuron_bwd` select the arithmetic (both default to FP32). An unsupported
   explicit configuration raises an error.
 - CUDA providers require NVIDIA CUDA; selection raises on HIP builds.
+- CLIF's low-precision Triton backward follows Torch's operation rounding,
+  including Sigmoid's negative-tail derivative evaluation.
+- PyTorch 2.7.1 Inductor rejects logical negative views created inside a captured
+  graph at the Triton higher-order operator. Ordinary negation and eagerly
+  materialized views remain supported; the exact upstream failure is recorded as
+  an expected failure, not validated support.
 
 ## Native extensions
 

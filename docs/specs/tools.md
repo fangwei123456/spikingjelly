@@ -27,8 +27,8 @@ task and performance runners.
 
 - Formal runs need Linux, clean tracked source and fixed inputs. `--development` runs
   are marked ineligible.
-- Skips pass only when they match a profile's `allow_skip_reasons`; the `cuda` profile
-  allows none. A missing dependency does not validate its capability.
+- Skips pass only when they match a profile's `allow_skip_reasons`; every skipped
+  case remains in its report. A missing dependency does not validate its capability.
 - The previous formal release is the only version baseline.
 - The efficiency gate compares three paired runs. It passes if all throughput ratios
   are at least 0.98, fails if none are, and is blocked otherwise. Quality tolerances
@@ -40,6 +40,10 @@ task and performance runners.
   are outside this release's acceptance scope. Necessary FlexSN state-copy and
   invariant DropConnect gradient-repair costs are reported separately from the
   equivalent-path efficiency gate.
+- The 2.1.0 GPU profile records memory-limited physical-offset stress cases and the
+  isolated PyTorch negative-view compilation limitation explicitly. Large logical
+  index probes and ordinary compiled paths still run; skipped physical allocations
+  are not claimed as tested.
 
 ## Verification layers
 

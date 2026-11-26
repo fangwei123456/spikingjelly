@@ -1848,6 +1848,9 @@ def clif_step(
     CUDA profile 会报错，此时应改用 auto 或 torch。
     函数不融合不同时间步，不修改调用者配置的替代梯度。
 
+    PyTorch 2.7.1 的 Inductor 无法将图内创建的逻辑取负 view 传给 Triton 高阶算子。
+    请使用常规 ``-x`` 运算，或在编译图外物化取负 view。
+
     :param x: 当前输入，形状为 ``[N, *]``。
     :type x: torch.Tensor
     :param v: 当前膜电位，与 ``x`` 形状、dtype 和 device 相同。
@@ -1887,6 +1890,10 @@ def clif_step(
     use Torch in auto or torch mode. An explicit Triton request rejects these
     unsupported CUDA profiles; use auto or torch for those functions.
     Time steps are not fused, and the caller's surrogate choice is preserved.
+
+    PyTorch 2.7.1 Inductor cannot pass logical negative views created inside the
+    graph to the Triton higher-order operator. Use ordinary ``-x`` operations or
+    materialize negative views outside the compiled graph.
 
     :param x: Current input shaped ``[N, *]``.
     :type x: torch.Tensor

@@ -1613,6 +1613,31 @@ def test_clif_fused_configurable_surrogate(dtype, surrogate_class, monkeypatch):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_clif_sigmoid_preserves_representable_positive_tail(monkeypatch, dtype):
+    from spikingjelly._ops.clif import _selection
+
+    monkeypatch.setattr(_selection, "_requested", "triton")
+    monkeypatch.setattr(_selection, "_selections", {})
+    x = torch.tensor([8.0], device="cuda", dtype=dtype, requires_grad=True)
+    reference = x.detach().clone().requires_grad_()
+    zero = torch.zeros_like(x)
+    spike = surrogate.Sigmoid(alpha=1.3)
+    actual = functional.clif_step(x, zero, zero, 3.7, 1.0, spike)[0]
+    expected = spike(reference - 1.0)
+    (actual_grad,) = torch.autograd.grad(actual.sum(), x)
+    (expected_grad,) = torch.autograd.grad(expected.sum(), reference)
+    assert expected_grad.item() > 0
+    assert actual_grad.item() > 0
+    torch.testing.assert_close(
+        actual_grad,
+        expected_grad,
+        rtol=1e-3 if dtype == torch.float16 else 1.6e-2,
+        atol=0,
+    )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_clif_fused_rect_endpoints_and_heaviside_gradients(monkeypatch, dtype):
     from spikingjelly._ops.clif import _selection, reference as clif_reference

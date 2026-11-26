@@ -347,7 +347,19 @@ def test_clif_strided_views_preserve_values_and_gradients(
         return functional.clif_step(x, v, m, 3.7, 1.0, spike)
 
     run = torch.compile(step, fullgraph=True) if execution == "compile" else step
-    actual = run(*inputs)
+    try:
+        actual = run(*inputs)
+    except torch._dynamo.exc.BackendCompilerFailed as error:
+        if (
+            execution == "compile"
+            and negative_location == "graph"
+            and "triton_kernel_wrapper_functional" in str(error)
+            and "DispatchKey.Negative" in str(error)
+        ):
+            pytest.xfail(
+                "PyTorch Triton wrapper lacks Negative dispatch for graph-created views"
+            )
+        raise
     reference_inputs = (
         tuple(torch._neg_view(t) for t in refs)
         if negative_location == "graph"

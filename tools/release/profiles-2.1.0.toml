@@ -37,8 +37,14 @@ args = [
   "test/activation_based/test_op_counter_aten_coverage.py",
   "-v", "-o", "faulthandler_timeout=60",
 ]
-# This provider-specific cache test is supplemented by forced-provider validation.
-allow_skip_reasons = ["requires the family's compiled implementation to be triton"]
+# Provider checks are supplemented by forced-provider runs; memory skips retain coverage gaps.
+allow_skip_reasons = [
+  "requires the family's compiled implementation to be triton",
+  "selected CUDA implementation is not Triton",
+  "Large-offset validation requires 20 GiB free CUDA memory",
+  "CLIF large-offset validation requires 64 GiB free CUDA memory",
+  "PyTorch Triton wrapper lacks Negative dispatch for graph-created views",
+]
 
 [cases.package]
 kind = "package"
