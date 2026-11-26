@@ -99,7 +99,8 @@ def _backward_kernel(
     gh_decay = (gh_decay * a).to(dtype).to(tl.float32)
     gh_decay = (gh_decay * tau_inv).to(dtype).to(tl.float32)
     if SURROGATE == 0:
-        u = (z * ALPHA).to(dtype).to(tl.float32)
+        # Like surrogate.sigmoid_backward: on the negative tail s cannot round to 1.
+        u = -tl.abs((z * ALPHA).to(dtype).to(tl.float32))
         s = tl.div_rn(1.0, 1.0 + libdevice.exp(-u)).to(dtype).to(tl.float32)
         gh_spike = (gs * (1.0 - s).to(dtype).to(tl.float32)).to(dtype).to(tl.float32)
         gh_spike = (gh_spike * s).to(dtype).to(tl.float32)
