@@ -1,4 +1,5 @@
 import importlib
+import importlib.util
 import inspect
 import itertools
 import math
@@ -7,7 +8,6 @@ import pytest
 import torch
 
 from spikingjelly._ops.layout import _empty_like, _layout_args
-from spikingjelly._ops.native_loader import _native_available
 from spikingjelly.activation_based import functional, neuron, surrogate
 
 try:
@@ -18,7 +18,9 @@ except ImportError:
 
 
 def _skip_if_native_unavailable(provider, family):
-    if provider == "cuda" and not _native_available(f"spikingjelly._ops.{family}", 0):
+    # Skip only an unbuilt extension; a stale or broken build must still fail.
+    module = f"spikingjelly._ops.{family}._C"
+    if provider == "cuda" and importlib.util.find_spec(module) is None:
         pytest.skip("native extension not built")
 
 
