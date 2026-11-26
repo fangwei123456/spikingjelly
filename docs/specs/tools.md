@@ -45,7 +45,7 @@ task and performance runners.
 
 | Layer | Runs | Does not run |
 | --- | --- | --- |
-| CI | Format, Ruff, CPU tests, release self-checks, Sphinx with `-W`, package install | CUDA, Triton, native builds, `test_distributed_*` |
+| CI | Format, Ruff, Linux CPU tests, Windows dataset tests, release self-checks, Sphinx with `-W`, package install | CUDA, Triton, native builds, `test_distributed_*` |
 | Release cases | CPU, minimum-version, CUDA, package, native, docs and links checks, plus selected task quality | `fp8_hardware`, which is deferred |
 
 Distributed tests check contracts and do not replace real multi-rank acceptance.

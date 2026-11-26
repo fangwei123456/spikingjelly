@@ -122,3 +122,23 @@ jobs:
           cd "$(mktemp -d)"
           "$package_venv/bin/python" "$GITHUB_WORKSPACE/tools/release/package_check.py" \
             imports --expected-root "$GITHUB_WORKSPACE"
+
+  windows-datasets:
+    name: Windows dataset regression
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11.16"
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: "0.9.24"
+      - name: Install CPU environment
+        run: |
+          uv venv --python 3.11
+          uv pip install --python .venv/Scripts/python.exe torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --constraints .github/ci-constraints.txt --index-url https://download.pytorch.org/whl/cpu
+          uv pip install --python .venv/Scripts/python.exe --editable . pytest --constraints .github/ci-constraints.txt --build-constraints .github/ci-constraints.txt
+      - name: Test dataset preparation on Windows
+        run: uv run --no-sync pytest test/datasets -v --junitxml=build/windows-datasets.xml
