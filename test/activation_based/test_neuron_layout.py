@@ -7,6 +7,7 @@ import pytest
 import torch
 
 from spikingjelly._ops.layout import _empty_like, _layout_args
+from spikingjelly._ops.native_loader import _native_available
 from spikingjelly.activation_based import functional, neuron, surrogate
 
 try:
@@ -14,6 +15,11 @@ try:
     import triton.language as tl
 except ImportError:
     triton = None
+
+
+def _skip_if_native_unavailable(provider, family):
+    if provider == "cuda" and not _native_available(f"spikingjelly._ops.{family}", 0):
+        pytest.skip("native extension not built")
 
 
 def _arguments(kind, T, N, device, dtype=torch.float32):
@@ -440,7 +446,7 @@ def test_clif_strided_offsets_beyond_int32(monkeypatch):
 def test_strided_execution_does_not_materialize_inputs(
     provider, layout, family, trace, dtype, spatial_shape, monkeypatch
 ):
-
+    _skip_if_native_unavailable(provider, family)
     package = importlib.import_module(f"spikingjelly._ops.{family}")
 
     monkeypatch.setattr(package._selection, "_requested", provider)
@@ -562,6 +568,7 @@ def test_wide_native_lif_mixed_spatial_orders(trace, monkeypatch):
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("provider", ["triton", "cuda"])
 def test_strided_channel_parameters_keep_logical_channel_order(provider, monkeypatch):
+    _skip_if_native_unavailable(provider, "activation_aware_if")
     from spikingjelly._ops import activation_aware_if as package
 
     monkeypatch.setattr(package._selection, "_requested", provider)
@@ -598,7 +605,7 @@ def test_strided_channel_parameters_keep_logical_channel_order(provider, monkeyp
     ],
 )
 def test_strided_operator_registration(family, provider, monkeypatch):
-
+    _skip_if_native_unavailable(provider, family)
     package = importlib.import_module(f"spikingjelly._ops.{family}")
     monkeypatch.setattr(package._selection, "_requested", provider)
     monkeypatch.setattr(package._selection, "_selections", {})
@@ -617,7 +624,7 @@ def test_strided_operator_registration(family, provider, monkeypatch):
 @pytest.mark.parametrize("mode", ["default", "reduce-overhead"])
 @pytest.mark.parametrize("family", ["lif", "plif", "izhikevich"])
 def test_compiled_strided_layout_transitions(family, provider, mode, monkeypatch):
-
+    _skip_if_native_unavailable(provider, family)
     torch.compiler.reset()
     package = importlib.import_module(f"spikingjelly._ops.{family}")
     monkeypatch.setattr(package._selection, "_requested", provider)
@@ -700,6 +707,7 @@ def test_triton_launch_keeps_input_state_and_gradient_pointers(monkeypatch):
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("provider", ["triton", "cuda"])
 def test_native_and_triton_large_physical_offset(provider, monkeypatch):
+    _skip_if_native_unavailable(provider, "lif")
     from spikingjelly._ops import lif
 
     if torch.cuda.mem_get_info()[0] < 10 * 1024**3:
