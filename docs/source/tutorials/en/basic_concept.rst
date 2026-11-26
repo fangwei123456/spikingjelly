@@ -183,6 +183,27 @@ Before a new independent sample or sequence, we should clear the previous states
 
 For convenience, we can also call :func:`spikingjelly.activation_based.functional.reset_net` to reset all modules in a network.
 
+``reset_net`` traverses the current network on every call, so added or replaced
+modules are included and removed modules are skipped. For a fixed model structure,
+collect the resettable modules once and reuse the tuple to avoid repeated traversal:
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import functional, neuron
+
+    net = torch.nn.Sequential(torch.nn.Linear(3, 2), neuron.IFNode())
+    reset_modules = functional.collect_reset_modules(net)
+    net(torch.rand(4, 3))
+    functional.reset_collected_modules(reset_modules)
+    assert net[1].v == 0.0
+
+The tuple holds strong references and remains a snapshot: after adding, removing
+or replacing modules, or changing whether ``reset`` is callable, assign a newly
+collected tuple to ``reset_modules``. The old tuple still refers to the old modules.
+``invalidate_reset_cache`` is deprecated and will be removed in SpikingJelly 3.0;
+delete those calls. It does not update an explicit snapshot.
+
 Reset the network after processing a batch of independent samples:
 
 .. code-block:: python

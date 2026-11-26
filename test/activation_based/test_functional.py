@@ -1,8 +1,5 @@
 """Tests for activation-based functional helpers."""
 
-import gc
-import weakref
-
 import pytest
 import torch
 import torch.nn as nn
@@ -23,7 +20,6 @@ from spikingjelly.activation_based.functional import (
     t_last_seq_to_ann_forward,
     temporal_efficient_training_cross_entropy,
 )
-from spikingjelly.activation_based.functional.net_config import _RESET_MODULE_CACHE
 
 
 class _ResetCounter(nn.Module):
@@ -56,41 +52,27 @@ class _StatefulCounter(base.MemoryModule):
         super().reset()
 
 
-class _EqualHashableResetCounter(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.reset_calls = 0
-
-    def __eq__(self, other):
-        return isinstance(other, _EqualHashableResetCounter)
-
-    def __hash__(self):
-        return 1
-
-    def reset(self):
-        self.reset_calls += 1
+@pytest.fixture(params=["traversal", "snapshot"])
+def reset(request):
+    if request.param == "traversal":
+        return reset_net
+    return lambda net: reset_collected_modules(collect_reset_modules(net))
 
 
-def test_collect_reset_modules_ignores_non_callable_reset_attributes():
+def test_collect_reset_modules_ignores_non_callable_reset_attributes(loguru_records):
     net = nn.Sequential(_NonCallableReset(), _ResetCounter())
     modules = collect_reset_modules(net)
     assert modules == (net[1],)
+    assert loguru_records == []
 
 
-def test_invalidate_then_reset_recollects():
-    net = nn.Sequential(_ResetCounter(), nn.ReLU(), _ResetCounter())
-    reset_net(net)
-    old_cached = _RESET_MODULE_CACHE[net]
-    invalidate_reset_cache(net)
-    reset_net(net)
-    try:
-        new_cached = _RESET_MODULE_CACHE[net]
-        assert tuple(module() for module in new_cached) == tuple(
-            module() for module in old_cached
-        )
-        assert new_cached is not old_cached
-    finally:
+def test_invalidate_reset_cache_is_deprecated():
+    net = nn.Sequential(_StatefulCounter())
+    state = net(torch.ones(2, 3))
+    with pytest.warns(DeprecationWarning, match="removed in SpikingJelly 3.0"):
         invalidate_reset_cache(net)
+    assert net[0].state is state
+    assert net[0].reset_calls == 0
 
 
 def test_reset_net_with_ifnode_actually_resets():
@@ -99,10 +81,7 @@ def test_reset_net_with_ifnode_actually_resets():
     net(x)
     assert torch.is_tensor(net[1].v)
     reset_net(net)
-    try:
-        assert net[1].v == 0.0
-    finally:
-        invalidate_reset_cache(net)
+    assert net[1].v == 0.0
 
 
 def test_reset_net_with_deeply_nested_modules():
@@ -113,11 +92,8 @@ def test_reset_net_with_deeply_nested_modules():
     x = torch.randn(2, 4)
     net(x)
     reset_net(net)
-    try:
-        assert net[0][0][1].v == 0.0
-        assert net[1][1].v == 0.0
-    finally:
-        invalidate_reset_cache(net)
+    assert net[0][0][1].v == 0.0
+    assert net[1][1].v == 0.0
 
 
 def test_reset_net_with_module_list():
@@ -128,21 +104,21 @@ def test_reset_net_with_module_list():
     for block in net:
         block(x)
     reset_net(net)
-    try:
-        for block in net:
-            assert block[1].v == 0.0
-    finally:
-        invalidate_reset_cache(net)
+    for block in net:
+        assert block[1].v == 0.0
 
 
-def test_reset_collected_modules_works_after_invalidate():
-    net = nn.Sequential(_ResetCounter(), nn.ReLU(), _ResetCounter())
-    reset_net(net)
-    invalidate_reset_cache(net)
+def test_collect_reset_modules_deduplicates_without_resetting(reset):
+    shared = _StatefulCounter()
+    net = nn.Sequential(shared, nn.Sequential(shared), _NonCallableReset())
+    state = shared(torch.ones(2, 3))
     modules = collect_reset_modules(net)
-    reset_collected_modules(modules)
-    assert net[0].reset_calls == 2
-    assert net[2].reset_calls == 2
+    assert modules == (shared,)
+    assert shared.state is state
+    assert shared.reset_calls == 0
+    reset(net)
+    assert shared.reset_calls == 1
+    assert shared.state == 0.0
 
 
 def test_reset_net_in_training_loop():
@@ -159,99 +135,101 @@ def test_reset_net_in_training_loop():
         optimizer.zero_grad()
         reset_net(net)
         assert net[1].v == 0.0
-    invalidate_reset_cache(net)
 
 
 def test_reset_net_preserves_parameters():
     net = nn.Sequential(nn.Linear(4, 8), neuron.IFNode())
     params_before = [p.clone() for p in net.parameters()]
     reset_net(net)
-    try:
-        params_after = list(net.parameters())
-        for pb, pa in zip(params_before, params_after, strict=True):
-            assert torch.equal(pb, pa)
-    finally:
-        invalidate_reset_cache(net)
+    params_after = list(net.parameters())
+    for pb, pa in zip(params_before, params_after, strict=True):
+        assert torch.equal(pb, pa)
 
 
-def test_reset_net_warns_for_non_memorymodule(loguru_records):
-    net = nn.Sequential(_ResetCounter())
-    reset_net(net)
-    try:
-        assert net[0].reset_calls == 1
-        assert any(
-            "not a MemoryModule" in record["message"] for record in loguru_records
-        )
-    finally:
-        invalidate_reset_cache(net)
+def test_reset_warns_for_non_memorymodule(reset, loguru_records):
+    net = nn.Sequential(_NonCallableReset(), _ResetCounter())
+    reset(net)
+    reset(net)
+    assert net[1].reset_calls == 2
+    assert [record["level"].name for record in loguru_records] == ["WARNING"] * 2
+    assert all("not a MemoryModule" in record["message"] for record in loguru_records)
 
 
-def test_reset_net_propagates_submodule_reset_exception():
+def test_reset_propagates_submodule_reset_exception(reset):
+    error = RuntimeError("boom")
+
     class _BrokenReset(nn.Module):
         def reset(self):
-            raise RuntimeError("boom")
+            raise error
 
-    net = nn.Sequential(_BrokenReset())
-    with pytest.raises(RuntimeError, match="boom"):
-        reset_net(net)
-    invalidate_reset_cache(net)
+    net = nn.Sequential(_StatefulCounter(), _BrokenReset(), _StatefulCounter())
+    with pytest.raises(RuntimeError, match="boom") as caught:
+        reset(net)
+    assert caught.value is error
+    assert net[0].reset_calls == 1
+    assert net[2].reset_calls == 0
 
 
-def test_reset_net_cache_must_be_invalidated_after_module_swap():
-    net = nn.Sequential(_ResetCounter())
+@pytest.mark.parametrize("mutation", ["replace", "add", "delete"])
+def test_reset_net_follows_current_modules(mutation):
+    old_module = _StatefulCounter()
+    net = nn.ModuleList([old_module])
     reset_net(net)
-    old_module = net[0]
-    replacement = _ResetCounter()
+    replacement = _StatefulCounter()
+    if mutation == "replace":
+        net[0] = replacement
+    elif mutation == "add":
+        net.append(replacement)
+    else:
+        del net[0]
+    old_state = old_module(torch.ones(2, 3))
+    replacement(torch.ones(2, 3))
+    reset_net(net)
+    assert old_module.reset_calls == (2 if mutation == "add" else 1)
+    if mutation == "add":
+        assert old_module.state == 0.0
+    else:
+        assert old_module.state is old_state
+    assert replacement.reset_calls == (0 if mutation == "delete" else 1)
+    if mutation != "delete":
+        assert replacement.state == 0.0
+
+
+def test_reset_collected_modules_reuses_snapshot_until_recollected():
+    old_module = _StatefulCounter()
+    net = nn.Sequential(old_module)
+    modules = collect_reset_modules(net)
+    replacement = _StatefulCounter()
     net[0] = replacement
-
-    reset_net(net)
+    for _ in range(2):
+        old_module(torch.ones(2, 3))
+        replacement_state = replacement(torch.ones(2, 3))
+        reset_collected_modules(modules)
+        assert old_module.state == 0.0
+        assert replacement.state is replacement_state
     assert old_module.reset_calls == 2
     assert replacement.reset_calls == 0
-
-    invalidate_reset_cache(net)
-    reset_net(net)
-    try:
-        assert old_module.reset_calls == 2
-        assert replacement.reset_calls == 1
-    finally:
-        invalidate_reset_cache(net)
+    modules = collect_reset_modules(net)
+    reset_collected_modules(modules)
+    assert replacement.state == 0.0
+    assert replacement.reset_calls == 1
+    assert old_module.reset_calls == 2
 
 
-def test_reset_net_cache_entry_is_released_with_network():
-    net = nn.Sequential(_ResetCounter())
-    reset_net(net)
-    net_ref = weakref.ref(net)
-    assert net in _RESET_MODULE_CACHE
-    del net
-    gc.collect()
-
-    assert net_ref() is None
-
-
-def test_reset_net_bypasses_cache_for_equal_hashable_modules():
-    net1 = _EqualHashableResetCounter()
-    net2 = _EqualHashableResetCounter()
-
-    reset_net(net1)
-    reset_net(net2)
-
-    assert net1.reset_calls == 1
-    assert net2.reset_calls == 1
-    assert net1 not in _RESET_MODULE_CACHE
-    assert net2 not in _RESET_MODULE_CACHE
-
-
-def test_reset_net_cached_modules_follow_memorymodule_reset_semantics():
-    net = nn.Sequential(_StatefulCounter())
+def test_reset_root_memorymodule(reset):
+    net = _StatefulCounter()
     x = torch.randn(2, 3)
     net(x)
-    reset_net(net)
-    reset_net(net)
-    try:
-        assert net[0].reset_calls == 2
-        assert net[0].state == 0.0
-    finally:
-        invalidate_reset_cache(net)
+    reset(net)
+    reset(net)
+    assert net.reset_calls == 2
+    assert net.state == 0.0
+
+
+def test_reset_empty_network(reset):
+    net = nn.Sequential(_NonCallableReset(), nn.ReLU())
+    assert collect_reset_modules(net) == ()
+    reset(net)
 
 
 def test_multi_step_forward_supports_both_time_axes_and_module_lists():
