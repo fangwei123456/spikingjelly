@@ -43,7 +43,11 @@ These functions help users set **configurations for each submodule** in a networ
 .. list-table::
 
    * - :func:`reset_net <spikingjelly.activation_based.functional.net_config.reset_net>`
-     - Reset the state of a network.
+     - Traverse the current network and reset its state.
+   * - :func:`collect_reset_modules <spikingjelly.activation_based.functional.net_config.collect_reset_modules>`
+     - Collect a caller-owned snapshot of resettable modules.
+   * - :func:`reset_collected_modules <spikingjelly.activation_based.functional.net_config.reset_collected_modules>`
+     - Reset a collected snapshot without traversing the network.
    * - :func:`set_step_mode <spikingjelly.activation_based.functional.net_config.set_step_mode>`
      - Set the step mode for a network.
    * - :func:`detach_net <spikingjelly.activation_based.functional.net_config.detach_net>`

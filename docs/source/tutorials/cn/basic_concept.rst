@@ -182,6 +182,23 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
 
 方便起见，还可以通过调用 :func:`spikingjelly.activation_based.functional.reset_net` 将整个网络中的所有有状态模块进行重置。
 
+``reset_net`` 每次遍历当前网络，因此会包含新增或替换的模块，并跳过已移除的模块。
+模型结构固定时，可以收集一次可重置模块，再重复使用元组，避免反复遍历：
+
+.. code-block:: python
+
+    import torch
+    from spikingjelly.activation_based import functional, neuron
+
+    net = torch.nn.Sequential(torch.nn.Linear(3, 2), neuron.IFNode())
+    reset_modules = functional.collect_reset_modules(net)
+    net(torch.rand(4, 3))
+    functional.reset_collected_modules(reset_modules)
+    assert net[1].v == 0.0
+
+元组持有强引用且始终是收集时的快照：增删或替换模块、改变 ``reset`` 的可调用性后，
+需要重新收集并将新元组赋给 ``reset_modules``；旧元组仍引用旧模块。
+
 处理完一批独立样本后需要重置网络：
 
 .. code-block:: python

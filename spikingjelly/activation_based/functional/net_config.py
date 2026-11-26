@@ -1,57 +1,109 @@
 from __future__ import annotations
-from spikingjelly.logger import logger
-
-from typing import Optional
-from weakref import ReferenceType, WeakKeyDictionary, ref
 
 import torch.nn as nn
 
+from ...logger import logger
 from .. import base
 
 
 __all__ = [
     "collect_reset_modules",
     "detach_net",
-    "invalidate_reset_cache",
     "reset_collected_modules",
     "reset_net",
     "set_step_mode",
 ]
 
-_RESET_MODULE_CACHE: WeakKeyDictionary[
-    nn.Module, tuple[ReferenceType[nn.Module], ...]
-] = WeakKeyDictionary()
-
 
 def collect_reset_modules(net: nn.Module) -> tuple[nn.Module, ...]:
+    r"""
+    **API Language** - :ref:`中文 <collect_reset_modules-cn>` | :ref:`English <collect_reset_modules-en>`
+
+    ----
+
+    .. _collect_reset_modules-cn:
+
+    * **中文**
+
+    遍历当前 ``net.modules()``，按遍历顺序收集具有可调用 ``reset`` 的模块，
+    包括符合条件的 ``net`` 自身；共享模块按 ``modules()`` 的规则去重。
+    收集不重置状态，也不记录非 ``MemoryModule`` 告警。
+
+    返回的元组是由调用方持有的强引用快照，可交给
+    :func:`reset_collected_modules` 重复使用。增删或替换模块、改变 ``reset``
+    的可调用性后，调用方必须重新收集；旧快照仍引用旧模块。
+
+    :param net: 要收集的网络；不限制其张量的形状、dtype、device 或后端。
+    :type net: torch.nn.Module
+    :return: 可重置模块的有序元组；没有符合条件的模块时为空元组。
+    :rtype: tuple[torch.nn.Module, ...]
+
+    ----
+
+    .. _collect_reset_modules-en:
+
+    * **English**
+
+    Traverse the current ``net.modules()`` and collect modules with a callable
+    ``reset`` in traversal order, including ``net`` itself when eligible. Shared
+    modules are deduplicated by ``modules()``. Collection neither resets state
+    nor emits warnings for non-``MemoryModule`` objects.
+
+    The returned tuple is a caller-owned snapshot of strong references that can
+    be reused with :func:`reset_collected_modules`. Recollect after adding,
+    removing or replacing modules, or changing whether ``reset`` is callable;
+    an old snapshot still references the old modules.
+
+    :param net: Network to collect from; no tensor shape, dtype, device or
+        backend restrictions are imposed.
+    :type net: torch.nn.Module
+    :return: Ordered tuple of resettable modules, empty if none are eligible.
+    :rtype: tuple[torch.nn.Module, ...]
+    """
     return tuple(m for m in net.modules() if callable(getattr(m, "reset", None)))
 
 
-def _supports_reset_cache_key(net: nn.Module) -> bool:
-    net_type = type(net)
-    return net_type.__eq__ is object.__eq__ and net_type.__hash__ is object.__hash__
-
-
-def _resolve_cached_reset_modules(
-    net: nn.Module,
-) -> Optional[tuple[nn.Module, ...]]:
-    if not _supports_reset_cache_key(net):
-        return None
-    cached = _RESET_MODULE_CACHE.get(net)
-    if cached is None:
-        return None
-
-    modules = []
-    for cached_module in cached:
-        module = cached_module()
-        if module is None:
-            invalidate_reset_cache(net)
-            return None
-        modules.append(module)
-    return tuple(modules)
-
-
 def reset_collected_modules(modules: tuple[nn.Module, ...]) -> None:
+    r"""
+    **API Language** - :ref:`中文 <reset_collected_modules-cn>` | :ref:`English <reset_collected_modules-en>`
+
+    ----
+
+    .. _reset_collected_modules-cn:
+
+    * **中文**
+
+    按元组顺序调用每个模块的 ``reset()``，由各模块恢复其状态。
+    此函数直接使用 :func:`collect_reset_modules` 返回的快照，不遍历网络或
+    检查结构变化；空元组不执行任何操作。调用方须在模型变化后重新收集。
+    对非 :class:`~spikingjelly.activation_based.base.MemoryModule` 模块，每次
+    调用其 ``reset()`` 前都会记录告警。异常原样传播，后续模块不会被重置。
+
+    :param modules: 收集得到的模块元组；其中每个模块必须仍具有可调用的
+        ``reset``。张量约束和状态变化由各模块的 ``reset()`` 决定。
+    :type modules: tuple[torch.nn.Module, ...]
+    :raises Exception: 任一模块的 ``reset()`` 抛出异常时原样传播。
+
+    ----
+
+    .. _reset_collected_modules-en:
+
+    * **English**
+
+    Call each module's ``reset()`` in tuple order to restore its state.
+    This function directly reuses the snapshot from :func:`collect_reset_modules`
+    without traversing the network or checking for structural changes; an empty
+    tuple does nothing. The caller must recollect after model changes.
+    Each call warns before resetting a module that is not a
+    :class:`~spikingjelly.activation_based.base.MemoryModule`. Exceptions propagate
+    unchanged and subsequent modules are not reset.
+
+    :param modules: Collected module tuple; each module must still have a
+        callable ``reset``. Tensor constraints and state changes are determined
+        by each module's ``reset()``.
+    :type modules: tuple[torch.nn.Module, ...]
+    :raises Exception: Any exception from a module's ``reset()`` propagates unchanged.
+    """
     for m in modules:
         if not isinstance(m, base.MemoryModule):
             logger.warning(
@@ -61,39 +113,7 @@ def reset_collected_modules(modules: tuple[nn.Module, ...]) -> None:
         m.reset()
 
 
-def invalidate_reset_cache(net: nn.Module) -> None:
-    r"""
-    **API Language** - :ref:`中文 <invalidate_reset_cache-cn>` | :ref:`English <invalidate_reset_cache-en>`
-
-    ----
-
-    .. _invalidate_reset_cache-cn:
-
-    * **中文**
-
-    清除 ``net`` 的 reset 模块缓存。当模型结构发生变化后调用
-    （如 ``torch.compile`` 或模块替换）。
-
-    :param net: 目标网络
-    :type net: torch.nn.Module
-
-    ----
-
-    .. _invalidate_reset_cache-en:
-
-    * **English**
-
-    Clear the reset module cache for ``net``.
-    Call after model structure changes (e.g. ``torch.compile`` or module swaps).
-
-    :param net: Target network
-    :type net: torch.nn.Module
-    """
-    if _supports_reset_cache_key(net):
-        _RESET_MODULE_CACHE.pop(net, None)
-
-
-def reset_net(net: nn.Module):
+def reset_net(net: nn.Module) -> None:
     r"""
     **API Language** - :ref:`中文 <reset_net-cn>` | :ref:`English <reset_net-en>`
 
@@ -106,15 +126,16 @@ def reset_net(net: nn.Module):
     重置 ``net`` 中所有可重置模块的状态。
 
     该函数会遍历 ``net.modules()`` 中的所有子模块；若某个子模块实现了
-    ``reset()`` 方法，则调用该方法。对于不是
+    可调用的 ``reset``，则调用该方法，包括符合条件的 ``net`` 自身。
+    共享模块按 ``modules()`` 的规则去重。对于不是
     :class:`~spikingjelly.activation_based.base.MemoryModule` 但实现了
     ``reset()`` 的模块，此函数仍会调用 ``reset()``，同时记录告警。
 
-    首次调用时收集并缓存可重置模块列表，后续调用直接复用缓存。
-    若模型结构发生变化（如 ``torch.compile`` 或模块替换），
-    请调用 :func:`invalidate_reset_cache` 清除缓存。
+    每次调用都重新收集，因此自动包含新增或替换的模块，并跳过已移除的模块。
+    不维护隐式缓存。固定结构的循环可用 :func:`collect_reset_modules` 收集一次，
+    再用 :func:`reset_collected_modules` 快速重置；模型变化后须由调用方重新收集。
 
-    :param net: 任何属于 ``nn.Module`` 子类的网络
+    :param net: 要重置的网络；张量约束和状态变化由各模块的 ``reset()`` 决定。
     :type net: torch.nn.Module
 
 
@@ -129,29 +150,25 @@ def reset_net(net: nn.Module):
     Reset the states of all resettable modules in ``net``.
 
     This function iterates over ``net.modules()`` and calls ``reset()`` on each
-    submodule that implements it. If a submodule is not an instance of
+    module with a callable ``reset``, including ``net`` itself when eligible.
+    Shared modules are deduplicated by ``modules()``. If a module is not an instance of
     :class:`~spikingjelly.activation_based.base.MemoryModule` but still defines
     ``reset()``, the function will still call it and emit a warning.
 
-    On the first call, the resettable module list is collected and cached;
-    subsequent calls reuse the cache.
-    If the model structure changes (e.g. ``torch.compile`` or module swaps),
-    call :func:`invalidate_reset_cache` to clear the cache.
+    Every call recollects modules, automatically including added or replaced
+    modules and skipping removed ones. There is no implicit cache. For loops
+    with a fixed structure, collect once with :func:`collect_reset_modules` and
+    reset quickly with :func:`reset_collected_modules`; the caller must recollect
+    after model changes.
 
-    :param net: Any network inherits from ``nn.Module``
+    :param net: Network to reset; tensor constraints and state changes are
+        determined by each module's ``reset()``.
     :type net: torch.nn.Module
 
 
     :raises Exception: Any exception raised by a submodule ``reset()`` call is propagated unchanged
     """
-    cached = _resolve_cached_reset_modules(net)
-    if cached is not None:
-        reset_collected_modules(cached)
-        return
-    modules = collect_reset_modules(net)
-    if _supports_reset_cache_key(net):
-        _RESET_MODULE_CACHE[net] = tuple(ref(module) for module in modules)
-    reset_collected_modules(modules)
+    reset_collected_modules(collect_reset_modules(net))
 
 
 def set_step_mode(net: nn.Module, step_mode: str):

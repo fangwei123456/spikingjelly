@@ -46,6 +46,13 @@ optimization through model builders.
 - **Memory.** `MemoryModule` registers state with reset values. `reset` restores those
   values, and `functional.reset_net` and `functional.detach_net` apply this across a
   network.
+- **Reset ownership.** `reset_net` recollects callable `reset` modules from the current
+  `net.modules()` on every call, including the root and deduplicating shared modules.
+  It keeps no implicit cache. `collect_reset_modules` returns a caller-owned tuple
+  of strong references without resetting state; `reset_collected_modules` resets
+  that snapshot without traversal. Callers must recollect after topology or reset
+  eligibility changes. Both reset paths warn for non-`MemoryModule` objects and
+  propagate reset exceptions unchanged, stopping before subsequent modules.
 - **State shape.** `BaseNode` and its built-in subclasses reject materialized
   states with mismatched per-step shapes instead of discarding them. Reset managed
   networks before changing batch or feature shape; explicit-state calls must supply
