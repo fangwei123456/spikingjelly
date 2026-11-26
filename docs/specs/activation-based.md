@@ -53,8 +53,6 @@ optimization through model builders.
   that snapshot without traversal. Callers must recollect after topology or reset
   eligibility changes. Both reset paths warn for non-`MemoryModule` objects and
   propagate reset exceptions unchanged, stopping before subsequent modules.
-  The released `invalidate_reset_cache` API remains as a deprecated warning until
-  removal in 3.0: delete old calls, or replace explicit snapshots by recollecting.
 - **State shape.** `BaseNode` and its built-in subclasses reject materialized
   states with mismatched per-step shapes instead of discarding them. Reset managed
   networks before changing batch or feature shape; explicit-state calls must supply

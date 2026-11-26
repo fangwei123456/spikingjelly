@@ -9,7 +9,6 @@ from spikingjelly.activation_based import base, layer, neuron
 from spikingjelly.activation_based.functional import (
     chunk_multi_step_forward,
     collect_reset_modules,
-    invalidate_reset_cache,
     kernel_dot_product,
     multi_step_forward,
     reset_collected_modules,
@@ -64,15 +63,6 @@ def test_collect_reset_modules_ignores_non_callable_reset_attributes(loguru_reco
     modules = collect_reset_modules(net)
     assert modules == (net[1],)
     assert loguru_records == []
-
-
-def test_invalidate_reset_cache_is_deprecated():
-    net = nn.Sequential(_StatefulCounter())
-    state = net(torch.ones(2, 3))
-    with pytest.warns(DeprecationWarning, match="removed in SpikingJelly 3.0"):
-        invalidate_reset_cache(net)
-    assert net[0].state is state
-    assert net[0].reset_calls == 0
 
 
 def test_reset_net_with_ifnode_actually_resets():

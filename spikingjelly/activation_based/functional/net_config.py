@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import warnings
-
 import torch.nn as nn
 
 from ...logger import logger
@@ -11,7 +9,6 @@ from .. import base
 __all__ = [
     "collect_reset_modules",
     "detach_net",
-    "invalidate_reset_cache",
     "reset_collected_modules",
     "reset_net",
     "set_step_mode",
@@ -114,49 +111,6 @@ def reset_collected_modules(modules: tuple[nn.Module, ...]) -> None:
                 m,
             )
         m.reset()
-
-
-def invalidate_reset_cache(net: nn.Module) -> None:
-    r"""
-    **API Language** - :ref:`中文 <invalidate_reset_cache-cn>` | :ref:`English <invalidate_reset_cache-en>`
-
-    ----
-
-    .. _invalidate_reset_cache-cn:
-
-    * **中文**
-
-    此接口已弃用，将在 SpikingJelly 3.0 删除。调用仅发出
-    ``DeprecationWarning``，不修改网络或任何快照。
-    :func:`reset_net` 每次遍历当前网络，已不需要清除缓存；请删除此调用。
-    使用显式快照时，改为 ``modules = collect_reset_modules(net)`` 并替换旧元组。
-
-    :param net: 仅为兼容已发布接口保留的网络参数；不会被读取或修改。
-    :type net: torch.nn.Module
-
-    ----
-
-    .. _invalidate_reset_cache-en:
-
-    * **English**
-
-    Deprecated; this interface will be removed in SpikingJelly 3.0. Calling it
-    only emits a ``DeprecationWarning`` and changes neither the network nor any
-    snapshot. :func:`reset_net` traverses the current network on every call,
-    so cache invalidation is unnecessary; remove this call. For an explicit
-    snapshot, replace the old tuple with ``modules = collect_reset_modules(net)``.
-
-    :param net: Network argument retained for compatibility with the released
-        interface; it is neither read nor modified.
-    :type net: torch.nn.Module
-    """
-    warnings.warn(
-        "invalidate_reset_cache() is deprecated and will be removed in SpikingJelly "
-        "3.0. reset_net() now traverses the current network; remove this call. "
-        "For an explicit snapshot, recollect it with collect_reset_modules(net).",
-        DeprecationWarning,
-        stacklevel=2,
-    )
 
 
 def reset_net(net: nn.Module) -> None:

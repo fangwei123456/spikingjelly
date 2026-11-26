@@ -198,8 +198,6 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
 
 元组持有强引用且始终是收集时的快照：增删或替换模块、改变 ``reset`` 的可调用性后，
 需要重新收集并将新元组赋给 ``reset_modules``；旧元组仍引用旧模块。
-``invalidate_reset_cache`` 已弃用，将在 SpikingJelly 3.0 删除，请删除这些调用。
-它不会更新显式快照。
 
 处理完一批独立样本后需要重置网络：
 

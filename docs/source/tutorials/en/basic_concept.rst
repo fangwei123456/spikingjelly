@@ -201,8 +201,6 @@ collect the resettable modules once and reuse the tuple to avoid repeated traver
 The tuple holds strong references and remains a snapshot: after adding, removing
 or replacing modules, or changing whether ``reset`` is callable, assign a newly
 collected tuple to ``reset_modules``. The old tuple still refers to the old modules.
-``invalidate_reset_cache`` is deprecated and will be removed in SpikingJelly 3.0;
-delete those calls. It does not update an explicit snapshot.
 
 Reset the network after processing a batch of independent samples:
 

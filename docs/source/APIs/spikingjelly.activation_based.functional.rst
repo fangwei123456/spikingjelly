@@ -48,8 +48,6 @@ These functions help users set **configurations for each submodule** in a networ
      - Collect a caller-owned snapshot of resettable modules.
    * - :func:`reset_collected_modules <spikingjelly.activation_based.functional.net_config.reset_collected_modules>`
      - Reset a collected snapshot without traversing the network.
-   * - :func:`invalidate_reset_cache <spikingjelly.activation_based.functional.net_config.invalidate_reset_cache>`
-     - Deprecated; remove calls or recollect explicit snapshots (removal in 3.0).
    * - :func:`set_step_mode <spikingjelly.activation_based.functional.net_config.set_step_mode>`
      - Set the step mode for a network.
    * - :func:`detach_net <spikingjelly.activation_based.functional.net_config.detach_net>`
