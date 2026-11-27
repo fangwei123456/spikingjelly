@@ -106,7 +106,7 @@ spikingjelly.activation_based.functional
 spikingjelly.activation_based.surrogate
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- Torch and Triton CLIF ``Sigmoid`` surrogate gradients retain representable positive tails in low-precision training.
+- Torch ``Sigmoid`` and its fused Triton implementation in CLIF avoid premature zero gradients from positive-side saturation.
 - ``PoissonPass`` preserves the input dtype, allowing matching FP16/BF16/FP64 layers.
 
 spikingjelly.activation_based.learning
