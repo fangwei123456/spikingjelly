@@ -77,6 +77,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 - `reset_net` traverses the current network on every call, fixing resets after module changes; reuse `collect_reset_modules` snapshots with `reset_collected_modules` for fixed structures.
 - Removed `invalidate_reset_cache`. Delete its imports and calls; after model changes, rebuild explicit snapshots with `collect_reset_modules`.
 - CUDA IF, LIF and PLIF accelerate matching FP16/BF16 inputs and states with FP32 accumulation per call. Rounding can change spikes near threshold.
+- Stateless `functional.delay` preserves a zero input gradient for an all-padding sequence. Stateful delays keep warm-up padding detached so later outputs can backpropagate through queued inputs.
 - Explicit `SJ_*_CUDA_IMPLEMENTATION=torch` accepts profiles requiring Torch reference execution, including custom surrogates and non-FP32 states.
 - `kernel_dot_product` evaluates low-precision Gaussian distances in FP32 and retains FP32 outputs under autocast, preserving spike differences and finite similarities.
 - TET cross-entropy accepts class probability targets, including MixUp and spatial targets.

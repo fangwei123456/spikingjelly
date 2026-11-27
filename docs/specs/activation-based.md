@@ -43,6 +43,10 @@ optimization through model builders.
 
 - **Step modes.** `'s'` processes one step, `[N, *]`; `'m'` processes a time-major
   sequence, `[T, N, *]`.
+- **Delay padding.** Stateless `functional.delay` has a zero input gradient for an
+  all-padding sequence. In contrast, `functional.delay_step` and `layer.Delay`
+  return detached warm-up zeros, keeping queued inputs' graphs available for
+  backward when a later step emits them.
 - **Memory.** `MemoryModule` registers state with reset values. `reset` restores those
   values, and `functional.reset_net` and `functional.detach_net` apply this across a
   network.
