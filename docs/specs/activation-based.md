@@ -64,7 +64,9 @@ optimization through model builders.
   Checkpoint buffer snapshots preserve gradients and commit updates once.
   Non-leaf buffer commits rebind shared module aliases without modifying autograd
   sources; leaf buffers retain their objects and are updated in-place.
-  FlexSN tracing isolates compiler probes from the caller's saved-tensor hooks.
+  FlexSN tracing isolates compiler probes from the caller's saved-tensor hooks,
+  and its one-time CUDA implementation selection runs eagerly while `torch.compile`
+  traces (Torch 2.11 and later) or outside the compiled graph (earlier versions).
 - **Step-mode leaves.** Built-in `StepModule` implementations are atomic leaves whose
   children are normally not `StepModule`s. Networks, blocks and attention stay plain
   `nn.Module`s. Explicit scheduling containers and modules that own independent

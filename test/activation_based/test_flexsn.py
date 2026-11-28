@@ -174,6 +174,58 @@ def test_cpu_scan_is_visible_to_fullgraph_compile():
     torch.testing.assert_close(compiled, eager)
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("fullgraph", [False, True])
+def test_cuda_triton_runtime_builds_on_first_compiled_call(fullgraph):
+    pytest.importorskip("triton")
+    if fullgraph and torch.__version__ < "2.11":
+        pytest.skip("Torch < 2.11 cannot build FlexSN kernels while tracing")
+    threshold = torch.nn.Parameter(torch.tensor(0.8, device="cuda"))
+    module = FlexSN(_lif_core, 1, (threshold,))
+    x = torch.randn(4, 2, 3, device="cuda", requires_grad=True)
+    initial = torch.zeros(2, 3, device="cuda")
+
+    actual = torch.compile(module, fullgraph=fullgraph)(x)
+    expected, final, _ = _reference(x, initial, threshold)
+
+    assert module._triton_capability[x.device, x.dtype] is True
+    torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(module.states[0], final)
+    got = torch.autograd.grad(actual.sum(), (x, threshold))
+    want = torch.autograd.grad(expected.sum(), (x, threshold))
+    for actual_grad, expected_grad in zip(got, want, strict=True):
+        torch.testing.assert_close(actual_grad, expected_grad)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_cuda_compiled_conv_network_builds_triton_runtimes_on_first_call():
+    pytest.importorskip("triton")
+    from spikingjelly.activation_based import functional, layer
+
+    def core(x, v):
+        return _lif_core(x, v, 0.8)
+
+    def block(in_channels):
+        return (
+            layer.Conv2d(in_channels, 4, 3, padding=1, step_mode="m"),
+            FlexSN(core, 1),
+            layer.MaxPool2d(2, step_mode="m"),
+        )
+
+    net = torch.nn.Sequential(*block(3), *block(4), *block(4)).cuda()
+    reference = copy.deepcopy(net)
+    x = torch.randn(2, 2, 3, 16, 16, device="cuda")
+
+    actual = torch.compile(net)(x)
+    expected = reference(x)
+
+    torch.testing.assert_close(actual, expected)
+    actual.sum().backward()
+    expected.sum().backward()
+    torch.testing.assert_close(net[0].weight.grad, reference[0].weight.grad)
+    functional.reset_net(net)
+
+
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
 @pytest.mark.parametrize("detach_first_output", [False, True])
 def test_multi_input_output_and_state_counts(device, detach_first_output):
