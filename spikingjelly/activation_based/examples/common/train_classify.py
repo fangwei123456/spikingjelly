@@ -707,7 +707,10 @@ class Trainer:
             model_without_ddp.load_state_dict(checkpoint["model"])
             if not args.test_only:
                 optimizer.load_state_dict(checkpoint["optimizer"])
-                if checkpoint["args"]["epochs"] == args.epochs:
+                saved_args = checkpoint["args"]
+                if not isinstance(saved_args, dict):  # older argparse.Namespace
+                    saved_args = vars(saved_args)
+                if saved_args["epochs"] == args.epochs:
                     lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
                 else:
                     # The saved schedule ends at the old --epochs. Rebuild it for

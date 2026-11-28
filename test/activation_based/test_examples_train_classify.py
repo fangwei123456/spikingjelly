@@ -230,6 +230,34 @@ def test_trainer_resume_with_more_epochs_replays_the_saved_scheduler_steps(
     assert checkpoint["optimizer"]["param_groups"][0]["lr"] == pytest.approx(0.01)
 
 
+def test_trainer_resumes_a_legacy_namespace_checkpoint(
+    tmp_path, image_folder, monkeypatch
+):
+    trainer = _TinyTrainer(tmp_path / "cache")
+    args = _parse(trainer, image_folder, tmp_path / "a", "--epochs", "1")
+    trainer.main(args)
+    (first,) = (tmp_path / "a").glob("pt/*/checkpoint_latest.pth")
+    # Checkpoints written before args became a dict hold the Namespace itself;
+    # they load only with weights_only disabled.
+    checkpoint = torch.load(first, map_location="cpu", weights_only=True)
+    checkpoint["args"] = args
+    torch.save(checkpoint, first)
+    monkeypatch.setenv("TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD", "1")
+
+    trainer.main(
+        _parse(
+            trainer,
+            image_folder,
+            tmp_path / "b",
+            "--epochs",
+            "2",
+            "--resume",
+            str(first),
+        )
+    )
+    assert _load(tmp_path / "b", "checkpoint_latest.pth")["epoch"] == 1
+
+
 def test_trainer_reloads_its_dataset_cache(tmp_path, image_folder, monkeypatch):
     trainer = _TinyTrainer(tmp_path / "cache")
     extra = ("--epochs", "1", "--cache-dataset")
