@@ -1,6 +1,6 @@
 import torch
 
-from .. import functional, neuron, surrogate
+from .. import functional, layer, neuron, surrogate
 from ..model import spiking_resnet
 from .common import train_classify
 
@@ -69,13 +69,17 @@ class SResNetTrainer(train_classify.Trainer):
 
     def load_model(self, args, num_classes):
         if args.model in spiking_resnet.__all__:
+            # ImageNet weights come with a 1000-class head; other datasets
+            # train a new head on top of the pretrained backbone.
             model = spiking_resnet.__dict__[args.model](
                 pretrained=args.pretrained,
-                num_classes=num_classes,
+                num_classes=1000 if args.pretrained else num_classes,
                 spiking_neuron=neuron.IFNode,
                 surrogate_function=surrogate.ATan(),
                 detach_reset=True,
             )
+            if model.fc.out_features != num_classes:
+                model.fc = layer.Linear(model.fc.in_features, num_classes)
             functional.set_step_mode(model, step_mode="m")
             return model
         else:

@@ -97,6 +97,28 @@ def test_train_imagenet_model_uses_dataset_num_classes():
     assert model.fc.out_features == 7
 
 
+def test_train_imagenet_pretrained_model_gets_a_dataset_sized_head(monkeypatch):
+    from spikingjelly.activation_based import neuron
+    from spikingjelly.activation_based.model import spiking_resnet
+
+    torch.manual_seed(0)
+    weights = spiking_resnet.spiking_resnet18(spiking_neuron=neuron.IFNode).state_dict()
+    monkeypatch.setattr(
+        spiking_resnet, "load_state_dict_from_url", lambda *args, **kwargs: weights
+    )
+    trainer = train_imagenet.SResNetTrainer()
+    args = _trainer_args(
+        trainer, "--model", "spiking_resnet18", "--T", "2", "--pretrained"
+    )
+
+    model = trainer.load_model(args, num_classes=7)
+
+    assert model.fc.out_features == 7
+    torch.testing.assert_close(model.conv1.weight, weights["conv1.weight"])
+    y = model(torch.rand(2, 1, 3, 32, 32))
+    assert y.shape == (2, 1, 7)
+
+
 def test_top5_accuracy_with_fewer_than_five_classes():
     output = torch.tensor([[0.9, 0.1], [0.2, 0.8], [0.7, 0.3]])
     target = torch.tensor([0, 0, 1])
