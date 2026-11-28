@@ -1,4 +1,5 @@
 import hashlib
+import math
 import os
 from pathlib import Path
 
@@ -159,6 +160,34 @@ def test_trainer_resumes_with_more_epochs(tmp_path, image_folder):
         )
     )
     assert _load(tmp_path / "b", "checkpoint_latest.pth")["epoch"] == 1
+
+
+def test_trainer_resume_with_more_epochs_follows_the_new_schedule(
+    tmp_path, image_folder
+):
+    trainer = _TinyTrainer(tmp_path / "cache")
+    trainer.main(_parse(trainer, image_folder, tmp_path / "a", "--epochs", "1"))
+    (first,) = (tmp_path / "a").glob("pt/*/checkpoint_latest.pth")
+
+    trainer = _TinyTrainer(tmp_path / "cache", stop_at_epoch=2)
+    with pytest.raises(_Interrupted):
+        trainer.main(
+            _parse(
+                trainer,
+                image_folder,
+                tmp_path / "b",
+                "--epochs",
+                "3",
+                "--resume",
+                str(first),
+            )
+        )
+
+    checkpoint = _load(tmp_path / "b", "checkpoint_latest.pth")
+    assert checkpoint["epoch"] == 1
+    # Cosine annealing planned for 3 epochs, after 2 of them.
+    expected = 0.1 * (1 + math.cos(math.pi * 2 / 3)) / 2
+    assert checkpoint["optimizer"]["param_groups"][0]["lr"] == pytest.approx(expected)
 
 
 def test_trainer_reloads_its_dataset_cache(tmp_path, image_folder, monkeypatch):

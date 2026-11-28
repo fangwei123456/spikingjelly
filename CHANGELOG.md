@@ -103,7 +103,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 #### spikingjelly.activation_based.examples
 
 - `common.train_classify.Trainer` stores `args` as a dict and reloads its dataset cache, so `--resume` and `--cache-dataset` work with PyTorch's `weights_only` default.
-- Resumed `Trainer` runs keep the best test accuracy and can extend `--epochs` instead of failing after the first epoch.
+- Resumed `Trainer` runs keep the best test accuracy and can extend `--epochs`, following the learning-rate schedule of the new horizon instead of failing after the first epoch.
 - `spiking_lstm_text` saves a `state_dict`, so its test mode loads the trained model; retrain models saved by earlier versions.
 
 ### Changes

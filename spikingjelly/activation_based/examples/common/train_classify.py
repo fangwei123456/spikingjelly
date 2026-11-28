@@ -707,7 +707,22 @@ class Trainer:
             model_without_ddp.load_state_dict(checkpoint["model"])
             if not args.test_only:
                 optimizer.load_state_dict(checkpoint["optimizer"])
-                lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+                if checkpoint["args"]["epochs"] == args.epochs:
+                    lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+                else:
+                    # The saved schedule ends at the old --epochs. Rebuild it for
+                    # the new horizon and replay it to the resumed epoch, as if
+                    # the run had been planned with the new --epochs.
+                    for group in optimizer.param_groups:
+                        group["lr"] = group["initial_lr"]
+                    lr_scheduler = self.set_lr_scheduler(args, optimizer)
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            "ignore",
+                            message=r"Detected call of `lr_scheduler\.step\(\)`",
+                        )
+                        for _ in range(checkpoint["epoch"] + 1):
+                            lr_scheduler.step()
             args.start_epoch = checkpoint["epoch"] + 1
             if model_ema:
                 model_ema.load_state_dict(checkpoint["model_ema"])
