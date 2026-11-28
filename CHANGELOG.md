@@ -100,6 +100,15 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 - `CubaLIFNode` trains scalar or broadcast decay parameters without requiring input or initial-state gradients.
 
+#### spikingjelly.activation_based.examples
+
+- `train_imagenet` sizes the classifier from the dataset classes, replacing the ImageNet head after loading `--pretrained` weights, and top-5 accuracy handles fewer than five classes, so other `ImageFolder` datasets train with mixup and cutmix.
+- `common.train_classify.Trainer` rejects unknown `--lr-scheduler` and `--lr-warmup-method` names with a clear error instead of a later `TypeError`.
+- `conv_fashion_mnist`, `classify_dvsg` and `rsnn_sequential_fmnist` default `-opt` to `sgd` and accept only `sgd` or `adam`.
+- `train_flexsn_compile` builds its FlexSN model instead of rejecting the captured surrogate module.
+- `spiking_lstm_text` normalizes each confusion-matrix row and saves figures before showing them.
+- `cifar10_r11_enabling_spikebased_backpropagation` samples Poisson input at every time-step, supports `-T 1`, and loads its own best model through `--pretrained-path`.
+
 ### Changes
 
 - Few-spike, outlier-aware and hierarchically gated neurons add optional native CUDA alongside Triton for eligible FP32 inference, with explicit provider selection and reference fallbacks.

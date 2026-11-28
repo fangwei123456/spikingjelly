@@ -515,7 +515,10 @@ class Trainer:
                 optimizer, gamma=args.lr_gamma
             )
         else:
-            main_lr_scheduler = None
+            raise RuntimeError(
+                f"Invalid lr scheduler '{args.lr_scheduler}'. "
+                "Only step, cosa and exp are supported."
+            )
         if args.lr_warmup_epochs > 0:
             if args.lr_warmup_method == "linear":
                 warmup_lr_scheduler = torch.optim.lr_scheduler.LinearLR(
@@ -530,7 +533,10 @@ class Trainer:
                     total_iters=args.lr_warmup_epochs,
                 )
             else:
-                warmup_lr_scheduler = None
+                raise RuntimeError(
+                    f"Invalid warmup lr method '{args.lr_warmup_method}'. "
+                    "Only linear and constant are supported."
+                )
             lr_scheduler = torch.optim.lr_scheduler.SequentialLR(
                 optimizer,
                 schedulers=[warmup_lr_scheduler, main_lr_scheduler],

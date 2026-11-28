@@ -44,12 +44,14 @@ class _FlexSNTrainer(train_classify.Trainer):
         if args.model not in spiking_vgg.__all__:
             raise ValueError(f"args.model should be one of {spiking_vgg.__all__}")
 
-        sg = surrogate.Sigmoid(alpha=args.surrogate_alpha)
+        # FlexSN cores may capture numbers but not modules such as
+        # surrogate.Sigmoid, so call its autograd function directly.
+        alpha = args.surrogate_alpha
 
         def lif_core_sg(x: torch.Tensor, v: torch.Tensor):
             tau, v_th = 2.0, 1.0
             h = v + (x - v) / tau
-            s = sg(h - v_th)
+            s = surrogate.sigmoid.apply(h - v_th, alpha)
             return s, h * (1.0 - s)
 
         def make_flexsn(**kwargs):
