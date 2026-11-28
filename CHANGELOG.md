@@ -25,6 +25,7 @@ Changes since `2.0.0.dev0`. For older releases, see
 - `FlexSN.functional_forward` defaults to registered static inputs, enabling functional conversion and checkpointing while preserving explicit overrides.
 - Cold FlexSN CUDA tracing uses deterministic gradient probes and isolates saved-tensor hooks, preserving checkpoint recomputation.
 - `FlexSN` builds Triton kernels for cores that call `Tensor.detach()` on Torch 2.14 and later instead of silently running without them.
+- CUDA `FlexSN` modules can be first called under `torch.compile` instead of failing on fake tensors; with Torch 2.11 and later this includes `fullgraph=True`.
 
 #### spikingjelly.activation_based.nir_exchange
 

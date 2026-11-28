@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import concurrent.futures
 import copy
 import functools
 import inspect
+import weakref
 from typing import Callable, Optional
 
 import torch
@@ -11,6 +13,39 @@ from .. import base
 from spikingjelly.logger import logger
 
 __all__ = ["FlexSN"]
+
+# Live FlexSN modules by id: torch.compile passes only constants to
+# _select_while_tracing, so it finds its module here.
+_SELECTION_OWNERS: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
+_NESTED_BUILD_SUPPORTED = torch.__version__ >= "2.11"
+
+
+@torch.compiler.assume_constant_result
+def _select_while_tracing(
+    owner_id: int, device: torch.device, dtype: torch.dtype
+) -> bool:
+    # Selecting the implementation may trace the core and build Triton kernels,
+    # which needs real tensors. torch.compile runs this function eagerly while
+    # tracing and keeps its result, so a first call under torch.compile, with
+    # fullgraph=True too, builds the kernels without a graph break. The build
+    # runs in a fresh thread, outside the caller's compile state. Before Torch
+    # 2.11, compile metrics are process-wide and a nested AOT trace corrupts the
+    # caller's compilation, so it returns False and the caller selects outside
+    # the graph instead. A module created by a path that skips registration
+    # also selects outside the graph.
+    module = _SELECTION_OWNERS.get(owner_id)
+    if module is None:
+        return False
+    if module._selection_ready(device, dtype):
+        return True
+    if not _NESTED_BUILD_SUPPORTED:
+        return False
+    with concurrent.futures.ThreadPoolExecutor(1) as pool:
+        try:
+            pool.submit(module._select_implementation, device, dtype).result()
+        except RuntimeError:
+            return False
+    return True
 
 
 def _as_tuple(value) -> tuple:
@@ -188,6 +223,7 @@ class FlexSN(base.MemoryModule):
 
         self._infer_output_arity()
         self.step_mode = step_mode
+        _SELECTION_OWNERS[id(self)] = self
 
     @property
     def static_inputs(self) -> tuple[torch.Tensor, ...]:
@@ -631,6 +667,53 @@ class FlexSN(base.MemoryModule):
             state_seqs = None
         return outputs, states, state_seqs
 
+    def _selection_ready(self, device: torch.device, dtype: torch.dtype) -> bool:
+        capable = self._triton_capability.get((device, dtype))
+        if capable is None:
+            return False
+        return not capable or (
+            self._triton_handle is not None and self._triton_runtime_dtype == dtype
+        )
+
+    def _select_implementation(self, device: torch.device, dtype: torch.dtype) -> None:
+        key = (device, dtype)
+        if key in self._triton_capability:
+            if self._triton_capability[key]:
+                # Rebuild after deepcopy, pickling, `.to()` or another dtype.
+                self._ensure_triton_runtime(dtype, device)
+            return
+        try:
+            self._ensure_triton_runtime(dtype, device)
+        except (
+            ImportError,
+            OSError,
+            NotImplementedError,
+            torch.fx.proxy.TraceError,
+        ) as error:
+            self._triton_capability[key] = False
+            logger.info(
+                "FlexSN selection device={} dtype={} implementation=hop reason={}",
+                device,
+                dtype,
+                error,
+            )
+        else:
+            self._triton_capability[key] = True
+            logger.info(
+                "FlexSN selection device={} dtype={} implementation=triton",
+                device,
+                dtype,
+            )
+
+    @torch.compiler.disable
+    def _select_outside_graph(self, device: torch.device, dtype: torch.dtype) -> None:
+        self._select_implementation(device, dtype)
+
+    def _prepare_implementation(self, device: torch.device, dtype: torch.dtype) -> bool:
+        if not _select_while_tracing(id(self), device, dtype):
+            self._select_outside_graph(device, dtype)
+        return self._triton_capability[(device, dtype)]
+
     def _multi_step(
         self,
         inputs: tuple[torch.Tensor, ...],
@@ -641,31 +724,7 @@ class FlexSN(base.MemoryModule):
         reference = self._validate_operands(inputs, states, static_inputs, "m")
         if reference.device.type != "cuda":
             return self._torch_scan(inputs, states, static_inputs, store_state_seqs)
-        key = (reference.device, reference.dtype)
-        if key not in self._triton_capability:
-            try:
-                self._ensure_triton_runtime(reference.dtype, reference.device)
-            except (
-                ImportError,
-                OSError,
-                NotImplementedError,
-                torch.fx.proxy.TraceError,
-            ) as error:
-                self._triton_capability[key] = False
-                logger.info(
-                    "FlexSN selection device={} dtype={} implementation=hop reason={}",
-                    reference.device,
-                    reference.dtype,
-                    error,
-                )
-            else:
-                self._triton_capability[key] = True
-                logger.info(
-                    "FlexSN selection device={} dtype={} implementation=triton",
-                    reference.device,
-                    reference.dtype,
-                )
-        if self._triton_capability[key]:
+        if self._prepare_implementation(reference.device, reference.dtype):
             return self._triton_scan(
                 inputs, states, static_inputs, store_state_seqs, reference
             )
@@ -691,6 +750,10 @@ class FlexSN(base.MemoryModule):
                 raise ValueError("FlexSN multi-step inputs must have a time dimension.")
             if inputs[0].shape[0] == 0:
                 raise ValueError("FlexSN does not support empty multi-step inputs.")
+            if inputs[0].is_cuda:
+                # Select before any computation: if torch.compile must break the
+                # graph here, it resumes on the inputs, not on intermediate views.
+                self._prepare_implementation(inputs[0].device, inputs[0].dtype)
         states = self.materialize_states(inputs, self.states, self.step_mode)
         if self.step_mode == "s":
             outputs, states = self.single_step_functional_forward(
@@ -733,6 +796,7 @@ class FlexSN(base.MemoryModule):
         result._triton_handle = None
         result._triton_handle_finalizer = None
         result._triton_runtime_dtype = None
+        _SELECTION_OWNERS[id(result)] = result
         return result
 
     def __getstate__(self):
@@ -741,6 +805,15 @@ class FlexSN(base.MemoryModule):
         state["_triton_handle_finalizer"] = None
         state["_triton_runtime_dtype"] = None
         return state
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        _SELECTION_OWNERS[id(self)] = self
+
+    def _replicate_for_data_parallel(self):
+        replica = super()._replicate_for_data_parallel()
+        _SELECTION_OWNERS[id(replica)] = replica
+        return replica
 
     def extra_repr(self) -> str:
         core_name = getattr(self.core, "__name__", type(self.core).__name__)
