@@ -71,6 +71,7 @@ class SResNetTrainer(train_classify.Trainer):
         if args.model in spiking_resnet.__all__:
             model = spiking_resnet.__dict__[args.model](
                 pretrained=args.pretrained,
+                num_classes=num_classes,
                 spiking_neuron=neuron.IFNode,
                 surrogate_function=surrogate.ATan(),
                 detach_reset=True,

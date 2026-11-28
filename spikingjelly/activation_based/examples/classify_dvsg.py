@@ -44,7 +44,13 @@ def main():
     parser.add_argument(
         "-amp", action="store_true", help="automatic mixed precision training"
     )
-    parser.add_argument("-opt", type=str, help="use which optimizer. SDG or Adam")
+    parser.add_argument(
+        "-opt",
+        type=str,
+        choices=["sgd", "adam"],
+        default="sgd",
+        help="use which optimizer. SGD or Adam",
+    )
     parser.add_argument("-momentum", default=0.9, type=float, help="momentum for SGD")
     parser.add_argument("-lr", default=0.1, type=float, help="learning rate")
     parser.add_argument("-channels", default=128, type=int, help="channels of CSNN")

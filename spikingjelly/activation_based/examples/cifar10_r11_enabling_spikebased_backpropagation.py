@@ -53,6 +53,12 @@ parser.add_argument(
     action="store_true",
     help="use pre-trained parameters.",
 )
+parser.add_argument(
+    "--pretrained-path",
+    default="./model_bestT1_cifar10_r11.pth.tar",
+    type=str,
+    help="parameters loaded by --pretrained, e.g. a model_bestT1 file saved in ./logs",
+)
 parser.add_argument("--gpu", default=None, type=int, help="GPU id to use.")
 
 
@@ -360,8 +366,9 @@ def main():
     if args.pretrained:
         # The pretrained parameter can either be downloaded in authors' Dropbox (https://www.dropbox.com/sh/vvq9afkq90refka/AAAIEnyBZ_wO7eM510GCyZ8ta?dl=0) or trained by yourself.
         # Should be placed together with code before training!
-        checkpoint = torch.load("./model_bestT1_cifar10_r11.pth.tar")
-        net.load_state_dict(checkpoint["state_dict"])
+        checkpoint = torch.load(args.pretrained_path)
+        # This script saves a bare state_dict; other checkpoints wrap it.
+        net.load_state_dict(checkpoint.get("state_dict", checkpoint))
 
     print(net)
 
@@ -386,15 +393,13 @@ def main():
 
             optimizer.zero_grad()
 
-            for t in range(T - 1):
-                # Poisson encoding
+            for t in range(T):
+                # Poisson encoding, sampled anew at every time-step
                 rand_num = torch.rand_like(img).cuda()
                 poisson_input = (torch.abs(img) > rand_num).float()
                 poisson_input = torch.mul(poisson_input, torch.sign(img))
 
-                net(poisson_input)
-
-            output = net(poisson_input)
+                output = net(poisson_input)
 
             for m in net.modules():
                 if isinstance(m, LIFNode) and m.fire:
@@ -422,15 +427,13 @@ def main():
                 label = label.cuda()
                 img = img.cuda()
 
-                for t in range(T - 1):
-                    # Poisson encoding
+                for t in range(T):
+                    # Poisson encoding, sampled anew at every time-step
                     rand_num = torch.rand_like(img).cuda()
                     poisson_input = (torch.abs(img) > rand_num).float()
                     poisson_input = torch.mul(poisson_input, torch.sign(img))
 
-                    net(poisson_input)
-
-                output = net(poisson_input)
+                    output = net(poisson_input)
 
                 accuracy += (output.argmax(dim=1) == label).float().sum().item()
                 test_num += label.numel()

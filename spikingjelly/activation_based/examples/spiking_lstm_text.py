@@ -256,8 +256,8 @@ if __name__ == "__main__":
                 test_accu, 1 / n_categories
             )
         )
-        plt.show()
         plt.savefig("TestAccuracy.png")
+        plt.show()
         plt.close()
 
         # 让用户输入姓氏以判断其属于哪种语系
@@ -289,7 +289,8 @@ if __name__ == "__main__":
             category_i = all_categories.index(category)
             confusion[category_i][guess_i] += 1
 
-        confusion = confusion / confusion.sum(1)
+        # Normalize each true category (row) to sum to one.
+        confusion = confusion / confusion.sum(1, keepdim=True)
         np.save("confusion.npy", confusion)
 
         # Set up plot
@@ -303,6 +304,6 @@ if __name__ == "__main__":
         # Force label at every tick
         ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
         ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
-        plt.show()
         plt.savefig("ConfusionMatrix.svg")
+        plt.show()
         plt.close()
