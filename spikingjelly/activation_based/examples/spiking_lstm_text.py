@@ -205,7 +205,7 @@ if __name__ == "__main__":
                         )
                     )
 
-        torch.save(net, "char_rnn_classification.pth")
+        torch.save(net.state_dict(), "char_rnn_classification.pth")
         np.save("avg_losses.npy", np.array(avg_losses))
         np.save("accuracy_rec.npy", np.array(accuracy_rec))
         np.save("test_accu_rec.npy", np.array(test_accu_rec))
@@ -229,7 +229,8 @@ if __name__ == "__main__":
     else:
         print("Testing...")
 
-        net = torch.load("char_rnn_classification.pth")
+        net.load_state_dict(torch.load("char_rnn_classification.pth"))
+        net.eval()
 
         # 遍历测试集计算准确率
         print("Calculating testing accuracy...")
