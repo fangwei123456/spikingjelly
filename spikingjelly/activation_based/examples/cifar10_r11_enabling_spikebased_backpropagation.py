@@ -366,7 +366,7 @@ def main():
     if args.pretrained:
         # The pretrained parameter can either be downloaded in authors' Dropbox (https://www.dropbox.com/sh/vvq9afkq90refka/AAAIEnyBZ_wO7eM510GCyZ8ta?dl=0) or trained by yourself.
         # Should be placed together with code before training!
-        checkpoint = torch.load(args.pretrained_path)
+        checkpoint = torch.load(args.pretrained_path, map_location="cpu")
         # This script saves a bare state_dict; other checkpoints wrap it.
         net.load_state_dict(checkpoint.get("state_dict", checkpoint))
 
