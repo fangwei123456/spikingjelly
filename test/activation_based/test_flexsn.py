@@ -198,6 +198,37 @@ def test_cuda_triton_runtime_builds_on_first_compiled_call(fullgraph):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("compiled", [False, True])
+def test_cuda_data_parallel_replica_selects_its_implementation(compiled):
+    pytest.importorskip("triton")
+    threshold = torch.nn.Parameter(torch.tensor(0.8, device="cuda"))
+    module = FlexSN(_lif_core, 1, (threshold,))
+    # The replication nn.DataParallel performs on each forward.
+    (replica,) = torch.nn.parallel.replicate(module, [x.device for x in (threshold,)])
+    x = torch.randn(4, 2, 3, device="cuda")
+    expected, _, _ = _reference(x, torch.zeros(2, 3, device="cuda"), threshold)
+
+    actual = (torch.compile(replica) if compiled else replica)(x)
+
+    torch.testing.assert_close(actual, expected)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_cuda_unregistered_module_selects_outside_the_graph():
+    pytest.importorskip("triton")
+    from spikingjelly.activation_based.neuron import flexsn
+
+    threshold = torch.nn.Parameter(torch.tensor(0.8, device="cuda"))
+    module = FlexSN(_lif_core, 1, (threshold,))
+    del flexsn._SELECTION_OWNERS[id(module)]
+    x = torch.randn(4, 2, 3, device="cuda")
+    expected, _, _ = _reference(x, torch.zeros(2, 3, device="cuda"), threshold)
+
+    torch.testing.assert_close(torch.compile(module)(x), expected)
+    assert module._triton_capability[x.device, x.dtype] is True
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_cuda_compiled_conv_network_builds_triton_runtimes_on_first_call():
     pytest.importorskip("triton")
     from spikingjelly.activation_based import functional, layer

@@ -31,8 +31,11 @@ def _select_while_tracing(
     # runs in a fresh thread, outside the caller's compile state. Before Torch
     # 2.11, compile metrics are process-wide and a nested AOT trace corrupts the
     # caller's compilation, so it returns False and the caller selects outside
-    # the graph instead.
-    module = _SELECTION_OWNERS[owner_id]
+    # the graph instead. A module created by a path that skips registration
+    # also selects outside the graph.
+    module = _SELECTION_OWNERS.get(owner_id)
+    if module is None:
+        return False
     if module._selection_ready(device, dtype):
         return True
     if not _NESTED_BUILD_SUPPORTED:
@@ -806,6 +809,11 @@ class FlexSN(base.MemoryModule):
     def __setstate__(self, state):
         super().__setstate__(state)
         _SELECTION_OWNERS[id(self)] = self
+
+    def _replicate_for_data_parallel(self):
+        replica = super()._replicate_for_data_parallel()
+        _SELECTION_OWNERS[id(replica)] = replica
+        return replica
 
     def extra_repr(self) -> str:
         core_name = getattr(self.core, "__name__", type(self.core).__name__)
