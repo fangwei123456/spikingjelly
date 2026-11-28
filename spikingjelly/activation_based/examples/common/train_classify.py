@@ -711,7 +711,7 @@ class Trainer:
                     lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
                 else:
                     # The saved schedule ends at the old --epochs. Rebuild it for
-                    # the new horizon and replay it to the resumed epoch, as if
+                    # the new horizon and replay the steps it had taken, as if
                     # the run had been planned with the new --epochs.
                     for group in optimizer.param_groups:
                         group["lr"] = group["initial_lr"]
@@ -721,7 +721,7 @@ class Trainer:
                             "ignore",
                             message=r"Detected call of `lr_scheduler\.step\(\)`",
                         )
-                        for _ in range(checkpoint["epoch"] + 1):
+                        for _ in range(checkpoint["lr_scheduler"]["last_epoch"]):
                             lr_scheduler.step()
             args.start_epoch = checkpoint["epoch"] + 1
             if model_ema:

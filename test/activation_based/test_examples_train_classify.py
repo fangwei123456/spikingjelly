@@ -190,6 +190,46 @@ def test_trainer_resume_with_more_epochs_follows_the_new_schedule(
     assert checkpoint["optimizer"]["param_groups"][0]["lr"] == pytest.approx(expected)
 
 
+def test_trainer_resume_with_more_epochs_replays_the_saved_scheduler_steps(
+    tmp_path, image_folder
+):
+    step = ("--lr-scheduler", "step", "--lr-step-size", "2")
+    trainer = _TinyTrainer(tmp_path / "cache")
+    trainer.main(
+        _parse(
+            trainer,
+            image_folder,
+            tmp_path / "a",
+            "--start-epoch",
+            "3",
+            "--epochs",
+            "4",
+            *step,
+        )
+    )
+    (first,) = (tmp_path / "a").glob("pt/*/checkpoint_latest.pth")
+
+    trainer = _TinyTrainer(tmp_path / "cache", stop_at_epoch=5)
+    with pytest.raises(_Interrupted):
+        trainer.main(
+            _parse(
+                trainer,
+                image_folder,
+                tmp_path / "b",
+                "--epochs",
+                "6",
+                "--resume",
+                str(first),
+                *step,
+            )
+        )
+
+    # One scheduler step in the first run, one after epoch 4: one decay.
+    checkpoint = _load(tmp_path / "b", "checkpoint_latest.pth")
+    assert checkpoint["epoch"] == 4
+    assert checkpoint["optimizer"]["param_groups"][0]["lr"] == pytest.approx(0.01)
+
+
 def test_trainer_reloads_its_dataset_cache(tmp_path, image_folder, monkeypatch):
     trainer = _TinyTrainer(tmp_path / "cache")
     extra = ("--epochs", "1", "--cache-dataset")
