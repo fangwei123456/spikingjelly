@@ -370,7 +370,9 @@ class Trainer:
             # Attention, as the transforms are also cached!
             if log_progress:
                 logger.info("Loading dataset_train from {}", cache_path)
-            dataset, _ = torch.load(cache_path)
+            # The cache pickles a whole dataset written by this method, which
+            # the weights_only default of torch>=2.6 rejects.
+            dataset, _ = torch.load(cache_path, weights_only=False)
         else:
             dataset = torchvision.datasets.ImageFolder(
                 traindir,
@@ -396,7 +398,7 @@ class Trainer:
             # Attention, as the transforms are also cached!
             if log_progress:
                 logger.info("Loading dataset_test from {}", cache_path)
-            dataset_test, _ = torch.load(cache_path)
+            dataset_test, _ = torch.load(cache_path, weights_only=False)
         else:
             if args.prototype and args.weights:
                 weights = prototype.models.get_weight(args.weights)
@@ -705,7 +707,25 @@ class Trainer:
             model_without_ddp.load_state_dict(checkpoint["model"])
             if not args.test_only:
                 optimizer.load_state_dict(checkpoint["optimizer"])
-                lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+                saved_args = checkpoint["args"]
+                if not isinstance(saved_args, dict):  # older argparse.Namespace
+                    saved_args = vars(saved_args)
+                if saved_args["epochs"] == args.epochs:
+                    lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+                else:
+                    # The saved schedule ends at the old --epochs. Rebuild it for
+                    # the new horizon and replay the steps it had taken, as if
+                    # the run had been planned with the new --epochs.
+                    for group in optimizer.param_groups:
+                        group["lr"] = group["initial_lr"]
+                    lr_scheduler = self.set_lr_scheduler(args, optimizer)
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            "ignore",
+                            message=r"Detected call of `lr_scheduler\.step\(\)`",
+                        )
+                        for _ in range(checkpoint["lr_scheduler"]["last_epoch"]):
+                            lr_scheduler.step()
             args.start_epoch = checkpoint["epoch"] + 1
             if model_ema:
                 model_ema.load_state_dict(checkpoint["model_ema"])
@@ -744,9 +764,10 @@ class Trainer:
                 args_txt.write("\n")
                 args_txt.write(" ".join(sys.argv))
 
-            max_test_acc1 = -1.0
-            if model_ema:
-                max_ema_test_acc1 = -1.0
+            if args.resume is None:
+                max_test_acc1 = -1.0
+                if model_ema:
+                    max_ema_test_acc1 = -1.0
 
         if args.test_only:
             if model_ema:
@@ -821,7 +842,8 @@ class Trainer:
                     "optimizer": optimizer.state_dict(),
                     "lr_scheduler": lr_scheduler.state_dict(),
                     "epoch": epoch,
-                    "args": args,
+                    # A plain dict keeps the checkpoint loadable with weights_only.
+                    "args": vars(args),
                     "max_test_acc1": max_test_acc1,
                 }
                 if model_ema:
@@ -857,8 +879,10 @@ class Trainer:
                     save_max_test_acc1,
                     bool(model_ema and save_max_ema_test_acc1),
                 )
-                if utils.is_main_process() and epoch > 0:
-                    os.remove(os.path.join(pt_dir, f"checkpoint_{epoch - 1}.pth"))
+                previous = os.path.join(pt_dir, f"checkpoint_{epoch - 1}.pth")
+                # Absent when resuming into a new directory, e.g. with more epochs.
+                if utils.is_main_process() and os.path.exists(previous):
+                    os.remove(previous)
             if utils.is_main_process():
                 logger.info(
                     "Estimated finish time: {}",

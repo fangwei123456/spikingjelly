@@ -100,6 +100,12 @@ Changes since `2.0.0.dev0`. For older releases, see
 
 - `CubaLIFNode` trains scalar or broadcast decay parameters without requiring input or initial-state gradients.
 
+#### spikingjelly.activation_based.examples
+
+- `common.train_classify.Trainer` stores `args` as a dict and reloads its dataset cache, so `--resume` and `--cache-dataset` work with PyTorch's `weights_only` default.
+- Resumed `Trainer` runs keep the best test accuracy and can extend `--epochs`, following the learning-rate schedule of the new horizon instead of failing after the first epoch.
+- `spiking_lstm_text` saves a `state_dict`, so its test mode loads the trained model; retrain models saved by earlier versions.
+
 ### Changes
 
 - Few-spike, outlier-aware and hierarchically gated neurons add optional native CUDA alongside Triton for eligible FP32 inference, with explicit provider selection and reference fallbacks.
